@@ -2536,8 +2536,16 @@ protected commands retire and revoke all 3,442,469 (`live=0`), the stock ones no
   `wmem_block_fast_sublet_alloc`, and the same sw=225 and sw=220. Only the serving index differs: F read `0x116c` and
   `0xcb1`.
 
-**tsu-p2** (transcript `…/tsu-p2/board.txt`, sha256 `f464e437…`, firmware `6c2ffae9…`): the same image, kit and stage
-as p1, no heartbeat, the next boot on the same board.
+**tsu-p2** (transcript `…/tsu-p2/board.txt`, sha256 `f464e437…`, firmware `6c2ffae9…`): the same stage as p1 (`diff -r`
+of the two stage directories is empty) and the same kit, no heartbeat, the next boot on the same board.
+- The kernel differs by more than the bake's usual relink: its bake recompiled `arch/riscv/kernel/setup.o`, `drivers/of/fdt.o`, `arch/riscv/kernel/pi/cmdline_early.o` and
+  `drivers/firmware/efi/libstub/efi-stub.o` in the shared kernel tree `perf/k2n/linux-board-k2n-native-hpm2tree`;
+  the other three bakes recompiled only `init/version-timestamp.o`. The cause is this lane's B5a kit recheck
+  (`nested/b5a/recheck-kit.sh`, two relinks, 04:47:01-04:47:11), which relinked the same tree under its `.native-kernel.lock` with
+  bkit94-rec1m's command line (`node_flat_records=1048576`); p2's bake put 262144 back, and kbuild recompiled the
+  objects that depend on `CONFIG_CMDLINE`. p2's `.config` `CONFIG_CMDLINE` and its dmesg command line equal p1's
+  (runtime, Addendum 176, and re-read here). The objects come from the same source and configuration, but they are not
+  archived, so their identity with p1's is not shown, and p1 to p2 is not shown to be one variable.
 - `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps.
 - rc 0, with stock's output: `056c1f8c…`, 1,140,005 lines, 9,000 frames.
 - Uptime span 1,118.38 s. In-context 24,073,705,090 cycles, `between_cycles` 3,830,848,086, 25,862 context entries.
@@ -2563,8 +2571,9 @@ as p1, no heartbeat, the next boot on the same board.
 
 **Reading, and a retraction.**
 - On P1 the protected tshark has now returned in 2 of 3 boots: the heartbeat boot and p2 returned, p1 did not. p1 and
-  p2 are the same image, kit and stage, both without the heartbeat, in consecutive boots on one board. So the
-  non-return is intermittent on P1, and the heartbeat is not needed for a return.
+  p2 are the same stage and kit, both without the heartbeat, in consecutive boots on one board; p2's kernel also
+  carries four recompiled objects (above). So the heartbeat is not needed for a return, and the non-return is
+  intermittent across P1 boots, which are not shown to differ in one variable only.
 - **Withdrawn:** "M-16 is narrowed to F's flat lifetime table" (497d4d6a189e, in the heartbeat result above and in
   ISSUES M-16). One return under a 60 s heartbeat does not place the non-return on F's table.
 - No mechanism is claimed. On F the protected arm did not return in 2 of 2 boots, on P1 in 1 of 3; counts this small

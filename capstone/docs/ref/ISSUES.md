@@ -10383,8 +10383,12 @@ protected tshark with a heartbeat on P1"). ~~So M-16 is narrowed to F's flat tab
 `d179bf9a…`. Its apertures are F's: commit pc 0x3ff6780f04 with `commit_instr[0].valid` = 0, sw=225 0x96, sw=220 0x8c,
 trap log 0x89; the serving index is 0x11de. The unprotected boot before it returned with stock's output in 1,064.75 s.
 The second boot without the heartbeat (`tsu-p2`, `f464e437…`) returned rc 0 in 1,118.38 s with stock's output,
-and the unprotected boot after it in 1,073.60 s. So on P1 the protected arm returned in 2 of 3 boots, one with the
-heartbeat and one without: the beat is not needed for a return, and the non-return is intermittent on P1. No root
+and the unprotected boot after it in 1,073.60 s. tsu-p2's bake also recompiled four objects that depend on `CONFIG_CMDLINE`
+(`setup.o`, `fdt.o`, `cmdline_early.o`, `efi-stub.o`) in the shared tree `perf/k2n/linux-board-k2n-native-hpm2tree`,
+because the nested lane's B5a kit recheck (04:47) had relinked that tree with `node_flat_records=1048576` in between;
+the command line p2 booted equals p1's, and the recompiled objects are not archived. So on P1 the protected arm returned
+in 2 of 3 boots, one with the heartbeat and one without: the beat is not needed for a return, and the non-return is
+intermittent on P1, with p1 to p2 not shown to be one variable. No root
 cause is claimed, and no cost is read (one protected boot of the pair did not return). The image is a dev-era revision; Fig. 10's later wmem patch (trap/eval 684a29c52685) uses the one-operand
 CREVOKE, which P1 (capstone-ariane d83d3a633, read there) does not implement: its CREVOKE takes parent and child.
 
