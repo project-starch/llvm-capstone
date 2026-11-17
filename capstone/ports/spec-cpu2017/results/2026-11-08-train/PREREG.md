@@ -5440,3 +5440,12 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
 - **Board 2.** The +Spatial perl full repeat (TAG p1-spa3rep-p) runs after the nested PHP chain (pid 1771932).
 - **Board 3.** The matched plain perl full repeat (TAG rvm3p, kit bkit95, the matched bitstream flashed over P1) runs after the Full repeat (pid 1219413). This is the plain perl row Addendum 167 moved off board 2.
 - **Cut order if 14:00 is at risk:** part B's xz, then +Spatial perl, then plain perl. A cut row stays N = 1 and is reported so.
+
+## Addendum 172 (2026-11-18 00:50 +08, before it runs): Perl on P1, board 1, ahead of the +Spatial repeat
+
+- **Pre-registration:** llvm-capstone nested-workloads ff011c64d374, "Pre-registration: Perl on P1, both arms in one boot, a 2^20-record table".
+- **Chain:** nested/p1a/b1-perl.*, kit nested/kits/bkit91-rec1m, board 1, after the nested Wireshark chain (pid 1526065).
+  - The kit differs from bkit91 only in node_flat_records=1048576, plus that line's checksum.
+  - Both arms run under it in one boot.
+- **Why the larger table.** The protected arm needs more than the default 262,144 records. On the twin it ends with cause 30 at 327,680 records and completes at 393,216. The appendix row states this.
+- **Order on board 1.** Perl now runs before Addendum 171's +Spatial part A. Part A waits on the Perl chain's pid, and part B waits on part A.
