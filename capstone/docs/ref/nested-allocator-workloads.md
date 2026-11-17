@@ -2248,3 +2248,41 @@ cycles 90.5 M, hpm5 paged record accesses 98.9 M, hpm6 grow 8, hpm7 event 23 11.
 - The output's size grows with the frames processed, so this boot cannot by itself exclude a kernel cost per frame
   that grows with the run; the fit and the `getc` cost favour the beat's own reads. The U P P U comparison without
   the heartbeat, which follows as pre-registered, tells them apart and gives the protection's cost on P1.
+
+### Results: mruby on P1 (board 2, 2026-11-18 01:57-02:37)
+
+**Configuration.** As pre-registered (f7b222e43189). The chain `nested/p1a/b2-mrb.*` (nat-run3 pid 1671139) waited for the
+SPEC lane's chain, then flashed P1 at 01:57 from the seal (sha256 checked) and read it back by name. Stage `nested/p1a/mrb`,
+commands u1 p1 p2 u2 in one boot. Transcript `spec/board/out-nat-p1a-mrb-b2/mrb/board.txt` (sha256 `40f83990…`, firmware
+`68c9437f…`), read by `nested/appd/parse-abba.py` and `nested/p1/abba.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver, and all four
+commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's PPM equals the native reference
+(`cfd73bb1…`).
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 10,355,627,967 | 10,785,150,505 | 10,785,737,662 | 10,355,031,358 | 0.01 % / 0.01 % | **+4.15 %** (+430 M) |
+| `between_cycles` | 143,994,494 | 145,280,458 | 144,998,140 | 142,419,166 | 1.11 % / 0.19 % | +1.35 % |
+| uptime span, s | 420.93 | 438.17 | 438.18 | 420.83 | 0.02 % / 0.00 % | +4.11 % |
+| hpm3 record-TLB misses | 415,450 | 2,279,942 | 2,279,563 | 416,178 | | +1.86 M |
+| hpm4 walk cycles | 8,768,363 | 28,381,542 | 28,293,493 | 8,748,182 | | +19.6 M |
+| hpm5 paged record accesses | 20,467,276 | 39,137,469 | 39,138,102 | 20,467,393 | | +18.7 M |
+| hpm6 grow | 1 | 2 | 0 | 0 | | |
+| hpm7 event 23 | 1,720,965 | 5,745,913 | 5,746,536 | 1,721,116 | | +4.03 M |
+| hpm8 L1D misses | 33,904,175 | 39,646,362 | 39,637,220 | 33,899,227 | | +16.9 % |
+
+**Against the pre-registration.**
+- Answers, controls: **met**. Repeats: **met** on both counters (0.01 % `run_cycles`, 1.11 % `between_cycles`), so the
+  difference is read.
+- In-context cost, band +0.5 % to +10 %: **met**, **+4.15 %**.
+- Duration, 6 to 14 min per command: **met**, 7.0-7.3 min.
+- Record-TLB misses more in the protected arm: **met** (5.5 times).
+
+**Reading.**
+- mruby's protection (patch 0008 with the Q-15 repair, the dev-era two-operand revision) costs **+4.15 %** in-context on
+  P1, against +1.64 % on the twin: a silicon-to-twin ratio of 2.5, inside the 1.9-3.5 of the other applications.
+- The walker's own cycles (+19.6 M) are 4.6 % of the +430 M. Event 23 (+4.03 M replays) and the L1D misses (+5.7 M)
+  are larger candidates; this boot does not attribute the rest.
+- This is not Fig. 10's revision of 0008 (that one calls the one-operand `capstone_cap_release`, which P1 does not
+  implement); the appendix row says so.
