@@ -5359,3 +5359,15 @@ These are wide bands; the readings decide.
   - x264 stays N = 1.
 - **Prediction:** every row's spread ≤ 0.5 %. imagick (0.1 s resolution on 10.6 s) is allowed ≤ 1.5 %.
 - **Refutation:** any other row spreads by more than 1 %. The text's noise statement would then have to change.
+
+## Addendum 165 (2026-11-17 22:10 +08, before it runs): a second run of P1 Full on board 3
+
+- **Chain:** a3rep-b3.conf (TAG p1-a3rep), kit bkit91, bitstream P1. It uses the same stages as the table's Full rows: ci-b1 (board-frcdkmsa3, gcc from board-frcdkmsa3-notune) and ck-b3 (perl full).
+- **Rows:** gcc train01, lbm, nab, imagick, mcf, xz and perl full. x264 is not repeated: it takes 8.5 h.
+- **Placement:** board 3, after the nested lane's CPython session 2 (pid 860657).
+- **Use:**
+  - Full's time per row becomes the mean of the two runs, and both runs are reported.
+  - +Spatial stays N = 1.
+  - Full over +Spatial is therefore compared with Full's mean. The run-to-run spread is reported beside it, so a reader can see whether the 1.0 % temporal cost exceeds Full's own run-to-run noise.
+- **Prediction:** each row's spread ≤ 0.5 %, and imagick ≤ 1.5 % (0.1 s resolution).
+- **Refutation:** another row spreads by more than 1 %. The temporal-cost statement for that row would then be within noise.
