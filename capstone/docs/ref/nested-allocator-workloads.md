@@ -2337,3 +2337,109 @@ commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's 
   than at the instructions the patch adds, which the twin prices at +40.3 %.
 - The record table is configured for 2^20 records for this program; the default 262,144 is exhausted by its peak of
   327,680 to 393,216 live records.
+
+### Results: memcached on P1, the in-process driver (board 2, 2026-11-18 02:37-03:20)
+
+**Configuration.** As pre-registered (c3d5b844728e; Addendum 170, `5eeb893bb63e`). The chain `nested/p1a/b2-mc.*` (nat-run3
+pid 1771874) waited for this lane's mruby chain; P1 was resident and read back by name. Stages `nested/p1a/mc128` and
+`mc32`, commands u1 p1 p2 u2 in each boot. Transcripts `spec/board/out-nat-p1a-mc-b2/mc128/board.txt` (sha256
+`b030d2e2…`, firmware `7e6335c9…`) and `…/mc32/board.txt` (sha256 `b21d60c1…`, firmware `c0271018…`), read by
+`nested/appd/parse-abba.py` and `nested/p1/abba.py`; the CHECK lines are read from each command's `st.out` in the
+transcript.
+
+**Controls.** In both boots `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver,
+and all four commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's stream hash equals the
+native reference (`f7733aa9…` at `-m 128`, `b897c51d…` at `-m 32`), with `set_fail=0`, `bad=0` and `MCDRV-END rc=0`.
+
+`mc128`, the reading:
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 5,005,998,913 | 5,102,897,092 | 5,103,534,319 | 5,009,583,660 | 0.07 % / 0.01 % | **+1.91 %** (+95.4 M) |
+| `between_cycles` | 414,090,695 | 441,882,640 | 440,203,590 | 413,417,945 | 0.16 % / 0.38 % | +6.60 % (+27.3 M) |
+| uptime span, s | 223.49 | 228.98 | 228.95 | 223.62 | 0.06 % / 0.01 % | +2.42 % |
+| context entries | 2,912 | 3,075 | 3,070 | 2,912 | | +5.5 % |
+| hpm3 record-TLB misses | 4,904 | 322,834 | 322,807 | 4,904 | | +0.318 M (66 times) |
+| hpm4 walk cycles | 176,793 | 10,430,353 | 10,402,157 | 170,994 | | +10.2 M |
+| hpm5 paged record accesses | 48,620 | 1,761,957 | 1,761,891 | 48,627 | | +1.71 M |
+| hpm6 grow | 0 | 7 | 0 | 0 | | |
+| hpm7 event 23 | 48,219 | 382,718 | 382,655 | 48,295 | | +0.334 M |
+| hpm8 L1D misses | 20,228,321 | 21,086,346 | 21,086,549 | 20,224,523 | | +4.25 % |
+
+CHECK, all four commands: hits 88,691, misses 91,309, items 30,360, slab allocations 60,000, evicted 0, as on the twin.
+The one field that differs is the LRU maintainer's `maint_moves`: 49,512 in both stock commands, 49,509 in both
+protected ones.
+
+`mc32`, reported and not read as the cost (the arms do different work):
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 3,907,830,017 | 3,870,755,500 | 3,871,697,661 | 3,904,145,928 | 0.09 % / 0.02 % | -0.89 % (-34.8 M) |
+| `between_cycles` | 171,274,360 | 172,040,263 | 171,502,387 | 170,956,290 | 0.19 % / 0.31 % | +0.38 % |
+| uptime span, s | 166.18 | 164.75 | 164.77 | 166.01 | | -0.80 % |
+| hpm3 record-TLB misses | 1,542 | 218,816 | 218,620 | 1,542 | | +0.217 M |
+| hits / evictions / items | 57,586 / 27,108 / 13,739 | 53,506 / 29,807 / 12,396 | the same as p1 | the same as u1 | | |
+
+The hit, eviction and item counts are the twin's, arm for arm.
+
+**Against the pre-registration.**
+- Answers, controls: **met** in both boots. Repeats: **met** on both counters in both boots, so `mc128`'s difference is read.
+- `mc128` in-context cost, band -1 % to +3 %: **met**, **+1.91 %**.
+- `mc128` hits, misses, evictions and items equal between the arms: **met**. `maint_moves` is not one of the registered
+  fields and differs by 3, which the row discloses.
+- Duration, 5 to 10 min per command: **missed, short**: 3.7-3.8 min at `-m 128`, 2.7-2.8 min at `-m 32`.
+
+**Reading.**
+- At `-m 128`, where both arms do the same work, memcached's protection (0006 with the Q-15 repair, the dev-era
+  two-operand revision) costs **+1.91 %** in-context on P1 and +6.6 % in the kernel. On the twin it cost +0.10 % and
+  +6.9 %.
+- The stock arm runs 1.58 times its twin cycles, against 2.84 for Perl and 2.55 for PHP. The twin's cost (+0.10 %) is too
+  small for a silicon-to-twin ratio of the costs (19) to be compared with the 1.9-3.5 of the other applications.
+- The walker's own cycles (+10.2 M) are 10.7 % of the +95.4 M. The protected arm misses the record TLB 66 times as
+  often, though at 0.32 M misses per command that is still few. This boot does not attribute the rest.
+- At `-m 32`, Fig. 10's setting, the protected arm evicts 2,699 more items and serves 4,080 fewer hits, and it runs
+  0.89 % fewer in-context cycles (the twin: 2.41 % fewer). That is the different work, not a saving from the
+  protection.
+
+### Results: PHP on P1 (board 2, 2026-11-18 03:21-04:31)
+
+**Configuration.** As pre-registered (c3d5b844728e; Addendum 170, `5eeb893bb63e`). The chain `nested/p1a/b2-php.*`
+(nat-run3 pid 1771932) waited for the memcached chain; P1 was resident and read back by name. Stage `nested/p1a/php10`,
+commands u1 p1 p2 u2 in one boot. Transcript `spec/board/out-nat-p1a-php-b2/php10/board.txt` (sha256 `8ec4e742…`,
+firmware `aacdf7ac…`), read by `nested/appd/parse-abba.py` and `nested/p1/abba.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver, and all four
+commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's normalised output equals the native
+reference (`8f692e64…`). **Modes**, from each command's `st.err`: u1 and u2 print `ZEND_CAP_MODE 4 exact=0 revoke=0`,
+p1 and p2 print `ZEND_CAP_MODE 6 exact=0 revoke=1`. Every command reports 1,088,437 blocks and 3,442,469 issues; the
+protected commands retire and revoke all 3,442,469 (`live=0`), the stock ones none.
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 22,369,239,344 | 22,897,759,008 | 22,908,679,228 | 22,389,029,560 | 0.09 % / 0.05 % | **+2.34 %** (+524 M) |
+| `between_cycles` | 426,939,061 | 431,539,605 | 429,081,292 | 424,053,296 | 0.68 % / 0.57 % | +1.13 % |
+| uptime span, s | 913.35 | 934.71 | 935.04 | 914.02 | 0.07 % / 0.04 % | +2.32 % |
+| context entries | 7,503 | 7,570 | 7,563 | 7,496 | | +0.9 % |
+| hpm3 record-TLB misses | 402,352 | 1,012,800 | 1,012,584 | 402,363 | | +0.61 M |
+| hpm4 walk cycles | 6,045,947 | 15,433,397 | 15,425,147 | 6,024,824 | | +9.4 M |
+| hpm5 paged record accesses | 19,810,404 | 74,406,491 | 74,406,720 | 19,810,458 | | +54.6 M |
+| hpm6 grow | 10 | 8 | 0 | 0 | | |
+| hpm7 event 23 | 2,341,379 | 2,677,368 | 2,677,663 | 2,341,526 | | +0.336 M |
+| hpm8 L1D misses | 98,671,519 | 100,323,517 | 100,345,205 | 98,679,914 | | +1.68 % |
+
+**Against the pre-registration.**
+- Answers, controls, modes: **met**. Repeats: **met** on both counters, so the difference is read.
+- In-context cost, band -1 % to +3 %: **met**, **+2.34 %**.
+- Duration, 13 to 26 min per command: **met**, 15.2-15.6 min.
+- hpm6 reads 10 / 8 / 0 / 0: the table grows in the boot's first two commands, as for Perl, so it is not read.
+
+**Reading.**
+- On P1 the lifetime alone (mode 6 against mode 4, one image, the dev-era two-operand `heap_end`) costs **+2.34 %**
+  in-context and +1.1 % in the kernel. That is 152 cycles per child issued and ended (3,442,469 per command). On the
+  twin it cost +0.16 %, +13.7 M cycles against P1's +524 M.
+- The stock arm runs 2.55 times its twin cycles (Perl: 2.84). The added cycles are 38 times the twin's, and the cost ratio, 14.6,
+  lies far outside the 1.9-3.5 the band was drawn from; the band held only because the twin's cost was so small.
+- The protected arm makes 54.6 M more paged record accesses, 15.9 per child, and misses the record TLB 2.5 times as
+  often. The walker's own cycles (+9.4 M) are 1.8 % of the +524 M; event 23 and the L1D misses add 0.34 M and 1.67 M.
+  This boot does not attribute the rest.
+- This is not Fig. 10's pairing (a pristine second binary); the appendix row says so.
