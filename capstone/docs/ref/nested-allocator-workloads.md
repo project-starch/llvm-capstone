@@ -1805,3 +1805,42 @@ Over F's six (without richards), for comparison with F: +4.87 % in-context (+766
 - The unprotected arm runs 7.4 % fewer in-context cycles on P1 than on F over the same six (15,719 M against
   16,983 M), so P1's cost sits on a smaller base. The two bitstreams differ in more than the table, and this run does
   not separate which difference moved the base.
+
+### Results: CPython on P1, second session, and the two sessions together (board 3, 2026-11-17 20:28-22:20)
+
+**Configuration.** As in the session-2 addendum above (858ddee10a4f; SPEC-lane Addendum 161, spec-silicon
+35a7194b03da). P1 was already resident on board 3 and read back by name, so there was no flash. One chain,
+`nested/p1s2/p1s2-b3.*`, nat-run3 pid 860657, after the same rule-8 recheck. Four one-arm boots, U P P U: `cpy2-u1`
+20:28, `cpy2-p1` 20:56, `cpy2-p2` 21:24, `cpy2-u2` 21:53. The stages are session 1's, the same images. Transcripts
+`spec/board/out-nat-p1s2cpy-nested-b3/cpy2-*/board.txt` (sha256 `b240cdf7…`, `21ec0605…`, `ae544fa9…`, `3f193174…`),
+read by `nested/p1/cpy-abba.py` (with the `cpy2` prefix).
+
+**Controls.** In every boot `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver
+(the two accounting checks), and all seven commands printed `@@SPEC-END`. Not VOID. **Answers:** 28 of 28 commands exit
+0 with CHECK equal to native.
+
+| benchmark | in-context, not protected (mean) | `run_cycles` repeats u / p | `between_cycles` repeats u / p | session 2 cost | session 1 cost | **two-session mean** | hpm7 event 23, p − u |
+|---|---|---|---|---|---|---|---|
+| json_dumps | 1,434.8 M | 0.03 % / 0.02 % | 0.09 % / 0.42 % | +7.43 % | +7.40 % | **+7.41 %** | +722,624 |
+| json_loads | 1,302.8 M | 0.03 % / 0.01 % | 0.68 % / 0.38 % | +6.49 % | +6.46 % | **+6.48 %** | +744,004 |
+| pickle | 1,216.6 M | 0.10 % / 0.05 % | 0.11 % / 0.36 % | +5.03 % | +5.01 % | **+5.02 %** | +799,524 |
+| richards | 7,349.8 M | 0.03 % / 0.00 % | 0.34 % / 0.12 % | +2.70 % | +2.70 % | **+2.70 %** | +1,742,515 |
+| deltablue | 1,320.2 M | 0.03 % / 0.06 % | 0.12 % / 0.24 % | +4.52 % | +4.54 % | **+4.53 %** | +778,063 |
+| regex_v8 | 3,327.1 M | 0.05 % / 0.08 % | 0.08 % / 0.17 % | +5.24 % | +5.32 % | **+5.28 %** | +930,124 |
+| nbody | 7,118.9 M | 0.03 % / 0.04 % | 0.18 % / 0.25 % | +3.94 % | +3.90 % | **+3.92 %** | +1,426,605 |
+
+Summed over the seven, session 2: in-context **+4.18 %** (+965.1 M), kernel +0.66 %, wall-clock +3.79 %; record-TLB
+misses 176,114 against 1,797,613; walk cycles +34.4 M; event 23 +7.14 M; L1D misses +18.0 %.
+
+**Against the pre-registration.**
+- Answers, controls: **met**. Repeats: **met** for all 14 pairs on both counters (largest 0.10 % and 0.68 %), so every
+  benchmark is read in both sessions.
+- In-context cost summed, band +3 % to +25 %: **met**, +4.18 %.
+- Two-session rule: both sessions pass for every benchmark, so the reading is the mean of the two ABBA means. Summed
+  over the seven: **+4.18 %** (session 1 +4.181 %, session 2 +4.183 %).
+
+**Reading.**
+- On two boards, the two sessions agree to 0.08 points or better per benchmark, and to 0.002 points summed. The
+  unprotected arms' in-context cycles agree to 0.05 % per benchmark across boards. The P1 CPython figure, **+4.18 %**,
+  is reproducible at the boot-to-boot level these counters resolve.
+- The attribution is session 1's: the walker 3.6 %, event 23 12.6-14.8 %, the rest not attributed.
