@@ -5371,3 +5371,15 @@ These are wide bands; the readings decide.
   - Full over +Spatial is therefore compared with Full's mean. The run-to-run spread is reported beside it, so a reader can see whether the 1.0 % temporal cost exceeds Full's own run-to-run noise.
 - **Prediction:** each row's spread ≤ 0.5 %, and imagick ≤ 1.5 % (0.1 s resolution).
 - **Refutation:** another row spreads by more than 1 %. The temporal-cost statement for that row would then be within noise.
+
+## Addendum 166 (2026-11-17 22:20 +08, before it runs): a second run of P1 +Spatial on board 1
+
+- **Chain:** spa3rep-b1.conf (TAG p1-spa3rep), kit bkit91, bitstream P1. It uses the same stages as the table's +Spatial rows: cj-b2 (board-frcdkmsspa3) and cl-b3 (perl full).
+- **Rows:** gcc train01, lbm, nab, imagick, mcf, xz and perl full. x264 is not repeated.
+- **Placement:** board 1, after the nested lane's session-2 chain (pid 886911), which leaves the board on P1.
+- **Use:**
+  - Together with Addendum 165, both Sublet arms of the seven rows have N = 2.
+  - Full over +Spatial per row uses each arm's mean, and the spreads are reported.
+  - The temporal cost per row is called within noise when it is smaller than the larger of the two arms' spreads.
+- **Prediction:** spread ≤ 0.5 % per row, and imagick ≤ 1.5 %.
+- **The 7-row Full / +Spatial geomean on means:** within ±0.3 pp of the N = 1 value. That value is 1.0 % over 8 rows; the 7-row value without x264 is computed the same way.
