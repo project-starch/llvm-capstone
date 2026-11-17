@@ -462,3 +462,33 @@ synth_design completed successfully):
   - A Delta above +0.2 % (+0.29 G) on mcf refutes "the cache does not cost on the probe path".
 - **gcc** (train01, about 30 % hits in the model on test): predicted inside ±0.2 % of P1.
 - **perl:** NO GRADE at N=1 on cycles (run-to-run variance, Addendum 153a); HPM identities only.
+
+**Readings so far (runtime lane, train PREREG Addenda 157/158; key 5 NOT MET on both bitstreams):**
+- **perl makerand** (ungraded on cycles):
+  - board 1 (cr-b1, firmware = P1's): run_cycles 7,025,320,964, inside P1's four-run range 7,001.9..7,038.8 M;
+  - board 2 (cs-b2, record-cache event set): 7,000,880,881, −0.21 % against cq-b2;
+  - hashes equal P1's on both.
+  - Record-cache counters (cs-b2): read hit 9,757, read miss 27,856, so **hit rate 25.9 %**.
+  - Fill reads 77,408, which is **2.78 per miss out of at most 3**: the fill completes about 93 % of the time; it is
+    not mostly yielding.
+  - Write-lookup hit 2,459. Identity ev31 − ev35 − ev37 = 3,368 ≥ 0, MET. That difference counts record writes plus
+    reads outside a context, not writes alone.
+  - The model's 40.1 % was QEMU's perl test input (specdiff FAIL), not makerand.
+- **gcc train01, board 1** (cr-b1): run_cycles 42,045,959,257, against P1's two runs on the board, 41,867,859,977 and
+  41,880,603,782 (spread 0.03 %): **+0.41 %. THE PRE-REGISTERED gcc PREDICTION (inside ±0.2 % of P1) IS REFUTED.**
+  - On gcc the record cache costs time.
+  - Paged event set, P1 to B5a:
+    - record-TLB misses −9 % (3.33 M to 3.02 M);
+    - walk cycles −4 %;
+    - walker requests +19 % (22.84 M to 27.20 M);
+    - verdict-cache replays unchanged;
+    - **L1D misses +3.5 % (+12.9 M)**.
+  - Inference, not attribution: the fill's record reads go through the shared L1D. The extra 171.7 M cycles divided
+    by 12.9 M extra L1D misses is about 13 cycles each. The fill's traffic and its pollution of the L1D are the
+    candidate cost, and fewer walks do not repay it on gcc.
+  - What would settle it is a matched pair that differs only in the fill: B5a with the background fill off (one
+    define; a new bitstream). cs-b2's gcc fill count comes first.
+- **What would have caught this before the board:** the pre-registration's cycle bounds counted only hit savings and
+  "2 cycles per miss and per write". The wide pass's one +47-cycle fill coincidence was recorded and then added to the
+  bounds as "neither bound counts the fill's own memory traffic". It was not turned into a prediction about L1D
+  misses. A fill that reads three records per miss into the shared L1D needed its own predicted L1D-miss delta.
