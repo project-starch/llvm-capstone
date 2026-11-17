@@ -5476,3 +5476,18 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
   - Its own end is expected at about 09:15.
   - The rule-8 dry runs are recorded in the lane pre-registration.
 - **Not a paper row.** This is a diagnostic of appendix D's unattributed Perl cost. The table stays on P1. Whether and how a B5a reading enters the text is the lead's call.
+
+## Addendum 175 (2026-11-18 05:30 +08, while tsu-p2 runs, before its outcome): tshark u2 kept, and the first protected boot did not return
+
+- **What happened at tsu-p1.** It is the first protected boot of Addendum 173's tshark U P P U on P1, without a heartbeat. It did not return within 3,600 s.
+  - The transcript (sha256 d179bf9a…) has @@SPEC-BEGIN at about 266 s and no @@SPEC-END.
+  - The wedge apertures read trap log 0x89, sw225 0x96, sw220 0x8c, commit pc 0x3ff6780f04 (slot-0 residue) and rev-node serving index 0x11de.
+  - tsu-u1 returned rc 0 over 1,064.75 s, with stock's output (056c1f8c…, 1,140,005 lines, 9,000 frames).
+- **Retraction, from the nested lane.** The lane withdrew "M-16 is narrowed to F's flat table" (nested-workloads 497d4d6a189e). The one P1 return of the protected arm was the heartbeat boot.
+  - So far the protected arm on P1 has returned once in one boot with a heartbeat, and not at all in one boot without.
+  - No mechanism is claimed. This addendum's own text on that boot (Addendum 173) stated only that it returned, and stands.
+- **The list edit, and why it is void.** From about 04:53 to 05:00, while tsu-p2 ran, the lane commented out tsu-u2 in nested/p1tu/p1tu-b1.list. The edit was the same length and in place.
+  - The chain (pid 1980951) holds that inode on fd 0 at offset 264, just past the tsu-p2 line. So it had not read the edited line.
+  - The SPEC lane advised restoring the line at once. A restore made only after p2 returned could miss the loop's next read, and lose the one u2 the repeat rule needs.
+  - The line was restored byte-identical (cmp against the original, same inode 280001077). The chain therefore runs Addendum 173 as registered: tsu-p2, then tsu-u2, whatever p2 does.
+- **Reading rule, unchanged.** A cost is read only if both protected boots return with stock's output and the repeat rule holds. Otherwise appendix D carries no Wireshark row.
