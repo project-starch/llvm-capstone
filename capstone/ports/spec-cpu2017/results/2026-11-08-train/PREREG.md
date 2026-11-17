@@ -5383,3 +5383,14 @@ These are wide bands; the readings decide.
   - The temporal cost per row is called within noise when it is smaller than the larger of the two arms' spreads.
 - **Prediction:** spread ≤ 0.5 % per row, and imagick ≤ 1.5 %.
 - **The 7-row Full / +Spatial geomean on means:** within ±0.3 pp of the N = 1 value. That value is 1.0 % over 8 rows; the 7-row value without x264 is computed the same way.
+
+## Addendum 167 (2026-11-17 23:50 +08, before it runs): the schedule to 14:00, a deviation from Addendum 164, and Wireshark on P1
+
+- **Schedule.** Completeness rows (appendix D: every application of the completeness figures) take priority over the N=2 repeats of Addenda 164-166. The board queues follow a scheduler's plan. A repeat row is cut, never a completeness row, if time runs short.
+- **Deviation from Addendum 164.** The plain perl repeat is not run on board 2: a marker directory makes chain-board.sh skip it, so board 2 frees at about 02:00 for mruby and PHP. The plain perl repeat moves to board 3 after memcached, about 09:10, under its own conf and TAG.
+- **Addendum 166's chain.** The +Spatial repeat waiter on board 1 was stopped before it started. It will be relaunched under a new TAG behind the completeness rows, with the same stages and use.
+- **Wireshark on P1.** One boot on board 1, protected arm only, with a heartbeat. Pre-registration: llvm-capstone nested-workloads 2475d3fb7944, "Pre-registration: the protected tshark with a heartbeat on P1, one boot".
+  - Chain nested/p1ts/p1ts-b1.conf (TAG p1ts-nested), behind the nested pg2 chain (pid 886911).
+  - Image bcc251f3…: wmem 0001's dev-era two-operand revision.
+  - Workload: a 9,000-frame capture.
+- **Correction to the suite pre-registration's deviation heading.** It is stamped "19:05 +08", but its commit 225fcfbbc8b7 is dated 18:47:34 +08. The text was written after p1k1-3 landed and before any ratio was compared with a band, as it says. Only the time in the heading is wrong.
