@@ -5338,3 +5338,24 @@ These are wide bands; the readings decide.
 - **Plain:** s4 ≥ s(hiccup3m) − 0.3 pp, since refill can only add. s5 within ±1 pp of 7.9 %.
 - **Sublet:** s4 ≤ 1 %. s5 above hiccup3m's 0.455 %, because ticks land during escapes. It stays below 3 %.
 - **Refutation:** a Sublet s5 above 3 %. That would mean the escapes expose most of plain's tick rate, and the hiccup3m factor would overstate the correction.
+
+## Addendum 164 (2026-11-17 22:00 +08, before it runs): a second run of matched plain on board 2, and the Sublet transfer-probe readings
+
+**Sublet transfer probes (Addendum 163), read.** Board 2, P1, 21:15-21:35.
+- **hiccup4:** HIC4-ALL 0.348 %; POST mean 76.39 over 4,524 chunks; BASE mean 0.05. So s4 = (5,244,582 + 76.34 × 4,524) / 1,508,320,062 = **0.371 %**.
+- **hiccup5:** NOSYS 0.440 %. The syscall chunks' excess above their p50 (850) sums to at least 133,880 cycles. So s5 ≈ **0.449 %**.
+- **Against the bands:**
+  - Sublet s4 ≤ 1 %: met.
+  - Sublet s5 above 0.455 %: missed, at 0.449 %. The escapes do not raise Sublet's tick share.
+  - Refutation (s5 > 3 %): not met, so the hiccup3m factor stands.
+- The plain side runs on board 1 after the matched x264.
+
+**A second matched plain run.**
+- Board 2, chain rvm2-b2.conf (TAG rvm2). It uses the same stages, kit bkit95 and bitstream 8db8f9cda as rvm-b2/b3, and runs every row except x264: gcc train01, lbm, nab, imagick, mcf, xz, perl full.
+- The chain flashes the matched baseline over P1.
+- **Use:**
+  - Each row's plain time becomes the mean of the two runs, and both are reported.
+  - The run-to-run spread |run2/run1 − 1| is reported per row.
+  - x264 stays N = 1.
+- **Prediction:** every row's spread ≤ 0.5 %. imagick (0.1 s resolution on 10.6 s) is allowed ≤ 1.5 %.
+- **Refutation:** any other row spreads by more than 1 %. The text's noise statement would then have to change.
