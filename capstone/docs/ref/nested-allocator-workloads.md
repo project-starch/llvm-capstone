@@ -1672,6 +1672,53 @@ session's. For CPython the rule applies per benchmark, as before.
 to stock's framemd5, `fp` decodes 300 frames with at least one different (else the comparison stops); in-context cost
 -1 % to +1 %; event 23 (hpm7 on this kit), protected minus not, under +10,000 per command.
 
+### Pre-registration: the protected tshark with a heartbeat on P1, one boot (written 2026-11-17 23:25, before the boot)
+
+**Question.** On P1, does the protected tshark complete, and if it does not, is it slow (A), stopped while the kernel
+runs (B), or stopped with the core or kernel (C), and at which frame? This is M-16's open question on a different
+lifetime table: F's flat table against P1's paged one (4 KiB pages of 256 records, a 16-entry record TLB, a three-read
+walk, and a table that grows on cause 30).
+
+**Configuration.**
+- P1 `…-tagoverlap6c-pagedtbl_d83d3a633`, kit bkit91, board 1. The chain `nested/p1ts/p1ts-b1.*` waits for this lane's
+  pg2 chain (pid 886911); board 1 is already on P1, read back by name before the boot. One boot, the protected arm only.
+- Stage `nested/p1ts/tsph` (`tsph.SHA256SUMS`): bkit91's `make-train-stage.sh` around the heartbeat stage's `train/`
+  (`nested/tshark/board/t-ph-stage/train`), copied unchanged (a file-for-file sha256 diff is empty).
+  - Image `bcc251f3…`, the same as F's protected boots: wmem patch 0001, the dev-era revision with the Q-15 repair,
+    which calls the two-operand CREVOKE. A census of the image finds no CREVOKE word with rs2 = x0 and 11 with rs2 != x0.
+    Fig. 10's wmem revision, which calls one-operand `capstone_cap_release`, cannot run on P1.
+  - The same capture (9,000 frames), command line and 60 s heartbeat as the F pre-registration above.
+  - This is not Fig. 10's workload (tshark over 169 test captures). The appendix row says so.
+- Rung budget 1800, which the kit's x4 makes `BAKED_TIMEOUT=7200`; the idle limit is the same. The list line is
+  `tsph 1800 130`.
+- Read by `tshark/hb-frames.py` against `wl/ref1000.out` (stock, sha256 `056c1f8c…`) and by `tshark/parse-ts.py` if the
+  command returns.
+
+**Checked off the board** (rule 8; `nested/p1ts/recheck-ts.sh`, output `nested/p1ts/tsph-recheck/`):
+- The real bake on bkit91 returned 0.
+- Two kit `BOARD_STUB=2` runs returned 0: F's heartbeat synthetic transcript that returns, and the one that does not
+  (both carry `@@HB` lines). Both print `BAKED_TIMEOUT=7200`.
+- The real firmware build is 23,760,392 B (sha `b946125b…`), under the cap.
+- An `NR_DRY=1` pass of the chain.
+- Twin control `nts-p1hb2` (the staged `train/` itself, slot 28, twin kernel `perf/natio/images`, flat-table model):
+  returned rc 0 in 8.25 s of command uptime, output equal to stock (`056c1f8c…`, 1,140,005 lines, 9,000 frames).
+  With a 60 s period it printed no beat inside the command; F's twin control `nts-hb` (period 1) showed the beats. The twin models neither P1's paged table nor F's, so it shows only that the stage runs.
+
+**Outcomes:** A, B, C, "not read" and VOID exactly as in the F heartbeat pre-registration above. In addition:
+- **A with a return inside 7,200 s:** the output must equal stock's. The uptime span against F's unprotected mean
+  (1,118 s) and the counters give the slowdown. This is one boot, so it is not the cost. If it does return, a U P P U
+  comparison follows when a board is free.
+
+**Prediction.** Not predicted. On F the two protected boots gave no output for at least 3,327 s. The record table is the
+part of the core that P1 changed most, so P1 may complete, or it may stop as F did. If it stops, the frame and B
+against C are the readings. If it completes, M-16 is narrowed to F's table, not fixed: no root cause is claimed from
+this boot.
+
+**What follows.**
+- A: the time is reported, and the U P P U comparison is scheduled.
+- B or C: the frame reduces the capture for a folder under `fpga-repros/`; the appendix row reads "does not complete
+  on P1, M-16".
+
 ### Results: speedtest1, PostgreSQL and CREVOKE chains on P1 (board 2, 2026-11-17 17:24-19:22)
 
 **Configuration.** As pre-registered (0a57804ea778; SPEC-lane Addendum 160, spec-silicon f7e660db383b). Board 2 was
