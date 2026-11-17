@@ -26,3 +26,17 @@ Files:
   with, in turn: a cycles=0 line, a check= mismatch across arms, a check= mismatch with the bitstream-3 reference,
   rdcycle_rdinstret=static, a missing NATIVE-CNT end, rc=1 and an empty input.
 - `qpass.sh` is the QEMU functional pass of the seven native stages (faultesc/run.sh, slots 29-31).
+
+Readings, 2026-11-17:
+- QEMU functional pass (qpass.sh, natio images, icount shift 0). All seven kits PASS p1-check.py with the bitstream-3
+  references (runs-t3k1..3, runs-t3a1..4):
+  - every step rc 0;
+  - 4,840 BENCH lines, each with cycles, instret and ns above 0;
+  - check= is one value per program and iteration across T1 and T3, and equals bitstream 3's for 103 of 103 programs.
+- Each board stage's train/ is byte-identical to the native stage that passed (diff -r; the kit adds only plan.json).
+- QEMU instret (exact instruction counts, the kernel's at exits included):
+  - T3/T1 geomean 0.9998, range 0.9962-1.0000.
+  - Against bitstream 3's silicon instret it is not like-for-like: matmult-int reads 25.88 M on QEMU, close to
+    240 x 20^3 x 13 = 24.96 M from its 13-instruction inner loop, while bitstream 3's silicon window read 11.97 M with the same
+    iteration count and the same inner loop. Which instrument differs is not established, so instret is compared
+    silicon to silicon only.
