@@ -53,3 +53,27 @@ Parsing and analysis:
 - `analyze-p1.sh OUT [KIT...]` gates each landed kit with p1-check.py, parses it, and runs perf-analyze.py `report
   --arms T1,T3` over main (the 15 allocating programs), all103 and groups (BEEBS as one group of 93). This is
   2026-10-28's recipe for one pair of arms.
+- Kernel splices (board 3, p1k1-3, 2026-11-17). A kernel console line can start in the middle of a user line, most
+  often capstone_vm's release line inside the BENCH-DONE line of the process that just exited:
+  `BENCH-DONE beebs/sglib-ha[  143.107178] capstone_vm: release retires ...` + newline + `shtable-libc failed=0`.
+  As first written, p1-check failed the three kits on it (38/28/24 problems), and p1k2 lost 4 BENCH lines.
+  Both scripts now run `unsplice_printk` before anything else reads the transcript:
+  - every timestamped kernel line that starts mid-line is removed with its newline, rejoining the user line;
+  - it repeats to a fixed point, because a second fragment right behind the first only becomes mid-line once the first
+    is gone;
+  - a line whose text before the fragment is a quote tag (native-smoke.sh's `@@NS-DMESG `) is kept;
+  - the count is printed (p1-check's first line, parse-board's stderr).
+  It is a parsing repair. The gate's checks are unchanged and run on the rejoined text. Readings:
+  - p1k1/p1k2/p1k3: 38/24/24 fragments removed. Each kit then passes p1-check with the bitstream-3 references
+    (214/240/240 BENCH lines) and parses with rc 0. The fragments all sit in BENCH or BENCH-DONE lines.
+  - An earlier repair without the tag exemption also removed the 26 `@@NS-DMESG` lines per kit and ran them, with the
+    `@@NS-RESULT` line after them, into one line. Apart from those lines its output is identical to this one.
+  - Controls, with no change: the ten bitstream-2/3 t3a/t3k transcripts parse byte-identically with the old and the new
+    parser, and the seven P1 QEMU transcripts PASS p1-check with 0 fragments.
+  - `test-p1-check.sh` builds a synthetic two-process transcript in the P1 format and checks four cases:
+    - clean;
+    - 4 splices (mid-word, inside check=, two back to back), plus an @@NS-DMESG block;
+    - a positive control that the splices are really there;
+    - the negative control, which deletes step 0's BENCH-DONE: p1-check FAILs with "step 0: no BENCH-DONE failed=0"
+      and parse-board exits 1.
+    Run against the previous p1-check.py and parse-board.py, the test fails on the spliced case.

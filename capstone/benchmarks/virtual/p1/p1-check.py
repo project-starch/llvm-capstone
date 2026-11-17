@@ -10,9 +10,36 @@ Per step of STEPS.tsv, in order:
   - @@NATIVE-CNT <n> begin and end, both with run_cycles= and runs=, run_cycles(end) > run_cycles(begin).
 Across steps: check= is one value per (program, iteration label) over both arms. With --ref (bitstream-3 runs-*.tsv.gz),
 that value must equal the reference's for every (program, label) the reference has; a program the reference lacks is
-listed as unreferenced. Console lines are taken after stripping CR; a heartbeat (@@HB...) cut into a line is removed."""
+listed as unreferenced. Console lines are taken after stripping CR; a heartbeat (@@HB...) cut into a line is removed,
+and so is a kernel console line that starts mid-line (unsplice_printk; the count is printed first).
+Test: test-p1-check.sh."""
 import argparse, gzip, re, sys
 from collections import defaultdict
+
+
+# A kernel console line can land inside a user line on the board console (p1k1-3 on bitstream 3, 2026-11-17: 38/24/24
+# times, mostly capstone_vm's release line inside the BENCH-DONE line of the process that just exited):
+# "BENCH-DONE beebs/sglib-ha[  143.107178] capstone_vm: release retires ...\nshtable-libc failed=0". Each such fragment,
+# a timestamped line starting mid-line, is removed with its newline, which rejoins the user line. This runs to a fixed
+# point, because a second fragment right behind the first only becomes mid-line once the first is gone. A line whose
+# text before the fragment is a known quote tag (native-smoke.sh's `@@NS-DMESG `, dmesg quoted on purpose) is kept.
+# The count is printed: a parsing repair, never silent. The gate's checks then run on the rejoined text unchanged.
+KSPLICE = re.compile(r'(?<=[^\n])\[\s*\d+\.\d{6}\] [^\n]*\n')
+QUOTE_TAGS = ('@@NS-DMESG ',)
+
+
+def unsplice_printk(t):
+    n = 0
+    while True:
+        out, last, k = [], 0, 0
+        for m in KSPLICE.finditer(t):
+            ls = t.rfind('\n', 0, m.start()) + 1
+            if t[ls:m.start()] in QUOTE_TAGS:
+                continue
+            out.append(t[last:m.start()]); last = m.end(); k += 1
+        if not k:
+            return t, n
+        out.append(t[last:]); t = ''.join(out); n += k
 
 ap = argparse.ArgumentParser()
 ap.add_argument('transcript'); ap.add_argument('steps'); ap.add_argument('--ref', action='append', default=[])
@@ -23,6 +50,8 @@ try:
 except OSError as e:
     print(f'NO DATA: {e}'); sys.exit(2)
 text = re.sub(r'@@HB[^\n]*\n', '', text.replace('\r', ''))
+text, nsplice = unsplice_printk(text)
+print(f'kernel fragments removed from mid-line: {nsplice}')
 lines = text.split('\n')
 if not any(l.startswith('@@PERF-BEGIN ') for l in lines):
     print(f'NO DATA: no @@PERF-BEGIN in {a.transcript} ({len(lines)} lines)'); sys.exit(2)

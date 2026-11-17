@@ -30,6 +30,31 @@ import re
 import sys
 from pathlib import Path
 
+
+# A kernel console line can land inside a user line on the board console (p1k1-3 on bitstream 3, 2026-11-17: 38/24/24
+# times, mostly capstone_vm's release line inside the BENCH-DONE line of the process that just exited):
+# "BENCH-DONE beebs/sglib-ha[  143.107178] capstone_vm: release retires ...\nshtable-libc failed=0". Each such fragment,
+# a timestamped line starting mid-line, is removed with its newline, which rejoins the user line. This runs to a fixed
+# point, because a second fragment right behind the first only becomes mid-line once the first is gone. A line whose
+# text before the fragment is a known quote tag (native-smoke.sh's `@@NS-DMESG `, dmesg quoted on purpose) is kept.
+# The count is printed: a parsing repair, never silent. The gate's checks then run on the rejoined text unchanged.
+KSPLICE = re.compile(r'(?<=[^\n])\[\s*\d+\.\d{6}\] [^\n]*\n')
+QUOTE_TAGS = ('@@NS-DMESG ',)
+
+
+def unsplice_printk(t):
+    n = 0
+    while True:
+        out, last, k = [], 0, 0
+        for m in KSPLICE.finditer(t):
+            ls = t.rfind('\n', 0, m.start()) + 1
+            if t[ls:m.start()] in QUOTE_TAGS:
+                continue
+            out.append(t[last:m.start()]); last = m.end(); k += 1
+        if not k:
+            return t, n
+        out.append(t[last:]); t = ''.join(out); n += k
+
 ARM = r'(T[123]|Plain|Caps|MapLife|ObjLife)'
 BEGIN = re.compile(r'@@PERF-BEGIN (\d+) (\S+) ' + ARM + r' (\d+) K(\d+)')
 END = re.compile(r'@@PERF-END (\d+) (\S+) ' + ARM + r' (\d+) K(\d+) rc=(\d+)(.*)')
@@ -61,6 +86,9 @@ def main():
     text = hb.sub('', text)
     if mid:
         print(f'parse-board: rejoined {mid} guest line(s) split by a mid-line @@HB', file=sys.stderr)
+    text, nsplice = unsplice_printk(text)
+    if nsplice:
+        print(f'parse-board: rejoined {nsplice} guest line(s) split by a mid-line kernel console line', file=sys.stderr)
     lines = text.splitlines()
     procs, cur, problems, last_quote, saw_ncnt = [], None, [], None, False
     for ln in lines:
