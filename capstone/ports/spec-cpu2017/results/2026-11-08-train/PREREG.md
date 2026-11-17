@@ -5286,3 +5286,23 @@ These are wide bands; the readings decide.
   - a failing session is reported as not read and never pooled.
 - **Board 1:** chain nested/p1s2/p1s2-b1.conf (TAG p1s2-nested). It waits for the matched x264 (pid 40534), then flashes P1 with the seal check and readback, then runs FFmpeg U P P U with the flipped-input control, then a second PostgreSQL session.
 - **Board 3:** chain nested/p1s2/p1s2-b3.conf (TAG p1s2cpy-nested). It waits for the embedded-suite chain (pid 403643), then runs a second CPython session as four one-arm boots.
+
+## Addendum 162 (2026-11-17 18:35 +08, after the tick probes): readings, and deviations from Addendum 159a
+
+- **Readings.** Every probe printed its DONE line.
+
+  | | idle (hiccup2) | streaming, primary (hiccup3m) | streaming, backup (hiccup3) |
+  |---|---|---|---|
+  | Plain on the matched baseline (board 2) | 7.584 % | **7.919 %** | 7.849 % |
+  | Sublet on P1 (board 3) | 1.233 % | **0.455 %** | 0.452 % |
+
+- **The rule fires.** |Δs| = 7.46 pp ≥ 1 pp, so every Sublet/plain ratio × (1 − 0.00455)/(1 − 0.07919) = **1.0811**. Uncorrected and corrected are both reported.
+- **Deviations to disclose.**
+  - The Sublet probes ran on board 3, not on board 2: board 2's B5a chain was stopped for the matched baseline.
+  - The Sublet idle prediction [3, 10] % MISSED. Most of its 1.233 % is the probe's own clock_gettime exit every 2^20 steps, not ticks. The probe's 40 ms histogram bin is its overflow bin.
+  - An interim note used hiccup3 as "the rule's probe". 159a names hiccup3m. The factors differ by 0.0008.
+- **Audit (claim-auditor, 2026-11-17).**
+  - Holds: the arithmetic, the direction, and that the two sides run the same probe.
+  - Unresolved: whether the probe's share transfers to SPEC. The probe makes no syscalls, while gcc spends about 5.4 % out of context, where 10 ms ticks run. The probe has no data reuse, so tick-induced refill is invisible to it.
+  - Transfer error: at least ±0.5 pp, sign unknown.
+  - Consequence: the uncorrected ratio is the measurement. The corrected one is an estimate that removes the tick share, labelled as such.
