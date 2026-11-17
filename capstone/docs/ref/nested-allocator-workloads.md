@@ -1671,3 +1671,82 @@ session's. For CPython the rule applies per benchmark, as before.
 **Bands.** PostgreSQL and CPython: as for the first P1 session. FFmpeg, as on F: every command decodes 300 frames equal
 to stock's framemd5, `fp` decodes 300 frames with at least one different (else the comparison stops); in-context cost
 -1 % to +1 %; event 23 (hpm7 on this kit), protected minus not, under +10,000 per command.
+
+### Results: speedtest1, PostgreSQL and CREVOKE chains on P1 (board 2, 2026-11-17 17:24-19:22)
+
+**Configuration.** As pre-registered (0a57804ea778; SPEC-lane Addendum 160, spec-silicon f7e660db383b). Board 2 was
+flashed with P1 at 17:24 from the seal (sha256 checked) and read back resident by name. One chain, `nested/p1/p1n-b2.*`,
+nat-run3 pid 537579. Before it: the rule-8 recheck of every stage (`nested/p1/recheck-p1.sh`: real bake, BOARD_STUB=2
+on the stage's real F transcript and on a cut that does not return, real firmware under the 26 MB cap), and an
+`NR_DRY=1` pass of the chain. Transcripts `spec/board/out-nat-p1-nested-b2/<stage>/board.txt`: st1 `adefc453…`
+(firmware `ab7626e5…`), pg `dacb8df4…` (`6a341fd…`), crvt `c905ef59…` (`7d9789f…`). Read by the F parsers and
+`nested/p1/abba.py` (the U P P U table and the repeat rule; it reproduces the F section's figures from F's
+transcripts) and `nested/p1/crvt-read.py`.
+
+**Controls.** In every boot `b0-stats` and `b0-hello` returned 0 and the smoke passed all 9 steps. The kit's classifier
+printed NO RESULT or MALFORMED for these stages' format, as on F; every command printed `@@SPEC-END`. Not VOID.
+
+**speedtest1 `--size 1`.** 32/32 oracle phases equal to the reference in every command.
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 660,481,623 | 674,241,669 | 674,930,135 | 659,578,365 | 0.14 % / 0.10 % | **+2.21 %** (+14.6 M) |
+| `between_cycles` | 5,051,005,067 | 5,127,715,362 | 5,133,707,324 | 5,051,341,672 | 0.01 % / 0.12 % | **+1.57 %** |
+| uptime span, s | 229.32 | 232.94 | 233.20 | 229.28 | 0.02 % / 0.11 % | **+1.64 %** |
+| hpm3 record-TLB misses | 15,383 | 17,842 | 17,843 | 15,383 | | +2,460 |
+| hpm4 walk cycles | 530,390 | 431,503 | 617,533 | 508,026 | | +5 k (noisy) |
+| hpm5 paged record accesses | 75,580 | 571,807 | 571,810 | 75,579 | | +496 k |
+| hpm7 event 23 | 69,323 | 115,473 | 117,689 | 69,283 | | +47.3 k |
+| hpm8 L1D misses | 3,011,267 | 3,192,803 | 3,217,104 | 2,980,705 | | +6.97 % |
+
+The unprotected arm's record-TLB misses equal its context entries (15,383), one per entry.
+
+**PostgreSQL.** Every command gives the native answers (4 CHECK lines, 2,000 rows).
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 11,734,796,918 | 12,652,577,957 | 12,653,535,263 | 11,733,066,120 | 0.01 % / 0.01 % | **+7.83 %** (+919 M) |
+| `between_cycles` | 8,720,320,127 | 8,795,808,032 | 8,800,476,915 | 8,737,671,836 | 0.20 % / 0.05 % | **+0.79 %** |
+| uptime span, s | 821.21 | 861.29 | 861.51 | 821.82 | 0.07 % / 0.03 % | **+4.86 %** |
+| hpm3 record-TLB misses | 201,628 | 1,278,719 | 1,289,702 | 201,627 | | +1.08 M |
+| hpm4 walk cycles | 7,392,286 | 33,711,607 | 33,401,230 | 7,336,900 | | +26.2 M |
+| hpm5 paged record accesses | 1,849,553 | 30,203,048 | 30,195,876 | 1,849,558 | | +28.3 M |
+| hpm7 event 23 | 1,411,111 | 3,470,832 | 3,461,592 | 1,410,790 | | +2.06 M |
+| hpm8 L1D misses | 66,619,089 | 75,020,134 | 75,164,650 | 66,513,338 | | +12.8 % |
+
+**CREVOKE chains.** hpmcounter3/4 read from the domain (`p-hpm` rc 0), so the misses below are read around the one
+CREVOKE. `mcycle` faults (rc 139), as on F.
+
+| chain | N | CREVOKE cycles | per node | record-TLB misses | walk cycles |
+|---|---|---|---|---|---|
+| contiguous | 1,000 | 16,926 | 16.9 | 0 | 0 |
+| contiguous | 10,000 | 318,824 | 31.9 | 40 | 1,063 |
+| contiguous | 100,000 | 3,217,879 | 32.2 | 391 | 10,038 |
+| scattered (64 pages) | 1,000 | 38,868 | 38.9 | 1,001 | 6,650 |
+| scattered (64 pages) | 10,000 | 382,475 | 38.3 | 10,001 | 61,863 |
+| scattered (400 pages) | 100,000 | 3,853,815 | 38.5 | 100,001 | 611,824 |
+
+The 10^6 probe reported 65,537, 131,073 and 196,609 nodes and died (rc 139) before 262,145, with 39 grow events
+(hpm6) over the command.
+
+**Against the pre-registration.**
+- Answers, repeats, controls: **met** for both applications. Both pairs pass the repeat rule on both counters.
+- In-context cost: speedtest1 **+2.21 %**, band +0.5 % to +5 %, **met**; PostgreSQL **+7.83 %**, band +3 % to +25 %,
+  **met**.
+- Record-TLB misses, more in the protected arm: **met** for both (+16 %, and 6.4 times).
+- CREVOKE contiguous, 15 to 60 per node at 10,000 and 100,000: **met** (31.9, 32.2).
+- Scattered more than contiguous: **met** (+6.4 cycles per node at 100,000). The scatter took: the scattered CREVOKE
+  misses once per node, 256 times the contiguous count (the check needed 4). Scattered 40 to 400 per node: **missed,
+  low** (38.3 and 38.5).
+- 10^6: the count reached is 196,609; the process died before 262,145. A 10^6-node subtree cannot be built here.
+
+**Reading.**
+- PostgreSQL's in-context cost is read on silicon for the first time: +7.83 %, with repeats 0.01 %. On F the same images
+  missed the repeat rule (ABBA mean +6.67 %, not read). The walker's own cycles (+26.2 M) are 2.8 % of the +919 M, so
+  the record TLB is not where most of PostgreSQL's cost goes on P1; event 23 (+2.06 M replays) and the L1D misses
+  (+8.5 M) are larger candidates, and this boot does not attribute the rest.
+- speedtest1 costs +2.21 % in-context on P1 against +1.67 % on F.
+- A record-TLB miss costs about 6 walk cycles (611,824 over 100,001 misses), so the three dependent reads of a walk hit
+  the L1D here. A CREVOKE whose subtree's records sit on a different page at every node costs 20 % more per node than a
+  contiguous one. The worst single CREVOKE measured, 100,000 scattered nodes, holds the core for 3.85 M cycles, about
+  154 ms at 25 MHz, uninterruptible.
