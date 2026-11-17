@@ -5491,3 +5491,20 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
   - The SPEC lane advised restoring the line at once. A restore made only after p2 returned could miss the loop's next read, and lose the one u2 the repeat rule needs.
   - The line was restored byte-identical (cmp against the original, same inode 280001077). The chain therefore runs Addendum 173 as registered: tsu-p2, then tsu-u2, whatever p2 does.
 - **Reading rule, unchanged.** A cost is read only if both protected boots return with stock's output and the repeat rule holds. Otherwise appendix D carries no Wireshark row.
+
+## Addendum 176 (2026-11-18 06:20 +08, after the chain ended): tshark U P P U on P1 is complete, and no cost is read
+
+- **Outcome.** Read from the transcripts of out-nat-p1tu-nested-b1 by the SPEC lane, every value recomputed from the counters.
+  - **tsu-p2** (sha256 f464e437…) returned rc 0 with stock's output: 056c1f8c…, 1,140,005 lines, 9,000 frames. Its span is 1,118.38 s.
+    In context it took 24,073,705,090 cycles, and 3,830,848,086 between.
+  - **tsu-u2** (sha256 bda62b6d…) returned rc 0 with stock's output. Its span is 1,073.60 s, and 22,942,461,402 cycles in context.
+  - u1 and u2 differ by 0.87 % in run_cycles and 0.59 % in between_cycles.
+- **Same stage, kernel rebuilt.** `diff -r` of the tsu-p1 and tsu-p2 stage directories is empty. Firmware and Image hashes differ in every boot, because the initramfs is embedded.
+  - p2's bake also recompiled setup.o, fdt.o and cmdline_early.o of the shared kernel tree. The other three bakes did not.
+  - The .config is identical, and so is the kernel command line in all four dmesgs. So the source of the rebuild is unknown, and p1 to p2 is not shown to be one variable.
+- **No cost is read**, under Addendum 175's rule, because tsu-p1 did not return.
+  - For the record only, not a reading: p2 against the u mean is +5.39 % in context and +4.60 % in span. It is one protected boot.
+  - Appendix D carries no Wireshark row.
+- **Returns of the protected arm on P1:** 2 boots of 3. With the heartbeat it returned 1 of 1, and without it 1 of 2.
+  - The heartbeat is therefore not needed for a return, and the non-return is intermittent. No mechanism is claimed.
+  - The lane record is llvm-capstone nested-workloads 35d349afc10c, with ISSUES M-16 updated. The withdrawal of 497d4d6a189e's narrowing stands.
