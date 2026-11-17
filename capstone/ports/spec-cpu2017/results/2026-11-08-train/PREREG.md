@@ -5429,3 +5429,14 @@ These are wide bands; the readings decide.
 - **PHP.** Chain nested/p1a/b2-php.*, after the memcached chain.
   - One image at run-time mode 4 (unprotected) against mode 6 (protected).
   - Fig. 8's pinned tenth of bench.php.
+
+## Addendum 171 (2026-11-18 00:40 +08, before they run): the N=2 repeats re-homed so no board idles before 14:00
+
+The stages, kits, use and predictions are those of Addenda 164-166. Only placement and TAGs change.
+- **Board 1.**
+  - Part A of the +Spatial repeat (TAG p1-spa3rep-a: gcc train01, lbm, nab, imagick) runs after the nested Wireshark chain (pid 1526065).
+  - The nested Perl SV chain then waits on part A.
+  - Part B (TAG p1-spa3rep-b: mcf, xz) runs after Perl SV.
+- **Board 2.** The +Spatial perl full repeat (TAG p1-spa3rep-p) runs after the nested PHP chain (pid 1771932).
+- **Board 3.** The matched plain perl full repeat (TAG rvm3p, kit bkit95, the matched bitstream flashed over P1) runs after the Full repeat (pid 1219413). This is the plain perl row Addendum 167 moved off board 2.
+- **Cut order if 14:00 is at risk:** part B's xz, then +Spatial perl, then plain perl. A cut row stays N = 1 and is reported so.
