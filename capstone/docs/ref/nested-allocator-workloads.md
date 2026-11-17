@@ -2137,3 +2137,52 @@ commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command gi
   to 0.03 %. The P1 PostgreSQL figure, **+7.83 %**, is reproducible at the boot-to-boot level these counters resolve.
 - The first protected command grew the record table 25 times and the second none, as in session 1 (25, 0). The two protected commands' record-TLB misses differ by 11 % and their walk cycles by 8 %, while
   their in-context cycles agree to 0.04 %: the walker's +25 M is 2.7 % of the +918 M, as in session 1.
+
+### Results: the protected tshark with a heartbeat on P1 (board 1, 2026-11-18 01:35-02:23): A, it returns with stock's output
+
+**Configuration.** As pre-registered (2475d3fb7944). The chain `nested/p1ts/p1ts-b1.*`, nat-run3 pid 1526065, waited for
+the pg2 chain. P1 was resident on board 1 and was read back by name, so there was no flash. Transcript
+`spec/board/out-nat-p1ts-nested-b1/tsph/board.txt` (sha256 `d4e0052e…`, firmware `955dadb6…`), read by
+`tshark/hb-frames.py` and `tshark/parse-ts.py` against `wl/ref1000.out` (`056c1f8c…`).
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver, and the command
+printed `@@SPEC-END` with rc 0. Not VOID.
+
+**Outcome: A.** The beats continued and the output grew through the run. The command returned rc 0 after 1,669.4 s of
+uptime (`@@SPEC-BEGIN` at 267.4 s), and its output equals stock: sha256 `056c1f8c…`, 1,140,005 lines, 9,000 frames.
+
+| beat | uptime, s | since the previous beat, s | `st.out`, MB | frame | `run_cycles` per frame in the beat | `between_cycles` per frame in the beat |
+|---|---|---|---|---|---|---|
+| 3 | 307.5 | | 1.46 | 276 | | |
+| 4 | 377.1 | 69.6 | 4.58 | 863 | 2.68 M | 0.95 M |
+| 6 | 565.0 | 102.6 | 11.96 | 2,249 | 2.70 M | 1.47 M |
+| 8 | 830.8 | 143.7 | 21.17 | 3,981 | 2.70 M | 1.89 M |
+| 10 | 1,194.0 | 195.1 | 32.69 | 6,146 | 2.71 M | 2.22 M |
+| 12 | 1,679.0 | 259.5 | 47.06 | 8,847 | 2.72 M | 2.50 M |
+
+Over the whole command: `run_cycles` 24,407 M, `between_cycles` 17,261 M, hpm3 record-TLB misses 7.16 M, hpm4 walk
+cycles 90.5 M, hpm5 paged record accesses 98.9 M, hpm6 grow 8, hpm7 event 23 11.27 M, hpm8 L1D misses 129.6 M.
+
+**Where the time went: the overrun of the heartbeat's own beats.**
+- The beats are 60 s apart by `sleep`. During the command each beat ran past its period by more, from 9.6 s at beat 4 to
+  199.5 s at beat 12. Before the command the overrun was 1.6 s.
+- The overrun grows with the size of `st.out`: 4.47 s per MB, minus 10.8 s, a linear fit over beats 4-12. The only
+  step of a beat whose work depends on that size is `wc -c < st.out`, and in the shared buildroot target `wc` is busybox (the kit's own rootfs was not checked).
+- Over the nine intervals between beats, the two counters fit to within 0.13 %:
+  - in-context: 2.683 M cycles per frame, constant through the run;
+  - kernel and other: 0.741 M cycles per frame, plus 12.5 M cycles per second of overrun.
+- So the in-context cost per frame does not grow as the run proceeds. What grows is the heartbeat's own work, which is
+  charged to `between_cycles`. On the twin a 1 s beat stretched the span from 8.32 s to 11.46 s, which is consistent with this.
+
+**Against the pre-registration.**
+- A with a return inside 7,200 s: **met**, and the output equals stock's.
+- The pre-registered slowdown, the uptime span against F's unprotected mean of 1,118 s, reads **+49 %**. But this boot
+  shows that most of it is the beat's own overrun, so it is not read as the protection's cost.
+- In-context `run_cycles`, 24,407 M against F's unprotected mean of 24,036 M: +1.5 %. That compares across two bitstreams
+  in one boot, so it is not the cost either.
+
+**Reading.**
+- On P1, the protected tshark completes, with stock's output. On F, the same image gave nothing for at least 3,327 s in
+  two boots. So M-16 is narrowed to F's flat lifetime table. That is not a root cause, and nothing is fixed on F.
+- The slowdown this boot shows grows with the output file the beat measures, not with the frames processed. The
+  protection's cost on P1 needs the U P P U comparison without the heartbeat, which follows as pre-registered.

@@ -10342,7 +10342,7 @@ on these types, and by casts between them and arrays.
 `values` under `MAXIMUM_ALIGNOF > 8`. That changes the on-disk layout, so every MAXALIGN-16 cluster and fixture must be
 rebuilt. The alternative is to teach the array code the vectors' fixed offset. The port owner chooses.
 
-### M-16 — silicon only (bitstream F): the Sublet-protected tshark does not return within 3,600 s, while the unprotected arm finishes in 1,112-1,125 s and both arms finish on the twin `OPEN — filed 2026-11-17 (nested lane); 2 of 2 boots; slow vs stopped NOT separated; not localised; the heartbeat stage that separates them is ready and unrun`
+### M-16 — silicon only (bitstream F): the Sublet-protected tshark does not return within 3,600 s, while the unprotected arm finishes in 1,112-1,125 s and both arms finish on the twin `OPEN — filed 2026-11-17 (nested lane); 2 of 2 boots; slow vs stopped NOT separated; not localised; on P1 (paged table) the protected arm returns with stock's output (2026-11-18), F not re-run`
 
 **Statement.** tshark 4.6.8 with wmem patch 0001 (Sublet lifetimes for `block_fast`, dev's Q-15-repaired revision),
 `-r w.pcap -V -n` on a 9,000-frame capture, native route, bitstream F `…-twc16k-merge-hpmtag_a948e4134`, kit
@@ -10373,8 +10373,11 @@ arms return with stock's output (8.0 s and 8.3 s uptime; in-context +4.4 %).
   also set in healthy controls on an older bitstream (`SILICON-BLOCKER.md` §3); and the unprotected boots have no
   aperture sample taken while running. So neither a stall at that CDERIVE nor a 3x-plus slowdown is shown.
 
-**Tried.** Nothing beyond the two boots: the heartbeat boot was pre-registered (nested-workloads 5d3b273eabb1) and
-not run. The image is a dev-era revision; Fig. 10's later wmem patch (trap/eval 684a29c52685) uses the one-operand
+**Tried.** On F, nothing beyond the two boots: the heartbeat boot was pre-registered (nested-workloads 5d3b273eabb1)
+and not run. On P1 (`…-tagoverlap6c-pagedtbl_d83d3a633`, the paged lifetime table, kit bkit91, board 1, 2026-11-18) the
+same image with the heartbeat returned rc 0 in 1,669 s with stock's output (transcript
+`spec/board/out-nat-p1ts-nested-b1/tsph/board.txt`, `d4e0052e…`; `nested-allocator-workloads.md`, "Results: the
+protected tshark with a heartbeat on P1"). So M-16 is narrowed to F's flat table; no root cause is claimed. The image is a dev-era revision; Fig. 10's later wmem patch (trap/eval 684a29c52685) uses the one-operand
 CREVOKE, which P1 (capstone-ariane d83d3a633, read there) does not implement: its CREVOKE takes parent and child.
 
 **Impact.** No silicon cost for tshark's protection; the paper's timing rows leave it out. The other four applications'
