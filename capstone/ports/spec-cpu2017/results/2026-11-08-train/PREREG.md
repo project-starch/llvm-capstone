@@ -5158,3 +5158,55 @@ takes precedence over _PAGED: mhpmevent3..8 = 34 (read hit), 35 (read miss), 31 
     passive, so no cycle effect is expected, but it is read as information, not graded.
 - Keys and bands are otherwise Addendum 157's. The cs-b2 chain is relaunched on its new conf before it has booked:
   it was waiting on cq-b2's pid.
+
+## Addendum 159 (2026-11-17 12:20 +08, before it runs): the matched plain baseline, and the tick probes with a correction rule fixed in advance
+
+**Why.** The co-author and the lead agreed (17 Nov, before the deadline) that plain must run on a CVA6 with the same
+non-capability configuration as the Sublet prototype. The current plain ran on stock CVA6, whose I-cache is 16 KiB
+4-way where the prototype's is 32 KiB 8-way, and whose DTLB has 16 entries where the prototype's has 64. Table 4 will
+use the same matched build. Ticks are measured on both sides before deciding how to handle them.
+
+**The matched baseline.** capstone-ariane riscv-baseline-matched 8db8f9cda = d31345cf3 plus three config parameters of
+`baseline_cv64a6_imafdc_sv39_config_pkg.sv`:
+- IcacheByteSize 16384 → 32768;
+- IcacheSetAssoc 4 → 8 (line width 128 bits, unchanged, so 4 KiB per way as on the prototype);
+- DataTlbEntries 16 → 64.
+
+These are the only parameter differences from the prototype's `capstone_cv64a6_imafdc_sv39_config_pkg.sv` at
+d83d3a633, checked by diff. The prototype's single non-idempotent rule there is simulation-only; on the FPGA both
+builds take it from ariane_xilinx.sv. The build runs under full-chain.sh, guarded (40 GB), and is sealed as
+`caplifive_rvbase-matched-ic32k-dtlb64_8db8f9cda.bit`; its seal file is perf/thp2/SEAL-rvm.sha256.
+
+**Software (unchanged from the current plain).**
+- The RVAL stages (`perf/fair/stages/*-rv-al3`), all SHA256SUMS re-verified 12:15.
+- Stock OpenSBI d6b78e4 (kit bkit54's firmware).
+- Kit bkit95-k2n-rvm = bkit54-k2n-rv with only BOARD_BITSTREAM changed.
+- Compiler check: plain is llvm-capstone 98337e20, Sublet 29027126. The 8 commits between them touch only the Capstone
+  backend, so plain code generation is identical.
+- x264 now uses the RVAL build, as every other row does.
+
+**Placement, chosen so each plain row shares a board with its Sublet counterpart where possible:**
+- board 1: x264 (Full x264 ran on board 1);
+- board 2: mcf, lbm, xz (+Spatial ran on board 2);
+- board 3: perl full, gcc train01, imagick, nab (both Sublet perl runs ran on board 3).
+
+**Predictions:**
+- rc 0, specdiff PASS; x264's decoded frames byte-identical to the Sublet runs'.
+- Each row's plain time on the matched baseline is at most the stock-CVA6 RVAL time +0.5 %, and at least × 0.80.
+  - The larger I-cache and DTLB can only help a plain program, apart from noise.
+  - lbm and x264 should move most, because they are the rows where Sublet beat stock plain.
+
+**Tick probes** (binaries requested from the compiler lane; their stages are added by a follow-up note, before they run):
+- hiccup2 (idle) and hiccup3 (streaming through 8 MiB at a 64-byte stride; perf/tick/hiccup3.c) each run for 60 s.
+- Plain runs them on the matched baseline with kit bkit95. Sublet runs them inside a context on P1 with kit bkit91, built
+  with the FRCDKMSa3 SDK.
+- s is the share of wall time lost to gaps: HIC2-ALL for idle, HIC3-ALL excess for streaming.
+
+**Correction rule, fixed now:**
+- s_plain and s_Sublet come from the streaming probe; the idle values are reported alongside.
+- If |s_plain − s_Sublet| < 1 percentage point, no correction; both values are disclosed.
+- Otherwise every Sublet/plain ratio is multiplied by (1 − s_plain) / (1 − s_Sublet). This is one factor for all
+  benchmarks. Both the uncorrected and the corrected ratios are reported.
+- Full over +Spatial needs no correction: same hardware, same execution mode.
+
+All key-5 caveats of the Sublet side are unchanged.
