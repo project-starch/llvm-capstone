@@ -1894,6 +1894,58 @@ functions and `cache.c`, with libevent's types, the mutexes, the condition varia
 - Record-table growth (hpm6, event 33): more in the protected arm.
 - **VOID** as above.
 
+### Pre-registration: tshark on P1, U P P U without a heartbeat, one arm per boot (written 2026-11-18 02:30, before the boots)
+
+**Question.** The heartbeat boot above returned (outcome A), so the U P P U comparison it pre-registered follows. What
+does the protection cost tshark on P1? And is the heartbeat boot's long span the beat's own `wc` reading `st.out`
+(H1), or a kernel cost per frame inside tshark that grows over the run (H2)?
+
+**Configuration.**
+- P1 `…-tagoverlap6c-pagedtbl_d83d3a633`, kit bkit91, board 1. The chain `nested/p1tu/p1tu-b1.*` waits for this lane's
+  Perl chain (pid 1793373). Board 1 is on P1; the chain reads it back by name before the first boot.
+- Four boots, one arm each, in the order U P P U, as on F: `tsu-u1`, `tsu-p1`, `tsu-p2`, `tsu-u2`.
+  - The stages come from `nested/p1tu/mk-stages.sh`: bkit91's `make-train-stage.sh` around F's
+    `nested/tshark/board/t-u-stage/train` and `t-p-stage/train`, copied unchanged. A file-for-file sha256 diff is
+    empty, and the wrapper equals the heartbeat stage's. Checksums are in `nested/p1tu/<name>.SHA256SUMS`.
+  - The images are F's: `ts_unprot.xz` (`2ceb6806…`) unpacks to `2061f661…`, with 6 CREVOKE words, all rs2 != x0.
+    `ts_prot.xz` (`c1a1293f…`) unpacks to `bcc251f3…`: wmem 0001, the dev-era two-operand revision with the Q-15
+    repair, with 11 CREVOKE words, all rs2 != x0.
+  - The capture (9,000 frames) and the command line `-r w.pcap -V -n` are the heartbeat boot's. There is no heartbeat.
+  - This is not Fig. 10's workload (tshark over 169 test captures); the appendix row says so.
+- List lines `<stage> 900 60`; the kit's x4 makes `BAKED_TIMEOUT=3600`.
+- Read by `tshark/parse-ts.py` against `wl/ref1000.out` (`056c1f8c…`) and by `nested/p1/abba.py`.
+
+**Checked off the board** (rule 8; `nested/p1tu/recheck-all.sh` runs `nested/p1/recheck-p1.sh` for each stage, with
+output in `nested/p1tu/<name>-recheck/`), for each stage:
+  - The real bake on bkit91 returned 0.
+  - Kit `BOARD_STUB=2` returned 0 on a real transcript that returns: F's `t-u1` for the U stages, and the P1 heartbeat
+    boot's for the P stages. It also returned 0 on that transcript cut after `@@SPEC-BEGIN`, which does not return.
+    Both print `BAKED_TIMEOUT=3600`.
+  - The real firmware build is 23,760,392 B, under the cap.
+- `nested/p1tu/tsu-abba.py` combines the four parses for `abba.py`. On the stubs' real transcripts it reproduces F's U
+  readings. On the cut transcript it exits 2 (`NO @@SPEC-END`).
+- An `NR_DRY=1` pass of the chain reached `DONE` (`nested/p1tu/dry.log`).
+
+**Bands.**
+- Answers: every command returns rc 0 with output equal to stock (`056c1f8c…`, 1,140,005 lines, 9,000 frames).
+  Otherwise that arm is not read.
+- Repeats: 1 % `run_cycles`, 2 % `between_cycles`, per arm pair. Otherwise the difference is not read.
+- In-context cost (ABBA means): +0 % to +6 %. The twin gave +4.4 %. The heartbeat boot gave +1.5 %, but that
+  compared across two bitstreams.
+- Kernel and other: no band.
+
+**H1 against H2, decided by the protected arm's mean.**
+- H1: `between_cycles` at most 8.5 G and an uptime span at most 1,400 s. The heartbeat boot's fit predicts 6.7 G
+  (0.741 M per frame) and about 1,250 s.
+- H2: `between_cycles` at least 14 G, or a span at least 1,600 s. The heartbeat boot had 17.3 G and 1,669 s.
+- Between those, neither is decided.
+
+**Prediction.** H1. In-context +1 % to +5 %. The protected arm's kernel cycles exceed the unprotected arm's: on F
+the unprotected arm had 0.43 M per frame, and the fit gives the protected arm 0.74 M on P1.
+
+**What follows.** If read, the cost goes into the appendix-D row together with the H1/H2 outcome. If H2, the frame
+profile from the heartbeat boot reduces the capture for a folder under `fpga-repros/`.
+
 ### Results: speedtest1, PostgreSQL and CREVOKE chains on P1 (board 2, 2026-11-17 17:24-19:22)
 
 **Configuration.** As pre-registered (0a57804ea778; SPEC-lane Addendum 160, spec-silicon f7e660db383b). Board 2 was
@@ -2167,12 +2219,21 @@ cycles 90.5 M, hpm5 paged record accesses 98.9 M, hpm6 grow 8, hpm7 event 23 11.
 - The beats are 60 s apart by `sleep`. During the command each beat ran past its period by more, from 9.6 s at beat 4 to
   199.5 s at beat 12. Before the command the overrun was 1.6 s.
 - The overrun grows with the size of `st.out`: 4.47 s per MB, minus 10.8 s, a linear fit over beats 4-12. The only
-  step of a beat whose work depends on that size is `wc -c < st.out`, and in the shared buildroot target `wc` is busybox (the kit's own rootfs was not checked).
+  step of a beat whose work depends on that size is `wc -c < st.out`. In the shared buildroot target `wc` is busybox
+  1.36.1, whose `wc` reads every byte with `getc` (`coreutils/wc.c:166`; its header notes that the old `-c` stat
+  shortcut was removed); the kit's own rootfs was not checked.
 - Over the nine intervals between beats, the two counters fit to within 0.13 %:
   - in-context: 2.683 M cycles per frame, constant through the run;
   - kernel and other: 0.741 M cycles per frame, plus 12.5 M cycles per second of overrun.
-- So the in-context cost per frame does not grow as the run proceeds. What grows is the heartbeat's own work, which is
-  charged to `between_cycles`. On the twin a 1 s beat stretched the span from 8.32 s to 11.46 s, which is consistent with this.
+- So the in-context cost per frame does not grow as the run proceeds. The 12.5 M cycles per second of overrun over
+  4.47 s per MB come to about 56 cycles per byte of `st.out`, a plausible cost for a `getc` loop. That fits the beat
+  reading the whole output each time, charged to `between_cycles`. The beat's `$(up)` is taken before its `wc` and
+  `$(cnt)` after it, so the counters at each beat are read when its `wc` ends.
+- 12.5 M cycles per second is half the core's 25 MHz clock (PostgreSQL's U arms count 24.9 M cycles per second of
+  uptime). That is what a single core shared evenly between the beat's `wc` and tshark would show, with tshark
+  still running during the overrun. Over the whole command the two counters add to 41.67 G cycles, 1,667 s at 25 MHz,
+  so the counters cover the span. Taking out 12.5 M cycles for each second of overrun (about 833 s over beats 3-12,
+  about 10.4 G) leaves about 31.3 G, which is about 1,250 s. On the twin a 1 s beat stretched the span from 8.32 s to 11.46 s, which is consistent with this.
 
 **Against the pre-registration.**
 - A with a return inside 7,200 s: **met**, and the output equals stock's.
@@ -2184,5 +2245,6 @@ cycles 90.5 M, hpm5 paged record accesses 98.9 M, hpm6 grow 8, hpm7 event 23 11.
 **Reading.**
 - On P1, the protected tshark completes, with stock's output. On F, the same image gave nothing for at least 3,327 s in
   two boots. So M-16 is narrowed to F's flat lifetime table. That is not a root cause, and nothing is fixed on F.
-- The slowdown this boot shows grows with the output file the beat measures, not with the frames processed. The
-  protection's cost on P1 needs the U P P U comparison without the heartbeat, which follows as pre-registered.
+- The output's size grows with the frames processed, so this boot cannot by itself exclude a kernel cost per frame
+  that grows with the run; the fit and the `getc` cost favour the beat's own reads. The U P P U comparison without
+  the heartbeat, which follows as pre-registered, tells them apart and gives the protection's cost on P1.
