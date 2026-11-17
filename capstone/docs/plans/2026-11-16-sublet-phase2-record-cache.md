@@ -488,6 +488,22 @@ synth_design completed successfully):
     candidate cost, and fewer walks do not repay it on gcc.
   - What would settle it is a matched pair that differs only in the fill: B5a with the background fill off. No switch exists:
     it is a small edit at `RC_FSEL`'s transition (`ex_stage.sv:2363`, always to RC_IDLE), and a new bitstream. cs-b2's gcc fill count comes first.
+- **gcc train01, board 2** (cs-b2, record-cache event set): run_cycles 42,051,915,561, **+0.39 %** against P1 on the
+  same board. The slowdown replicates across boards (board 1 +0.41 %).
+  - read hit 9,753,677 and read miss 5,912,498, so **hit rate 62.3 %** (the model's gcc test figure was 30.2 %);
+  - fill reads 14,113,377, which is **2.39 per miss** out of at most 3;
+  - write-lookup hit 7,108,705;
+  - identity ev31 − ev35 − ev37 = 7,178,119 ≥ 0, MET;
+  - L1D misses 384,376,306 (board 1's B5a 384,358,046; P1 about 371.5 M).
+  - **So the cache hits often and the run is still slower.**
+- **The geometry that makes the fill expensive.** The L1D line is 16 B (`CVA6ConfigDcacheLineWidth = 128`, P1's
+  config), and a record is 16 B. The paper's 64-byte record line spans FOUR L1D lines, so each fill read is a
+  separate L1D access: up to three extra L1D lines per miss, each a possible miss and an eviction of program data.
+  - 14.1 M fill reads against +12.9 M L1D misses fits this. It is still an inference.
+  - The fill-off pair would read it directly: L1D misses near P1's, and the hit rate below 62.3 %.
+  - The design choice behind it is the paper's (2-way, 64 B lines of four records). Shorter lines, or a fill only
+    where the next record is already L1D-resident, are design questions for the lead and the collaborator, not
+    fixes for this lane to pick.
 - **What would have caught this before the board:** the pre-registration's cycle bounds counted only hit savings and
   "2 cycles per miss and per write". The wide pass's one +47-cycle fill coincidence was recorded and then added to the
   bounds as "neither bound counts the fill's own memory traffic". It was not turned into a prediction about L1D
