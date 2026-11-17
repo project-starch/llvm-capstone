@@ -10342,7 +10342,7 @@ on these types, and by casts between them and arrays.
 `values` under `MAXIMUM_ALIGNOF > 8`. That changes the on-disk layout, so every MAXALIGN-16 cluster and fixture must be
 rebuilt. The alternative is to teach the array code the vectors' fixed offset. The port owner chooses.
 
-### M-16 — silicon only (bitstream F): the Sublet-protected tshark does not return within 3,600 s, while the unprotected arm finishes in 1,112-1,125 s and both arms finish on the twin `OPEN — filed 2026-11-17 (nested lane); 2 of 2 boots; slow vs stopped NOT separated; not localised; on P1 (paged table) the protected arm returns with stock's output (2026-11-18), F not re-run`
+### M-16 — silicon only (bitstreams F and P1): the Sublet-protected tshark does not return within 3,600 s, while the unprotected arm finishes in 1,112-1,125 s and both arms finish on the twin `OPEN — filed 2026-11-17 (nested lane); F 2 of 2 boots, P1 1 of 2 so far (2026-11-18: the boot with a 60 s heartbeat returned, the boot without one did not); slow vs stopped NOT separated; not localised`
 
 **Statement.** tshark 4.6.8 with wmem patch 0001 (Sublet lifetimes for `block_fast`, dev's Q-15-repaired revision),
 `-r w.pcap -V -n` on a 9,000-frame capture, native route, bitstream F `…-twc16k-merge-hpmtag_a948e4134`, kit
@@ -10377,12 +10377,21 @@ arms return with stock's output (8.0 s and 8.3 s uptime; in-context +4.4 %).
 and not run. On P1 (`…-tagoverlap6c-pagedtbl_d83d3a633`, the paged lifetime table, kit bkit91, board 1, 2026-11-18) the
 same image with the heartbeat returned rc 0 in 1,669 s with stock's output (transcript
 `spec/board/out-nat-p1ts-nested-b1/tsph/board.txt`, `d4e0052e…`; `nested-allocator-workloads.md`, "Results: the
-protected tshark with a heartbeat on P1"). So M-16 is narrowed to F's flat table; no root cause is claimed. The image is a dev-era revision; Fig. 10's later wmem patch (trap/eval 684a29c52685) uses the one-operand
+protected tshark with a heartbeat on P1"). ~~So M-16 is narrowed to F's flat table.~~ **Withdrawn 2026-11-18**
+(the narrowing was 497d4d6a189e): the next P1 boot of the same image, with no heartbeat (`tsu-p1`, chain
+`nested/p1tu/p1tu-b1.*`), did not return within 3,600 s. Transcript `spec/board/out-nat-p1tu-nested-b1/tsu-p1/board.txt`,
+`d179bf9a…`. Its apertures are F's: commit pc 0x3ff6780f04 with `commit_instr[0].valid` = 0, sw=225 0x96, sw=220 0x8c,
+trap log 0x89; the serving index is 0x11de. The unprotected boot before it returned with stock's output in 1,064.75 s.
+So on P1 the protected arm returned in 1 of 2 boots, and the two differ by the beat and by boot-to-boot variation, at
+N=1 each. No root cause is claimed. A second boot without the heartbeat (`tsu-p2`) is pending. The image is a dev-era revision; Fig. 10's later wmem patch (trap/eval 684a29c52685) uses the one-operand
 CREVOKE, which P1 (capstone-ariane d83d3a633, read there) does not implement: its CREVOKE takes parent and child.
 
 **Impact.** No silicon cost for tshark's protection; the paper's timing rows leave it out. The other four applications'
-protected arms return on F (speedtest1, CPython, PostgreSQL, FFmpeg). Next step: the heartbeat boot, then, if the output
-freezes, a capture reduced to the frame where it stops, for a folder under `tests/fpga-repros/`.
+protected arms return on F (speedtest1, CPython, PostgreSQL, FFmpeg), and those four plus mruby, Perl, memcached and PHP
+return on P1. Next steps:
+- separate the beat from boot-to-boot variation: a beat that only sleeps and echoes, reading neither `st.out` nor the
+  module's counters, and a second boot with the plain heartbeat;
+- then, if a boot stops, a capture reduced to the frame where it stops, for a folder under `tests/fpga-repros/`.
 
 ### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
 

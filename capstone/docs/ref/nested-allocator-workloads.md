@@ -2304,7 +2304,10 @@ cycles 90.5 M, hpm5 paged record accesses 98.9 M, hpm6 grow 8, hpm7 event 23 11.
 
 **Reading.**
 - On P1, the protected tshark completes, with stock's output. On F, the same image gave nothing for at least 3,327 s in
-  two boots. So M-16 is narrowed to F's flat lifetime table. That is not a root cause, and nothing is fixed on F.
+  two boots. ~~So M-16 is narrowed to F's flat lifetime table.~~ **Withdrawn 2026-11-18:** without the heartbeat the
+  protected arm did not return on P1 either ("Results so far: tshark on P1, U P P U without a heartbeat"). This boot
+  shows only that the protected arm can complete on P1 under a 60 s heartbeat. That is not a root cause, and nothing
+  is fixed on F.
 - The output's size grows with the frames processed, so this boot cannot by itself exclude a kernel cost per frame
   that grows with the run; the fit and the `getc` cost favour the beat's own reads. The U P P U comparison without
   the heartbeat, which follows as pre-registered, tells them apart and gives the protection's cost on P1.
@@ -2503,3 +2506,47 @@ protected commands retire and revoke all 3,442,469 (`live=0`), the stock ones no
   often. The walker's own cycles (+9.4 M) are 1.8 % of the +524 M; event 23 and the L1D misses add 0.34 M and 1.67 M.
   This boot does not attribute the rest.
 - This is not Fig. 10's pairing (a pristine second binary); the appendix row says so.
+
+### Results so far: tshark on P1, U P P U without a heartbeat (board 1, 2026-11-18 03:04-04:50; p2 and u2 pending): the protected arm did not return
+
+**Configuration.** As pre-registered (e42113e2b85d; Addendum 173, `0fe1da3b0398`). The chain `nested/p1tu/p1tu-b1.*`
+(nat-run3 pid 1980951) waited for this lane's Perl chain; P1 was resident and read back by name. One arm per boot.
+- **Disclosure:** the u2 line of `p1tu-b1.list` was commented out in place from about 04:53 to 05:00, while p2 ran, and
+  then restored byte-identical (`cmp` against the original). The chain had not read that line in either state, so the
+  run follows the list as registered.
+
+**tsu-u1** (transcript `…/out-nat-p1tu-nested-b1/tsu-u1/board.txt`, sha256 `ff973eb4…`, firmware `f327637d…`):
+- `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps.
+- rc 0, with stock's output: `056c1f8c…`, 1,140,005 lines, 9,000 frames (`parse-ts.py` against `wl/ref1000.out`).
+- Uptime span 1,064.75 s. In-context 22,743,759,258 cycles, `between_cycles` 3,821,114,782, 25,853 context entries.
+- hpm3-8: 279,902 / 11,382,678 / 45,386,001 / 1 / 3,041,091 / 108,891,108.
+
+**tsu-p1** (transcript `…/tsu-p1/board.txt`, sha256 `d179bf9a…`, firmware `7128b53b…`):
+- `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps.
+- `@@SPEC-BEGIN 0 run p1` at about 266 s uptime, then nothing: `vbatch: no return within 3600s (ActionTimeout)`. So it
+  ran at least about 3,330 s, 3.1 times u1's span, with no `@@SPEC-END`.
+- The runner's apertures after the timeout (`BAKED_WEDGE_APERTURES=1`), verbatim:
+  - trap log `0x89`; sw=224 `0x05`; sw=225 `0x96`; sw=226 `0x00`; sw=227 `0x07`; sw=228 `0x9f`; sw=229 `0x00`;
+  - sw=192-195 all `0x00`, so `commit_instr[0].valid` = 0; sw=219 `0xd7`; sw=220 `0x8c`; sw=221 `0x02`; sw=222 `0x00`;
+  - commit pc `0x0000003ff6780f04`; trap-log mepc `0xffffffff80007376`, tval `0x73`;
+  - rev_node_debug_ex `0x000010ff40001134`, head `0x0071`, serving index `0x000011de`.
+- These are M-16's F readings: the same commit pc, `0x3ff6780f04`, which is slot-0 residue at the CDERIVE of
+  `wmem_block_fast_sublet_alloc`, and the same sw=225 and sw=220. Only the serving index differs: F read `0x116c` and
+  `0xcb1`.
+
+**Against the pre-registration.**
+- **The pre-registration listed no outcome in which the protected arm does not return.** It said only that an arm
+  without stock's output "is not read".
+- So p1 is not read. H1 against H2 is **undecided**. The span is undefined, and a timeout is not read as "at least
+  1,600 s".
+- The prediction (H1, in-context +1 % to +5 %) **missed**: no cost is read.
+
+**Reading, and a retraction.**
+- On P1 the protected tshark has now returned in 1 of 2 boots: the heartbeat boot returned, and this boot without the
+  heartbeat did not.
+- **Withdrawn:** "M-16 is narrowed to F's flat lifetime table" (497d4d6a189e, in the heartbeat result above and in
+  ISSUES M-16). One return under a 60 s heartbeat does not place the non-return on F's table.
+- The two P1 boots differ by the beat and by whatever varies from boot to boot, at N=1 each. So no mechanism is
+  claimed, and the beat is not shown to be the cause.
+- What would separate them: a beat that only sleeps and echoes, reading neither `st.out` nor the module's counters, and
+  a second boot with the plain heartbeat.
