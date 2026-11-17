@@ -5277,3 +5277,12 @@ These are wide bands; the readings decide.
   - The images are bitstream F's, unchanged: the dev-era two-operand patches. Fig. 10's one-operand variants cannot run on P1.
   - Its gates, bands and repeat rule are that section's. This addendum only registers the chain's place in the board queue.
 - **Board 3: the embedded suites on P1.** Pre-registered at spec-silicon 1bb843bef3cc (benchmarks/virtual/PREREG-t1-t2-sampling.md, "All 103 programs on P1"). Chain p1suite-b3.conf, behind the P1 tick probes (Addendum 159a/159b).
+
+## Addendum 161 (2026-11-17 18:20 +08, before any of these boots): the nested lane's second P1 session on boards 1 and 3
+
+- Pre-registration: llvm-capstone nested-workloads 858ddee10a4f, nested-allocator-workloads.md, "Pre-registration addendum: a second session on boards 1 and 3". Its reading rule applies:
+  - each session is read on its own pairs by the 1 % / 2 % repeat rule;
+  - when both sessions pass, they are averaged;
+  - a failing session is reported as not read and never pooled.
+- **Board 1:** chain nested/p1s2/p1s2-b1.conf (TAG p1s2-nested). It waits for the matched x264 (pid 40534), then flashes P1 with the seal check and readback, then runs FFmpeg U P P U with the flipped-input control, then a second PostgreSQL session.
+- **Board 3:** chain nested/p1s2/p1s2-b3.conf (TAG p1s2cpy-nested). It waits for the embedded-suite chain (pid 403643), then runs a second CPython session as four one-arm boots.
