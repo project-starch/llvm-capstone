@@ -3,18 +3,42 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-16 19:40 +08)
+## Status (updated 2026-11-17 08:50 +08)
 
-**The final table is being measured on P1** (Addenda 147, 154, 155): bitstream P1 (G plus the paged lifetime table with
-dynamic growth, capstone-ariane d83d3a633), kit bkit91, images FRCDKMSa3 / FRCDKMSspa3, riscv-base RVAL, node-table
-pool, gcc untuned. gcc is reported at both train01 and test. Every P1 reading carries **key 5 NOT MET**: P1's WNS is
-−13.173 ns, outside the pre-registered band around G's −9.107 ns. Whether the table may stand on P1 with the miss
-stated is open with the lead. Outputs are bit-exact against G on every pair run.
+**The final table is measured on P1** (Addenda 147, 154, 155). Its configuration:
+- bitstream P1: G plus the paged lifetime table with dynamic growth, capstone-ariane d83d3a633;
+- kit bkit91, with the node-table pool;
+- images FRCDKMSa3 (temporal) and FRCDKMSspa3 (spatial);
+- riscv-base RVAL (plain-rv64al, the same musl) on stock CVA6 d31345cf3;
+- gcc untuned, reported at both train01 and test.
 
-| Row (final config, P1) | riscv-base | Capstone spatial | Capstone temporal |
-|---|---|---|---|
-| gcc train01 | 1,722.35 s (RVF3; RVAL 1,720.98 s) | 1,752.53 s (board 2) | 1,771.70 s (board 1) |
-| others | running: boards 1-3, see PREREG Addenda 154-155 | | |
+Every Capstone row is in. The riscv-base RVAL x264 row is still running on board 3. Every P1 reading carries
+**key 5 NOT MET**: P1's WNS is −13.173 ns, outside the pre-registered band around G's −9.107 ns. Whether the table may
+stand on P1 with the miss stated is open with the lead. Every row passed specdiff and the 9-step smoke. x264 is
+checked by its output hashes: both .264 files and five frames are byte-identical to riscv-base's.
+
+| Row (final config, P1) | riscv-base RVAL (s) | Capstone spatial (s) | ratio | Capstone temporal (s) | ratio |
+|---|---|---|---|---|---|
+| 500.perlbench_r (full: makerand + test.pl) | 12,665.05 | 12,839.14 | **1.014** | 13,074.67 | **1.032** |
+| 502.gcc_r train01 | 1,720.98 | 1,752.53 | **1.018** | 1,771.70 | **1.029** |
+| 505.mcf_r | 5,120.73 | 5,658.99 | **1.105** | 5,945.18 | **1.161** |
+| 519.lbm_r | 1,077.89 | 989.21 | **0.918** | 989.16 | **0.918** |
+| 525.x264_r | 35,613.24 (rv64r; RVAL running) | 30,669.13 | **0.861** | 30,674.0 | **0.861** |
+| 538.imagick_r | 11.02 | 11.4 | **1.034** | 11.4 | **1.034** |
+| 544.nab_r | 677.79 | 691.65 | **1.020** | 693.97 | **1.024** |
+| 557.xz_r | 4,986.37 | 4,956.84 | **0.994** | 4,956.68 | **0.994** |
+| geomean (8 rows, gcc train01) | | | **0.993** | | **1.003** |
+| 502.gcc_r test (footnote) | 4.8 | 7.00 | 1.46 | 7.03 | 1.46 |
+
+Every table row is below the 1.20 target; the gcc test footnote reads 1.46 (below). Notes:
+- **Boards.** riscv-base RVAL rows ran on board 3. Capstone perl and gcc test also ran on board 3, so those ratios are
+  same-board. The other Capstone rows ran temporal on board 1 and spatial on board 2, so their ratios are cross-board.
+  A same-configuration board-1 against board-2 reading is running now (Addendum 156: P1 perl, gcc and mcf on both).
+- **gcc test** is startup-dominated: 2.9 s in context, 2.9 s of kernel between runs, and ~1.2 s of exec, against a
+  4.8 s riscv-base run at 0.1 s resolution. It is a footnote, not a table row.
+- **imagick** is read at 0.01 s resolution, and **gcc test** at 0.1 s.
+- **x264 RVAL** (compiler lane's twin, Addendum 155; cause not established): the RVAL encode's .264 is 54 B longer than Capstone's, with identical frames. The ratio
+  above is against the rv64r riscv-base, whose outputs are byte-identical to Capstone's. It is updated when RVAL lands.
 
 **Phase 1 paging cost (pair B, same board 1, same firmware; flat vs paged table on P1, FRCDKMS images):**
 
