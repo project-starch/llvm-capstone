@@ -397,9 +397,11 @@ synth_design completed successfully):
 - **Seal:** `caplifive_ids55-…-pagedtbl-reccache_6e82d7bd2.bit`, sha256 806c5f55a40ca851a9a9b29f48272137f543dd3714d6d15a0acdf4457eee9356,
   11,443,722 B. Tarball sha256 2b5b69fbd216…, with the .bit cmp-identical; PROVENANCE HEAD 6e82d7bd2956. Run guard
   peak 26.02 GB (exit 0, 1 h 17 m), collector 15.90 GB.
-- **Routes, 0 errors: PASS.** Failed, unrouted and partially routed nets are all 0, and there are 0 node overlaps.
-- **Congestion at most 5: PASS.** Effective levels 5, 5, 4, 5 by direction, from `report_design_analysis
-  -congestion` on the impl checkpoint.
+- **Routes, 0 errors: PASS.** `work-fpga/ariane_xilinx_route_status.rpt` reads 246,477 fully routed nets and 0 with
+  routing errors. At the end of route_design, failed, unrouted and partially routed nets are all 0, with 0 overlaps.
+- **Congestion at most 5: PASS.** Effective levels 5, 5, 4, 5 by direction. Corrected source: route_design's
+  initial-routing congestion estimate in the implementation log (`route_design` at log line 27045), not
+  `report_design_analysis` as first written.
 - **Loops 0: PASS.** check_timing: "There are 0 combinational loops in the design". The methodology report has no
   TIMING-23 and no LUTLP-1, while it does list other checks (TIMING-16 ×1000, SYNTH-6 ×109), so it ran.
 - **WNS inside ±3.74 ns of P1's −13.173: PASS.** WNS −13.691 (Δ −0.518), TNS −259,470, 50,477 of 234,469 endpoints
@@ -413,6 +415,28 @@ synth_design completed successfully):
 - **Not run:** the in-flight loops-only gate and the LUTLP stop. The runtime lane launched with launch-job.sh
   directly. The routed loop checks above cover what they would have stopped.
 - **Grade: a flash candidate on every key.** Key 5 is NOT MET against G, as on P1. The flash is the lead's decision.
+
+### Full build read: B5a + R-76 7180a83b6 (sealed by the runtime lane, graded here; key 5 NOT MET carries over)
+
+- **Seal:** `caplifive_ids55-…-pagedtbl-reccache-r76_7180a83b6.bit`, sha256
+  b339149665e4a141b5a9efb778fad625e4db4a7d9cf6640806f61bfc71b95ee7, 11,443,722 B. Tarball sha256 0388b34ae40f…, with the
+  .bit cmp-identical; PROVENANCE HEAD 7180a83b61942ea5. Run guard peak 26.16 GB (exit 0, 1 h 10 m), collector 16.46 GB.
+- **Routes, 0 errors: PASS.** The route_status report reads 245,529 fully routed nets and 0 with routing errors; the
+  end of route_design reads 0 failed, unrouted and partially routed nets, with 0 overlaps.
+- **Congestion at most 5: PASS.** The router's initial estimate is 5, 5, 5, 5 by direction. B5a's was 5, 5, 4, 5.
+- **Loops 0: PASS.** check_timing reports 0 combinational loops. The methodology report has no TIMING-23 or LUTLP-1,
+  and lists TIMING-16 ×1000, so it ran.
+- **WNS inside ±3.74 ns of P1's −13.173: PASS.** WNS −13.615 (Δ −0.442; B5a −13.691), TNS −288,193, 53,219 of 234,474
+  endpoints failing, WHS +0.049.
+- **Reported only:**
+  - rc_live_q is not among the 2,000 worst failing endpoints (−13.615 to −12.146), and no rc_* cell is on the worst
+    500 paths (control fu_data_q: 4,434).
+  - `privilege_violation` (R-76's term) is on neither the worst 500 nor the 2,000 (the same on B5a). Synthesis may
+    rename the net.
+  - The worst path runs from dom_switcher `_thread_0_event_counter_870_1_q` to `fu_data_q[0]…cap_metadata_b[18]`. That
+    is bitstream B's recorded family, swapping order with B5a's cpmp_q family inside the band.
+- **Grade: a flash candidate on every key.** Key 5 is NOT MET against G. It is not scheduled on a board; R-76's
+  silicon flash is the lead's decision.
 
 ### Board readings (B5a against P1, same kit and board; key 5 NOT MET on both)
 
