@@ -1719,6 +1719,57 @@ this boot.
 - B or C: the frame reduces the capture for a folder under `fpga-repros/`; the appendix row reads "does not complete
   on P1, M-16".
 
+## Appendix D completeness on P1: mruby, PHP, Perl and memcached
+
+These four were not timed on silicon before. Each runs on P1 (`…-pagedtbl_d83d3a633`, kit bkit91) with the design of
+the P1 sections above: stock against the lifetime patch, U P P U, the same counters, the same repeat rule (1 %
+`run_cycles`, 2 % `between_cycles`, else not read). **Every patch is the dev-era two-operand revision**, not the one on
+native-kernel-new-qemu (5060011844e) that Fig. 10 used: Fig. 10's revisions call the one-operand
+`capstone_cap_release` (and memcached's CRENEW), which P1 does not implement. Every image is a virtual-profile domain
+compiled and linked through the FRCDKMS SDK (`perf/cclever/arms/FRCDKMS/sdk`, llvm-c9, the F/P1 flags), as the
+CPython, PostgreSQL and FFmpeg images were. Stages are made by `nested/appd/make-abba-stage.py` (one boot, the four
+commands in order, a fresh tmpfs per command, the arm's image staged as given) and read by `nested/appd/parse-abba.py`
+(the normalised output's sha256 against the native reference) and `nested/p1/abba.py`.
+
+### Pre-registration: mruby on P1, both arms in one boot (written 2026-11-17 23:55, before the boot)
+
+**Configuration.**
+- mruby 4.0.0-rc2 (pin 9d523e2f), built by the compiler lane (llvm-capstone `appd-native-images` c839ecfb2add, from
+  dev 83f60f4660cb; `perf/appd/mruby/build.sh`). Stripped images: stock `9d61ccdd…`, protected `67217aa5…` (full
+  `081a8f55…` / `de2f200f…`).
+  - Protected: patch 0008 `gc-slots-as-sublet-lifetimes`, dev's revision (blob `1541cee2`) **with this lane's Q-15
+    repair** (blob `15c05a92`, `nested/appd/mrb-q15/0008-q15.patch`), live under `-DMRB_CAPSTONE_SUBLET`.
+    - Why the repair: the dev revision's protected image faulted on the twin at its first heap page (cause 29 at the
+      CDERIVE in `add_heap`, vaddr 0x4ad5e; twin `nmrb-2`). Its `page->life` is 80 KiB at a 16-byte-aligned
+      address, and the compact format's granule for 80 KiB is 128 (`capstone/representable.h`), so the virtual
+      profile refuses it (Q-15).
+    - The repair makes `life` the smallest representable range around `objects`: the base rounded down into
+      `issued[]`, the end rounded up into a new 256-byte `life_pad`, and objects' offset kept in `life_skew`. Only
+      the slots' 80-byte children (exact below 4 KiB) are handed out.
+  - The port applies 0001-0003 and 0008-0010 to both arms. The stock arm's `gc.o` is byte-identical to `gc.c` with
+    0008 reversed, for the repaired 0008 too.
+  - CREVOKE census (encoding `(w & 0xfe00707f) == 0xa400105b`, 2-byte stride): protected 0 with rs2 = x0 and 8 with
+    rs2 != x0 (2 from 0008, 6 in the libc's mallocng); stock 0 and 6 (the same six).
+  - mrb_malloc sits on the libc's mallocng in both arms.
+- Workload, Fig. 10's: `mruby bm_ao_render.rb 16` (`bm_ao_render.rb` `e44efffd…`, from the same tree). The answer is the
+  PPM on stdout; native reference `cfd73bb1…` (781 bytes), the same from both arms' native builds.
+- Stage `nested/p1a/mrb` (`mrb.SHA256SUMS`): bkit91's `make-train-stage.sh` around `nested/appd/mrb/stage`, copied unchanged;, commands u1 p1 p2 u2 in one
+  boot. Board 2, after the SPEC lane's chain pid 1217768; the chain flashes P1 (board 2 is on the matched bitstream)
+  from the seal, sha256 checked, and reads it back by name. Chain `nested/p1a/b2-mrb.*`. Budget 1200 (x4 = `BAKED_TIMEOUT=4800`), booking 70 min.
+- Checked off the board: real bake, `BOARD_STUB=2` on a returning and a non-returning transcript (both rc 0, both
+  print 4,800), real firmware 19,566,088 B (`c52a7e42…`), and an `NR_DRY=1` pass of the chain.
+- Twin control `nmrb-3` (slot 28, `perf/natio/images`, flat-table model): all four commands rc 0 with the native PPM,
+  4.4-4.5 s each. In-context u1 / p1 / p2 / u2 = 4,384.1 / 4,455.9 / 4,455.9 / 4,384.1 M, **+1.64 %**, repeats 0.00 %.
+
+**Outcomes and bands.**
+- Answers: every command's PPM equals the native reference, else VOID for the cost.
+- Repeat rule as above.
+- In-context cost, protected vs not: +0.5 % to +10 % (the twin's +1.64 % times the 1.9 to 3.5 silicon-to-twin cost
+  ratios of PostgreSQL, CPython and speedtest1 on P1, widened).
+- Duration: 6 to 14 min per command (the twin's in-context x 2.3 to 4.5, at 25 M cycles/s).
+- Record-TLB misses (hpm3): more in the protected arm.
+- **VOID** if `b0-stats`, `b0-hello` or the smoke fails beyond the kit's waiver.
+
 ### Results: speedtest1, PostgreSQL and CREVOKE chains on P1 (board 2, 2026-11-17 17:24-19:22)
 
 **Configuration.** As pre-registered (0a57804ea778; SPEC-lane Addendum 160, spec-silicon f7e660db383b). Board 2 was
