@@ -7755,3 +7755,231 @@ Cycles per timed iteration, geomean of per-program ratios (two-level bootstrap i
     excess over the pair's own cost.**
   - **The hpm counters as exact on C.5a.** l1d_miss read one more than pre-registered on every image with a data access
     (N = 1, open, see the C.5a record).
+
+## The tag-overlap lever on synthesis: v6 and v6c gates, and v6c's routed build (board lane, apollo, 2026-11-14/15)
+
+These are build records only; neither bitstream has been flashed or read on silicon. The keys, the predictions and
+the sim gates are rtl's, in `capstone/docs/plans/2026-11-14-twc-reach.md` on llvm-capstone `land/rtl-twc-reach`:
+the key set at 4b17ec214618 and 025d3e33c97b, v6c's pre-registration at 18a1cf1cc911, and the seal recorded at
+250cbde98efc. Every run was under vivado-guard with a 40 GB cap.
+
+- **Synthesis-only gates** against faa0ee83d's kept synth checkpoint. Every gating key passed on both.
+
+  | key | v6, capstone-ariane e7f2ed8c8 | v6c, capstone-ariane 9fd9d2530 |
+  |---|---|---|
+  | mapping peak vs own XDC stage (limit +500 MB) | 5,030.1 = 5,002.2 + 27.9 MB | 5,036.8 = 5,008.9 + 27.9 MB |
+  | Synth 8-326 on load_unit / wt_dcache / wt_axi_adapter / lrsc | 0 | 0 |
+  | "Found timing loop" headers (ref 0) | 0 | 0 |
+  | LUTLP-1 on the kept dcp (toy control 1) | 0 | 0 |
+  | add_sources: axi_fix demux / vendored demux | 1 / 0 | 1 / 0 |
+  | core i_cva6 LUT (±2,500) / family-excluded FF (±300) | −14 / −1 | −17 / −2 |
+
+  - Record-only rows (sub-floor):
+    - v6: xbar +19 LUT; lrsc +3; demux[0] +22, demux[1] −10; adapter −12 LUT / −2 FF; design 190,807 LUT (−6).
+    - v6c: xbar +30 / +0; lrsc +3 / 0; demux[0] +25, demux[1] −5; design 190,835 (+22).
+  - v6c's adapter row (5,466 LUT / 934 FF) equals eeb654104's exactly. Its source is byte-identical to eeb654104's.
+  - v6 is a reading only, and rtl withdrew its full build. By rtl's one-variable sim arms, v6's adapter one-read rule
+    costs cold-I$ code +7.2 % / +16.0 %. v6c is its successor.
+  - An earlier v6 launch was stopped before synthesis on rtl's hold and gave no reading.
+- **v6c full build (9fd9d2530): FULL BUILD PASS, 4 of 4 keys**, graded by grade_full.py against eeb654104's sealed F2
+  build. The self-compare control gives PASS.
+  - Routed clean: 0 errors, 241,644 of 241,644 nets fully routed.
+  - check_timing loops: 0.
+  - Placed congestion: level 4 (ref 4).
+  - WNS: −9.107 ns against eeb654104's −12.229 (Δ +3.122). That is inside the ±3.74 ns null band, so it is not an
+    improvement.
+  - Reported, not graded:
+    - TNS −77,207.266 over 23,259 of 228,428 endpoints (ref −187,724.094 over 42,923 of 227,629); WHS +0.041.
+    - Placed 188,525 LUT (92.50 %, +430), 75,440 FF (+216), 50,685 slices (99.48 %).
+  - The build: guard exit 0 in 1 h 18 min, peak RSS 30.25 GB. The in-flight loops-only gate passed, and the
+    LUTLP-1 stop read 0 at synth and at opt.
+  - Bitstream `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c_9fd9d2530.bit`:
+    - 11,443,722 B, sha256 `35e1fea57646c435400096f0b6bb2311e7c78f107d61e1cb0a3e78aebd496440`.
+    - The tarball synth-9fd9d2530-exit0.tar.gz has sha256 `1d7cd82a6dac…a431b813`. Its .bit is cmp-identical, and
+      its PROVENANCE HEAD is 9fd9d25305e3.
+    - rtl recomputed the sha256 independently. The flash is the runtime lane's.
+  - Post-route utilization_hier (Design State Routed), v6c against eeb654104, as LUT / FF:
+
+    | instance | v6c | eeb654104 | Δ |
+    |---|---:|---:|---:|
+    | i_cva6 | 162,781 / 52,994 | 162,686 / 52,994 | +95 / 0 |
+    | i_adapter (wt_axi_adapter) | 5,444 / 934 | 5,439 / 934 | +5 / 0 |
+    | i_axi_xbar | 6,518 / 5,126 | 6,264 / 4,946 | +254 / +180 |
+    | demux[0] | 1,342 / 803 | 826 / 749 | +516 / +54 |
+    | demux[1] | 770 / 732 | 1,223 / 685 | −453 / +47 |
+    | i_lrsc | 574 / 550 | 369 / 585 | +205 / −35 |
+
+    eeb654104 predates both lrscfix and the axi_fix demux; its add_sources lists the vendored demux. So the xbar,
+    demux and lrsc rows carry those changes as well as v6c's. All of them are below the ±2,500 per-module floor.
+
+## The paged-table walker on synthesis: its synthesis-only gate and its routed build (d83d3a633 against v6c 9fd9d2530, board lane, apollo, 2026-11-15)
+
+This section is recorded from the build (2026-11-15). Silicon readings of this bitstream, if any, are in the runtime
+lane's Addenda 148-149 (spec-silicon, `capstone/ports/spec-cpu2017/results/2026-11-08-train/PREREG.md`). The keys, the
+predictions and the board pre-registration are the RTL lane's, in `capstone/docs/plans/2026-11-15-sublet-phase1-paged-table.md` on llvm-capstone
+`land/rtl-sublet-p1`:
+- the synthesis-gate keys at 536c022d8611 and 028f8b181660;
+- the board pre-registration at 2796b81618d8, pushed before the full build;
+- the gate recorded at 95e7b885d9c1, and the seal at 3ce54954e255.
+
+The reference G is v6c (capstone-ariane 9fd9d2530): its own synthesis-only gate for the gate, and its routed build
+(WNS −9.107, the section above) for the full build. Every run was under vivado-guard: a 40 GB cap for synthesis, and
+8-12 GB for the checkpoint probes.
+
+- **The synthesis-only gate passed every gating key.**
+
+  | key | d83d3a633 | G |
+  |---|---|---|
+  | mapping peak (G ± 500 MB) | 5,041.7 MB (+4.9) | 5,036.8 MB |
+  | Synth 8-326 lines | 0 | 0 |
+  | "Found timing loop" headers / LUTLP-1 (toy 1) / check_timing loops (toy 1) | 0 / 0 / 0 | 0 / 0 / 0 |
+  | ex_stage LUT minus the walker's own (±2,500) | +673 | n/a |
+  | core i_cva6 LUT minus the walker's own (±2,500) | −1,888 (core 162,403, −1,136) | 163,539 |
+  | NEG / POS name controls | 0 / 1 | 0 / 1 |
+
+  - The walker's own cells, by name (`pw_*` under ex_stage_i): 1,197 FF and 752 LUT, 0 RAM. The FF count is inside
+    rtl's predicted 1.0-1.6 k. The LUT count is below the predicted 1.5-3 k; the prediction bands do not gate.
+  - perf_counters moved +98 LUT / +6 FF, also outside its prediction and also not gating.
+  - The design totals 189,693 LUT (−1,142).
+  - rev_node moved −7,458 LUT and dyn_unit _spawn_0 +5,935, though neither module's source changed. The two net to
+    −2,311, which reads as logic re-homed between those hierarchies.
+
+- **The routed build: FULL BUILD FAIL, 3 of 4 keys.** The failed key is WNS, which is 0.33 ns outside the band.
+  - Passed:
+    - routing is clean: 0 errors, 0 unrouted, 241,265/241,265 nets routed;
+    - placed congestion is level 4, against G's 4;
+    - check_timing loops read 0.
+  - Failed: WNS is −13.173 against −9.107 ± 3.74 (Δ −4.066).
+  - Reported only:
+    - placed LUT 187,368 (−1,157), FF 76,543 (+1,103), slices 50,800 / 99.71 % (+115);
+    - router effective congestion max 5 against G's 4;
+    - two Route 35-447 warnings against G's 0, where the router put completing the route ahead of timing;
+    - design_analysis's initial estimated router congestion: North and South Long at level 6, over 20.3 % / 20.4 % of
+      tiles, against G's worst, East Short at level 5 over 12.2 %;
+    - TNS −201,219 against −77,207, and failing endpoints 47,712 against 23,259.
+  - Identity: `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl_d83d3a633.bit`,
+    11,443,722 B, sha256 `dc411e36fc5e68ae8e8ab5193abfdfd7fee85cfd299183f283b7cee83e4a1a40`. The tarball's .bit is
+    byte-identical, and PROVENANCE HEAD is d83d3a633. Peak RSS was 27.39 GB.
+
+- **Where the WNS went. The routed checkpoints were queried both ways; these readings are reported, not graded.**
+
+  | path (by start and end pin) | on the walker build | on G |
+  |---|---|---|
+  | the walker build's worst: dom_switcher `cur_idx_q_reg[3]` → issue_read_operands `fu_data_q_reg[0][cap_data][cap_metadata_a][19]` | −13.173 ns, 111 levels; logic 8.40, net 44.86 ns | −8.032 ns, 114 levels; logic 9.25, net 38.70 ns |
+  | G's worst: csr `cpmp_q_reg[9][comp_metadata][bounds][iE]_rep` → `fu_data_q_reg[0][cap_data][rd_metadata][23]` | −12.333 ns, 120 levels; logic 9.59, net 42.74 ns | −9.107 ns, 116 levels; logic 9.83, net 38.62 ns |
+  | 500th-worst setup path | −11.136 ns | −7.303 ns |
+
+  - On both paths the walker build carries 4-6 ns more net delay, at equal or lower logic delay. Logic depth went
+    −3 levels on one path and +4 on the other, but logic delay fell on both.
+  - The same comparison over each build's worst-20 families agrees: G's cpmp families read −12.84 to −12.91 on the
+    walker build, and the walker build's cur_idx families read −8.43 to −8.53 on G.
+  - The comparison by identical pins could not run. 148 of the walker path's 224 pins, and 155 of G's 234, do not
+    exist by name in the other netlist, because synthesis numbers the LUTs differently. So the rows above match start
+    and end pins, not cells.
+  - **RETRACTED (2026-11-15): "0 of the 500 worst paths touch a walker cell" said nothing about walker logic.** Both
+    counts matched cell names only: this lane's `ex_stage_i/...(pw_|rv_rd_res)` over the cells of each path, and the
+    RTL lane's script over `worst_500_paths.rpt`, whose control (paths touching `fu_data_q`) reads 389. Neither had a
+    walker-logic positive control. Searching the same report for the walker commit's new signal finds it:
+    - **39 of the 500 worst paths run through `ex_stage_i/rev_node/rv_rd_res[data_rvalid]`.** That is the walker's new
+      response view into rev_node (`core/ex_stage.sv:1657-1658` at d83d3a633; absent at 9fd9d2530), a net with fanout 129.
+    - All 39 start at csr `cpmp_q_reg[5][comp_metadata][bounds][bE][1]` and pass the D$ port-2 controller. The net is
+      driven by one LUT, `gen_rd_ports[2].i_wt_dcache_ctrl/revnode_rdfill_valid_q_i_1`, named for R-35's fill tap.
+      By source, that net carries the walker's filter, `rv_rd_res.data_rvalid = (rev_mem_rd_res_i.data_rvalid &&
+      !pw_own_rd_q) || pw_dead_rv_q` (`core/ex_stage.sv:1977` at d83d3a633). It hides the walker's own reads and injects
+      the DEAD response. At 9fd9d2530, `rev_mem_rd_res_i` went to the unit unfiltered.
+    - From the net, the paths run through rev_node's `_thread_3_event_counter` logic and end at `led_stretch_cnt_reg`
+      (D or CE). Slack ranges from −11.370 to −11.142, at ranks 261-481.
+    - G's worst 500 contain no `rv_rd_res`.
+    - None of the 260 worst paths, including the WNS path and both families in the table, pass through it. So the
+      net-delay reading above stands for the paths that set WNS. "No walker logic on the failing paths" does not.
+  - **The walker's own paths have positive slack on the routed build:**
+    - the D$ port-2 grant → `pw_slot_q`: +1.803 ns, 65 levels;
+    - the worst path into any walker flop: +0.284 ns;
+    - the worst path out of one: +3.160 ns;
+    - the grant → R-35's fill taps: +10.812 ns, against G's +14.364.
+  - The grant here means both of the arbiter's output copies, `rd_ack_q_i_1` and `vld_sel_q[1]_i_1`, with 43,072 and
+    43,197 endpoints. They reach 85 walker flops and 74 of the 131 fill taps.
+  - What this cannot separate: whether the walker's +1.1 k FF and their placement are what crowded these paths at
+    99.7 % slices, or whether this is build-to-build noise. The documented null change moved WNS 3.7 ns. Telling
+    them apart would take a second build of the same commit, which nobody has proposed.
+
+- **A retraction from the gate's timing probe (lane-only, not previously on dev).** The gate's probe found the
+  grant from the net at `rd_ack_q_reg/D`. That handle saw 9,733 endpoints on G and 5 on the trial, and reported no
+  grant path to the fill taps or to the walker. Both conclusions were withdrawn the same day. From the arbiter's
+  output nets the cone is about 43,000 endpoints and does reach the fill taps. The gate's grant readings are void;
+  its readings through the ex_stage boundary pins stand.
+
+## The record cache on synthesis: B5a's synthesis-only gate fails its mapping-memory key (6e82d7bd2 against P1 d83d3a633, board lane, apollo, 2026-11-17)
+
+This section is recorded from the gate (2026-11-17). The keys are the RTL lane's, in
+`capstone/docs/plans/2026-11-16-sublet-phase2-record-cache.md` on llvm-capstone `land/rtl-sublet-p2`:
+- the pre-registration at 23d3a2ba2e01 and 1aab7c1aa017, pushed before the gate request;
+- key 4 corrected at aa9f69edc9f6, before the gate ran (four HPM events, not one).
+
+The reference is P1 (capstone-ariane d83d3a633), through its own synthesis-only gate (the section above). The run was
+under vivado-guard with a 40 GB cap, and the checkpoint probes under 12 GB.
+
+- **The gate FAILED key 1, so no full build was launched.** The pre-registration allows no retry.
+
+  | key | 6e82d7bd2 | P1 |
+  |---|---|---|
+  | 1. peak at the Technology Mapping marker (P1 ± 500 MB) | **6,865.6 MB (+1,823.9): FAIL** | 5,041.7 MB |
+  | Synth 8-326 lines | 0 | 0 |
+  | 2. "Found timing loop" headers / LUTLP-1 (toy 1) / check_timing loops (toy 1) | 0 / 0 / 0: PASS | 0 / 0 / 0 |
+  | 3. records in block RAM (both ways in the Block RAM mapping report, none in distributed RAM, core RAMB36-eq +4) | yes: PASS | n/a |
+  | 4. core i_cva6 LUT minus the cache's own (±2,000) | +912 (core 165,786, +3,383): PASS | 162,403 |
+  | NEG / POS / rc_live_q must-fire controls | 0 / 1 / 1 | 0 / 1 / 0 |
+
+- **Where the extra memory appears.** Vivado's "peak" figure is a running maximum, so each phase was read from both
+  logs (P1 → 6e82d7bd2):
+  - after RTL Optimization Phase 1: 4,157.9 → 4,244.9 MB (+87);
+  - after Constraint Validation: 5,013.8 → 6,837.7 MB (+1,824). This step spans XDC processing and the timing
+    engine's initialisation, after elaboration and before any optimisation or mapping;
+  - Technology Mapping itself: +8.0 MB on both.
+
+  The key therefore reads a peak that was set before mapping started. What costs the 1.8 GB in that phase is not
+  established. The guard's process-group RSS peaked at 26.17 GB, against 27.35 GB for P1's gate, so this was not a
+  host-memory event.
+- **The records are in block RAM.**
+  - `g_rc_way[0].dat_mem_reg` and `g_rc_way[1].dat_mem_reg` each map to 256 x 128 (READ_FIRST), 2 RAMB36.
+  - The tags map to `tag_mem_reg` 64 x 17 → RAM64X1S x 17 per way, 34 LUTRAMs in all, against a prediction of about 40.
+- **The cache's own cells, by name** (`*/rc_*` and `*g_rc_way*` under ex_stage_i): 2,471 LUT, 897 FF and 4 RAMB36E.
+  - The LUT count is above rtl's predicted 0.6-1.5 k; the FF count is inside its 0.7-1.2 k. The bands are reported, not
+    gating.
+  - ex_stage grew +5,647 LUT, which is +3,176 beyond the cache's own cells.
+  - perf_counters moved +6 LUT and +0 FF.
+  - The design totals 193,062 LUT (+3,369) and FF +829.
+- **Timing, as a synthesis estimate on a 40 ns clock created for the probe (not graded).**
+  - Design worst slack: 2.779 ns, against P1's 3.152.
+  - From `rc_addr_q`: 13.195 ns, 76 levels, into the scoreboard's `mem_q ... [dom_switch_req][ra_data]`.
+  - From the record RAMs: 16.322 ns.
+  - Into `rc_live_q`: only its reset.
+- **A diagnostic rerun of the same hash, pre-registered by the RTL lane (`land/rtl-sublet-p2` 03961967017c, before
+  the run), reads H-RTL: the cost repeats on the same hash, so it is not an anomaly of the first run.** What in the
+  RTL costs it is not established. The run was rc2-6e82d7bd2, on the same flow and guard.
+  - Constraint Validation peaked at 6,839.7 MB, +2.0 against the first run's 6,837.7. The pre-registered band for
+    H-RTL was ±50 MB; H-flow predicted about 5.0-5.1 GB.
+  - Elaboration and Technology Mapping read 4,244.9 and 6,867.7 MB, so key 1 FAILS again (+1,826.0).
+  - Keys 2-4 pass, and every number is identical to the first run.
+  - Guard RSS peaked at 26.10 GB.
+  - What follows, as pre-registered: key 1 reads a running peak set before mapping, and mapping itself adds 8 MB.
+    Whether to re-key it is the lead's decision, and the full build waits for it.
+  - **Status, 2026-11-17.** The lead chose to re-scope key 1 and build: key 1 is recorded as mis-scoped, not passed,
+    and is replaced by growth across Technology Mapping itself of at most +500 MB, plus a whole-run peak inside the
+    guard. The runtime lane had already launched the full build under a standing instruction, before that answer. It
+    also launched the combined B5a + R-76 tree, capstone-ariane 7180a83b6, whose RTL differs from 6e82d7bd2 only in
+    `core/csr_regfile.sv` (+7 lines).
+    - The combined gate's key-2 probes, run with this lane's scripts, were read here from their own logs:
+      check_timing loops 0 (toy 1) and LUTLP-1 0 (toy 1).
+    - Both full builds are sealed on apollo. Their grades are the RTL lane's records (`land/rtl-sublet-p2`
+      8c9e22649d4b and 87bd522f0eda), not restated here. The flash is the lead's decision.
+- **A withdrawn reading (the RTL lane's, on its lane, c2f7a35f21b2).** The rerun was requested partly because the
+  first run's `runme.log` appeared to lack its elaboration messages.
+  - That was the stdout capture, not the run. Vivado's own `ariane_xilinx.vds` holds the whole elaboration: it ends
+    at line 22,410 (P1: 22,365), with Synth 8-6157, 8-6155 and 8-294 at their 100-message caps, as on P1.
+    `runme.log` lacks the `.vds` lines 57-21,951 as one block.
+  - The same block is missing on the rerun (3,194 lines), and is not missing on P1. Why is not established. Both
+    logs read the same memory peaks.
+  - Synth 8-7128 (×22, "2 input Mux optimized to 1 input Mux") and 8-7156 (×18, "Variable shifter node is
+    optimized using Range optimization") are real. They sit inside elaboration on both runs, at scoreboard.sv,
+    capstone_rev_node.anvil.sv and ariane_pkg.sv, none of which the change touches, and P1 has none.
