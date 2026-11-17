@@ -22,14 +22,24 @@ Without the define the preprocessed file is unchanged. Needs
 capstone/runtime/include on the include path (capstone/capability.h) and the
 virtual profile.
 
+Q-15 repair (nested lane, 2026-11-17, for silicon P1): under the virtual
+profile a CDERIVE child the compact bounds format cannot hold exactly is
+refused with cause 29, and page->life (objects, 80 KiB at a 16-byte-aligned
+address) was not representable: the protected mruby faulted in add_heap at its
+first page on the native-route twin. life is now the smallest representable
+range around objects (capstone/representable.h), with objects' offset in it
+kept in life_skew and a 256-byte pad after objects for the rounded end. Only
+the slots' children are handed out.
+
 --- a/src/gc.c
 +++ b/src/gc.c
-@@ -166,12 +166,22 @@
+@@ -166,13 +166,29 @@
  #define MRB_HEAP_PAGE_SIZE 1024
  #endif
  
 +#ifdef MRB_CAPSTONE_SUBLET
 +#include <capstone/capability.h>
++#include <capstone/representable.h>
 +#endif
 +
  typedef struct mrb_heap_page {
@@ -42,12 +52,18 @@ virtual profile.
 +  /* Sublet: the page's lifetime over its slots (CDERIVE of the page), and
 +     the child each live object was handed out as; NULL for a free slot. */
 +  void *life;
++  unsigned long life_skew;       /* objects' offset in life (Q-15: life starts at or below objects) */
 +  struct RBasic *issued[MRB_HEAP_PAGE_SIZE];
 +#endif
    RVALUE objects[MRB_HEAP_PAGE_SIZE];
++#ifdef MRB_CAPSTONE_SUBLET
++  /* Q-15: room for life's end to round up to its granule inside the page. */
++  unsigned char life_pad[256];
++#endif
  } mrb_heap_page;
  
-@@ -321,11 +331,64 @@
+ typedef struct mrb_heap_region {
+@@ -321,11 +337,64 @@
    return FALSE;
  }
  
@@ -85,7 +101,7 @@ virtual profile.
 +{
 +  size_t i = p - page->objects;
 +
-+  page->issued[i] = (struct RBasic*)capstone_cap_derive(page->life, i * sizeof(RVALUE), sizeof(RVALUE));
++  page->issued[i] = (struct RBasic*)capstone_cap_derive(page->life, page->life_skew + i * sizeof(RVALUE), sizeof(RVALUE));
 +  return page->issued[i];
 +}
 +
@@ -112,19 +128,33 @@ virtual profile.
    return is_dead(gc, object);
  }
  
-@@ -350,6 +413,11 @@
+@@ -350,6 +419,25 @@
      prev = p;
    }
    page->freelist = prev;
 +#ifdef MRB_CAPSTONE_SUBLET
-+  page->life = capstone_cap_derive(page,
-+      __builtin_capstone_cap_get_cursor(page->objects) - __builtin_capstone_cap_get_base(page),
-+      sizeof(page->objects));
++  {
++    /* Q-15: under the virtual profile a CDERIVE child the compact format cannot hold exactly is
++       refused (cause 29), and objects' 80 KiB at a 16-byte-aligned address is not representable.
++       life is therefore the smallest representable range around objects: its base rounded down
++       into issued[] and its end rounded up into life_pad, both inside the page. Only the slots'
++       children, each bounded to its slot, are ever handed out; life itself never is. */
++    unsigned long start = __builtin_capstone_cap_get_cursor(page->objects);
++    unsigned long end = start + sizeof(page->objects);
++    unsigned long b = start, e = end, g;
++    do {
++      g = capstone_repr_granule(e - b);
++      b = start - start % g;
++      e = (end + g - 1) / g * g;
++    } while (!capstone_repr_ok(b, e - b));
++    page->life_skew = start - b;
++    page->life = capstone_cap_derive(page, b - __builtin_capstone_cap_get_base(page), e - b);
++  }
 +#endif
  }
  
  static void
-@@ -444,8 +512,12 @@
+@@ -444,8 +532,12 @@
      tmp = page;
      page = page->next;
      for (p = tmp->objects, e=p+MRB_HEAP_PAGE_SIZE; p<e; p++) {
@@ -138,7 +168,7 @@ virtual profile.
      }
      if (!tmp->region) {
        mrb_free(mrb, tmp);
-@@ -601,6 +673,9 @@
+@@ -601,6 +693,9 @@
      add_heap(mrb, gc);
    }
  
@@ -148,7 +178,7 @@ virtual profile.
    RVALUE *p = gc->free_heaps->freelist;
    gc->free_heaps->freelist = p->as.free.next;
    if (gc->free_heaps->freelist == NULL) {
-@@ -608,6 +683,19 @@
+@@ -608,6 +703,19 @@
    }
  
    gc->live++;
@@ -168,7 +198,7 @@ virtual profile.
    gc_protect(mrb, gc, &p->as.basic);
    *p = RVALUE_zero;
    p->as.basic.tt = ttype;
-@@ -617,6 +705,7 @@
+@@ -617,6 +725,7 @@
    }
    paint_partial_white(gc, &p->as.basic);
    return &p->as.basic;
@@ -176,7 +206,7 @@ virtual profile.
  }
  
  static inline void
-@@ -901,10 +990,20 @@
+@@ -901,10 +1010,20 @@
  
            while (ce <= ci) {
              struct REnv *e = ci->u.env;
@@ -197,7 +227,7 @@ virtual profile.
              ci--;
            }
          }
-@@ -1193,6 +1292,9 @@
+@@ -1193,6 +1312,9 @@
          if (p->as.basic.tt != MRB_TT_FREE) {
            obj_free(mrb, &p->as.basic, FALSE);
            if (p->as.basic.tt == MRB_TT_FREE) {
@@ -207,7 +237,7 @@ virtual profile.
              p->as.free.next = page->freelist;
              page->freelist = p;
              freed++;
-@@ -1645,8 +1747,16 @@
+@@ -1645,8 +1767,16 @@
  
      p = page->objects;
      for (int i=0; i < MRB_HEAP_PAGE_SIZE; i++) {
