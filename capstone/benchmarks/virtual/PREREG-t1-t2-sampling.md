@@ -433,3 +433,15 @@ Consequently no P1 ratio is gated against a bitstream-3 ratio. Bitstream 3 is th
 - perf-analyze.py `report --arms T1,T3` over all seven kits.
 - Suite groups as in 2026-10-28 (groups/: BEEBS = upstream + libc).
 - The paper's appendix table is replaced only if every kit passes its gates. Otherwise it keeps bitstream 3 with its footnote.
+
+### Erratum to "All 103 programs on P1" (2026-11-17 17:15 +08, before any of these boots)
+
+**WITHDRAWN: the per-process cross-check prediction** ("the ratio of in-context cycles summed over its BENCH lines to its run_cycles delta is ≥ 1 in every process"). It was ill-posed.
+- run_cycles counts every CSRUNV window of the whole process, which includes start-up, the harness between brackets and the printing. The BENCH brackets cover only the timed units.
+- So the BENCH sum is below the run_cycles delta whenever start-up outweighs the kernel time at exits inside the brackets, whatever the arm.
+- On the seven kits' QEMU transcripts the prediction fails in 843 of 880 processes. The median of the BENCH sum over the run_cycles delta is 0.9988, and the median of the run_cycles delta minus the BENCH sum is 79,654 cycles. Compiler lane, p1-suite-native 07d3f7279267.
+- Nothing measures run_cycles restricted to the timed region, so the intended quantity (kernel time inside the brackets ≥ 0) has no reading here.
+
+**Replacement, descriptive only, no prediction and no gate:** per arm, the distribution of bench_cycles_timed over the run_cycles delta per process, from parse-board.py's .ncnt.tsv.
+
+The gates and the T3/T1 bands above are unchanged.
