@@ -331,6 +331,14 @@ standing instruction of 16 Nov to launch the Section 5 work "in any case". Key 1
 recommendation above), not as a pass. The lead had not answered the key-1 question by then. This build serves the
 B5a-against-P1 performance pair.
 
+**THE LEAD'S RULING on key 1 (2026-11-17, in the board lane's session): "Re-scope, build".**
+- Key 1 is recorded as mis-scoped, not as a pass.
+- Its replacement, for this and later gates on the flow: growth across Technology Mapping itself of at most
+  +500 MB, plus a whole-run peak inside the guard.
+- The ruling came after the runtime lane had launched both full builds on the standing instruction. Both builds were
+  already sealed when it arrived.
+- Board lane's dev record: 21859e83e215.
+
 ### Combined gate: B5a + R-76 (pre-registered 2026-11-17, before the run)
 
 - **Hash:** capstone-ariane `r76-ccsrrw-priv` 7180a83b6. It descends from 6e82d7bd2, and its RTL differs from it in
