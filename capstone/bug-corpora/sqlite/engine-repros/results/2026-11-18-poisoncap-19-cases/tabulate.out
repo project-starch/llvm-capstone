@@ -1,0 +1,35 @@
+| case | record | PoisonCap | PoisonCap reading | Sublet, block port | Sublet reading |
+|---|---|---|---|---|---|
+| 02 | 2026-11-18 | rejected at site | fault sqlite3BtreePager code=3 | rejected at site | fault sqlite3BtreePager cause=25 |
+| 03 | 2026-10-26 | rejected at site | fault sqlite3DbFreeNN code=3 | rejected at site | fault sqlite3DbFreeNN cause=25 |
+| 05 | 2026-10-26 | rejected at site | fault findElementWithHash code=3 | rejected at site | fault findElementWithHash cause=25 |
+| 06 | 2026-10-26 | rejected at site | fault idxRemFunc code=3 | rejected at site | fault idxRemFunc cause=25 |
+| 07 | 2026-10-26 | rejected at site | fault fts3DestroyMethod code=3 | rejected at site | fault fts3DestroyMethod cause=25 |
+| 10 | 2026-10-26 | rejected at site | fault fts3SnippetAdvance code=3 | rejected at site | fault fts3SnippetAdvance cause=25 |
+| 11 | 2026-11-18 | in quarantine only | neither faults nor returns within the timeout | rejected at site | fault memcmp cause=25 |
+| 12 | 2026-10-26 | neither | returned | rejected at site | fault fts5SegIterNextPage cause=25 |
+| 13 | 2026-11-18 | rejected at site | fault sqlite3Fts5PoslistNext64 code=3 | rejected at site | fault sqlite3Fts5PoslistNext64 cause=25 |
+| 14 | 2026-10-26 | rejected at site | fault fts5StructureRelease code=3 | rejected at site | fault fts5StructureRelease cause=25 |
+| 15 | 2026-10-26 | in quarantine only | returned | rejected at site | fault sqlite3Fts5PoslistNext64 cause=25 |
+| 16 | 2026-10-26 | in quarantine only | returned | rejected at site | fault memcmp cause=25 |
+| 17 | 2026-10-26 | in quarantine only | returned | rejected at site | fault memcmp cause=25 |
+| 19 | 2026-10-26 | rejected at site | fault nodeRelease code=3 | rejected at site | fault nodeRelease cause=25 |
+| 20 | 2026-10-26 | rejected at site | fault nodeHashLookup code=3 | rejected at site | fault nodeHashLookup cause=25 |
+| 21 | 2026-10-26 | rejected at site | fault memcpy code=3 | rejected at site | fault memcpy cause=25 |
+| 22 | 2026-10-26 | rejected at site | fault editDist3FindLang code=3 | rejected at site | fault editDist3FindLang cause=25 |
+| 23 | 2026-10-26 | rejected at site | fault memcpy code=3 | rejected at site | fault memcpy cause=25 |
+| 24 | 2026-10-26 | rejected at site | fault sqlite3OpenTable code=3 | rejected at site | fault sqlite3OpenTable cause=25 |
+
+PoisonCap rejected at site    14 of 19  02 03 05 06 07 10 13 14 19 20 21 22 23 24
+PoisonCap in quarantine only   4 of 19  11 15 16 17
+PoisonCap neither              1 of 19  12
+Sublet    rejected at site    19 of 19  02 03 05 06 07 10 11 12 13 14 15 16 17 19 20 21 22 23 24
+Sublet    in quarantine only   0 of 19  
+Sublet    neither              0 of 19  
+
+repetitions equal, PoisonCap: True
+repetitions equal, Sublet:    True
+in quarantine, case 11: runs/c19-diag11-la (this record)
+in quarantine, case 15: ../2026-10-24-poisoncap/EVIDENCE.md (diag3-la)
+in quarantine, case 16: ../2026-10-26-poisoncap-heap256/README.md (diag-driver16-la)
+in quarantine, case 17: ../2026-10-26-poisoncap-heap256/README.md (diag-driver16-la)
