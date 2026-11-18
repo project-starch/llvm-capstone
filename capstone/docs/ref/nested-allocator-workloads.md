@@ -3115,3 +3115,40 @@ table's), protected `83703c92…` (the first port with the lookup repair).
 cycles), so the protection has almost nothing to do in it, and what this boot measures is the difference between two
 builds of the interpreter. It bounds the protection's cost on this input at about zero; it is not evidence that the
 protection speeds Perl up.
+
+### Results: 502.gcc_r train01 on P1 with alloc-pool protected (board 2, 2026-11-18 12:53-15:11): +5.26 % in-context
+
+**Configuration.** As pre-registered (d3cd2c484bab with Addenda 1 and 2, 4aec438c4c55 and 117102bcd3f6; the SPEC
+lane's Addendum 186, `356949d451d4`). Chain `nested/p1g/b2-gfx.*` (nat-run3 pid 3227005); P1 resident on board 2.
+Transcript `spec/board/out-nat-p1-gccpool-b2/gfx/board.txt`, sha256
+`4dc936d1e4e233fc014579c39348e9a3bb4729b70b7a667c946400e8b232e89f`, firmware `a27a0b77…`. `b0-stats` and `b0-hello`
+returned 0; the smoke reads as in every P1 boot. Images: stock with the fix `e9b0f80c…`, protected `54291a9f…`.
+
+| | u1 | p1 | p2 | u2 | repeat, u / p | protected vs stock |
+|---|---:|---:|---:|---:|---|---|
+| in-context cycles | 41,800,647,681 | 44,001,429,869 | 43,996,027,573 | 41,801,673,609 | 0.00 % / 0.01 % | **+5.26 %** (+2,197.6 M) |
+| kernel + other | 2,015,039,808 | 2,073,001,269 | 2,069,141,818 | 2,016,547,420 | 0.07 % / 0.19 % | **+2.74 %** (+55.3 M) |
+| uptime span, s | 1,775.13 | 1,865.70 | 1,865.35 | 1,775.26 | 0.01 % / 0.02 % | **+5.09 %** |
+| record-TLB misses (hpm3) | 3,468,420 | 27,863,223 | 27,862,542 | 3,466,983 | | +24.4 M |
+| walk cycles (hpm4) | 106.8 M | 461.9 M | 462.0 M | 106.6 M | | +355.2 M |
+| paged record accesses (hpm5) | 23.06 M | 96.45 M | 96.45 M | 23.06 M | | +73.4 M |
+| event-23 replays (hpm7) | 6.64 M | 31.85 M | 31.85 M | 6.64 M | | +25.2 M |
+| L1D misses (hpm8) | 371.2 M | 413.4 M | 413.4 M | 371.2 M | | +42.2 M (+11.4 %) |
+
+**Against the pre-registration.**
+- Answers: **met.** All four commands' `train01…s` have SPEC's reference hash (`c786c07f…`); the SPEC lane recomputes
+  specdiff from the transcript.
+- Repeat rule: **met** on both counters, so both differences are read.
+- Stock control: **met.** The stock arm with the fix reads 41,801.2 M against the table's 41,713.7 M (board 1) and
+  41,694.2 M (board 3), +0.21 % and +0.26 %.
+- In-context cost: **+5.26 %**, inside the predicted +0.5 % to +10 %.
+
+**Reading.**
+- Protecting gcc's pool allocator costs **+5.3 %** of its in-context cycles and +5.1 % of its run time on train01,
+  with 3.78 M element lifetimes created and at most 132,149 live at once.
+- The twin prices the added instructions at +0.8 %. The rest follows the records: the protected arm misses the record
+  TLB 24.4 M times more and spends 355 M more cycles in walks (16 % of the +2,198 M); how the remainder divides between
+  the CDERIVEs and CREVOKEs and the checks on element accesses is not separated by this boot.
+- Coverage, to be stated with the number: gcc's pool allocator only. The GC heap is not protected (SPEC's build never
+  collects, so 1.37 M lifetimes would be live at once), obstacks are not, and both arms carry one fix for a use after
+  `pool_free` in `df_insn_rescan`.
