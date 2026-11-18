@@ -5742,3 +5742,27 @@ busy overnight and complete the records.
   - The 250 Hz run counts only if its frames are byte-identical to rvm-b1's. A share outside 7.0-9.5 % is reported and x264 keeps the mean until the reading is explained.
   - Any change to the paper from these runs is a new eval/* PR after the deadline, for the lead to decide.
 - **Priority.** If a boot that feeds the paper fails and can be rerun before the deadline, its rerun takes the board and the x264 run behind it is stopped and registered again.
+
+## Addendum 191 (2026-11-18 17:50 +08, before it runs): gcc with all three of its own allocators as Sublet lifetimes on P1, train01, protected arm first, board 1
+
+- **Why.** The lead asked for the external collaborator's gcc port (their branch native-kernel-new-qemu, 6d4504f8b073, `ports/spec-cpu2017/sublet/502.gcc_r`) to be adapted to the board's instructions with no hardware change. That port uses a one-operand CREVOKE and CRENEW. P1 has neither: its CREVOKE takes two operands, and rs2's node must be a direct non-linear child of rs1's.
+- **What runs. It is "gcc's three allocators on P1", not the collaborator's design one to one.**
+  - GC heap (`ggc-page.c`): `ggc_alloc` derives a child of the page capability for an object size below 4096 bytes, and `ggc_free` releases it through the page capability. Larger objects keep their page's lifetime. There is no release at collection: an object's lifetime ends only at `ggc_free`.
+  - Obstacks: the collaborator's edits, with each release made through the chunk's capability.
+  - Pools: the nested lane's header port of Addendum 186, not the collaborator's.
+  - The stale-use fix of Addendum 186 is in both arms.
+  - Build: perf/gcc3/build-three.sh on the Full arm's tree (FRCDKMSa3, hash-equal to the collaborator's baseline.json in all five files). cpugcc_r 559675b79f5402e6, stage binary 5920b9f9ac773782 by build-arm.sh's strip recipe (the recipe reproduces Addendum 186's protected stage binary 54291a9fec6869fd). Stock arm: Addendum 186's, e9b0f80c5fbe1a84.
+  - Lifetime instructions, counted by a variable-length walk of the executable sections: stock 10 CDERIVE / 6 CREVOKE (the runtime's own), pool arm 12 / 7, this arm 14 / 11. In this arm's objects: ggc-page.o 1 / 1, obstack.o 1 / 3, alloc-pool.o 2 / 1. The same three objects of the stock arm hold none.
+- **Gate (QEMU twin, perf/gcc3, 262,144 records, as the board kit).** g3t (test input, U P P U) ended rc 0 with specdiff 1/1 at 17:36:54. g3tr (train01, U P P U) is running. **The chain is launched only if g3tr ends rc 0 with four `rc=0` arms and specdiff 1/1.** The board stage differs from g3tr's only in the order of its arm blocks (mk-puup.py asserts that the sorted lines are equal), and its test twin (g3tp) must pass too.
+- **Registration: gcc3-b1.** Stage perf/gcc3/board/g3 (g3.SHA256SUMS), train01, arms p1 u1 u2 p2. Kit bkit91-k2n-native-p1-tree-cscfix, P1 resident, no flash. Board 1, behind the protected perlbench boot of Addendum 188 (chain pid 3361060). Files natstage/gcc3-b1.{conf,list}: the conf is Addendum 186's b2-gfx.conf with TAG and LIST changed. Budget 3600 (the kit multiplies by 4), booking 240 min.
+- **Rules.** VOID as for every P1 boot. Every arm must end `rc=0`, and the sha256 of `train01.opts-O3_-finline-limit_50000.s` in every arm must equal the twin's, whose specdiff passed. Otherwise no cost is read.
+  - Cost: protected over stock, wall clock (up1 - up0), mean of the two runs per arm. A repeat pair further apart than 0.5 % is reported.
+  - Early reading: if only p1 has ended by 19:15, it is set against Addendum 186's two stock runs on board 2 (1775.13 s and 1775.26 s, the same stock binary) and labelled n=1, across boards. The in-boot value replaces it when the arms end.
+  - Predicted: above the pool's +5.09 %, since the pool edit is part of this arm. Band +5 % to +40 %. It is wide because no count of GC-heap or obstack events on train01 exists. A reading outside it is a miss and is still read.
+- **Failure branches, each ends with no cost read.**
+  - A protected arm faults or returns non-zero: gcc uses a GC or obstack object after its release on train01. The collaborator tested the test input only. The reading is then "the adaptation does not run train01", with the fault's cause and pc.
+  - The record table fills (no release at collection, so records live until `ggc_free`). The twin runs at the board kit's 262,144 records, so its pass is the evidence that train01 fits. If the board still refuses, both arms rerun on the 2^20-record kit after the deadline.
+  - No return within the budget.
+- **Limits that travel with any number.** One train input of five, n=2 per arm, not the reference workload. GC objects of 4096 bytes or more are not separately protected. Pools use a different port from the collaborator's.
+- **Addendum 190, Registration 1 (spa3w-b1).** Its chain (pid 3426486) was stopped at 17:37 while it was still waiting on pid 3361060, before it touched the board, so that board 1 takes this boot first. It is re-queued behind gcc3-b1 with the same conf and list.
+- **Paper rule.** A number goes to the lead as paste-ready text for 7.3. The paper changes only on the lead's word.
