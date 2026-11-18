@@ -5718,3 +5718,27 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
   - x264 Full: -0.49 to +0.30 % by the probe's range, +0.49 % by the mean; +Spatial -0.50 to +0.29 % against +0.48 %. The sign of x264 depends on the imputed share.
 - **Linearity (claim-auditor, 13:50).** The formula takes 250 Hz to cost 2.5 times 100 Hz. On the probe the measured factor is 2.460 (19.484 % over 7.919 %). With 2.460 every share rises by 0.19-0.22 pp (gcc 9.24 %) and the geometric means become 16.75 % and 17.95 % instead of 16.49 % and 17.69 %. The factor 2.5 is kept. It favours Sublet by about 0.25 pp.
 - **Label.** Addendum 162 stands: the uncorrected ratio is the measurement and the corrected one is an estimate. The PR's text and caption say "estimate" from the next push, and the figure's axis starts at -5 % so that a negative x264 bar cannot be clipped.
+
+## Addendum 190 (2026-11-18 14:25 +08, before they run): the three x264 runs deferred for the paper deadline, queued behind the boots that still feed the paper
+
+The paper deadline is 2026-11-18 20:00 +08 and no x264 run ends before it. These runs start only when each board's
+current chain ends, so they take no board time from a run that can still change the paper. They keep the boards
+busy overnight and complete the records.
+
+- **Registration 1: spa3w-b1.** A second +Spatial run of 525.x264_r on P1, board 1, after the protected perlbench boot (Addendum 188, chain pid 3361060). It replaces spa3v-b1 (Addendum 181), stopped at 11:36 with no reading.
+  - Files: natstage/spa3w-b1.{conf,list}. The conf is spa3v-b1.conf with TAG, LIST and its comment changed; the stage and budget are the same.
+  - Band: 30,362-30,976 s (the first run, cj-b2, 30,669.13 s, ±1 %).
+- **Registration 2: a3w-b2.** A second Full run of 525.x264_r on P1, board 2, after the stock perlbench boot (Addendum 188, chain pid 3361059). It replaces a3v-b3 (Addendum 181), which never started.
+  - Files: natstage/a3w-b2.{conf,list}. The conf is a3v-b3.conf with TAG, LIST and its comment changed.
+  - Band: 30,367-30,981 s (the first run, ci-b1, 30,674.0 s, ±1 %).
+- **Registration 3: hz250x-b3.** Plain 525.x264_r with the 250 Hz kernel (bkit96) on board 3, after the perlbench 250 Hz chain (Addendum 185, thrun pid 3123471). The 100 Hz reference is rvm-b1, 33,060.23 s (n=1).
+  - Files: natstage/hz250x-b3.{conf,list}. The conf is hz250p-b3.conf with TAG, the chain tag, LIST and its comment changed. The list line is rvm-b1.list's (60000 s, 960 min).
+  - Prediction: 37,538-38,832 s, from the smallest and largest shares measured so far (nab 7.37 %, gcc 9.02 %). Its share is s = (r-1)/(2.5r-1) with r = T250/33,060.23.
+  - What it changes: x264's estimate takes its own share in place of the mean of the measured ones (Addendum 189). Full x264 is +0.50 % with the mean; it would be -0.30 % at 7.37 % and +1.51 % at 9.02 %.
+- **Rule-8 dry runs.** All three reached DONE, rc 0 (NR_DRY=1 / NB_DRY=1, with 24ab2aaa8ede as a stand-in for the pre-registration commit); logs in the session scratch, dry190/.
+- **Reading rules, fixed now.**
+  - A run counts if SPEC's validation passes and, on P1, the smoke is 9/9.
+  - Addendum 181's rule stands: if both second runs are inside their bands, 7.3's Setup sentence may drop "except x264". Outside a band, the run is reported and the sentence stays.
+  - The 250 Hz run counts only if its frames are byte-identical to rvm-b1's. A share outside 7.0-9.5 % is reported and x264 keeps the mean until the reading is explained.
+  - Any change to the paper from these runs is a new eval/* PR after the deadline, for the lead to decide.
+- **Priority.** If a boot that feeds the paper fails and can be rerun before the deadline, its rerun takes the board and the x264 run behind it is stopped and registered again.
