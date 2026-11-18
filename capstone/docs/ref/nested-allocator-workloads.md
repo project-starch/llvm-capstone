@@ -3152,3 +3152,66 @@ returned 0; the smoke reads as in every P1 boot. Images: stock with the fix `e9b
 - Coverage, to be stated with the number: gcc's pool allocator only. The GC heap is not protected (SPEC's build never
   collects, so 1.37 M lifetimes would be live at once), obstacks are not, and both arms carry one fix for a use after
   `pool_free` in `df_insn_rescan`.
+
+### Results: SPEC perlbench test.pl on P1 with SV heads protected (boards 1 and 2, 2026-11-18 13:48-19:02): +5.84 % in-context, output correct
+
+**Configuration.** As pre-registered (cbd14ff6b5c4; the SPEC lane's Addendum 188, `eab935564a65`). Both boots on kit
+`nested/kits/bkit91-rec1m` (the transcripts read `node_flat_records=1048576`), P1 resident, the table's stage
+(makerand.pl, then test.pl), one arm per boot. `b0-stats` returned 0 in both; the smoke reads 8 PASS with `task`
+waived, as in every P1 boot.
+- **Protected, board 1** (chain `nested/p1g/b1-pt2.*`, 13:48-17:51): image `f5449ace…` (the stage's packed image
+  unpacks to it). Transcript `spec/board/out-nat-p1-pt2-b1/pt2/board.txt`, sha256
+  `f04a17a30fadafe917ab3da066474a67683f43066652f1f9f7c01156c295ffa6`, firmware `78bf5afe…`.
+- **Stock, board 2** (chain `nested/p1g/b2-st2.*`, 15:11-19:02): the table's image `c1744e87…`. Transcript
+  `spec/board/out-nat-p1-st2-b2/st2/board.txt`, sha256
+  `9b9feb343f566493ab7c04caa2a1c8864a752f48f32b3ce23a905bfcf6bb0d9e`, firmware `527ef774…`.
+- The firmware hashes are not the dry runs' (`8a0a857a…`, `cc1c0bac…`): each bake relinks the kernel (builds #250 and
+  #251 in the transcripts).
+
+| test.pl (command 1) | stock, board 2 | protected, board 1 | protected vs stock |
+|---|---:|---:|---|
+| in-context cycles | 267,194,043,894 | 282,785,227,858 | **+5.84 %** (+15,591.2 M) |
+| kernel + other | 44,320,834,142 | 45,788,624,164 | +3.31 % (+1,467.8 M) |
+| uptime span, s | 12,796.15 | 13,488.91 | **+5.41 %** |
+| record-TLB misses (hpm3) | 24,086,975 | 45,827,521 | +21.7 M (+90 %) |
+| walk cycles (hpm4) | 511.2 M | 854.6 M | +343.3 M |
+| paged record accesses (hpm5) | 361.3 M | 609.0 M | +247.7 M |
+| event-23 replays (hpm7) | 52,723,317 | 96,408,702 | +43.7 M (+83 %) |
+| L1D misses (hpm8) | 1,305.6 M | 1,427.0 M | +121.4 M (+9.3 %) |
+
+| makerand.pl (command 0) | stock, board 2 | protected, board 1 | protected vs stock |
+|---|---:|---:|---|
+| in-context cycles | 6,839,873,599 | 6,766,079,003 | −1.08 % |
+| uptime span, s | 276.09 | 273.17 | −1.06 % |
+
+Both commands together (the unit of the SPEC table's perlbench bar): in-context 274,033,917,493 against
+289,551,306,861, **+5.66 %**; span 13,072.24 s against 13,762.08 s, **+5.28 %**.
+
+**Against the pre-registration.**
+- Answers: **met in both boots.** All commands return 0; `makerand.out` (43,841 bytes) and `test.out` (15,555 bytes)
+  read from each transcript are byte-equal to SPEC's `data/test/output` files, and both `.err` files are empty. The
+  protected `test.out` ends "All tests successful". Neither console shows a fault line during a command.
+- So io/perlio.t, op/inccode.t and op/inccode-tie.t, which the twin could not show, **pass under protection on the
+  board.** The twin's full run (`npspec-pt2`) failed exactly those three and no other, as registered.
+- Cost of test.pl: **+5.84 % in-context, +5.41 % span.** Predicted +5 % to +30 % in-context: met, at the low edge.
+- Stock check: **met.** Stock test.pl here reads −0.01 % in-context and −0.02 % in span against the table's two runs
+  on board 3 (267,212.4 M and 267,230.6 M; 12,798.66 s and 12,799.00 s), on a table four times the size.
+- makerand: stock here reads +0.09 % against the stock arm of board 1's interleaved boot (6,833.9 M). The protected
+  image of this boot (the extended port) reads −1.08 % against stock; the first port read −2.54 %.
+
+**Limits.**
+- One run per arm, the arms on different boards and not interleaved. The stock arm repeats the table's runs on
+  another board to 0.02 %, which is the evidence that the board is not the difference.
+- The kit has 2^20 records, not the table's 262,144: re/pat_psycho.t needs more than 262,144 records under
+  protection. Stock is unchanged by the larger table (the stock check above).
+- The cost is for the SV-head patch with the lookup repair and the six stale-head sites of the extended port; nothing
+  else in the interpreter is protected.
+
+**Reading.**
+- Protecting every scalar head of SPEC's Perl costs **+5.8 %** of test.pl's in-context cycles and +5.4 % of its run
+  time, with all 314 test scripts giving SPEC's reference output.
+- The protected arm misses the record TLB 21.7 M times more and spends 343 M more cycles in walks, 2.2 % of the
+  +15,591 M. How the remainder divides between the instructions the patch adds (the arena lookup, CDERIVE, CREVOKE),
+  the checks and cache effects is not separated by this pair.
+- This replaces suns.pl (+16.05 %) as the Perl cost with the widest coverage: suns.pl is one script on Perl 5.36,
+  test.pl is SPEC's own test workload on SPEC's Perl 5.22.
