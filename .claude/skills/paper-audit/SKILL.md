@@ -38,6 +38,9 @@ and every edit goes through an `eval/*` PR that the lead merges.
 4. **A formula is audited before anyone sees it.** Put one measured number through it and check
    the sign and the size of the result. A correction formula was once pre-registered and sent to a
    co-author inverted, in our favour. An auditor caught it only because it happened to be asked.
+5. **Check where the evidence sits.** A table or figure that a takeaway, the abstract or the
+   conclusion rests on belongs in the main text. If it is in an appendix, move it in the PR or put
+   the move to the lead before round 1. No lens asks this (see the last section).
 
 ## 1. Which auditors
 
@@ -50,7 +53,7 @@ anything: two auditors once disagreed on a presentation question and the first t
 |---|---|---|
 | Numbers | `paper-numbers-checker` | The record paths. "Recompute every value. Do not trust the PR body or the macros' comments." Counts of things ("N of M applications") are numbers too. |
 | Claims | `claim-auditor` | Three to five named weakest links, and a falsification target ("a free list in any of these programs would falsify the sentence"). One open slot: "true but misleading to a reader who later sees the raw records". |
-| Wording and house style | `general-purpose` | "First extract the paper's conventions from the sections we did not write, then judge ours against them." Lab jargon, undefined terms, number formats, captions. Each item: file:line, quoted text, exact replacement. |
+| Wording and house style | `general-purpose` | "First extract the paper's conventions from the sections we did not write, then judge ours against them." Lab jargon, undefined terms, number formats. **Captions are judged alone:** paste only the captions, without the body, and ask which words a reader who has read nothing else cannot understand. A caption uses plain words or defines its terms itself; a build name, a patch name or a term coined in the body fails. Each item: file:line, quoted text, exact replacement. |
 | Over-disclosure | `general-purpose` | The lead's framing, quoted. The rule: keep a detail only if a sentence becomes false, or a result is hidden, without it. "A reviewer might ask" is not a reason to keep. |
 
 **On a trigger:**
@@ -130,3 +133,8 @@ Then rebuild, and run layout last.
 - **Whether a true statement helps the paper.** That is the lead's call.
 - **Their own duplicates.** Without the "do not re-report" list, parallel auditors spend most of
   their reports on the same three items.
+- **Placement, and captions read alone.** After all 33 audits and four merged PRs, the PI read the
+  paper once (2026-11-18) and found two things at once: the applications table that Takeaway 4
+  rests on sat in an appendix, and its caption said "lifetime patch", a term no caption defined.
+  Every auditor had read the captions with the body open. Hence step 5 of section 0 and the
+  caption rule in the wording lens.
