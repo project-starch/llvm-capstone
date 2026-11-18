@@ -3028,3 +3028,57 @@ test.pl begins, and this boot takes board 2 now. It would otherwise end near 18:
   `spec/board/out-nat-p1-gccpool-b2/gfx/board.txt`. The chain armed on board 1 (pid 3213632) is cancelled; it had
   booked nothing.
 - Everything else is as registered above.
+
+### Pre-registration: SPEC perlbench test.pl with the port extended for six stale-head sites, one protected and one stock run on a 2^20-record kit (written 2026-11-18 13:40, before the boots)
+
+**Why.** With the first port, the protected test.pl fails 10 of 314 tests on the twin (Addendum 3 above). The lead asks
+for the full Perl row on SPEC's test.pl if it can be had today, with suns.pl as the fallback.
+
+**The extended port** (`nested/perlspec/fx/port-sv-heads.py`, `f55e5096…`; all of it under `PERL_CAPSTONE_SUBLET`,
+and without the define 69 of 69 objects are still byte-identical to the table's build):
+- `S_rv2gv` (pp.c:245), `pp_bless` (pp.c:614) and `sv_resetpvn` (sv.c:9607): a type test of a stash that may be
+  freed; read through the arena's own pointer (`SvTYPE_MAYBE_FREED`), as the 5.36.3 patch does for its sites.
+- `S_glob_assign_glob` (sv.c:3991, 4000): `SvTAINTED(sstr)` and `GvAV(sstr)` are read after a `LEAVE` that may have
+  freed `sstr`; both are read before the `LEAVE`.
+- `pad_free` (pad.c:1820): tests and clears `SVs_PADTMP` in a pad entry that can be a freed head; done through the
+  arena's own pointer. **This is the one write through that pointer.** Why the pad entry is stale was not found.
+- `pp_aassign` (pp_hot.c:1094): `SvGETMAGIC` on an element that may be a freed scalar; skipped when `SvIS_FREED`.
+- No CREVOKE is skipped and no SV is exempt. Protected image: stripped `f5449ace…` (full `781af4cc…`).
+
+**Twin, and a deviation.** Run by a background fork of this lane; this session read its port diff and its build log.
+- With the new image, 7 of the 10 failing tests pass or run to their end as stock does (`npfx-tt2b`): io/open.t,
+  op/bless.t, op/gv.t, op/reset.t pass in full; op/goto.t and op/sort.t end rc 0 with only the TODO test that stock
+  also fails; re/pat_psycho.t passes with 1,048,576 records (`npfx-tt2p`), so it needs the 2^20-record kit.
+- io/perlio.t (tests 23-29), op/inccode.t and op/inccode-tie.t (test 61) still fail on the twin, **and the stock
+  image fails them identically there** (`npfx-tt2s`). They need a temp file and `/dev/null`; the boards' command line
+  has `capstone_vm.dom_local_tmp` and `dom_null`, and the twin's cannot hold them beside `dom_grant_root` (512 bytes).
+  That they pass on a board with the protected image is **not verified**.
+- **Deviation:** the twin has not run all of test.pl with the new image, and cannot show 314 of 314 for the reason
+  above. A full run (`npspec-pt2`, 2^20 records) started at 13:35 and serves as an early warning: it should fail
+  those three tests and no other. If it shows another failure or a fault, the protected boot is stopped.
+
+**Boots**, both on kit `nested/kits/bkit91-rec1m` (`node_flat_records=1048576`), each the table's stage
+(makerand.pl, then test.pl), budget 86400 (`BAKED_TIMEOUT` 345600), booking 1,440 min:
+- **protected, board 1**, after the makerand boot there: stage `nested/p1g/pt2` (`pt2.SHA256SUMS`), the table's stage
+  with the protected image (xz-packed; `run.sh` differs from the table's in that one line). Chain
+  `nested/p1g/b1-pt2.*`. Transcript `spec/board/out-nat-p1-pt2-b1/pt2/board.txt`. Rule 8: real bake, both stubs rc 0,
+  firmware 23,760,392 B (`8a0a857a…`), the kernel at 1048576, `NR_DRY=1` to DONE.
+- **stock, board 2**, after the gcc boot there (about 15:05): stage `nested/p1g/st2` (`st2.SHA256SUMS`), whose
+  `train/` is file-for-file the table's board stage. Chain `nested/p1g/b2-st2.*`. Transcript
+  `spec/board/out-nat-p1-st2-b2/st2/board.txt`. Rule 8: the same, firmware `cc1c0bac…`.
+- Expected: 4.6 min for makerand and 3.6 h for a stock test.pl; the protected one 3.6 h plus its cost. A boot must
+  end by about 19:00 to reach the paper today.
+
+**Outcomes and bands.**
+- **VOID** as for every P1 boot.
+- **Answers.** Each boot's `makerand.out` and `test.out` pass specdiff against SPEC's references, read with the tool
+  the table used. **If the protected `test.out` fails, the failing tests are listed and no test.pl cost is read.**
+- **Cost of test.pl:** protected (board 1) against stock (board 2), in-context cycles and uptime span. The arms are
+  on different boards and not interleaved; the SPEC lane's spread for one image across boards is at most 0.3 %, so a
+  difference under 1 % is reported as not distinguishable. Predicted: +5 % to +30 % in-context.
+- **Checks on the comparison:**
+  - the stock test.pl here against the table's two runs on board 3 (267,212.4 M and 267,230.6 M in-context, on the
+    262,144-record kit): reported, expected within 1 %;
+  - makerand in both boots against each other and against board 1's interleaved makerand boot.
+- **If only one boot ends in time,** the protected run is set against the table's two stock runs (another board,
+  the smaller table), and the row says so.
