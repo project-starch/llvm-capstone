@@ -2649,3 +2649,569 @@ of the two stage directories is empty) and the same kit, no heartbeat, the next 
 - No mechanism is claimed. On F the protected arm did not return in 2 of 2 boots, on P1 in 1 of 3; counts this small
   do not tell the two bitstreams apart.
 - The sleep-and-echo beat proposed after p1 is no longer needed: a boot without any beat returned.
+
+## CREVOKE at the table's capacity on P1
+
+### Pre-registration: CREVOKE subtrees of 262,000, 450,000 and 10^6 nodes on P1 with a 2^20-record table, one boot (written 2026-11-18 10:40, before the boot)
+
+**Why.** Appendix F states 0.4 s for 262,144 records and 1.6 s for 2^20 as extrapolations at 39 cycles per node. The
+P1 CREVOKE chains (above) measured at most 100,000 nodes, and their 10^6 probe was refused after 196,609 because
+bkit91's table holds 262,144 records. This boot measures subtrees near the capacity of a 2^20-record table. The SPEC
+lane asked for it, and the lead approved it.
+
+**Configuration.**
+- Bitstream P1 `…-pagedtbl_d83d3a633`, sealed. The chain flashes it from the seal if it is not resident (sha256 checked)
+  and reads it back by name.
+- Kit `nested/kits/bkit91-rec1m` (`node_flat_records=1048576`), the kit of P1's Perl boot.
+- Stage `nested/p1cap/crvt` (`crvt.SHA256SUMS`). It is the kit's `make-train-stage.sh` around `nested/crvt/stages-c5`,
+  written by `crvt/make-stage-crv5.py`.
+  - The domain is the P1 boot's `crvtime`, byte-identical: stripped `b7b4af35…`, source `6bc727e4…`.
+  - The smoke skeleton is byte-identical to `nested/p1/crvt`.
+- Commands, one process each:
+  - `control`, and the `readclock` probes for `cycle`, `mcycle` and the HPM counters, as on P1;
+  - the controls: `chain 100000` and `scatter 100000 102400`, which repeat the P1 boot's rows;
+  - `scatter 262000 262144`: 1,024 record pages;
+  - `chain 450000`, and `scatter 450000 450048` over 1,758 pages;
+  - `chain 1000000`, and `scatter 1000000 1000192` over 3,907 pages;
+  - last, `probe 2000000`, with a progress line every 65,536 nodes.
+  - With `CRVT_HPM=1`, hpmcounter3/4 (record-TLB misses, walk cycles) are read around each CREVOKE.
+- Board 2, after the SPEC lane's spa3x chain (nat-run3 pid 2534574), which leaves board 2 on P1. Chain
+  `nested/p1cap/b2-crvt.*`. Budget 900 (x4 = `BAKED_TIMEOUT` 3600), booking 45 min.
+- Checked on the twin: run `ncrv-c5`, qemu55, `--records 1048576`.
+  - Every command up to `scatter 450000` returns.
+  - `chain 1000000`, `scatter 1000000` and the probe end with cause 30 (node exhaustion) and rc 139. The probe was
+    refused after 458,753 nodes.
+  - The twin's table is flat, not P1's paged tree, so it does not predict the board's capacity.
+- Checked off the board (`nested/p1cap/crvt-recheck`, via `b5a/recheck-kit.sh`):
+  - real bake;
+  - `BOARD_STUB=2` on the P1 crvt transcript and on its cut after the first `@@SPEC-BEGIN`: rc 0 and 0,
+    `BAKED_TIMEOUT=3600` in both;
+  - the relinked kernel's configuration carries `node_flat_records=1048576`;
+  - real firmware 19,566,088 B (`f40d2586…`);
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/p1cap/dry.log`).
+  - The recheck relinked the shared kernel tree with `node_flat_records=1048576`. The next bake from that tree with
+    262,144 recompiles the four `CONFIG_CMDLINE` objects (see tsu-p2 above).
+
+**Outcomes and bands.**
+- **VOID**, as on P1: `b0-stats` or `b0-hello` fails, or the smoke fails beyond the kit's waiver.
+- **Controls.** `chain 100000` per node within ±10 % of P1's 32.2, and `scatter 100000` within ±10 % of P1's 38.5.
+  Otherwise the boot's figures are reported as not reproducing P1's.
+- **The scatter took** if each scattered CREVOKE's record-TLB misses are at least N, one per node, as at 100,000 on P1.
+  Otherwise those rows are reported as chains on churned records.
+- **Prediction.**
+  - Scattered, per node, at 262,000 and 450,000: 35 to 50 cycles.
+  - Contiguous at 450,000: 28 to 40 cycles per node.
+  - So 262,000 scattered nodes revoke in about 9-13 M cycles, 0.37-0.52 s at P1's 25 MHz, in one uninterruptible
+    instruction.
+- **Linearity.** Linear if the per-node figure at 262,000 and 450,000 lies within ±15 % of the same boot's at
+  100,000, for each kind. If so, the extrapolation to 2^20 (39 per node) stands on a measured trend. If not, it is
+  replaced by the measured figures.
+- **10^6, not predicted.**
+  - If a command returns, its figure is measured.
+  - If the table refuses it (cause 30, rc 139), the 2^20 figure stays an extrapolation, and the largest N measured
+    is stated with it.
+- **Probe:** the count reached is the effective capacity of this kit for one domain. Not predicted.
+
+### Results: CREVOKE at the table's capacity on P1 (board 2, 2026-11-18 10:48-10:58): linear to 450,000 nodes, 262,000 scattered nodes in 0.40 s
+
+**Configuration.** As pre-registered (5d5210277fdf; Addendum 180, `1b12d2463fea`). Chain `nested/p1cap/b2-crvt.*`
+(nat-run3 pid 2714880), after the SPEC lane's spa3x chain; P1 was resident and read back by name. Transcript
+`spec/board/out-nat-p1cap-crvt-b2/crvt/board.txt`, sha256 `bbb3c7726f0a5f26fe82c4228dd10aa1b6e8307bbd6da75f6ffe724548a5f915`,
+firmware `178e8197…`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0 and the smoke passed all 9 steps. `cycle` reads from the domain,
+`mcycle` faults (rc 139) and hpmcounter3/4 read (`p-hpm` rc 0), as in the first P1 boot. Not VOID.
+
+| subtree | N | CREVOKE cycles | per node | at 25 MHz | record-TLB misses | walk cycles |
+|---|---:|---:|---:|---:|---:|---:|
+| contiguous | 100,000 | 3,209,994 | 32.10 | 0.128 s | 391 | 9,501 |
+| scattered (400 pages) | 100,000 | 3,894,368 | 38.94 | 0.156 s | 100,001 | 611,896 |
+| scattered (1,024 pages) | 262,000 | 10,034,529 | 38.30 | 0.401 s | 262,002 | 1,604,791 |
+| contiguous | 450,000 | 14,508,643 | 32.24 | 0.580 s | 1,759 | 43,998 |
+| scattered (1,758 pages) | 450,000 | 17,261,371 | 38.36 | 0.690 s | 450,002 | 2,758,329 |
+| contiguous | 1,000,000 | not built: rc 139 | | | | |
+| scattered | 1,000,000 | not built: rc 139 | | | | |
+
+The probe toward 2·10^6 reported 458,753 nodes and died (rc 139) before 524,289.
+
+**Against the pre-registration.**
+- Controls: **met**. `chain 100000` reads 32.10 against P1's 32.2, and `scatter 100000` 38.94 against 38.5.
+- The scatter took: **met**. Each scattered CREVOKE misses the record TLB once per node (N + 1 or N + 2 misses).
+- Prediction: **met**. Scattered 38.30 and 38.36 per node (35 to 50); contiguous 32.24 at 450,000 (28 to 40);
+  262,000 scattered nodes in 10.03 M cycles (9 to 13 M).
+- Linearity: **met**. Against the same boot's 100,000: scattered −1.6 % and −1.5 %, contiguous +0.4 %.
+- 10^6: **refused** in both commands, so nothing at 10^6 is measured.
+
+**Reading.**
+- **Measured:** one CREVOKE of 262,000 scattered nodes takes 10.03 M cycles, 0.40 s at 25 MHz, in one
+  uninterruptible instruction. Appendix F's 0.4 s for 262,144 records is now a measurement to within 144 nodes.
+- **The largest subtree measured is 450,000 nodes:** 0.69 s scattered, 0.58 s contiguous.
+- **2^20 stays an extrapolation.** The cost is linear from 100,000 to 450,000 nodes at 38.3 to 38.9 cycles per scattered
+  node, which gives 40.2 M cycles, 1.61 s, for 2^20 nodes.
+- **A subtree of 2^20 nodes cannot be built on this kit.** With `node_flat_records=1048576` one domain's chain was
+  refused between 458,753 and 524,288 nodes. The board console does not show the fault's cause; on the twin the same
+  commands end with cause 30 after the same count. What limits a domain to under 2^19 nodes of a 2^20-record table is
+  not established here.
+
+## Perl with the arena lookup repaired
+
+### Pre-registration: Perl suns.pl on P1 with the arena-lookup repair, U P P U in one boot (written 2026-11-18 11:25, before the boot)
+
+**Why.** The +208 % of "Results: Perl on P1" is withheld: patch 0001 finds a head's arena by walking the list of all
+arenas, about 100 M loads through cold arenas per command ("Withdrawn 2026-11-18" there). This boot repeats that boot
+with the lookup repaired and nothing else changed. It asks what a lifetime per SV head costs once the search is gone.
+
+**Configuration.**
+- Bitstream P1, kit `nested/kits/bkit91-rec1m` (`node_flat_records=1048576`), workload suns.pl with `PERL_HASH_SEED=0`,
+  answer `suns.out` (`01688ea0…`): all as in the P1 Perl boot. The lifetimes are the same, so the live-record peak is
+  the same and the 2^20-record table is still needed.
+- **The repair**, this lane's, on top of patch 0001 (blob `72db9236`):
+  `nested/perl/lookup-fix/0002-sv-arena-lookup-by-index.patch` (`04540913…`; written by `fix-lookup.py`,
+  `f5ccf26e…`). It keeps every arena in an array sorted by address. `Perl_more_sv`, the only place that adds an arena, enters
+  it. A lookup tries the arena found last, then binary-searches the array, and reads no arena. The array is freed in
+  `Perl_sv_free_arenas`. CDERIVE and CREVOKE sites, the arena geometry and the free list are unchanged.
+  - Only `sv.c` differs from the protected source tree of the P1 boot (`cmp` of `sv.h`, `sv_inline.h`, `gv.h`, `pp.c`,
+    `pp_ctl.c`, `perl.h`).
+  - Built by the same `build-arms.sh` (arm `protfix`, `PERLD_EXTRA_PATCH`). Stripped image `693568f6…` (full
+    `9f1fad49…`). CREVOKE census as the P1 protected image: 0 with rs2 = x0, 9 with rs2 != x0.
+  - The stock image is the P1 boot's, `3012f392…`.
+- Stage `nested/p1g/perlfix` (`perlfix.SHA256SUMS`): the kit's wrap of `nested/appd/perl-fix`. Against the P1 boot's
+  stage `nested/p1a/perl`, only `perl_prot.xz` and `plan.json` differ.
+- u1 p1 p2 u2 in one boot. Board 2, after the SPEC lane's filler chain (nat-run3 pid 2941955); P1 is resident. Chain
+  `nested/p1g/b2-perlfix.*`. Budget 900 (x4 = `BAKED_TIMEOUT` 3600), booking 45 min.
+- Expected wall time: 3.6 min per stock command (the P1 boot), 4 to 6 min per protected command; about 20 min of
+  commands.
+- **Twin** (`nperl-fix`, 2^20 records): four commands rc 0 with `suns.out`. In-context 1,731.9 / 1,905.1 / 1,905.1 /
+  1,731.9 M, **+10.00 %**, repeats 0.00 %. With the walk (`nperl-1m`) it was +40.26 %: the repair removes 524 M of
+  the 697 M added instructions.
+- Checked off the board (`nested/p1g/perlfix-recheck`): real bake; `BOARD_STUB=2` on the P1 Perl transcript and on its
+  cut, rc 0 and 0, `BAKED_TIMEOUT=3600` in both; the relinked kernel carries `node_flat_records=1048576`; real firmware
+  23,760,392 B (`f7748f4f…`); an `NR_DRY=1` pass of the chain to DONE (`nested/p1g/dry-perlfix.log`).
+
+**Outcomes and bands.**
+- Answers: every command's stdout equals `suns.out`, else VOID for the cost. Repeat rule as for every P1 boot (1 %
+  in-context, 2 % kernel + other, else not read). VOID as before.
+- **Stock control:** the stock arm's in-context cycles within ±1 % of the P1 boot's 4.914 G (same image, same kit,
+  another board). Outside it, the two boots are not compared.
+- **The reading:** the in-context cost, protected against stock.
+  - ≤ +30 %: the arena search carried at least 85 % of the +208 %;
+  - +30 % to +100 %: the search carried part of it, and the rest is still unexplained;
+  - ≥ +100 %: the search was not the main cost, and the new attribution is wrong too.
+- **Prediction: +10 % to +30 %.**
+  - The twin's +173 M instructions at the stock arm's 2.84 cycles per twin instruction: about 0.5 G, +10 %.
+  - CDERIVE and CREVOKE on 1.94 M allocations and frees, at 63 to 100 cycles each: 0.1 to 0.2 G.
+  - Checks on cold records that are not the walk's: the P1 boot read 100.6 M added event-23 replays against 97.4 M
+    counted steps, so about 3 M, at about 105 cycles: 0.3 G.
+- **Counters** (hpm3-8 as in the P1 boot), protected minus stock, per command:
+  - event-23 replays (hpm7): under +10 M, against +100.6 M;
+  - record-TLB misses (hpm3): under +10 M, against +48.8 M;
+  - L1D misses (hpm8): under +30 M, against +260 M.
+  - A counter above its bound with the cost in the first band is reported, not explained.
+- **What this boot cannot show:** it changes the lookup only. It does not separate the cost of CDERIVE and CREVOKE from
+  the cost of checking each head's own record.
+
+## Perl on SPEC's own perlbench test, with SV heads protected
+
+### Pre-registration: 500.perlbench_r test on P1 with the sv-heads protection, one boot (written 2026-11-18 11:35, before the boot)
+
+**Why.** The lane owner chose SPEC's perlbench test as the Perl row of the appendix: the workload of the paper's SPEC
+table, run on SPEC's own Perl 5.22.1 sources and checked against SPEC's reference outputs. suns.pl on stock Perl
+5.36.3 is no longer the row.
+
+**Images.** SPEC CPU2017 500.perlbench_r, the table's Full build (FRCDKMSa3, the SPEC lane's).
+- Stock: the table's image itself, stripped `c1744e87…`.
+- Protected: the same build with the sv-heads patch ported to 5.22.1 (`nested/perlspec/port-sv-heads.py`, `0020f23c…`;
+  from patch 0001, blob `72db9236`) and the arena-lookup repair (`nested/perl/lookup-fix/fix-lookup.py`,
+  `f5ccf26e…`), under `-DPERL_CAPSTONE_SUBLET`. Stripped `83703c92…` (full `1cdc258b…`).
+  - Port differences from 5.36.3: `uproot_SV` and `S_more_sv` live in `sv.c`, and the eval compiler is `S_doeval`.
+  - **Control:** the ported sources compiled without the define give 69 of 69 objects byte-identical to the table's
+    build, and the relink reproduces its image (`51bfbd41…`).
+  - CREVOKE census: stock 0 with rs2 = x0 and 6 with rs2 != x0; protected 0 and 9.
+
+**Stage** `nested/p1g/ptest` (`ptest.SHA256SUMS`, 574 files): kit bkit91's wrap of `nested/perlspec/stage-test5`, made
+by `make-perltest-stage.py` (`4b536a30…`) from the table's stage `stages-frcdkmsa3-full/500.perlbench_r-native`. `in/`
+and `natperl` are byte-identical to the table's board stage. One boot, cheap commands first:
+- commands 0-3: `makerand.pl` as u1 p1 p2 u2;
+- commands 4-5 (`pt`): `makerand.pl` and `test.pl` with the protected image. test.pl runs each of its test scripts
+  with the arm's image as `../sw/perl`, as in the table's run.
+- **test.pl has no stock arm in this boot.** A stock test.pl takes 12,799 s, and the deadline leaves room for one such
+  run. Its reference is the SPEC lane's two Full runs on board 3:
+  - `out-nat-p1-final-a3-perl-b3` (`bc778b6f…`): makerand 276.01 s, 6,837,496,467 in-context cycles; test.pl
+    12,798.66 s, 267,212,372,330 in-context cycles, 44,357,708,022 kernel + other;
+  - `out-nat-p1-a3rep-b3` (`6f4d9f8e…`): 276.11 s and 6,840,289,021; 12,799.00 s, 267,230,625,762 and 44,358,613,410.
+  - The two differ by 0.04 % (makerand) and 0.007 % (test.pl) in in-context cycles. The SPEC lane's measured spread
+    between boards for one build is at most 0.3 %.
+- Board 2, after this lane's Perl suns.pl chain (nat-run3 pid 2985665); P1 is resident. Chain `nested/p1g/b2-ptest.*`.
+  Budget 86400 as the table's run (`BAKED_TIMEOUT` 345600), booking 1,440 min.
+- Expected wall time: makerand 4.6 min per command; test.pl 3.6 h plus its cost. The row is usable for the deadline
+  if the boot ends by about 18:45, which holds if test.pl's cost is under about +70 %.
+- Checked off the board (`nested/p1g/ptest-recheck`): real bake; `BOARD_STUB=2` on the table's transcript and on its
+  cut, rc 0 and 0, `BAKED_TIMEOUT=345600` in both; real firmware 23,760,392 B (`89467f76…`); an `NR_DRY=1` pass of
+  the chain to DONE (`nested/p1g/dry-ptest.log`).
+- **Twin, and a deviation.** The linear-search image passed makerand as U P P U on the twin with SPEC's
+  `makerand.out` in all four commands (`npspec-t1`, `npspec-mrx`; in-context +2.6 %). The twin of this stage
+  (`npspec-t5`, the repaired image) is queued behind the gcc twin and will not have finished test.pl when the boot
+  starts. It serves as an early warning: if it shows the protected test.pl failing, the boot is stopped.
+
+**Outcomes and bands.**
+- **VOID** as for every P1 boot.
+- **Answers.** `makerand.out` equals SPEC's reference (`539d02dc…`) in all five makerand commands, and `test.out`
+  passes specdiff against SPEC's reference with the tool the table used. A makerand mismatch voids that command's
+  cost. **If test.out fails specdiff, the protected Perl is reported as failing its tests, with the failing tests
+  listed, and no test.pl cost is read.**
+- **makerand, interleaved.** Repeat rule as for every P1 boot. In-context cost, protected against stock: predicted
+  +1 % to +8 %.
+- **makerand, cross-board check.** This boot's stock makerand against the reference's 6,837.5 M in-context cycles:
+  within ±1 %. If it is outside, the test.pl comparison below is reported with that offset stated, not corrected.
+- **test.pl, not interleaved, another board.** Cost = this boot's protected test.pl against the mean of the two
+  reference runs, for in-context cycles and for the uptime span.
+  - A difference under 1 % is reported as "not distinguishable from the cross-board spread".
+  - Predicted: +5 % to +30 % in-context.
+  - ≥ +100 %: the protection has a cost in test.pl that the lookup repair did not remove; reported as such.
+- The row states that test.pl's stock run is the table's, from another board and day.
+
+**Addendum 1 (2026-11-18 11:57, before either boot): the same stage also runs on board 1.** Board 1 was freed at
+11:36 (the SPEC lane's x264 repeat was stopped on the lane owner's order), and this lane's gcc run, planned for it, is
+cancelled (below). So the stage `nested/p1g/ptest` runs unchanged on board 1 as well, chain `nested/p1g/b1-ptest.*`
+(an `NR_DRY=1` pass reached DONE, `dry-ptest-b1.log`), starting at once; board 2's boot follows its suns.pl chain as
+registered.
+- Both boots are read by the rules above, each on its own.
+- test.pl's cost is reported per board and as the mean of the two.
+- The two protected test.pl readings are a cross-board repeat of one image. If their in-context cycles agree within
+  0.5 %, that supports setting them against board 3's stock runs. If they do not, both are reported and their
+  difference is stated as the uncertainty of the row.
+- If one boot fails for a reason of its own, the other stands alone, as registered above.
+
+**Addendum 2 (2026-11-18 12:55): board 2's boot is stopped by this lane before its test.pl begins.** Board 1's
+protected test.pl was running without a fault ten minutes after its start, and board 2 is given to the gcc boot
+("gcc ... Addendum 2"). Board 2's makerand commands are not read: the boot did not reach its end. The row rests on
+board 1 alone, as first registered.
+
+**Addendum 3 (2026-11-18 13:17): the twin shows the protected test.pl failing 10 of 314 tests, so board 1's boot is
+stopped and makerand is measured by a boot of its own.**
+- Twin `npspec-t5h` (this stage, with `capstone_vm.dom_grant_root=/tmp/nt/sr` as on the boards; the earlier twin
+  `npspec-t5` lacked it and failed on that alone): test.pl ran 55.2 G in-context instructions and reports "Failed 10
+  tests out of 314": io/open.t, io/perlio.t, op/bless.t, op/goto.t, op/gv.t, op/inccode-tie.t, op/inccode.t,
+  op/reset.t, op/sort.t and re/pat_psycho.t. `test.out` fails specdiff.
+  - Six processes end on a stale-lifetime fault (cause 25), in `S_rv2gv`, `Perl_pp_bless`, `Perl_pad_free`,
+    `S_glob_assign_glob`, `Perl_sv_resetpvn` and `Perl_pp_aassign` (pcs mapped at 0x3ff7c00000 = vaddr 0x10000).
+    Perl 5.22.1 touches a freed SV head at each, and the 5.36.3 patch, which this port follows, does not cover them.
+  - One process ends on cause 30 in `malloc`: the table's 262,144 records are exhausted.
+- By the rule registered above, a failing `test.out` means no test.pl cost is read. Board 1's protected test.pl would
+  end the same way after 3.6 h, so the boot is stopped now (started 12:42:12, running at 13:17). Its makerand commands
+  are not read: the boot does not reach its end.
+- **makerand gets its own boot on board 1 at once:** stage `nested/p1g/pmrf` (`pmrf.SHA256SUMS`), makerand.pl as
+  u1 p1 p2 u2 with the same two images, made by `make-uppu-stage.py` from the table's stage without test.pl, `t/` and
+  `lib/`. Chain `nested/p1g/b1-pmrf.*`; budget 900 (`BAKED_TIMEOUT` 3600), booking 60 min; about 25 min. Rule 8:
+  real bake, both stubs rc 0, firmware 21,663,240 B (`a58bb54b…`), `NR_DRY=1` to DONE (`dry-pmrf.log`). The makerand
+  rules above apply unchanged: answers against SPEC's `makerand.out`, the repeat rule, the predicted +1 % to +8 %,
+  and the cross-board check against board 3's 6,837.5 M.
+- A boot of test.pl with the port extended to those six sites, on a 2^20-record kit, would be registered separately.
+
+### Results: Perl suns.pl on P1 with the arena lookup repaired (board 2, 2026-11-18 11:54-12:23): +16.05 % in-context, against +208.08 % with the walk
+
+**Configuration.** As pre-registered (f01c2ec2a683; Addendum 182, `a65d0b390a21`). Chain `nested/p1g/b2-perlfix.*`
+(nat-run3 pid 2985665), after the SPEC lane's filler; P1 was resident. Transcript
+`spec/board/out-nat-p1fix-perl-b2/perlfix/board.txt`, sha256
+`865c62d59a4b529a9d3a4f6f2e07b151444f5a992d89401e463b2207a6bdf0b5`, firmware `8c12985b…`. `b0-stats` and `b0-hello`
+returned 0 and the smoke passed all 9 steps. Read by `appd/parse-abba.py` and `p1/abba.py` (`nested/p1g/perlfix.json`).
+
+| | u1 | p1 | p2 | u2 | repeat, u / p | protected vs stock | with the walk (P1 boot) |
+|---|---:|---:|---:|---:|---|---|---|
+| in-context cycles | 4,916,505,883 | 5,704,881,088 | 5,701,428,730 | 4,912,214,234 | 0.09 % / 0.06 % | **+16.05 %** (+788.8 M) | +208.08 % (+10.22 G) |
+| kernel + other | 409,309,728 | 517,288,210 | 502,512,229 | 400,859,680 | 2.11 % / 2.94 % | not read (+25.9 %) | not read |
+| uptime span, s | 217.32 | 254.21 | 253.50 | 216.82 | 0.23 % / 0.28 % | +16.95 % | +191.97 % |
+| record-TLB misses (hpm3) | 691,246 | 1,146,427 | 1,145,881 | 690,486 | | +0.455 M | +48.8 M |
+| walk cycles (hpm4) | 18.5 M | 30.9 M | 30.8 M | 18.5 M | | +12.3 M | +1,096 M |
+| paged record accesses (hpm5) | 15.47 M | 32.05 M | 32.05 M | 15.47 M | | +16.6 M | +115.7 M |
+| event-23 replays (hpm7) | 1,360,473 | 2,813,325 | 2,809,806 | 1,358,065 | | +1.45 M | +100.6 M |
+| L1D misses (hpm8) | 14.53 M | 21.99 M | 21.96 M | 14.51 M | | +7.46 M | +260.3 M |
+
+**Against the pre-registration.**
+- Answers: all four commands return `suns.out`. Repeat rule: in-context 0.09 % and 0.06 %, read; kernel + other
+  2.11 % and 2.94 %, not read.
+- Stock control: **met**. The stock arm reads 4,914.4 M in-context cycles against the P1 boot's 4,913.9 M on board 1,
+  +0.01 %.
+- **The reading: +16.05 %, in the first band (≤ +30 %).** The arena search carried 92 % of the +208 %.
+- Prediction (+10 % to +30 %): **met**.
+- Counter bounds: **all met.** Event 23 +1.45 M (bound 10 M), record-TLB misses +0.455 M (bound 10 M), L1D misses
+  +7.46 M (bound 30 M).
+
+**Reading.**
+- With the lookup repaired, a lifetime per SV head costs Perl **+16 %** of its in-context cycles on suns.pl, with
+  the same lifetimes, the same peak of live records and the same 2^20-record table as the +208 % boot.
+- So the +208 % was the cost of the patch's linear arena search, as the withdrawal said. The record TLB was not the
+  cause: with the same number of live records, the protected arm now misses it 0.455 M times more than stock, not
+  48.8 M.
+- What makes up the +789 M is not separated by this boot. The twin prices the added instructions at +10.00 %; the
+  boot adds 1.94 M CDERIVEs and CREVOKEs, 16.6 M paged record accesses and 7.5 M L1D misses.
+
+## gcc (SPEC 502.gcc_r) with its pool allocator protected
+
+**Scope.** SPEC's Full build protects only `malloc`. gcc carves its own objects from three allocators. This lane
+counted them on x86 (SPEC's flags plus counters; outputs byte-identical to SPEC's references):
+
+| input | ggc-page allocations | `ggc_free` | ggc peak live | alloc-pool allocations | alloc-pool peak live |
+|---|---:|---:|---:|---:|---:|
+| test `t1.c` | 12,129 | 157 | 11,980 | 1,247 | 359 |
+| train01 | 1,415,393 | 47,290 | 1,369,103 | 3,780,544 | 132,149 |
+
+- **ggc-page is not protected, and cannot be at train01.** SPEC's build disables the collector (`ggc-page.c:1941`:
+  `ggc_collect` returns at once under `SPEC`), so a GC object is freed only by an explicit `ggc_free`. 1.37 M
+  lifetimes would be live at once, more than the 2^20-record table.
+- obstack is not counted or protected.
+- **alloc-pool is protected** (`nested/gcc/pool/port-alloc-pool.py`, `ac09f51c…`, under `-DGCC_CAPSTONE_POOL`): every
+  element is a CDERIVE child of its block, with a 16-byte header holding the block's own pointer; `pool_free`
+  CREVOKEs it; `empty_alloc_pool` and `free_alloc_pool` free the blocks, which ends every element still live in them.
+
+**A use after `pool_free` in gcc itself.** With the pool protected, gcc stops on SPEC's own test input: the twin
+faults (cause 25) in `forward_propagate_into` (fwprop.c), loading through a df ref's `insn_info`.
+- Found natively with AddressSanitizer and a `pool_free` that poisons and never reuses the element
+  (`nested/gcc/asan`): `use-after-poison` at `fwprop.c:1350`. The element is a `df_scan insn` record freed by
+  `df_insn_delete`, called from `df_insn_rescan`.
+- Read in the source: `df_insn_refs_verify` collects the insn's new refs with the insn's current record as their
+  `insn_info`. `df_insn_rescan` then frees that record, allocates a new one and installs the collected refs, which
+  still name the freed record. Stock gcc works only because the pool's free list is LIFO, so the new record is the
+  element just freed.
+- **One fix** (`nested/gcc/pool/fix-stale.py`, `108b7a3b…`): after the new record is created, the collected refs are
+  pointed at it. No CREVOKE is skipped and no pool is exempted. With it, ASan with quarantine is clean on t1.c,
+  train01.c, 200.c and scilab.c, and all four outputs are byte-identical to SPEC's references.
+- Not checked: other inputs, and whether later gcc releases changed this code.
+
+### Pre-registration: 502.gcc_r train01 on P1 with alloc-pool protected, U P P U in one boot (written 2026-11-18 12:30, before the boot)
+
+**Images**, both built from the table's Full build (FRCDKMSa3) with its own compile and link lines
+(`nested/gcc/pool/build-fx.sh`):
+- stock arm, **the fix only**: stripped `e9b0f80c…`. Its `alloc-pool.o` is byte-identical to the Full build's; only
+  `df-scan.o` differs from the Full build.
+- protected arm, the fix and `-DGCC_CAPSTONE_POOL`: stripped `54291a9f…`. The arms differ in `alloc-pool.o` only.
+- So the stock arm is not the table's image: it carries the fix. The row says so.
+
+**Stage** `nested/p1g/gfx` (`gfx.SHA256SUMS`): kit bkit91's wrap of `nested/gcc/pool/fx-stage-train01`, made by
+`make-uppu-stage.py` from the table's untuned train01 stage (`board-frcdkmsa3-notune`). u1 p1 p2 u2 in one boot.
+- Board 3, after the SPEC lane's 250 Hz chain (pid 2657209); the chain flashes P1 from the seal (sha256 checked)
+  and reads it back by name. Chain `nested/p1g/b3-gfx.*`. Budget 3600 (`BAKED_TIMEOUT` 14400), booking 180 min.
+- Expected wall time: 1,772 s per stock command (the table's run) and about the same per protected one; about 2 h.
+- Twin: `ngpool-fxt` (test) and `ngpool-fx1` (train01), four commands each, all rc 0 with SPEC's reference output
+  (specdiff 1/1). In-context on train01: 12,230.7 / 12,330.2 / 12,330.2 / 12,230.7 M, **+0.81 %**; on test +0.14 %.
+- Checked off the board (`nested/p1g/gfx-recheck`): real bake; `BOARD_STUB=2` on the table's train01 transcript and
+  its cut, rc 0 and 0, `BAKED_TIMEOUT=14400` in both; real firmware 25,857,544 B (`a8ee5dec…`), under the 26 MB cap; an
+  `NR_DRY=1` pass of the chain to DONE (`nested/p1g/dry-gfx.log`).
+
+**Outcomes and bands.**
+- **VOID** as for every P1 boot.
+- **Answers:** all four commands' `.s` output passes specdiff against SPEC's reference, else no cost is read.
+- Repeat rule as for every P1 boot (1 % in-context, 2 % kernel + other).
+- **Stock control:** the stock arm's in-context cycles within ±1 % of the table's Full runs (41,713.7 M on board 1,
+  41,694.2 M on board 3). Reported only; it also shows what the fix costs.
+- **In-context cost, protected against stock: predicted +0.5 % to +10 %.**
+  - The twin's added instructions give +0.8 %.
+  - 3.78 M CDERIVEs and 1.85 M CREVOKEs at 63 to 100 cycles: about 0.45 G of 41.7 G, +1 %.
+  - Up to 132,149 pool elements are live at once, each with its own record, against a 16-entry record TLB. PostgreSQL,
+    with 105,043 live records, costs +7.8 %. So the upper end is set by record checks on element accesses.
+  - ≥ +30 %: reported as unexplained, and the port's own code is read for a search or a loop before any other cause
+    is named.
+- The row states its coverage: gcc's pool allocator; the GC heap and obstacks are not protected, and both arms carry
+  one stale-use fix.
+
+**Addendum 1 (2026-11-18 12:36, before the boot): board 1, not board 3.** Board 3 is taken by the SPEC lane after
+15:00 (its Addendum 185). The boot runs on board 1 behind this lane's perlbench test boot there, with the same stage.
+- Chain `nested/p1g/b1-gfx.*` (an `NR_DRY=1` pass reached DONE, `dry-gfx-b1.log`); P1 is resident, so no flash.
+  Transcript `spec/board/out-nat-p1-gccpool-b1/gfx/board.txt`.
+- It starts when the perlbench test boot ends, expected about 16:15 to 16:55, and ends about two hours later.
+- Everything else is as registered above.
+
+**Addendum 2 (2026-11-18 12:55, before the boot): board 2, at once.** On board 1 the protected test.pl has been
+running for ten minutes without a fault, so the perlbench test boot on board 2, a repeat of it, is stopped before its
+test.pl begins, and this boot takes board 2 now. It would otherwise end near 18:45.
+- Chain `nested/p1g/b2-gfx.*` (an `NR_DRY=1` pass reached DONE, `dry-gfx-b2.log`). Transcript
+  `spec/board/out-nat-p1-gccpool-b2/gfx/board.txt`. The chain armed on board 1 (pid 3213632) is cancelled; it had
+  booked nothing.
+- Everything else is as registered above.
+
+### Pre-registration: SPEC perlbench test.pl with the port extended for six stale-head sites, one protected and one stock run on a 2^20-record kit (written 2026-11-18 13:40, before the boots)
+
+**Why.** With the first port, the protected test.pl fails 10 of 314 tests on the twin (Addendum 3 above). The lead asks
+for the full Perl row on SPEC's test.pl if it can be had today, with suns.pl as the fallback.
+
+**The extended port** (`nested/perlspec/fx/port-sv-heads.py`, `f55e5096…`; all of it under `PERL_CAPSTONE_SUBLET`,
+and without the define 69 of 69 objects are still byte-identical to the table's build):
+- `S_rv2gv` (pp.c:245), `pp_bless` (pp.c:614) and `sv_resetpvn` (sv.c:9607): a type test of a stash that may be
+  freed; read through the arena's own pointer (`SvTYPE_MAYBE_FREED`), as the 5.36.3 patch does for its sites.
+- `S_glob_assign_glob` (sv.c:3991, 4000): `SvTAINTED(sstr)` and `GvAV(sstr)` are read after a `LEAVE` that may have
+  freed `sstr`; both are read before the `LEAVE`.
+- `pad_free` (pad.c:1820): tests and clears `SVs_PADTMP` in a pad entry that can be a freed head; done through the
+  arena's own pointer. **This is the one write through that pointer.** Why the pad entry is stale was not found.
+- `pp_aassign` (pp_hot.c:1094): `SvGETMAGIC` on an element that may be a freed scalar; skipped when `SvIS_FREED`.
+- No CREVOKE is skipped and no SV is exempt. Protected image: stripped `f5449ace…` (full `781af4cc…`).
+
+**Twin, and a deviation.** Run by a background fork of this lane; this session read its port diff and its build log.
+- With the new image, 7 of the 10 failing tests pass or run to their end as stock does (`npfx-tt2b`): io/open.t,
+  op/bless.t, op/gv.t, op/reset.t pass in full; op/goto.t and op/sort.t end rc 0 with only the TODO test that stock
+  also fails; re/pat_psycho.t passes with 1,048,576 records (`npfx-tt2p`), so it needs the 2^20-record kit.
+- io/perlio.t (tests 23-29), op/inccode.t and op/inccode-tie.t (test 61) still fail on the twin, **and the stock
+  image fails them identically there** (`npfx-tt2s`). They need a temp file and `/dev/null`; the boards' command line
+  has `capstone_vm.dom_local_tmp` and `dom_null`, and the twin's cannot hold them beside `dom_grant_root` (512 bytes).
+  That they pass on a board with the protected image is **not verified**.
+- **Deviation:** the twin has not run all of test.pl with the new image, and cannot show 314 of 314 for the reason
+  above. A full run (`npspec-pt2`, 2^20 records) started at 13:35 and serves as an early warning: it should fail
+  those three tests and no other. If it shows another failure or a fault, the protected boot is stopped.
+
+**Boots**, both on kit `nested/kits/bkit91-rec1m` (`node_flat_records=1048576`), each the table's stage
+(makerand.pl, then test.pl), budget 86400 (`BAKED_TIMEOUT` 345600), booking 1,440 min:
+- **protected, board 1**, after the makerand boot there: stage `nested/p1g/pt2` (`pt2.SHA256SUMS`), the table's stage
+  with the protected image (xz-packed; `run.sh` differs from the table's in that one line). Chain
+  `nested/p1g/b1-pt2.*`. Transcript `spec/board/out-nat-p1-pt2-b1/pt2/board.txt`. Rule 8: real bake, both stubs rc 0,
+  firmware 23,760,392 B (`8a0a857a…`), the kernel at 1048576, `NR_DRY=1` to DONE.
+- **stock, board 2**, after the gcc boot there (about 15:05): stage `nested/p1g/st2` (`st2.SHA256SUMS`), whose
+  `train/` is file-for-file the table's board stage. Chain `nested/p1g/b2-st2.*`. Transcript
+  `spec/board/out-nat-p1-st2-b2/st2/board.txt`. Rule 8: the same, firmware `cc1c0bac…`.
+- Expected: 4.6 min for makerand and 3.6 h for a stock test.pl; the protected one 3.6 h plus its cost. A boot must
+  end by about 19:00 to reach the paper today.
+
+**Outcomes and bands.**
+- **VOID** as for every P1 boot.
+- **Answers.** Each boot's `makerand.out` and `test.out` pass specdiff against SPEC's references, read with the tool
+  the table used. **If the protected `test.out` fails, the failing tests are listed and no test.pl cost is read.**
+- **Cost of test.pl:** protected (board 1) against stock (board 2), in-context cycles and uptime span. The arms are
+  on different boards and not interleaved; the SPEC lane's spread for one image across boards is at most 0.3 %, so a
+  difference under 1 % is reported as not distinguishable. Predicted: +5 % to +30 % in-context.
+- **Checks on the comparison:**
+  - the stock test.pl here against the table's two runs on board 3 (267,212.4 M and 267,230.6 M in-context, on the
+    262,144-record kit): reported, expected within 1 %;
+  - makerand in both boots against each other and against board 1's interleaved makerand boot.
+- **If only one boot ends in time,** the protected run is set against the table's two stock runs (another board,
+  the smaller table), and the row says so.
+
+### Results: SPEC perlbench makerand.pl on P1 with SV heads protected (board 1, 2026-11-18 13:17-13:47): −2.54 % in-context, the prediction missed low
+
+**Configuration.** As registered in Addendum 3 of the perlbench test pre-registration (cbe092a39bfc; Addendum 187,
+`57d7efd2eace`). Chain `nested/p1g/b1-pmrf.*`; P1 resident. Transcript `spec/board/out-nat-p1-pmr-b1/pmrf/board.txt`,
+sha256 `ea9177544253a5fb194018a9ae542280d48123c0f58fc1522b7bbb408b22e618`, firmware `dac2141e…`. `b0-stats` and
+`b0-hello` returned 0; the smoke reads 8 PASS with `task` waived, as in every P1 boot. Images: stock `c1744e87…` (the
+table's), protected `83703c92…` (the first port with the lookup repair).
+
+| | u1 | p1 | p2 | u2 | repeat, u / p | protected vs stock |
+|---|---:|---:|---:|---:|---|---|
+| in-context cycles | 6,835,370,958 | 6,660,829,111 | 6,659,959,955 | 6,832,475,210 | 0.04 % / 0.01 % | **−2.54 %** (−173.5 M) |
+| kernel + other | 46,418,036 | 46,959,596 | 46,922,751 | 46,502,802 | 0.18 % / 0.08 % | +1.03 % |
+| uptime span, s | 275.92 | 268.95 | 268.91 | 275.78 | | −2.51 % |
+| record-TLB misses (hpm3) | 2,198 | 3,069 | 3,069 | 2,196 | | +872 |
+| event-23 replays (hpm7) | 30,784 | 49,591 | 49,731 | 30,736 | | +18.9 k |
+| L1D misses (hpm8) | 96,832 | 91,087 | 93,580 | 95,927 | | −4.0 k |
+
+**Against the registration.**
+- Answers: all four `makerand.out` equal SPEC's reference. Repeat rule: met on both counters, so both are read.
+- Cross-board check: the stock arm reads 6,833.9 M against board 3's 6,837.5 M, −0.05 %. Met.
+- **In-context cost −2.54 %; predicted +1 % to +8 %: missed, low.** The protected image runs makerand in fewer cycles
+  than the table's stock image.
+- On the twin the same pair costs +2.5 % in instructions. So the protected arm executes more instructions and takes
+  fewer cycles. **Not explained.** The two images differ in `sv.o` and in every object that inlines the patched
+  macros, so a difference in code layout is the obvious candidate; this boot does not show it.
+- The stopped boot on board 1 read the same from its console (6,795.7 / 6,655.1 / 6,665.0 / 6,838.9 M; not a
+  registered reading).
+
+**Reading.** makerand.pl allocates few scalars (872 more record-TLB misses, 18.9 k more event-23 replays in 6.8 G
+cycles), so the protection has almost nothing to do in it, and what this boot measures is the difference between two
+builds of the interpreter. It bounds the protection's cost on this input at about zero; it is not evidence that the
+protection speeds Perl up.
+
+### Results: 502.gcc_r train01 on P1 with alloc-pool protected (board 2, 2026-11-18 12:53-15:11): +5.26 % in-context
+
+**Configuration.** As pre-registered (d3cd2c484bab with Addenda 1 and 2, 4aec438c4c55 and 117102bcd3f6; the SPEC
+lane's Addendum 186, `356949d451d4`). Chain `nested/p1g/b2-gfx.*` (nat-run3 pid 3227005); P1 resident on board 2.
+Transcript `spec/board/out-nat-p1-gccpool-b2/gfx/board.txt`, sha256
+`4dc936d1e4e233fc014579c39348e9a3bb4729b70b7a667c946400e8b232e89f`, firmware `a27a0b77…`. `b0-stats` and `b0-hello`
+returned 0; the smoke reads as in every P1 boot. Images: stock with the fix `e9b0f80c…`, protected `54291a9f…`.
+
+| | u1 | p1 | p2 | u2 | repeat, u / p | protected vs stock |
+|---|---:|---:|---:|---:|---|---|
+| in-context cycles | 41,800,647,681 | 44,001,429,869 | 43,996,027,573 | 41,801,673,609 | 0.00 % / 0.01 % | **+5.26 %** (+2,197.6 M) |
+| kernel + other | 2,015,039,808 | 2,073,001,269 | 2,069,141,818 | 2,016,547,420 | 0.07 % / 0.19 % | **+2.74 %** (+55.3 M) |
+| uptime span, s | 1,775.13 | 1,865.70 | 1,865.35 | 1,775.26 | 0.01 % / 0.02 % | **+5.09 %** |
+| record-TLB misses (hpm3) | 3,468,420 | 27,863,223 | 27,862,542 | 3,466,983 | | +24.4 M |
+| walk cycles (hpm4) | 106.8 M | 461.9 M | 462.0 M | 106.6 M | | +355.2 M |
+| paged record accesses (hpm5) | 23.06 M | 96.45 M | 96.45 M | 23.06 M | | +73.4 M |
+| event-23 replays (hpm7) | 6.64 M | 31.85 M | 31.85 M | 6.64 M | | +25.2 M |
+| L1D misses (hpm8) | 371.2 M | 413.4 M | 413.4 M | 371.2 M | | +42.2 M (+11.4 %) |
+
+**Against the pre-registration.**
+- Answers: **met.** All four commands' `train01…s` have SPEC's reference hash (`c786c07f…`); the SPEC lane recomputes
+  specdiff from the transcript.
+- Repeat rule: **met** on both counters, so both differences are read.
+- Stock control: **met.** The stock arm with the fix reads 41,801.2 M against the table's 41,713.7 M (board 1) and
+  41,694.2 M (board 3), +0.21 % and +0.26 %.
+- In-context cost: **+5.26 %**, inside the predicted +0.5 % to +10 %.
+
+**Reading.**
+- Protecting gcc's pool allocator costs **+5.3 %** of its in-context cycles and +5.1 % of its run time on train01,
+  with 3.78 M element lifetimes created and at most 132,149 live at once.
+- The twin prices the added instructions at +0.8 %. The rest follows the records: the protected arm misses the record
+  TLB 24.4 M times more and spends 355 M more cycles in walks (16 % of the +2,198 M); how the remainder divides between
+  the CDERIVEs and CREVOKEs and the checks on element accesses is not separated by this boot.
+- Coverage, to be stated with the number: gcc's pool allocator only. The GC heap is not protected (SPEC's build never
+  collects, so 1.37 M lifetimes would be live at once), obstacks are not, and both arms carry one fix for a use after
+  `pool_free` in `df_insn_rescan`.
+
+### Results: SPEC perlbench test.pl on P1 with SV heads protected (boards 1 and 2, 2026-11-18 13:48-19:02): +5.84 % in-context, output correct
+
+**Configuration.** As pre-registered (cbd14ff6b5c4; the SPEC lane's Addendum 188, `eab935564a65`). Both boots on kit
+`nested/kits/bkit91-rec1m` (the transcripts read `node_flat_records=1048576`), P1 resident, the table's stage
+(makerand.pl, then test.pl), one arm per boot. `b0-stats` returned 0 in both; the smoke reads 8 PASS with `task`
+waived, as in every P1 boot.
+- **Protected, board 1** (chain `nested/p1g/b1-pt2.*`, 13:48-17:51): image `f5449ace…` (the stage's packed image
+  unpacks to it). Transcript `spec/board/out-nat-p1-pt2-b1/pt2/board.txt`, sha256
+  `f04a17a30fadafe917ab3da066474a67683f43066652f1f9f7c01156c295ffa6`, firmware `78bf5afe…`.
+- **Stock, board 2** (chain `nested/p1g/b2-st2.*`, 15:11-19:02): the table's image `c1744e87…`. Transcript
+  `spec/board/out-nat-p1-st2-b2/st2/board.txt`, sha256
+  `9b9feb343f566493ab7c04caa2a1c8864a752f48f32b3ce23a905bfcf6bb0d9e`, firmware `527ef774…`.
+- The firmware hashes are not the dry runs' (`8a0a857a…`, `cc1c0bac…`): each bake relinks the kernel (builds #250 and
+  #251 in the transcripts).
+
+| test.pl (command 1) | stock, board 2 | protected, board 1 | protected vs stock |
+|---|---:|---:|---|
+| in-context cycles | 267,194,043,894 | 282,785,227,858 | **+5.84 %** (+15,591.2 M) |
+| kernel + other | 44,320,834,142 | 45,788,624,164 | +3.31 % (+1,467.8 M) |
+| uptime span, s | 12,796.15 | 13,488.91 | **+5.41 %** |
+| record-TLB misses (hpm3) | 24,086,975 | 45,827,521 | +21.7 M (+90 %) |
+| walk cycles (hpm4) | 511.2 M | 854.6 M | +343.3 M |
+| paged record accesses (hpm5) | 361.3 M | 609.0 M | +247.7 M |
+| event-23 replays (hpm7) | 52,723,317 | 96,408,702 | +43.7 M (+83 %) |
+| L1D misses (hpm8) | 1,305.6 M | 1,427.0 M | +121.4 M (+9.3 %) |
+
+| makerand.pl (command 0) | stock, board 2 | protected, board 1 | protected vs stock |
+|---|---:|---:|---|
+| in-context cycles | 6,839,873,599 | 6,766,079,003 | −1.08 % |
+| uptime span, s | 276.09 | 273.17 | −1.06 % |
+
+Both commands together (the unit of the SPEC table's perlbench bar): in-context 274,033,917,493 against
+289,551,306,861, **+5.66 %**; span 13,072.24 s against 13,762.08 s, **+5.28 %**.
+
+**Against the pre-registration.**
+- Answers: **met in both boots.** All commands return 0; `makerand.out` (43,841 bytes) and `test.out` (15,555 bytes)
+  read from each transcript are byte-equal to SPEC's `data/test/output` files, and both `.err` files are empty. The
+  protected `test.out` ends "All tests successful". Neither console shows a fault line during a command.
+- So io/perlio.t, op/inccode.t and op/inccode-tie.t, which the twin could not show, **pass under protection on the
+  board.** The twin's full run (`npspec-pt2`) failed exactly those three and no other, as registered.
+- Cost of test.pl: **+5.84 % in-context, +5.41 % span.** Predicted +5 % to +30 % in-context: met, at the low edge.
+- Stock check: **met.** Stock test.pl here reads −0.01 % in-context and −0.02 % in span against the table's two runs
+  on board 3 (267,212.4 M and 267,230.6 M; 12,798.66 s and 12,799.00 s), on a table four times the size.
+- makerand: stock here reads +0.09 % against the stock arm of board 1's interleaved boot (6,833.9 M). The protected
+  image of this boot (the extended port) reads −1.08 % against stock; the first port read −2.54 %.
+
+**Limits.**
+- One run per arm, the arms on different boards and not interleaved. The stock arm repeats the table's runs on
+  another board to 0.02 %, which is the evidence that the board is not the difference.
+- The kit has 2^20 records, not the table's 262,144: re/pat_psycho.t needs more than 262,144 records under
+  protection. Stock is unchanged by the larger table (the stock check above).
+- The cost is for the SV-head patch with the lookup repair and the six stale-head sites of the extended port; nothing
+  else in the interpreter is protected.
+
+**Reading.**
+- Protecting every scalar head of SPEC's Perl costs **+5.8 %** of test.pl's in-context cycles and +5.4 % of its run
+  time, with all 314 test scripts giving SPEC's reference output.
+- The protected arm misses the record TLB 21.7 M times more and spends 343 M more cycles in walks, 2.2 % of the
+  +15,591 M. How the remainder divides between the instructions the patch adds (the arena lookup, CDERIVE, CREVOKE),
+  the checks and cache effects is not separated by this pair.
+- This replaces suns.pl (+16.05 %) as the Perl cost with the widest coverage: suns.pl is one script on Perl 5.36,
+  test.pl is SPEC's own test workload on SPEC's Perl 5.22.
