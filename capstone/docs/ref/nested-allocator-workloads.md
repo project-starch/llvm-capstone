@@ -2987,3 +2987,10 @@ faults (cause 25) in `forward_propagate_into` (fwprop.c), loading through a df r
     is named.
 - The row states its coverage: gcc's pool allocator; the GC heap and obstacks are not protected, and both arms carry
   one stale-use fix.
+
+**Addendum 1 (2026-11-18 12:36, before the boot): board 1, not board 3.** Board 3 is taken by the SPEC lane after
+15:00 (its Addendum 185). The boot runs on board 1 behind this lane's perlbench test boot there, with the same stage.
+- Chain `nested/p1g/b1-gfx.*` (an `NR_DRY=1` pass reached DONE, `dry-gfx-b1.log`); P1 is resident, so no flash.
+  Transcript `spec/board/out-nat-p1-gccpool-b1/gfx/board.txt`.
+- It starts when the perlbench test boot ends, expected about 16:15 to 16:55, and ends about two hours later.
+- Everything else is as registered above.
