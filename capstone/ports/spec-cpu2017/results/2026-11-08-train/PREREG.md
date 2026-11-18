@@ -5707,3 +5707,14 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
   - Predicted cost: +5 % to +30 % in-context (suns.pl read +16.9 % wall clock with the same lookup patch). A reading outside the band is reported as a miss and still read.
 - **Deadline.** The protected boot is expected to end between 17:45 and 18:15, the stock boot near 18:50. If only the protected boot ends by 19:15, it is set against board 3's two stock runs and the row says so. If neither does, the paper keeps suns.pl and the boots run on.
 - **Paper rule.** A row from this needs both specdiff passes per boot and the SPEC lane's own recomputation from the two transcripts. PR #11 changes only on the lead's word.
+
+## Addendum 189 (2026-11-18 14:00 +08, a deviation, recorded after paper PR #12 was opened): benchmarks without a 250 Hz run take the mean of the measured shares, not the probe's range
+
+- **What Addenda 179 and 185 said.** Each benchmark with a 250 Hz run takes its own measured s; perlbench and x264 take the probe's range (hiccup4 7.184 % to hiccup3m 7.919 %).
+- **What the paper PR does (eval/tick-corrected cf1629c7, opened 13:44).** A benchmark without a 250 Hz reading takes the mean of the measured shares: 8.0966 % over gcc, mcf, lbm, imagick and nab. Today that covers perlbench, x264 and xz. xz and perlbench get their own s when their runs end (Addenda 179, 185); x264 keeps the mean.
+- **Why.** The figure needs one value per bar. The five measured shares (7.37-9.02 %) lie above the probe's range on three of five benchmarks, so the probe's range understates Plain's share on SPEC, and the mean of the SPEC readings is the nearer estimate. The choice was made after the five readings were known. It is not a pre-registered rule.
+- **Effect, recomputed by the SPEC lane.** The mean moves every imputed value against Sublet:
+  - perlbench Full: 29.76-30.80 % by the probe's range, 31.05 % by the mean (30.02 % with the smallest measured share, 32.37 % with the largest);
+  - x264 Full: -0.49 to +0.30 % by the probe's range, +0.49 % by the mean; +Spatial -0.50 to +0.29 % against +0.48 %. The sign of x264 depends on the imputed share.
+- **Linearity (claim-auditor, 13:50).** The formula takes 250 Hz to cost 2.5 times 100 Hz. On the probe the measured factor is 2.460 (19.484 % over 7.919 %). With 2.460 every share rises by 0.19-0.22 pp (gcc 9.24 %) and the geometric means become 16.75 % and 17.95 % instead of 16.49 % and 17.69 %. The factor 2.5 is kept. It favours Sublet by about 0.25 pp.
+- **Label.** Addendum 162 stands: the uncorrected ratio is the measurement and the corrected one is an estimate. The PR's text and caption say "estimate" from the next push, and the figure's axis starts at -5 % so that a negative x264 bar cannot be clipped.
