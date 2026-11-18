@@ -2047,6 +2047,10 @@ boot asks whether the record cache removes that cost. The question was proposed 
 - Stock arm: 4.957 G against P1's 4.914 G, +0.88 %, inside ±1 %. Reported only.
 - Duration: the unprotected commands took 3.6 min and the protected ones 12.4 min, just over the 3-12 min stated.
 
+**Note, 2026-11-18.** The cost that this boot set against the record cache is the patch's arena search ("Withdrawn
+2026-11-18" under "Results: Perl on P1"): about 100 M loads, each through a different arena. So "the record cache does
+not remove the cost" holds for that access pattern, and says nothing about a lifetime per SV head.
+
 **What the counters show, not attributed.**
 - B5a's protected command runs 2.72 G cycles (+18.0 %) longer than P1's, from the same images, workload and command line.
 - B5a's protected command makes 101.1 M record-cache read misses and 216.6 M fill reads, 2.14 fill reads per miss.
@@ -2450,6 +2454,22 @@ commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's 
   pages evicting the program's data is not shown here.
 - The protected live set is 80-96 times the record TLB's reach. The counters point at the paged table rather
   than at the instructions the patch adds, which the twin prices at +40.3 %.
+
+**Withdrawn 2026-11-18: the reading above, not the counters.** "The counters point at the paged table rather than at
+the instructions the patch adds" is withdrawn, and so is the live-record count as the cause.
+- Patch 0001 finds a head's arena by walking the list of all arenas (`S_sv_arena_of`). In the protected image the walk
+  is a 6-instruction loop at `Perl_sv_arena_head` 0xde994-0xde9a6 whose first instruction, `ldc a1, 0(a1)`, loads
+  through the next arena. Every arena is a heap object with a lifetime of its own, so every step checks another
+  record. Stock Perl has no such lookup.
+- A native count by another session (x86-64, suns.pl, SPEC's output; not re-run by this lane) reads 97.4 M search
+  steps over 2,534 arenas, 71.9 M of them from 80,205 `SvIS_FREED` tests.
+- This lane's counters agree with that count: +100.6 M event-23 replays per protected command here, +99.9 M
+  record-cache read misses on B5a, and +697 M instructions on the twin, 7.2 per step.
+- So +10.22 G is about 105 cycles for each step of a search that the patch adds. It is the cost of this revision of
+  the patch, not of a lifetime per SV head, and it is not shown to be the cost of the table's reach.
+- **The +208 % row is withheld** from the appendix until the boot is repeated with the lookup repaired
+  (`nested/perl/lookup-fix/0002-sv-arena-lookup-by-index.patch`: an index of arenas sorted by address, searched
+  without reading any arena). The B5a result above measured the same search.
 - The record table is configured for 2^20 records for this program; the default 262,144 is exhausted by its peak of
   327,680 to 393,216 live records.
 
