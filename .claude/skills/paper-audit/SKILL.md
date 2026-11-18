@@ -20,8 +20,8 @@ and every edit goes through an `eval/*` PR that the lead merges.
 ## 0. Before launching anything
 
 1. **Settle the framing first.** Every audit pushes toward saying more. Not one of the 33 asked
-   whether stating a true thing harms the paper. The lead had to ask that three times, after the
-   additions were already in a PR, and about half of what the audits added was cut again. So before
+   whether stating a true thing harms the paper. The lead had to ask that, after the additions were
+   already in a PR, and much of what the audits had added was cut again. So before
    round 1, know: which sections may be edited, the page budget, and what the lead does not want
    said. Use what the lead has already told you. If nothing is known, ask once and carry on with the
    default in section 3.
@@ -96,9 +96,9 @@ anything: two auditors once disagreed on a presentation question and the first t
 Never apply a whole round in one pass. That one habit caused most of the later cuts. For each
 finding:
 
-1. **Verify it against the primary source.** Auditors were wrong about 1 time in 15: a style
+1. **Verify it against the primary source.** Auditors were wrong more than once: a style
    unification that merged two different measured quantities, a replacement sentence without
-   support, a sentence called fine that was false.
+   support, a rewrite that added a cause the records do not show.
 2. **Put it in one class:**
    - *A sentence is false.* Fix it by **weakening or deleting** the sentence. A caveat is the last
      choice. The caveats were what the lead later removed.
