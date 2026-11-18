@@ -25,7 +25,8 @@ Measured 2026-11-18 on silicon (bitstream P1). The record, with pre-registration
 - **The lookup repair is required for a usable cost.** The 0001 patch finds a head's arena by walking the list of
   arenas, one load through each. On Perl 5.36 `suns.pl` that walk made the protected interpreter cost +208 %; with the
   arenas in an address-sorted array searched by bisection it costs +16.05 %. For 5.36.3 the same repair is
-  `ports/perl/sublet/patches/5.36.3/0002-sv-arena-lookup-by-index.patch`, applied after 0001.
+  `ports/perl/sublet/pending/5.36.3/0002-sv-arena-lookup-by-index.patch`, applied after 0001; no build in this tree
+  applies it yet (`ports/perl/sublet/pending/README.md`).
 - Result (protected image stripped `f5449ace…`): SPEC's test workload, `test.pl`, **+5.84 % in-context cycles,
   +5.41 % run time**, with `test.out` byte-equal to SPEC's reference. One run per arm, on a lifetime table of 2^20
   records: one test script needs more than 262,144.
