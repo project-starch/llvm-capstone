@@ -2882,6 +2882,11 @@ registered.
   difference is stated as the uncertainty of the row.
 - If one boot fails for a reason of its own, the other stands alone, as registered above.
 
+**Addendum 2 (2026-11-18 12:55): board 2's boot is stopped by this lane before its test.pl begins.** Board 1's
+protected test.pl was running without a fault ten minutes after its start, and board 2 is given to the gcc boot
+("gcc ... Addendum 2"). Board 2's makerand commands are not read: the boot did not reach its end. The row rests on
+board 1 alone, as first registered.
+
 ### Results: Perl suns.pl on P1 with the arena lookup repaired (board 2, 2026-11-18 11:54-12:23): +16.05 % in-context, against +208.08 % with the walk
 
 **Configuration.** As pre-registered (f01c2ec2a683; Addendum 182, `a65d0b390a21`). Chain `nested/p1g/b2-perlfix.*`
@@ -2993,4 +2998,12 @@ faults (cause 25) in `forward_propagate_into` (fwprop.c), loading through a df r
 - Chain `nested/p1g/b1-gfx.*` (an `NR_DRY=1` pass reached DONE, `dry-gfx-b1.log`); P1 is resident, so no flash.
   Transcript `spec/board/out-nat-p1-gccpool-b1/gfx/board.txt`.
 - It starts when the perlbench test boot ends, expected about 16:15 to 16:55, and ends about two hours later.
+- Everything else is as registered above.
+
+**Addendum 2 (2026-11-18 12:55, before the boot): board 2, at once.** On board 1 the protected test.pl has been
+running for ten minutes without a fault, so the perlbench test boot on board 2, a repeat of it, is stopped before its
+test.pl begins, and this boot takes board 2 now. It would otherwise end near 18:45.
+- Chain `nested/p1g/b2-gfx.*` (an `NR_DRY=1` pass reached DONE, `dry-gfx-b2.log`). Transcript
+  `spec/board/out-nat-p1-gccpool-b2/gfx/board.txt`. The chain armed on board 1 (pid 3213632) is cancelled; it had
+  booked nothing.
 - Everything else is as registered above.
