@@ -2881,3 +2881,41 @@ registered.
   0.5 %, that supports setting them against board 3's stock runs. If they do not, both are reported and their
   difference is stated as the uncertainty of the row.
 - If one boot fails for a reason of its own, the other stands alone, as registered above.
+
+### Results: Perl suns.pl on P1 with the arena lookup repaired (board 2, 2026-11-18 11:54-12:23): +16.05 % in-context, against +208.08 % with the walk
+
+**Configuration.** As pre-registered (f01c2ec2a683; Addendum 182, `a65d0b390a21`). Chain `nested/p1g/b2-perlfix.*`
+(nat-run3 pid 2985665), after the SPEC lane's filler; P1 was resident. Transcript
+`spec/board/out-nat-p1fix-perl-b2/perlfix/board.txt`, sha256
+`865c62d59a4b529a9d3a4f6f2e07b151444f5a992d89401e463b2207a6bdf0b5`, firmware `8c12985b…`. `b0-stats` and `b0-hello`
+returned 0 and the smoke passed all 9 steps. Read by `appd/parse-abba.py` and `p1/abba.py` (`nested/p1g/perlfix.json`).
+
+| | u1 | p1 | p2 | u2 | repeat, u / p | protected vs stock | with the walk (P1 boot) |
+|---|---:|---:|---:|---:|---|---|---|
+| in-context cycles | 4,916,505,883 | 5,704,881,088 | 5,701,428,730 | 4,912,214,234 | 0.09 % / 0.06 % | **+16.05 %** (+788.8 M) | +208.08 % (+10.22 G) |
+| kernel + other | 409,309,728 | 517,288,210 | 502,512,229 | 400,859,680 | 2.11 % / 2.94 % | not read (+25.9 %) | not read |
+| uptime span, s | 217.32 | 254.21 | 253.50 | 216.82 | 0.23 % / 0.28 % | +16.95 % | +191.97 % |
+| record-TLB misses (hpm3) | 691,246 | 1,146,427 | 1,145,881 | 690,486 | | +0.455 M | +48.8 M |
+| walk cycles (hpm4) | 18.5 M | 30.9 M | 30.8 M | 18.5 M | | +12.3 M | +1,096 M |
+| paged record accesses (hpm5) | 15.47 M | 32.05 M | 32.05 M | 15.47 M | | +16.6 M | +115.7 M |
+| event-23 replays (hpm7) | 1,360,473 | 2,813,325 | 2,809,806 | 1,358,065 | | +1.45 M | +100.6 M |
+| L1D misses (hpm8) | 14.53 M | 21.99 M | 21.96 M | 14.51 M | | +7.46 M | +260.3 M |
+
+**Against the pre-registration.**
+- Answers: all four commands return `suns.out`. Repeat rule: in-context 0.09 % and 0.06 %, read; kernel + other
+  2.11 % and 2.94 %, not read.
+- Stock control: **met**. The stock arm reads 4,914.4 M in-context cycles against the P1 boot's 4,913.9 M on board 1,
+  +0.01 %.
+- **The reading: +16.05 %, in the first band (≤ +30 %).** The arena search carried 92 % of the +208 %.
+- Prediction (+10 % to +30 %): **met**.
+- Counter bounds: **all met.** Event 23 +1.45 M (bound 10 M), record-TLB misses +0.455 M (bound 10 M), L1D misses
+  +7.46 M (bound 30 M).
+
+**Reading.**
+- With the lookup repaired, a lifetime per SV head costs Perl **+16 %** of its in-context cycles on suns.pl, with
+  the same lifetimes, the same peak of live records and the same 2^20-record table as the +208 % boot.
+- So the +208 % was the cost of the patch's linear arena search, as the withdrawal said. The record TLB was not the
+  cause: with the same number of live records, the protected arm now misses it 0.455 M times more than stock, not
+  48.8 M.
+- What makes up the +789 M is not separated by this boot. The twin prices the added instructions at +10.00 %; the
+  boot adds 1.94 M CDERIVEs and CREVOKEs, 16.6 M paged record accesses and 7.5 M L1D misses.
