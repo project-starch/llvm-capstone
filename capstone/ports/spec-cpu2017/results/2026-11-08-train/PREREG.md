@@ -5644,3 +5644,16 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
   - A Perl row is written only if both outputs pass specdiff, the stock makerand is within 0.3 % of board 3's, and the SPEC lane recomputes the row from the transcript.
   - The row gives the measured cost, whichever band it falls in. Which Perl workload stands in Appendix F (this one or suns.pl) is the lead's decision.
 - **Board 3 is unchanged by this Addendum.** The lane's gcc alloc-pool boot gets its own Addendum when its pre-registration hash arrives.
+
+## Addendum 184 (2026-11-18 11:55 +08, before it runs): the perlbench test stage also on board 1; the gcc alloc-pool boot is cancelled
+
+- **Registration: the nested lane's second perlbench test boot.** Its own pre-registration is nested-workloads 026801b3b069 (Addendum 1 to a5597ce91c91 in capstone/docs/ref/nested-allocator-workloads.md), read by the SPEC lane before this Addendum.
+  - Board 1, P1 resident, one boot, the stage of Addendum 183 unchanged (nested/p1g/ptest), chain nested/p1g/b1-ptest.conf. Transcript spec/board/out-nat-p1-ptest-b1/ptest/board.txt. The lane reports a stubbed dry run that reached DONE (dry-ptest-b1.log); the SPEC lane has not read that log.
+  - Board 1 carries no SPEC-lane chain: the x264 repeat was stopped at 11:36 with no reading (RESULTS).
+  - Board 2's boot stays as Addendum 183 registered it.
+- **How the two boots are read, as the lane registered it.**
+  - Each boot is read on its own by Addendum 183's rules. test.pl's cost is reported per board and as the mean of the two.
+  - The two protected test.pl readings repeat one image across boards. If their in-context cycles agree within 0.5 %, that supports setting them against board 3's stock runs. If they do not, both are reported and their difference is the stated uncertainty of the row.
+  - If one boot fails for a reason of its own, the other stands alone.
+- **The paper rule of Addendum 183 is unchanged**: a row needs both outputs to pass specdiff, the stock makerand within 0.3 % of board 3's, and the SPEC lane's own recomputation from the transcript.
+- **The gcc alloc-pool boot of Addendum 183's last line is cancelled; no boot ran.** The lane reports that its protected gcc faults on SPEC's test input in the QEMU twin, and that a native build whose pool_free never reuses an element also fails. The SPEC lane has not checked either reading, and nothing in the paper rests on them. Board 3 after the hz250 chain (about 15:00) is therefore not booked by that lane.
