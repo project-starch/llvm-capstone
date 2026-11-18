@@ -2919,3 +2919,71 @@ returned 0 and the smoke passed all 9 steps. Read by `appd/parse-abba.py` and `p
   48.8 M.
 - What makes up the +789 M is not separated by this boot. The twin prices the added instructions at +10.00 %; the
   boot adds 1.94 M CDERIVEs and CREVOKEs, 16.6 M paged record accesses and 7.5 M L1D misses.
+
+## gcc (SPEC 502.gcc_r) with its pool allocator protected
+
+**Scope.** SPEC's Full build protects only `malloc`. gcc carves its own objects from three allocators. This lane
+counted them on x86 (SPEC's flags plus counters; outputs byte-identical to SPEC's references):
+
+| input | ggc-page allocations | `ggc_free` | ggc peak live | alloc-pool allocations | alloc-pool peak live |
+|---|---:|---:|---:|---:|---:|
+| test `t1.c` | 12,129 | 157 | 11,980 | 1,247 | 359 |
+| train01 | 1,415,393 | 47,290 | 1,369,103 | 3,780,544 | 132,149 |
+
+- **ggc-page is not protected, and cannot be at train01.** SPEC's build disables the collector (`ggc-page.c:1941`:
+  `ggc_collect` returns at once under `SPEC`), so a GC object is freed only by an explicit `ggc_free`. 1.37 M
+  lifetimes would be live at once, more than the 2^20-record table.
+- obstack is not counted or protected.
+- **alloc-pool is protected** (`nested/gcc/pool/port-alloc-pool.py`, `ac09f51c…`, under `-DGCC_CAPSTONE_POOL`): every
+  element is a CDERIVE child of its block, with a 16-byte header holding the block's own pointer; `pool_free`
+  CREVOKEs it; `empty_alloc_pool` and `free_alloc_pool` free the blocks, which ends every element still live in them.
+
+**A use after `pool_free` in gcc itself.** With the pool protected, gcc stops on SPEC's own test input: the twin
+faults (cause 25) in `forward_propagate_into` (fwprop.c), loading through a df ref's `insn_info`.
+- Found natively with AddressSanitizer and a `pool_free` that poisons and never reuses the element
+  (`nested/gcc/asan`): `use-after-poison` at `fwprop.c:1350`. The element is a `df_scan insn` record freed by
+  `df_insn_delete`, called from `df_insn_rescan`.
+- Read in the source: `df_insn_refs_verify` collects the insn's new refs with the insn's current record as their
+  `insn_info`. `df_insn_rescan` then frees that record, allocates a new one and installs the collected refs, which
+  still name the freed record. Stock gcc works only because the pool's free list is LIFO, so the new record is the
+  element just freed.
+- **One fix** (`nested/gcc/pool/fix-stale.py`, `108b7a3b…`): after the new record is created, the collected refs are
+  pointed at it. No CREVOKE is skipped and no pool is exempted. With it, ASan with quarantine is clean on t1.c,
+  train01.c, 200.c and scilab.c, and all four outputs are byte-identical to SPEC's references.
+- Not checked: other inputs, and whether later gcc releases changed this code.
+
+### Pre-registration: 502.gcc_r train01 on P1 with alloc-pool protected, U P P U in one boot (written 2026-11-18 12:30, before the boot)
+
+**Images**, both built from the table's Full build (FRCDKMSa3) with its own compile and link lines
+(`nested/gcc/pool/build-fx.sh`):
+- stock arm, **the fix only**: stripped `e9b0f80c…`. Its `alloc-pool.o` is byte-identical to the Full build's; only
+  `df-scan.o` differs from the Full build.
+- protected arm, the fix and `-DGCC_CAPSTONE_POOL`: stripped `54291a9f…`. The arms differ in `alloc-pool.o` only.
+- So the stock arm is not the table's image: it carries the fix. The row says so.
+
+**Stage** `nested/p1g/gfx` (`gfx.SHA256SUMS`): kit bkit91's wrap of `nested/gcc/pool/fx-stage-train01`, made by
+`make-uppu-stage.py` from the table's untuned train01 stage (`board-frcdkmsa3-notune`). u1 p1 p2 u2 in one boot.
+- Board 3, after the SPEC lane's 250 Hz chain (pid 2657209); the chain flashes P1 from the seal (sha256 checked)
+  and reads it back by name. Chain `nested/p1g/b3-gfx.*`. Budget 3600 (`BAKED_TIMEOUT` 14400), booking 180 min.
+- Expected wall time: 1,772 s per stock command (the table's run) and about the same per protected one; about 2 h.
+- Twin: `ngpool-fxt` (test) and `ngpool-fx1` (train01), four commands each, all rc 0 with SPEC's reference output
+  (specdiff 1/1). In-context on train01: 12,230.7 / 12,330.2 / 12,330.2 / 12,230.7 M, **+0.81 %**; on test +0.14 %.
+- Checked off the board (`nested/p1g/gfx-recheck`): real bake; `BOARD_STUB=2` on the table's train01 transcript and
+  its cut, rc 0 and 0, `BAKED_TIMEOUT=14400` in both; real firmware 25,857,544 B (`a8ee5dec…`), under the 26 MB cap; an
+  `NR_DRY=1` pass of the chain to DONE (`nested/p1g/dry-gfx.log`).
+
+**Outcomes and bands.**
+- **VOID** as for every P1 boot.
+- **Answers:** all four commands' `.s` output passes specdiff against SPEC's reference, else no cost is read.
+- Repeat rule as for every P1 boot (1 % in-context, 2 % kernel + other).
+- **Stock control:** the stock arm's in-context cycles within ±1 % of the table's Full runs (41,713.7 M on board 1,
+  41,694.2 M on board 3). Reported only; it also shows what the fix costs.
+- **In-context cost, protected against stock: predicted +0.5 % to +10 %.**
+  - The twin's added instructions give +0.8 %.
+  - 3.78 M CDERIVEs and 1.85 M CREVOKEs at 63 to 100 cycles: about 0.45 G of 41.7 G, +1 %.
+  - Up to 132,149 pool elements are live at once, each with its own record, against a 16-entry record TLB. PostgreSQL,
+    with 105,043 live records, costs +7.8 %. So the upper end is set by record checks on element accesses.
+  - ≥ +30 %: reported as unexplained, and the port's own code is read for a search or a loop before any other cause
+    is named.
+- The row states its coverage: gcc's pool allocator; the GC heap and obstacks are not protected, and both arms carry
+  one stale-use fix.
