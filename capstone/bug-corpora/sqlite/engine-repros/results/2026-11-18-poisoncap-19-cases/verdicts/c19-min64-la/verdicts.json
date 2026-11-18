@@ -1,0 +1,32 @@
+{
+ "published": "runs/c19-min64-la",
+ "spatial": "None",
+ "counts": {
+  "qualified": 1,
+  "fault_at_site": 1,
+  "attributable": 0,
+  "mechanism_signed": 1
+ },
+ "cases": [
+  {
+   "case": "11_dee0359ddb_fts3_zterm_stale_buffer",
+   "qualified": true,
+   "fault_sites": [
+    "fts3SegReaderCmp",
+    "memcmp"
+   ],
+   "published": {
+    "outcome": "fault",
+    "code": "3",
+    "object": "/lib/libc.so.7",
+    "function": "memcmp",
+    "signal": "SIGPROT",
+    "at_site": true,
+    "poison_console": true
+   },
+   "spatial": null,
+   "mechanism_signed": true,
+   "attributable": null
+  }
+ ]
+}

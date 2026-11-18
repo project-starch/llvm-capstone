@@ -1,0 +1,70 @@
+{
+ "published": "runs/c19-driver-la",
+ "spatial": "None",
+ "counts": {
+  "qualified": 3,
+  "fault_at_site": 2,
+  "attributable": 0,
+  "mechanism_signed": 2
+ },
+ "cases": [
+  {
+   "case": "02_b9e0f62c3a_backup_pager_after_detach",
+   "qualified": true,
+   "fault_sites": [
+    "sqlite3BtreePager"
+   ],
+   "published": {
+    "outcome": "fault",
+    "code": "3",
+    "object": "/tmp/allocator-tests/02_b9e0f62c3a_backup_pager_after_detach",
+    "function": "sqlite3BtreePager",
+    "signal": "SIGPROT",
+    "at_site": true,
+    "poison_console": true
+   },
+   "spatial": null,
+   "mechanism_signed": true,
+   "attributable": null
+  },
+  {
+   "case": "11_dee0359ddb_fts3_zterm_stale_buffer",
+   "qualified": true,
+   "fault_sites": [
+    "fts3SegReaderCmp",
+    "memcmp"
+   ],
+   "published": {
+    "outcome": "no-reading",
+    "at_site": false,
+    "tail": [
+     "pHeap= 0x41600000",
+     "mnReq= 16",
+     "heap len =268435456, expected = 268435456"
+    ]
+   },
+   "spatial": null,
+   "mechanism_signed": false,
+   "attributable": null
+  },
+  {
+   "case": "13_fix-2026-06-08_fts5_near_stale_phrase",
+   "qualified": true,
+   "fault_sites": [
+    "sqlite3Fts5PoslistNext64"
+   ],
+   "published": {
+    "outcome": "fault",
+    "code": "3",
+    "object": "/tmp/allocator-tests/13_fix-2026-06-08_fts5_near_stale_phrase",
+    "function": "sqlite3Fts5PoslistNext64",
+    "signal": "SIGPROT",
+    "at_site": true,
+    "poison_console": true
+   },
+   "spatial": null,
+   "mechanism_signed": true,
+   "attributable": null
+  }
+ ]
+}

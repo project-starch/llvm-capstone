@@ -1,0 +1,12 @@
+# The same case source (case 03, unchanged since 2026-10-26) built on 2026-10-26 and on 2026-11-18.
+# PoisonCap: published amalgamation, driver configuration.
+5f02bc8a4cf76145c01a3a53be79a7f28acedab4672efa344e03948daee827c8  builds/driver-la/03_e464802d49_blob_close_after_db_close            (2026-10-26)
+5f02bc8a4cf76145c01a3a53be79a7f28acedab4672efa344e03948daee827c8  builds/c3-driver-la/03_e464802d49_blob_close_after_db_close         (2026-11-18)
+# Sublet: block port, same configuration, with the rebuilt compiler and sdk-v6-restored.
+ffccf529352c6c033b74290dba93eaf5dacf0f3582a32820cd327d255d16db02  builds/v6-sublet-block/03_e464802d49_blob_close_after_db_close.dom  (2026-10-26)
+ffccf529352c6c033b74290dba93eaf5dacf0f3582a32820cd327d255d16db02  builds/libc-cand2/03_e464802d49_blob_close_after_db_close.dom       (2026-11-18)
+8cb7b8b27cd55b2ed9930074d0ab5aae19b41b211c656eeecffa1af9f8b02c76  builds/v6-sublet-block/obj/sqlite3-core.o                           (2026-10-26)
+8cb7b8b27cd55b2ed9930074d0ab5aae19b41b211c656eeecffa1af9f8b02c76  builds/libc-cand2/obj/sqlite3-core.o                                (2026-11-18)
+# The restored inputs of the Sublet build.
+ee5526b6a9db24604efe8ad917c8be5f75baf670083edeeb5faf8250a7ef738e  ~/spec-kit/toolchain/build/bin/clang-22   (rebuilt; toolchain-record.txt of 2026-10-20 names this hash)
+1fc697575cc7cd005579698245b699b11cffbc56780934b74f211165810a8e53  ~/sdkself/sdk-branch/libc-capstone.a      (libc of sdk-v6-restored)

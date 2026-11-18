@@ -1,0 +1,17 @@
+Case 11 on PoisonCap, run c19-long-la: two samples of the process while it neither faults nor returns.
+
+Taken inside the guest over the harness's ssh port, about half a minute and about six minutes after the case started:
+
+  procstat rusage, 8 s apart:   user time 0.66 s -> 8.05 s, system time 11.40 s -> 12.00 s
+  truss -p for 6 s:             no system call
+  procstat kstack:              mi_switch sys_sched_getcpu ast cpu_exception_handler_user
+
+  gcore, then readelf -n (NT_PRSTATUS: sepc and ra), symbols from llvm-nm of the case image,
+  load base 0x100000:
+
+  sample 1   sepc=0x1ffa4a fts3EvalInvalidatePoslist+0x14   ra=0x2057e0 fts3EvalNextRow+0x69e
+  sample 2   sepc=0x205142 fts3EvalNextRow+0x0              ra=0x214aaa fts3EvalGatherStats+0x332
+
+The process computes in user mode inside the row walk of fts3EvalGatherStats, which matchinfo()
+runs after fts3EvalRestart. Each gcore stops the process for about 150 s of guest time. The run
+is not scored.
