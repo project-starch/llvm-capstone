@@ -2629,3 +2629,65 @@ of the two stage directories is empty) and the same kit, no heartbeat, the next 
 - No mechanism is claimed. On F the protected arm did not return in 2 of 2 boots, on P1 in 1 of 3; counts this small
   do not tell the two bitstreams apart.
 - The sleep-and-echo beat proposed after p1 is no longer needed: a boot without any beat returned.
+
+## CREVOKE at the table's capacity on P1
+
+### Pre-registration: CREVOKE subtrees of 262,000, 450,000 and 10^6 nodes on P1 with a 2^20-record table, one boot (written 2026-11-18 10:40, before the boot)
+
+**Why.** Appendix F states 0.4 s for 262,144 records and 1.6 s for 2^20 as extrapolations at 39 cycles per node. The
+P1 CREVOKE chains (above) measured at most 100,000 nodes, and their 10^6 probe was refused after 196,609 because
+bkit91's table holds 262,144 records. This boot measures subtrees near the capacity of a 2^20-record table. The SPEC
+lane asked for it, and the lead approved it.
+
+**Configuration.**
+- Bitstream P1 `…-pagedtbl_d83d3a633`, sealed. The chain flashes it from the seal if it is not resident (sha256 checked)
+  and reads it back by name.
+- Kit `nested/kits/bkit91-rec1m` (`node_flat_records=1048576`), the kit of P1's Perl boot.
+- Stage `nested/p1cap/crvt` (`crvt.SHA256SUMS`). It is the kit's `make-train-stage.sh` around `nested/crvt/stages-c5`,
+  written by `crvt/make-stage-crv5.py`.
+  - The domain is the P1 boot's `crvtime`, byte-identical: stripped `b7b4af35…`, source `6bc727e4…`.
+  - The smoke skeleton is byte-identical to `nested/p1/crvt`.
+- Commands, one process each:
+  - `control`, and the `readclock` probes for `cycle`, `mcycle` and the HPM counters, as on P1;
+  - the controls: `chain 100000` and `scatter 100000 102400`, which repeat the P1 boot's rows;
+  - `scatter 262000 262144`: 1,024 record pages;
+  - `chain 450000`, and `scatter 450000 450048` over 1,758 pages;
+  - `chain 1000000`, and `scatter 1000000 1000192` over 3,907 pages;
+  - last, `probe 2000000`, with a progress line every 65,536 nodes.
+  - With `CRVT_HPM=1`, hpmcounter3/4 (record-TLB misses, walk cycles) are read around each CREVOKE.
+- Board 2, after the SPEC lane's spa3x chain (nat-run3 pid 2534574), which leaves board 2 on P1. Chain
+  `nested/p1cap/b2-crvt.*`. Budget 900 (x4 = `BAKED_TIMEOUT` 3600), booking 45 min.
+- Checked on the twin: run `ncrv-c5`, qemu55, `--records 1048576`.
+  - Every command up to `scatter 450000` returns.
+  - `chain 1000000`, `scatter 1000000` and the probe end with cause 30 (node exhaustion) and rc 139. The probe was
+    refused after 458,753 nodes.
+  - The twin's table is flat, not P1's paged tree, so it does not predict the board's capacity.
+- Checked off the board (`nested/p1cap/crvt-recheck`, via `b5a/recheck-kit.sh`):
+  - real bake;
+  - `BOARD_STUB=2` on the P1 crvt transcript and on its cut after the first `@@SPEC-BEGIN`: rc 0 and 0,
+    `BAKED_TIMEOUT=3600` in both;
+  - the relinked kernel's configuration carries `node_flat_records=1048576`;
+  - real firmware 19,566,088 B (`f40d2586…`);
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/p1cap/dry.log`).
+  - The recheck relinked the shared kernel tree with `node_flat_records=1048576`. The next bake from that tree with
+    262,144 recompiles the four `CONFIG_CMDLINE` objects (see tsu-p2 above).
+
+**Outcomes and bands.**
+- **VOID**, as on P1: `b0-stats` or `b0-hello` fails, or the smoke fails beyond the kit's waiver.
+- **Controls.** `chain 100000` per node within ±10 % of P1's 32.2, and `scatter 100000` within ±10 % of P1's 38.5.
+  Otherwise the boot's figures are reported as not reproducing P1's.
+- **The scatter took** if each scattered CREVOKE's record-TLB misses are at least N, one per node, as at 100,000 on P1.
+  Otherwise those rows are reported as chains on churned records.
+- **Prediction.**
+  - Scattered, per node, at 262,000 and 450,000: 35 to 50 cycles.
+  - Contiguous at 450,000: 28 to 40 cycles per node.
+  - So 262,000 scattered nodes revoke in about 9-13 M cycles, 0.37-0.52 s at P1's 25 MHz, in one uninterruptible
+    instruction.
+- **Linearity.** Linear if the per-node figure at 262,000 and 450,000 lies within ±15 % of the same boot's at
+  100,000, for each kind. If so, the extrapolation to 2^20 (39 per node) stands on a measured trend. If not, it is
+  replaced by the measured figures.
+- **10^6, not predicted.**
+  - If a command returns, its figure is measured.
+  - If the table refuses it (cause 30, rc 139), the 2^20 figure stays an extrapolation, and the largest N measured
+    is stated with it.
+- **Probe:** the count reached is the effective capacity of this kit for one domain. Not predicted.
