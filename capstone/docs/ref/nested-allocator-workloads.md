@@ -2752,3 +2752,60 @@ The probe toward 2·10^6 reported 458,753 nodes and died (rc 139) before 524,289
   refused between 458,753 and 524,288 nodes. The board console does not show the fault's cause; on the twin the same
   commands end with cause 30 after the same count. What limits a domain to under 2^19 nodes of a 2^20-record table is
   not established here.
+
+## Perl with the arena lookup repaired
+
+### Pre-registration: Perl suns.pl on P1 with the arena-lookup repair, U P P U in one boot (written 2026-11-18 11:25, before the boot)
+
+**Why.** The +208 % of "Results: Perl on P1" is withheld: patch 0001 finds a head's arena by walking the list of all
+arenas, about 100 M loads through cold arenas per command ("Withdrawn 2026-11-18" there). This boot repeats that boot
+with the lookup repaired and nothing else changed. It asks what a lifetime per SV head costs once the search is gone.
+
+**Configuration.**
+- Bitstream P1, kit `nested/kits/bkit91-rec1m` (`node_flat_records=1048576`), workload suns.pl with `PERL_HASH_SEED=0`,
+  answer `suns.out` (`01688ea0…`): all as in the P1 Perl boot. The lifetimes are the same, so the live-record peak is
+  the same and the 2^20-record table is still needed.
+- **The repair**, this lane's, on top of patch 0001 (blob `72db9236`):
+  `nested/perl/lookup-fix/0002-sv-arena-lookup-by-index.patch` (`04540913…`; written by `fix-lookup.py`,
+  `f5ccf26e…`). It keeps every arena in an array sorted by address. `Perl_more_sv`, the only place that adds an arena, enters
+  it. A lookup tries the arena found last, then binary-searches the array, and reads no arena. The array is freed in
+  `Perl_sv_free_arenas`. CDERIVE and CREVOKE sites, the arena geometry and the free list are unchanged.
+  - Only `sv.c` differs from the protected source tree of the P1 boot (`cmp` of `sv.h`, `sv_inline.h`, `gv.h`, `pp.c`,
+    `pp_ctl.c`, `perl.h`).
+  - Built by the same `build-arms.sh` (arm `protfix`, `PERLD_EXTRA_PATCH`). Stripped image `693568f6…` (full
+    `9f1fad49…`). CREVOKE census as the P1 protected image: 0 with rs2 = x0, 9 with rs2 != x0.
+  - The stock image is the P1 boot's, `3012f392…`.
+- Stage `nested/p1g/perlfix` (`perlfix.SHA256SUMS`): the kit's wrap of `nested/appd/perl-fix`. Against the P1 boot's
+  stage `nested/p1a/perl`, only `perl_prot.xz` and `plan.json` differ.
+- u1 p1 p2 u2 in one boot. Board 2, after the SPEC lane's filler chain (nat-run3 pid 2941955); P1 is resident. Chain
+  `nested/p1g/b2-perlfix.*`. Budget 900 (x4 = `BAKED_TIMEOUT` 3600), booking 45 min.
+- Expected wall time: 3.6 min per stock command (the P1 boot), 4 to 6 min per protected command; about 20 min of
+  commands.
+- **Twin** (`nperl-fix`, 2^20 records): four commands rc 0 with `suns.out`. In-context 1,731.9 / 1,905.1 / 1,905.1 /
+  1,731.9 M, **+10.00 %**, repeats 0.00 %. With the walk (`nperl-1m`) it was +40.26 %: the repair removes 524 M of
+  the 697 M added instructions.
+- Checked off the board (`nested/p1g/perlfix-recheck`): real bake; `BOARD_STUB=2` on the P1 Perl transcript and on its
+  cut, rc 0 and 0, `BAKED_TIMEOUT=3600` in both; the relinked kernel carries `node_flat_records=1048576`; real firmware
+  23,760,392 B (`f7748f4f…`); an `NR_DRY=1` pass of the chain to DONE (`nested/p1g/dry-perlfix.log`).
+
+**Outcomes and bands.**
+- Answers: every command's stdout equals `suns.out`, else VOID for the cost. Repeat rule as for every P1 boot (1 %
+  in-context, 2 % kernel + other, else not read). VOID as before.
+- **Stock control:** the stock arm's in-context cycles within ±1 % of the P1 boot's 4.914 G (same image, same kit,
+  another board). Outside it, the two boots are not compared.
+- **The reading:** the in-context cost, protected against stock.
+  - ≤ +30 %: the arena search carried at least 85 % of the +208 %;
+  - +30 % to +100 %: the search carried part of it, and the rest is still unexplained;
+  - ≥ +100 %: the search was not the main cost, and the new attribution is wrong too.
+- **Prediction: +10 % to +30 %.**
+  - The twin's +173 M instructions at the stock arm's 2.84 cycles per twin instruction: about 0.5 G, +10 %.
+  - CDERIVE and CREVOKE on 1.94 M allocations and frees, at 63 to 100 cycles each: 0.1 to 0.2 G.
+  - Checks on cold records that are not the walk's: the P1 boot read 100.6 M added event-23 replays against 97.4 M
+    counted steps, so about 3 M, at about 105 cycles: 0.3 G.
+- **Counters** (hpm3-8 as in the P1 boot), protected minus stock, per command:
+  - event-23 replays (hpm7): under +10 M, against +100.6 M;
+  - record-TLB misses (hpm3): under +10 M, against +48.8 M;
+  - L1D misses (hpm8): under +30 M, against +260 M.
+  - A counter above its bound with the cost in the first band is reported, not explained.
+- **What this boot cannot show:** it changes the lookup only. It does not separate the cost of CDERIVE and CREVOKE from
+  the cost of checking each head's own record.
