@@ -5613,3 +5613,17 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
   - A run counts if SPEC's validation passes on every command and the smoke is 9/9. The table keeps the first run's value; the second run is reported as a repeat with its board.
   - If both x264 second runs are inside their bands, 7.3's Setup sentence drops "except x264". Outside a band, the run is reported and the sentence stays.
   - The third lbm and nab runs change no paper number. They are reported as repeats.
+
+## Addendum 182 (2026-11-18 11:30 +08, before it runs): Perl suns.pl with the arena lookup repaired, board 2, after a3t-b2; a correction to Addendum 181
+
+- **Registration: the nested lane's Perl rerun.** Its own pre-registration is nested-workloads f01c2ec2a683 (capstone/docs/ref/nested-allocator-workloads.md, "Perl with the arena lookup repaired"), read by the SPEC lane before this Addendum.
+  - Board 2, P1 resident, kit bkit91-rec1m (2^20 records), U P P U in one boot, armed by that lane behind a3t-b2 (nat-run3 pid 2941955). Booking 45 min; transcript spec/board/out-nat-p1fix-perl-b2/perlfix/board.txt.
+  - One variable against the P1 Perl boot (Addendum 174): the protected image, built with the lane's lookup repair on top of patch 0001. The stock image is the same one.
+  - The lane's bands for the in-context cost, protected against stock: at most +30 %, +30 % to +100 %, at least +100 %. Its prediction is +10 % to +30 %. The stock arm must repeat the P1 boot's in-context cycles within ±1 %, or the two boots are not compared.
+- **What the paper does with it, fixed now.**
+  - Appendix F gains a Perl row only if every command's output equals SPEC's answer, the repeat rule holds, and the SPEC lane recomputes the row from the transcript.
+  - The row gives the measured cost, whichever band it falls in. No cause is written for the earlier +208 % unless the reading is in the first band.
+- **After it on board 2 (the lane's order, each under its own pre-registration and Addendum):** gcc's alloc-pool, then perlbench's makerand.
+- **Correction to Addendum 181.** It said the 10^6-node subtrees were "refused by the 2^20-record table". The transcript does not show that.
+  - Both 10^6 builds ended rc 139, and the probe ended between 458,753 and 524,288 nodes, below the table's 1,048,576 records. The kernel line is "cause 30 ... 4 answers made no progress: context ended".
+  - The cause is not established. No value is read above 450,000 nodes, and the paper claims none.
