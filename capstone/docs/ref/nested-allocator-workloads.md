@@ -2887,6 +2887,27 @@ protected test.pl was running without a fault ten minutes after its start, and b
 ("gcc ... Addendum 2"). Board 2's makerand commands are not read: the boot did not reach its end. The row rests on
 board 1 alone, as first registered.
 
+**Addendum 3 (2026-11-18 13:17): the twin shows the protected test.pl failing 10 of 314 tests, so board 1's boot is
+stopped and makerand is measured by a boot of its own.**
+- Twin `npspec-t5h` (this stage, with `capstone_vm.dom_grant_root=/tmp/nt/sr` as on the boards; the earlier twin
+  `npspec-t5` lacked it and failed on that alone): test.pl ran 55.2 G in-context instructions and reports "Failed 10
+  tests out of 314": io/open.t, io/perlio.t, op/bless.t, op/goto.t, op/gv.t, op/inccode-tie.t, op/inccode.t,
+  op/reset.t, op/sort.t and re/pat_psycho.t. `test.out` fails specdiff.
+  - Six processes end on a stale-lifetime fault (cause 25), in `S_rv2gv`, `Perl_pp_bless`, `Perl_pad_free`,
+    `S_glob_assign_glob`, `Perl_sv_resetpvn` and `Perl_pp_aassign` (pcs mapped at 0x3ff7c00000 = vaddr 0x10000).
+    Perl 5.22.1 touches a freed SV head at each, and the 5.36.3 patch, which this port follows, does not cover them.
+  - One process ends on cause 30 in `malloc`: the table's 262,144 records are exhausted.
+- By the rule registered above, a failing `test.out` means no test.pl cost is read. Board 1's protected test.pl would
+  end the same way after 3.6 h, so the boot is stopped now (started 12:42:12, running at 13:17). Its makerand commands
+  are not read: the boot does not reach its end.
+- **makerand gets its own boot on board 1 at once:** stage `nested/p1g/pmrf` (`pmrf.SHA256SUMS`), makerand.pl as
+  u1 p1 p2 u2 with the same two images, made by `make-uppu-stage.py` from the table's stage without test.pl, `t/` and
+  `lib/`. Chain `nested/p1g/b1-pmrf.*`; budget 900 (`BAKED_TIMEOUT` 3600), booking 60 min; about 25 min. Rule 8:
+  real bake, both stubs rc 0, firmware 21,663,240 B (`a58bb54b…`), `NR_DRY=1` to DONE (`dry-pmrf.log`). The makerand
+  rules above apply unchanged: answers against SPEC's `makerand.out`, the repeat rule, the predicted +1 % to +8 %,
+  and the cross-board check against board 3's 6,837.5 M.
+- A boot of test.pl with the port extended to those six sites, on a 2^20-record kit, would be registered separately.
+
 ### Results: Perl suns.pl on P1 with the arena lookup repaired (board 2, 2026-11-18 11:54-12:23): +16.05 % in-context, against +208.08 % with the walk
 
 **Configuration.** As pre-registered (f01c2ec2a683; Addendum 182, `a65d0b390a21`). Chain `nested/p1g/b2-perlfix.*`
