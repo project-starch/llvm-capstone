@@ -5657,3 +5657,17 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
   - If one boot fails for a reason of its own, the other stands alone.
 - **The paper rule of Addendum 183 is unchanged**: a row needs both outputs to pass specdiff, the stock makerand within 0.3 % of board 3's, and the SPEC lane's own recomputation from the transcript.
 - **The gcc alloc-pool boot of Addendum 183's last line is cancelled; no boot ran.** The lane reports that its protected gcc faults on SPEC's test input in the QEMU twin, and that a native build whose pool_free never reuses an element also fails. The SPEC lane has not checked either reading, and nothing in the paper rests on them. Board 3 after the hz250 chain (about 15:00) is therefore not booked by that lane.
+
+## Addendum 185 (2026-11-18 12:00 +08, before it runs): Plain perlbench with the 250 Hz tick, board 3, after the hz250 chain
+
+- **Why.** Addendum 179 measures the tick share on six benchmarks and leaves perlbench and x264 to the probe's range. Board 3 is free from the end of that chain (about 15:00) and the nested lane does not need it. perlbench fits before the paper deadline (20:00); x264 does not.
+- **Chain.** natstage/hz250p-b3.{conf,list}, thrun.sh on board 3 behind the hz250 chain (pid 2657209), the same kit (bkit96-k2n-rvm-hz250) and runner. One stage: perf/fair/stages/500.perlbench_r-rv-al3, the stage of both 100 Hz reference runs (its SHA256SUMS pass). The thrun dry run (NB_DRY=1) reached DONE (scratch dry185/).
+- **Reference, read by the SPEC lane from the result files.** Two matched-plain runs on board 3 with the 100 Hz kit (bkit95-k2n-rvm), specdiff 2/2 PASS in both:
+  - out-thp2-rvm-b3: makerand 240.88 s, test.pl 10,565.13 s;
+  - out-thp2-rvm3p-b3: makerand 241.29 s, test.pl 10,563.26 s.
+  - The reference is the mean of the two: 241.09 s and 10,564.20 s. Same board, so r is not cross-board.
+- **Prediction, by Addendum 179's formula r = (1-s)/(1-2.5s).**
+  - With s in 6.7-8.4 %: makerand 270.2-279.5 s, test.pl 11,840-12,249 s. About 3.5 h of board, ending near 18:30.
+  - With s equal to the three benchmarks already read (7.37-8.08 %): test.pl 11,996-12,169 s.
+- **Reading.** s = (r-1)/(2.5r-1) for each command. Addendum 179's rules apply unchanged, with perlbench as a seventh benchmark: inside 6.7-8.4 % the uniform factor is said to be checked on seven of eight, otherwise perlbench takes its own measured s. Both outputs must pass specdiff, or no s is read.
+- **If the boot has not ended by the deadline**, it runs on and is read afterwards. The paper then says six of eight.
