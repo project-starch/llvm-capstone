@@ -5801,3 +5801,17 @@ busy overnight and complete the records.
   - By the Addendum's rule perlbench takes its own measured s. Seven shares measured, 7.37-11.00 %, mean 8.45 % (stands for x264 alone). Estimate without timer interrupts: perlbench 32.90 / 35.33 % (+Spatial / Full; it was 28.59 / 30.95 % with the mean of six), dashed bar 42.47 %, geometric means 16.95 / 18.15 %.
   - Not explained: why test.pl's share is above every other benchmark's. One 250 Hz run. test.pl starts many short processes, which the other benchmarks do not; that is a guess, not a finding.
   - Paper: appendix only, PR #22, for the lead to decide.
+
+## Addendum 194 (2026-11-18 21:29 +08, outcome): Addendum 192, gcc with all three of its own allocators on P1 (gcc3-b2)
+
+- **VALID.** spec/board/out-nat-p1-gcc3r4m-b2/g3, board 2, 19:03:33 to 21:27:24. Native smoke PASS (all 9 steps), so the kit copy with the 4,194,304-record table boots. All four arms `rc=0`. `train01.opts-O3_-finline-limit_50000.s` is c786c07f51d5...efad1ab1 in every arm, equal to the twin's (perf/gcc3/out/g3p22, specdiff 1/1). board.txt sha256 1ec57c47...d90e31. The chain's "SPEC rc=2, NO RESULT: no @@SPEC-DONE" line is the classifier's reading of this stage format, as on Addendum 186's boot (same line there, same trap-log byte 0x89).
+- **Readings (up1 - up0; in-context cycles = run_cycles end - begin).**
+  - p1 2,053.19 s, 48,301,911,428
+  - u1 1,775.19 s, 41,804,234,258
+  - u2 1,775.14 s, 41,799,017,731
+  - p2 2,044.69 s, 48,286,084,763
+- **Cost, protected over stock: +15.42 % wall clock** (2,048.94 over 1,775.165 s), **+15.53 % in-context cycles.** Inside the +5..+40 % band. By order: p1/u1 +15.66 %, p2/u2 +15.18 %. Repeat pairs: protected 0.42 % apart in wall clock (under the 0.5 % rule; 0.03 % in cycles), stock 0.003 %.
+- **Control, met.** The stock arms against Addendum 186's stock runs with the 262,144-record kit (1,775.13 and 1,775.26 s): -0.002 %. The larger table costs nothing measurable in the stock arm.
+- **For comparison.** Pools alone (Addendum 186): +5.09 %. Over Plain with gcc's Full at +20.15 %: 1.2015 x 1.1542 = 1.3868, about 39 %. Pools alone: about 26 %.
+- **Limits that travel with the number.** One boot, two runs per arm, one board. It is the P1 adaptation of Addendum 191, not the collaborator's design: the GC heap has no release at collection (an object's lifetime ends only at `ggc_free`), pools are the nested lane's header port. The table is 16 times the kit's default; with the default the protected arm cannot run train01. The cost is not attributed among the three allocators.
+- **Paper.** Nothing changes without the lead's word. The paper states the pool port only (+5.1 %, about 26 % over Plain) and "below 30%"; this arm would be above that bound.
