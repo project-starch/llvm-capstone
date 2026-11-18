@@ -2869,3 +2869,15 @@ and `natperl` are byte-identical to the table's board stage. One boot, cheap com
   - Predicted: +5 % to +30 % in-context.
   - ≥ +100 %: the protection has a cost in test.pl that the lookup repair did not remove; reported as such.
 - The row states that test.pl's stock run is the table's, from another board and day.
+
+**Addendum 1 (2026-11-18 11:57, before either boot): the same stage also runs on board 1.** Board 1 was freed at
+11:36 (the SPEC lane's x264 repeat was stopped on the lane owner's order), and this lane's gcc run, planned for it, is
+cancelled (below). So the stage `nested/p1g/ptest` runs unchanged on board 1 as well, chain `nested/p1g/b1-ptest.*`
+(an `NR_DRY=1` pass reached DONE, `dry-ptest-b1.log`), starting at once; board 2's boot follows its suns.pl chain as
+registered.
+- Both boots are read by the rules above, each on its own.
+- test.pl's cost is reported per board and as the mean of the two.
+- The two protected test.pl readings are a cross-board repeat of one image. If their in-context cycles agree within
+  0.5 %, that supports setting them against board 3's stock runs. If they do not, both are reported and their
+  difference is stated as the uncertainty of the row.
+- If one boot fails for a reason of its own, the other stands alone, as registered above.
