@@ -3082,3 +3082,36 @@ and without the define 69 of 69 objects are still byte-identical to the table's 
   - makerand in both boots against each other and against board 1's interleaved makerand boot.
 - **If only one boot ends in time,** the protected run is set against the table's two stock runs (another board,
   the smaller table), and the row says so.
+
+### Results: SPEC perlbench makerand.pl on P1 with SV heads protected (board 1, 2026-11-18 13:17-13:47): −2.54 % in-context, the prediction missed low
+
+**Configuration.** As registered in Addendum 3 of the perlbench test pre-registration (cbe092a39bfc; Addendum 187,
+`57d7efd2eace`). Chain `nested/p1g/b1-pmrf.*`; P1 resident. Transcript `spec/board/out-nat-p1-pmr-b1/pmrf/board.txt`,
+sha256 `ea9177544253a5fb194018a9ae542280d48123c0f58fc1522b7bbb408b22e618`, firmware `dac2141e…`. `b0-stats` and
+`b0-hello` returned 0; the smoke reads 8 PASS with `task` waived, as in every P1 boot. Images: stock `c1744e87…` (the
+table's), protected `83703c92…` (the first port with the lookup repair).
+
+| | u1 | p1 | p2 | u2 | repeat, u / p | protected vs stock |
+|---|---:|---:|---:|---:|---|---|
+| in-context cycles | 6,835,370,958 | 6,660,829,111 | 6,659,959,955 | 6,832,475,210 | 0.04 % / 0.01 % | **−2.54 %** (−173.5 M) |
+| kernel + other | 46,418,036 | 46,959,596 | 46,922,751 | 46,502,802 | 0.18 % / 0.08 % | +1.03 % |
+| uptime span, s | 275.92 | 268.95 | 268.91 | 275.78 | | −2.51 % |
+| record-TLB misses (hpm3) | 2,198 | 3,069 | 3,069 | 2,196 | | +872 |
+| event-23 replays (hpm7) | 30,784 | 49,591 | 49,731 | 30,736 | | +18.9 k |
+| L1D misses (hpm8) | 96,832 | 91,087 | 93,580 | 95,927 | | −4.0 k |
+
+**Against the registration.**
+- Answers: all four `makerand.out` equal SPEC's reference. Repeat rule: met on both counters, so both are read.
+- Cross-board check: the stock arm reads 6,833.9 M against board 3's 6,837.5 M, −0.05 %. Met.
+- **In-context cost −2.54 %; predicted +1 % to +8 %: missed, low.** The protected image runs makerand in fewer cycles
+  than the table's stock image.
+- On the twin the same pair costs +2.5 % in instructions. So the protected arm executes more instructions and takes
+  fewer cycles. **Not explained.** The two images differ in `sv.o` and in every object that inlines the patched
+  macros, so a difference in code layout is the obvious candidate; this boot does not show it.
+- The stopped boot on board 1 read the same from its console (6,795.7 / 6,655.1 / 6,665.0 / 6,838.9 M; not a
+  registered reading).
+
+**Reading.** makerand.pl allocates few scalars (872 more record-TLB misses, 18.9 k more event-23 replays in 6.8 G
+cycles), so the protection has almost nothing to do in it, and what this boot measures is the difference between two
+builds of the interpreter. It bounds the protection's cost on this input at about zero; it is not evidence that the
+protection speeds Perl up.
