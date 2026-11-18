@@ -5627,3 +5627,20 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
 - **Correction to Addendum 181.** It said the 10^6-node subtrees were "refused by the 2^20-record table". The transcript does not show that.
   - Both 10^6 builds ended rc 139, and the probe ended between 458,753 and 524,288 nodes, below the table's 1,048,576 records. The kernel line is "cause 30 ... 4 answers made no progress: context ended".
   - The cause is not established. No value is read above 450,000 nodes, and the paper claims none.
+
+## Addendum 183 (2026-11-18 11:35 +08, before it runs): SPEC's perlbench test with the sv-heads protection, board 2, after the Perl suns.pl boot
+
+- **Registration: the nested lane's perlbench test boot.** Its own pre-registration is nested-workloads a5597ce91c91 (capstone/docs/ref/nested-allocator-workloads.md), read by the SPEC lane before this Addendum.
+  - Board 2, P1 resident, one boot, armed by that lane behind its suns.pl chain (nat-run3 pid 2985665, Addendum 182). Booking 1,440 min; transcript spec/board/out-nat-p1-ptest-b2/ptest/board.txt.
+  - Stock image: this lane's FRCDKMSa3 perlbench (c1744e87...). Protected image 83703c92...: the same build with the sv-heads patch ported to SPEC's Perl 5.22.1 and the arena-lookup repair. The lane reports 69 of 69 objects equal to the stock build without the define; the SPEC lane has not re-checked that.
+  - Commands 0-3: makerand.pl as U P P U. Commands 4-5: makerand.pl and test.pl, protected only.
+- **The test.pl reference, checked by the SPEC lane from the result files.** test.pl has no stock arm in the boot. Its reference is the two Full runs on board 3:
+  - out-nat-p1-final-a3-perl-b3: 12,798.66 s, specdiff 2/2 PASS, transcript bc778b6f...;
+  - out-nat-p1-a3rep-b3: 12,799.00 s, specdiff 2/2 PASS, transcript 6f4d9f8e....
+  - The reference is on board 3 and the boot on board 2. The lane assumes a cross-board spread of at most 0.3 % and checks it on the stock makerand (276.01 s and 276.11 s on board 3). A test.pl difference under 1 % is reported as not distinguishable.
+- **The lane's predictions:** makerand +1 % to +8 %, test.pl +5 % to +30 %. If test.out fails specdiff, the protected Perl is reported as failing its tests and no cost is read.
+- **Deviation, as the lane registered it:** the QEMU twin of this stage will not have finished test.pl when the boot starts. It serves as an early warning, and the lane stops the boot if the twin shows a failure.
+- **What the paper does with it, fixed now.**
+  - A Perl row is written only if both outputs pass specdiff, the stock makerand is within 0.3 % of board 3's, and the SPEC lane recomputes the row from the transcript.
+  - The row gives the measured cost, whichever band it falls in. Which Perl workload stands in Appendix F (this one or suns.pl) is the lead's decision.
+- **Board 3 is unchanged by this Addendum.** The lane's gcc alloc-pool boot gets its own Addendum when its pre-registration hash arrives.
