@@ -5522,3 +5522,22 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
   - So no boot ships another bake's command line, and p2's dmesg line equals p1's.
 - **Unchanged.** The objects are not archived, so Addendum 176 stands: p1 to p2 is not shown to be one variable.
 - **For later P1 bakes from this tree.** Expect the same four-object recompile after each B5a bake. It is not evidence of a changed kernel source.
+
+## Addendum 178 (2026-11-18 09:20 +08): Perl on B5a read; +Spatial xz second run registered on board 2, before it runs
+
+- **Addendum 174's outcome: the record cache does not remove Perl's cost.** Recomputed by the SPEC lane from out-nat-b5a-perl-b2/perl/board.txt (sha256 bf795fc0…); lane record nested-workloads 39b78e2915b1.
+  - In-context cycles, u1/p1/p2/u2: 4,958,653,357 / 17,857,967,802 / 17,856,420,707 / 4,956,113,253. The repeats differ by 0.05 % and 0.01 %.
+  - The cost is +260.21 % in context (+12.90 G cycles per protected command), against +208.08 % on P1. That is in the ≥ +170 % band.
+  - All four commands give suns.out 01688ea0…, which is P1's output.
+  - The prediction missed. The cost is above +120 to +230 %, and the lane reports a read hit rate of 14.53 %, below 15-50 %.
+  - The reading crosses boards (P1 on board 1, B5a on board 2) and bitstreams. The extra cost on B5a is not attributed.
+  - Not a paper row (Addendum 174).
+- **Registration: spa3x-b2.** It is a second +Spatial run of 557.xz_r on P1, on board 2, the board of the first spa3 xz run (cj-b2, 4,956.84 s).
+  - Files: natstage/spa3x-b2.{conf,list}. The conf is spa3p-b2.conf with only TAG, LIST and its comment changed. The stage is board-frcdkmsspa3/557.xz_r-native, the one in spa3b-b1.list. Kit bkit91, bitstream P1 d83d3a633.
+  - nat-run3.sh reads back the resident bitstream (B5a) and flashes P1 from its seal (dc411e36…, checked against the file). It then reads P1 back by name before the boot.
+  - The rule-8 dry run (NR_DRY=1, this commit's predecessor as a stand-in for NR_PREREG) reached DONE, rc 0.
+- **Why.** Board 2 was idle after the B5a chain. This puts the xz repeat on the first run's board, and the reading arrives about an hour before board 1's.
+  - Board 1's spa3b chain (mcf, then xz) is left as registered, so xz +Spatial may end with three runs.
+- **Reading rule, fixed now.** The table value is the mean of every +Spatial xz run that completes with 12/12 specdiff PASS and smoke 9/9. The spread and each run's board are reported.
+  - Band: 4,906-5,006 s (first run ±1 %).
+  - A run outside the band is reported and not averaged in, pending a reason.
