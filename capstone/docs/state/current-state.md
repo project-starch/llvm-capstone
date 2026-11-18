@@ -1,3 +1,14 @@
+## gcc's own allocators as lifetimes (SPEC 502.gcc_r), 18 November 2026
+
+`capstone/ports/spec-cpu2017/sublet/502.gcc_r` ports the pools, the GC heap and the
+obstacks of 502.gcc_r: every object they hand out is a `CDERIVE` child, `pool_free`
+renews it, and `ggc_free` and an obstack free end it. gcc needs one fix of its own, in
+`df_insn_rescan`. On SPEC's test input the ported compiler gives the reference output in
+30 of 30 runs and the job runs 0.58 % more instructions, on the kit of revision
+`71ce199d8` (native task route, QEMU). The control without the fix faults. Larger inputs,
+the trap route, the board and gcc's typed free lists are not covered.
+[Port, reproduction and limits](../../ports/spec-cpu2017/sublet/502.gcc_r/README.md).
+
 ## Trap-route mapping blocks, 14 November 2026
 
 The step-6 fragment `capstone/kernel/patches/series.s6-mappings` adds depth-1

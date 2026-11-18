@@ -1,0 +1,66 @@
+# The lifetime port of 502.gcc_r's allocators on SPEC's test input, QEMU, 2026-11-18. Result lines only.
+# Kit: revision 71ce199d8 of this branch, native task route. Images and inputs: SHA256SUMS.
+# Tools: apply.py 1339f23bebc38552, baseline.json ffaddd48583647dc, sublet-port.h 127e37e92b2b2bb3,
+#        replay-build.sh d43f6b44d6698d64, run-test.sh ad49a585d58eec97, icount.c e6e4f3d1e8397a5f (sha256, first 16).
+
+## 1. Source: apply.py on a fresh copy of the stock build directory, then on the ported copy
+lifetime port applied to 5 files, sublet-port.h added
+<tree> already has sublet-port.h: use a fresh copy
+
+## 2. Build: replay-build.sh on the ported copy and on an unchanged copy (the control)
+ported     compiled 387 files  370fda69542c680b2da26834bc0c1147827344ed039e63de028c8098cc490db7  cpugcc_r
+unchanged  compiled 387 files  d9be3d400caa2661e48cc85e29f499e94672ed47956ce7e96a7b9fc8b48f4263  cpugcc_r
+kit build  d9be3d400caa2661e48cc85e29f499e94672ed47956ce7e96a7b9fc8b48f4263  cpugcc_r_base (tools/build.sh)
+
+## 3. Static check: lifetime-instructions.py --expect present, then --expect absent
+stock   FAIL alloc-pool.o: CDERIVE=0 CREVOKE=0 CRENEW=0
+ported  PASS alloc-pool.o: CDERIVE=1 CREVOKE=0 CRENEW=1
+stock   FAIL ggc-page.o: CDERIVE=0 CREVOKE=0 CRENEW=0
+ported  PASS ggc-page.o: CDERIVE=1 CREVOKE=1 CRENEW=0
+stock   FAIL obstack.o: CDERIVE=0 CREVOKE=0 CRENEW=0
+ported  PASS obstack.o: CDERIVE=1 CREVOKE=3 CRENEW=0
+stock   PASS alloc-pool.o: CDERIVE=0 CREVOKE=0 CRENEW=0
+ported  FAIL alloc-pool.o: CDERIVE=1 CREVOKE=0 CRENEW=1
+stock   PASS ggc-page.o: CDERIVE=0 CREVOKE=0 CRENEW=0
+ported  FAIL ggc-page.o: CDERIVE=1 CREVOKE=1 CRENEW=0
+stock   PASS obstack.o: CDERIVE=0 CREVOKE=0 CRENEW=0
+ported  FAIL obstack.o: CDERIVE=1 CREVOKE=3 CRENEW=0
+
+## 4. Test input, one boot, 9 rounds (run-test.sh, ROUNDS=9): QEMU wall seconds
+GCC_TEST name=stock round=1 rc=0 seconds=18.25 output=MATCH
+GCC_TEST name=sublet round=1 rc=0 seconds=18.46 output=MATCH
+GCC_TEST name=stock round=2 rc=0 seconds=3.59 output=MATCH
+GCC_TEST name=sublet round=2 rc=0 seconds=4.42 output=MATCH
+GCC_TEST name=stock round=3 rc=0 seconds=3.97 output=MATCH
+GCC_TEST name=sublet round=3 rc=0 seconds=5.40 output=MATCH
+GCC_TEST name=stock round=4 rc=0 seconds=4.95 output=MATCH
+GCC_TEST name=sublet round=4 rc=0 seconds=5.16 output=MATCH
+GCC_TEST name=stock round=5 rc=0 seconds=3.50 output=MATCH
+GCC_TEST name=sublet round=5 rc=0 seconds=5.11 output=MATCH
+GCC_TEST name=stock round=6 rc=0 seconds=5.07 output=MATCH
+GCC_TEST name=sublet round=6 rc=0 seconds=5.49 output=MATCH
+GCC_TEST name=stock round=7 rc=0 seconds=5.04 output=MATCH
+GCC_TEST name=sublet round=7 rc=0 seconds=5.46 output=MATCH
+GCC_TEST name=stock round=8 rc=0 seconds=4.69 output=MATCH
+GCC_TEST name=sublet round=8 rc=0 seconds=5.10 output=MATCH
+GCC_TEST name=stock round=9 rc=0 seconds=4.79 output=MATCH
+GCC_TEST name=sublet round=9 rc=0 seconds=5.09 output=MATCH
+
+## 5. Test input, one boot, 6 rounds under -icount shift=0 (run-test.sh, ROUNDS=6, ICOUNT): instructions of the whole job
+GCC_TEST name=stock round=1 rc=0 seconds=0.05 instructions=52509050 status=0 output=MATCH
+GCC_TEST name=sublet round=1 rc=0 seconds=0.06 instructions=52616066 status=0 output=MATCH
+GCC_TEST name=stock round=2 rc=0 seconds=0.06 instructions=49477648 status=0 output=MATCH
+GCC_TEST name=sublet round=2 rc=0 seconds=0.06 instructions=49760237 status=0 output=MATCH
+GCC_TEST name=stock round=3 rc=0 seconds=0.05 instructions=49501767 status=0 output=MATCH
+GCC_TEST name=sublet round=3 rc=0 seconds=0.05 instructions=49797760 status=0 output=MATCH
+GCC_TEST name=stock round=4 rc=0 seconds=0.05 instructions=49497888 status=0 output=MATCH
+GCC_TEST name=sublet round=4 rc=0 seconds=0.05 instructions=49785400 status=0 output=MATCH
+GCC_TEST name=stock round=5 rc=0 seconds=0.05 instructions=49502413 status=0 output=MATCH
+GCC_TEST name=sublet round=5 rc=0 seconds=0.05 instructions=49794458 status=0 output=MATCH
+GCC_TEST name=stock round=6 rc=0 seconds=0.05 instructions=49527362 status=0 output=MATCH
+GCC_TEST name=sublet round=6 rc=0 seconds=0.05 instructions=49793700 status=0 output=MATCH
+
+## 6. Control: the port without the gcc fix (df-scan.c as stock), one round
+GCC_TEST name=nofix round=1 rc=139 seconds=15.74 output=MISMATCH
+GCC_FAULT rc=-14 kind=2 cause=25 pc=0x3ff73182e4 address=0x3ff6ae1570 ra=0x3ff7317be4 fp=0x3ff6fff520 pid=89 entry=0x3ff7000000 code=0x3ff7000000-0x3ff7dae000
+fault pc: forward_propagate_into+0x88, return address: fwprop+0x94 (image linked at 0x10000, loaded at entry)

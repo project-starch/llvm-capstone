@@ -15,6 +15,10 @@ toolchain, and platform pins. They do not select the native-task Perl repair.
 For that build, use the explicit [Perl v2 source-selection recipe](../perl/provenance/README.md#build-and-run-the-explicit-v2-package)
 with a current native SDK and the native qualification helpers.
 
+The lifetime port of 502.gcc_r's own allocators (pools, GC heap, obstacks) is a separate
+adapter, [sublet/502.gcc_r](sublet/502.gcc_r/README.md). The default manifest and build do
+not select it.
+
 The measurement plan, with the pre-registered readings of its controls, is
 `capstone/docs/plans/spec-spatial-vs-temporal.md`; the heap switches it measures are PR #279.
 

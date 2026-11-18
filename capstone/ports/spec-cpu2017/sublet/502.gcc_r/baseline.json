@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "name": "SPEC CPU2017 502.gcc_r (GCC 4.5.0) with the kit's capstone source alternative, as tools/build.sh builds it",
+  "baseline_package": "502.gcc_r.capstone.cpu2017.v1.0.tar.xz",
+  "baseline_package_sha256": "7df4c247746b252226e3f53d2603db2134493a1f52d9093a27b04b8a426b334a",
+  "before": {
+    "alloc-pool.c": "5a228afc54ed785ce3f47a59305d2994b7661b9cc59d6b01693b343e50d8b2d1",
+    "df-scan.c": "863895eb7858a81568097b4b559287590640fa5f57986725b6273995644c8e76",
+    "ggc-page.c": "0641beca607e6173fb163919bf97d6776940d580dbc1391fb8050a619b90b776",
+    "include/obstack.h": "f49cb8ced622dec94537069b26f4ba294548e9d46d9711a9b9ab4cbe7dfffeec",
+    "obstack.c": "7c6b33f24dcb73ce6b308af62eedb958c3236d40e022766a234ffbd695a30fe2"
+  },
+  "after": {
+    "alloc-pool.c": "1dff2abe60ad57f70919d707ba297f435ab74ea53e51d8ae548534b39442957a",
+    "df-scan.c": "dddd36c64e58f78db31f1cdaab3bbe05bcb55af4319f710938b90380a0683558",
+    "ggc-page.c": "ee3cba173914244821cf95080beb40a03bd0c9d287cd351f2a116279a0549451",
+    "include/obstack.h": "97a89a72195b9f11dce8beb444523f0642a94e6601bff6af5ca06749fc42c4bd",
+    "obstack.c": "0552c53a1f181c002a5802d517147f26751ea559a5792b15c9ae2978cc6159a1",
+    "sublet-port.h": "127e37e92b2b2bb3435ca28ea30c2aa20e3f591f7154306e69b4385fba856f5a"
+  }
+}
