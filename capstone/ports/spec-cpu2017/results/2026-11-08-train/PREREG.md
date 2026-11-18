@@ -5565,3 +5565,24 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
   - Otherwise: 7.3 uses each benchmark's measured s for these six and the probe's range for perlbench and x264.
   - r < 1.10 for a benchmark means the correction overstates its tick share; r > 1.19 means it understates it.
 - Answers must pass SPEC's validation, as in every plain run. A failed benchmark is reported and gives no s.
+
+## Addendum 180 (2026-11-18 10:40 +08, before it runs): CREVOKE at the table's capacity on P1, board 2, after spa3x
+
+- **Pre-registration:** llvm-capstone nested-workloads 5d5210277fdf, "pre-register CREVOKE subtrees of 262,000, 450,000
+  and 10^6 nodes on P1 with a 2^20-record table". Its commands, bands and rules are the ones that apply.
+- **Why.** Appendix F measured CREVOKE up to 100,000 objects (129-154 ms). It now states no bound for larger subtrees,
+  because the 10^6 probe stopped at the 262,144-record table. The lead asked for the measurement at capacity.
+- **Configuration.**
+  - The P1 crvtime domain, byte-identical (b7b4af35…).
+  - Kit bkit91-rec1m (node_flat_records=1048576).
+  - Commands: the control and clock probes; chain and scatter 100k controls; scatter 262,000; chain and scatter
+    450,000; chain and scatter 10^6; a probe to 2x10^6. Budget 3,600 s.
+  - The lane's rule-8 dry runs passed (real bake and firmware f40d2586…).
+- **Predictions (the lane's).**
+  - Scattered subtrees cost 35-50 cycles per node and contiguous ones 28-40.
+  - Linear means within ±15 % of the same boot's 100k.
+  - The QEMU twin refuses 10^6 after 458,753 nodes (cause 30), so on the board 10^6 is "measured or refused, not
+    predicted".
+- **Placement.** Board 2, behind nat-run3 pid 2534574 (spa3x-b2, Addendum 178). It stays on P1.
+- **For later P1 bakes.** The lane's recheck relinked the shared hpm2tree with 1048576 at about 10:30. The next P1 bake
+  from that tree recompiles the four CMDLINE objects (Addendum 177).
