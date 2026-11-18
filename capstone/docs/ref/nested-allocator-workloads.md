@@ -2691,3 +2691,44 @@ lane asked for it, and the lead approved it.
   - If the table refuses it (cause 30, rc 139), the 2^20 figure stays an extrapolation, and the largest N measured
     is stated with it.
 - **Probe:** the count reached is the effective capacity of this kit for one domain. Not predicted.
+
+### Results: CREVOKE at the table's capacity on P1 (board 2, 2026-11-18 10:48-10:58): linear to 450,000 nodes, 262,000 scattered nodes in 0.40 s
+
+**Configuration.** As pre-registered (5d5210277fdf; Addendum 180, `1b12d2463fea`). Chain `nested/p1cap/b2-crvt.*`
+(nat-run3 pid 2714880), after the SPEC lane's spa3x chain; P1 was resident and read back by name. Transcript
+`spec/board/out-nat-p1cap-crvt-b2/crvt/board.txt`, sha256 `bbb3c7726f0a5f26fe82c4228dd10aa1b6e8307bbd6da75f6ffe724548a5f915`,
+firmware `178e8197…`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0 and the smoke passed all 9 steps. `cycle` reads from the domain,
+`mcycle` faults (rc 139) and hpmcounter3/4 read (`p-hpm` rc 0), as in the first P1 boot. Not VOID.
+
+| subtree | N | CREVOKE cycles | per node | at 25 MHz | record-TLB misses | walk cycles |
+|---|---:|---:|---:|---:|---:|---:|
+| contiguous | 100,000 | 3,209,994 | 32.10 | 0.128 s | 391 | 9,501 |
+| scattered (400 pages) | 100,000 | 3,894,368 | 38.94 | 0.156 s | 100,001 | 611,896 |
+| scattered (1,024 pages) | 262,000 | 10,034,529 | 38.30 | 0.401 s | 262,002 | 1,604,791 |
+| contiguous | 450,000 | 14,508,643 | 32.24 | 0.580 s | 1,759 | 43,998 |
+| scattered (1,758 pages) | 450,000 | 17,261,371 | 38.36 | 0.690 s | 450,002 | 2,758,329 |
+| contiguous | 1,000,000 | not built: rc 139 | | | | |
+| scattered | 1,000,000 | not built: rc 139 | | | | |
+
+The probe toward 2·10^6 reported 458,753 nodes and died (rc 139) before 524,289.
+
+**Against the pre-registration.**
+- Controls: **met**. `chain 100000` reads 32.10 against P1's 32.2, and `scatter 100000` 38.94 against 38.5.
+- The scatter took: **met**. Each scattered CREVOKE misses the record TLB once per node (N + 1 or N + 2 misses).
+- Prediction: **met**. Scattered 38.30 and 38.36 per node (35 to 50); contiguous 32.24 at 450,000 (28 to 40);
+  262,000 scattered nodes in 10.03 M cycles (9 to 13 M).
+- Linearity: **met**. Against the same boot's 100,000: scattered −1.6 % and −1.5 %, contiguous +0.4 %.
+- 10^6: **refused** in both commands, so nothing at 10^6 is measured.
+
+**Reading.**
+- **Measured:** one CREVOKE of 262,000 scattered nodes takes 10.03 M cycles, 0.40 s at 25 MHz, in one
+  uninterruptible instruction. Appendix F's 0.4 s for 262,144 records is now a measurement to within 144 nodes.
+- **The largest subtree measured is 450,000 nodes:** 0.69 s scattered, 0.58 s contiguous.
+- **2^20 stays an extrapolation.** The cost is linear from 100,000 to 450,000 nodes at 38.3 to 38.9 cycles per scattered
+  node, which gives 40.2 M cycles, 1.61 s, for 2^20 nodes.
+- **A subtree of 2^20 nodes cannot be built on this kit.** With `node_flat_records=1048576` one domain's chain was
+  refused between 458,753 and 524,288 nodes. The board console does not show the fault's cause; on the twin the same
+  commands end with cause 30 after the same count. What limits a domain to under 2^19 nodes of a 2^20-record table is
+  not established here.
