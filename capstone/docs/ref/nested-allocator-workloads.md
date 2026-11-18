@@ -2006,6 +2006,56 @@ boot asks whether the record cache removes that cost. The question was proposed 
 - Duration: 3 to 12 min per command.
 - **VOID** as above.
 
+### Results: Perl on B5a (the record cache), board 2, 2026-11-18 08:20-09:08: +260.2 % in-context, the record cache does not remove the cost
+
+**Configuration.** As pre-registered (7fc3183ce3b2; Addendum 174, `8299e1ed6287`).
+- The chain `nested/b5a/b2-perl.*` (nat-run3 pid 2290383) ran after the runtime lane's spa3p chain. It flashed B5a
+  from the seal: the local sha256 matched the sealed hash, and the name read back after the power cycle.
+- Transcript `spec/board/out-nat-b5a-perl-b2/perl/board.txt`, sha256 `bf795fc04d3a185b6c77df8c355b9471f332215b9d83ad494beca447e9134a0e`,
+  firmware `b09d5dd5…`.
+- `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps.
+- The kernel command line equals that of P1's Perl boot (`out-nat-p1a-perl-b1`), including `node_flat_records=1048576`.
+  The bake recompiled the four `CONFIG_CMDLINE` objects because the bake before it, on the shared tree, used 262144.
+
+**Readings** (`parse-abba.py` against `suns.out` `01688ea0c1058063…`, then `ABBA_EVENTS=rc nested/p1/abba.py`; JSON
+`nested/b5a/perl.json`):
+
+| | u1 | p1 | p2 | u2 |
+|---|---:|---:|---:|---:|
+| in-context cycles | 4,958,653,357 | 17,857,967,802 | 17,856,420,707 | 4,956,113,253 |
+| kernel + other | 410,576,459 | 597,740,151 | 584,704,256 | 404,386,510 |
+| uptime span, s | 219.09 | 743.63 | 743.05 | 218.74 |
+| context entries | 4,604 | 7,541 | 7,496 | 4,550 |
+| hpm3, rcache read hit (ev 34) | 8,016,399 | 17,180,859 | 17,181,414 | 8,016,662 |
+| hpm4, rcache read miss (ev 35) | 1,217,980 | 101,090,815 | 101,089,340 | 1,215,010 |
+| hpm5, paged record accesses (ev 31) | 10,494,724 | 330,597,203 | 330,595,706 | 10,485,071 |
+| hpm6, fill reads (ev 37) | 3,039,798 | 216,571,136 | 216,571,113 | 3,033,115 |
+| hpm7, rcache write hit (ev 36) | 6,083,491 | 12,565,629 | 12,565,642 | 6,083,500 |
+| hpm8, L1D miss (ev 2) | 17,561,666 | 513,510,924 | 513,504,436 | 17,534,116 |
+
+**Against the pre-registration.**
+- Answers: all four commands rc 0 with `suns.out`'s sha256.
+- Repeat rule: in-context 0.05 % (u) and 0.01 % (p), so the in-context cost is read. Kernel + other repeats at 1.53 % and
+  2.23 %, above the 2 % rule, so its cost (+45.1 %) is not read; on P1 it was not read either.
+- Counters fire: hpm3 + hpm4 > 0 in both protected commands. ev31 − ev35 − ev37 is 6,236,946 / 12,935,252 / 12,935,253 /
+  6,236,946, all ≥ 0. The event readings stand.
+- **In-context cost: +260.21 %** (+12.90 G per protected command), against P1's +208.08 % (+10.22 G). That is in the
+  **≥ +170 % band: the record cache does not remove Perl's cost.** The two costs come from different boards (P1's from
+  board 1, this one from board 2) and different bitstreams.
+- **The prediction missed on both counts.** The cost, +260.2 %, is above the predicted +120 % to +230 %. The read hit
+  rate, hpm3 / (hpm3 + hpm4), is 14.53 % in both protected commands, just below the predicted 15 % to 50 %.
+- Stock arm: 4.957 G against P1's 4.914 G, +0.88 %, inside ±1 %. Reported only.
+- Duration: the unprotected commands took 3.6 min and the protected ones 12.4 min, just over the 3-12 min stated.
+
+**What the counters show, not attributed.**
+- B5a's protected command runs 2.72 G cycles (+18.0 %) longer than P1's, from the same images, workload and command line.
+- B5a's protected command makes 101.1 M record-cache read misses and 216.6 M fill reads, 2.14 fill reads per miss.
+- Protected, B5a's ev31 reads 330.6 M where P1's read 131.2 M, and its L1D misses read 513.5 M where P1's read 274.8 M.
+  Stock, the same events read 10.5 M against 15.5 M and 17.5 M against 14.5 M.
+- P1's record-TLB miss and walk-cycle events are not in B5a's set, so the walk itself is not compared.
+- So this boot does not say which of the fill reads, the extra L1D misses or anything else makes up the +2.72 G. Whether
+  ev31 counts the same accesses on both bitstreams is not checked here.
+
 ### Results: speedtest1, PostgreSQL and CREVOKE chains on P1 (board 2, 2026-11-17 17:24-19:22)
 
 **Configuration.** As pre-registered (0a57804ea778; SPEC-lane Addendum 160, spec-silicon f7e660db383b). Board 2 was
