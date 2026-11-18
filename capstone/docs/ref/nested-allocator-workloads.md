@@ -1579,3 +1579,943 @@ folder under `fpga-repros/`, and the hardware side gets one link.
 **Not run.** On 15 Nov evening the lead paused the nested work for the final SPEC test run, before this boot started
 (its chain had only waited for the board). The stage, its checksums, the stubbed dry runs and the twin control remain,
 so the boot can run as written when the work resumes.
+
+## Re-timing on P1 (paged lifetime table)
+
+### Pre-registration: speedtest1, PostgreSQL, CPython and CREVOKE chains on P1 (written 2026-11-17, before the boots)
+
+**Question.** The same two arms as on F (the sublet processor in both; the application's lifetime patch applied or not)
+on bitstream P1, whose lifetime table is paged and reached through a 16-entry record TLB. What does each protection cost
+there, and how does CREVOKE scale when a subtree's records span more pages than the record TLB holds?
+
+**Which patches, and why not Fig. 10's.** The images are the F images, unchanged: SQLite memsys5 + lookaside, CPython
+0014 `6c2c170e…`, PostgreSQL 0003 `657c0e1f…` (Q-15-repaired). Fig. 10's reuse rows (llvm-capstone 5060011844e, tree
+trap/eval ed8cc375c2) use later revisions, CPython 0014 `fc63552d…` and PostgreSQL 0003 `65580ed3…`. Those call
+`capstone_cap_release`, a CREVOKE with the object alone (`.insn r 0x5b, 0x1, 0x52, x0, obj, x0`; ed8cc375c2
+`capstone/runtime/include/capstone/capability.h:67`), the QEMU model's ISA. P1's CREVOKE takes rs1 = parent and
+rs2 = child, and raises UNEXPECTED_OPERAND when rs2 is not a capability (capstone-ariane d83d3a633
+`core/anvil_build/capstone_dyn_unit.anvil:303-330`). So Fig. 10's patches cannot run on P1. The SPEC lane chose these
+variants; the rows say they are not Fig. 10's revisions.
+
+**Configuration.**
+- Bitstream P1 `…-tagoverlap6c-pagedtbl_d83d3a633` (sha256 `dc411e36…`), board 2, kit bkit91
+  (`bkit91-k2n-native-p1-tree-cscfix`). Flashed by the chain if not resident, the seal's sha256 checked first and the
+  resident name read back after.
+- The kit's firmware sets the counters for the paged table (`CAPSTONE_HPM_EVENTS_PAGED`, `sbi_hart.c:99-108`):
+  hpm3 = event 29 (record-TLB miss, a walk started), hpm4 = 30 (walk cycles), hpm5 = 31 (record accesses in paged
+  mode), hpm6 = 33 (cause-30 grow), hpm7 = 23 (verdict-cache miss replays), hpm8 = 2 (L1D miss). F's L1I, DTLB,
+  mispredict and issue-stall counters are not on this kit.
+- Stages `nested/p1/<name>`, made by bkit91's `make-train-stage.sh` around each F boot's `train/` directory, which is
+  byte-identical to F's (`diff -r`); only the kit's smoke differs. Checksums `nested/p1/<name>.SHA256SUMS`: st1
+  `8448689f…`, pg `ccdbfbdd…`, crvt `81b6a7f1…`, cpy-u1/u2 `2d27c6b4…`, cpy-p1/p2 `585e2049…`.
+- Images: speedtest1 `817b1652…` / `945fb69f…`; PostgreSQL `pg_unprot.xz` `26a9511f…` / `pg_prot.xz` `194d7fec…` (they
+  unpack to F's `1ea084ab…` / `4cc5f247…`); CPython `b0b29e89…` / `eabba900…`.
+- Boots, in this order, one board:
+  1. `st1`: speedtest1 `--size 1`, U P P U in one boot, budget 900 (x4 = 3,600 s);
+  2. `pg`: PostgreSQL, U P P U in one boot, budget 2700 (10,800 s; F's boot took 86 min);
+  3. `crvt`: CREVOKE chains (below), budget 900;
+  4. `cpy-u1`, `cpy-p1`, `cpy-p2`, `cpy-u2`: CPython, one arm per boot, budget 3600 each.
+- Read by the F parsers (`stage-gen/parse.py`, `pg/parse-pg.py`, `cpy/parse-cpy.py`), with hpm3..8 relabelled as above.
+
+**CREVOKE chains (`crvt`, new domain `crvtime` `b7b4af35…`, source `crvt/crvtime.c` `6bc727e4…`; stage maker
+`crvt/make-stage-crv4.py`).** One process per command, the cycle counter as on F:
+- probes: `control`, `readclock` with cycle and mcycle, and `readclock` with `CRVT_HPM=1`. If hpmcounter3 reads from
+  the domain, the chain commands read it and hpmcounter4 around the CREVOKE;
+- contiguous, as on F: a chain of 1,000, 10,000 and 100,000 nodes, then one CREVOKE of it;
+- scattered: 16,384 siblings (64 record pages; 102,400 and 400 pages for the largest) are derived, then revoked one by
+  one page-strided, so the LIFO free list hands out records a page apart. Then a chain of 1,000, 10,000 or 100,000
+  nodes is built on them, and one CREVOKE of it;
+- last, the probe toward 10^6 nodes, with progress lines every 65,536.
+- Twin (qemu55, flat table, run `ncrv-c4`): every command returns, and the probe dies after 196,609 nodes, as on F.
+  The twin's cycle counts are instruction-based and its table is flat, so it shows only that the commands run.
+
+**Outcomes and bands.**
+- Applications:
+  - answers equal to the reference in every command, else that boot is VOID for the cost;
+  - the repeat rule as on F: within 1 % `run_cycles` and 2 % `between_cycles`, or that difference is not read;
+  - in-context cost, protected vs not: speedtest1 +0.5 % to +5 %; PostgreSQL +3 % to +25 %; CPython, the benchmarks
+    read, summed, +3 % to +25 %. The bands are wide on purpose: on F the protected arms' peak live records (398, 105,043
+    and 76,767) stayed in the flat table, and here every record-TLB miss costs a three-read walk;
+  - record-TLB misses (hpm3) per command: more in the protected arm than in the unprotected arm, for each application.
+- CREVOKE:
+  - contiguous, per node: 15 to 60 cycles for 10,000 and 100,000 nodes (F: 27.9 and 28.2);
+  - scattered, per node: more than contiguous at the same N, predicted 40 to 400 cycles at 10,000 and 100,000;
+  - the scatter took only if the scattered CREVOKE's record-TLB misses are at least 4 times the contiguous one's at the
+    same N. If they are not, or hpmcounter3 cannot be read, the scattered rows are reported as chains on churned
+    records, not as scattered;
+  - the 10^6 probe: not predicted. The paged table can grow (event 33), so it may reach 10^6. The reading is the count
+    reached and whether the process died.
+- **VOID**, as on F: `b0-stats` or `b0-hello` fails, or the smoke fails beyond the kit's waiver.
+
+**Deadline.** The SPEC lane uses P1 rows that land by 2026-11-18 14:00 +08. Until then the paper appendix carries the
+F rows, marked as the dev-era patches on bitstream F.
+
+### Pre-registration addendum: a second session on boards 1 and 3 (written 2026-11-17 evening, before these boots and before board 2's PostgreSQL result)
+
+The SPEC lane offered two more board slots tonight. Both run on P1 with bkit91, with stages made as above
+(`nested/mk-p1s2-stages.sh`, F's byte-identical `train/` inside bkit91's smoke; checksums `nested/p1s2/<name>.SHA256SUMS`).
+- **Board 1**, after the SPEC lane's x264 run (wait pid 40534). The chain flashes P1 from the matched-baseline
+  bitstream, with the seal check and readback.
+  1. `ff`: FFmpeg, U P P U, then `fp` (the protected flipped-input control); F's `f2-stage` train, budget 900. Checksums
+     `a5e54049…`; images `ff_unprot.xz` `d92e0113…`, `ff_prot.xz` `1afff123…`, `ff_prot_flip.xz` `8ef6bcc0…`.
+  2. `pg2`: PostgreSQL, a second U P P U session; the same stage as `pg` (`ccdbfbdd…`), budget 2700.
+- **Board 3**, after the SPEC lane's embedded-suite chain (wait pid 403643); it is already on P1.
+  `cpy2-u1`, `cpy2-p1`, `cpy2-p2`, `cpy2-u2`: a second CPython session, one arm per boot, the same stages as
+  `cpy-*` (`2d27c6b4…` u, `585e2049…` p), budget 3600 each.
+
+**Reading rule for two sessions.** Each session is read on its own pairs by the 1 % / 2 % rule. A cost is reported for
+each session that passes. When both sessions of an application pass, its reading is the mean of the two sessions' ABBA
+means, with both shown. A session that fails is reported as not read, and its runs are never pooled with the other
+session's. For CPython the rule applies per benchmark, as before.
+
+**Bands.** PostgreSQL and CPython: as for the first P1 session. FFmpeg, as on F: every command decodes 300 frames equal
+to stock's framemd5, `fp` decodes 300 frames with at least one different (else the comparison stops); in-context cost
+-1 % to +1 %; event 23 (hpm7 on this kit), protected minus not, under +10,000 per command.
+
+### Pre-registration: the protected tshark with a heartbeat on P1, one boot (written 2026-11-17 23:25, before the boot)
+
+**Question.** On P1, does the protected tshark complete, and if it does not, is it slow (A), stopped while the kernel
+runs (B), or stopped with the core or kernel (C), and at which frame? This is M-16's open question on a different
+lifetime table: F's flat table against P1's paged one (4 KiB pages of 256 records, a 16-entry record TLB, a three-read
+walk, and a table that grows on cause 30).
+
+**Configuration.**
+- P1 `…-tagoverlap6c-pagedtbl_d83d3a633`, kit bkit91, board 1. The chain `nested/p1ts/p1ts-b1.*` waits for this lane's
+  pg2 chain (pid 886911); board 1 is already on P1, read back by name before the boot. One boot, the protected arm only.
+- Stage `nested/p1ts/tsph` (`tsph.SHA256SUMS`): bkit91's `make-train-stage.sh` around the heartbeat stage's `train/`
+  (`nested/tshark/board/t-ph-stage/train`), copied unchanged (a file-for-file sha256 diff is empty).
+  - Image `bcc251f3…`, the same as F's protected boots: wmem patch 0001, the dev-era revision with the Q-15 repair,
+    which calls the two-operand CREVOKE. A census of the image finds no CREVOKE word with rs2 = x0 and 11 with rs2 != x0.
+    Fig. 10's wmem revision, which calls one-operand `capstone_cap_release`, cannot run on P1.
+  - The same capture (9,000 frames), command line and 60 s heartbeat as the F pre-registration above.
+  - This is not Fig. 10's workload (tshark over 169 test captures). The appendix row says so.
+- Rung budget 1800, which the kit's x4 makes `BAKED_TIMEOUT=7200`; the idle limit is the same. The list line is
+  `tsph 1800 130`.
+- Read by `tshark/hb-frames.py` against `wl/ref1000.out` (stock, sha256 `056c1f8c…`) and by `tshark/parse-ts.py` if the
+  command returns.
+
+**Checked off the board** (rule 8; `nested/p1ts/recheck-ts.sh`, output `nested/p1ts/tsph-recheck/`):
+- The real bake on bkit91 returned 0.
+- Two kit `BOARD_STUB=2` runs returned 0: F's heartbeat synthetic transcript that returns, and the one that does not
+  (both carry `@@HB` lines). Both print `BAKED_TIMEOUT=7200`.
+- The real firmware build is 23,760,392 B (sha `b946125b…`), under the cap.
+- An `NR_DRY=1` pass of the chain.
+- Twin control `nts-p1hb2` (the staged `train/` itself, slot 28, twin kernel `perf/natio/images`, flat-table model):
+  returned rc 0 in 8.25 s of command uptime, output equal to stock (`056c1f8c…`, 1,140,005 lines, 9,000 frames).
+  With a 60 s period it printed no beat inside the command; F's twin control `nts-hb` (period 1) showed the beats. The twin models neither P1's paged table nor F's, so it shows only that the stage runs.
+
+**Outcomes:** A, B, C, "not read" and VOID exactly as in the F heartbeat pre-registration above. In addition:
+- **A with a return inside 7,200 s:** the output must equal stock's. The uptime span against F's unprotected mean
+  (1,118 s) and the counters give the slowdown. This is one boot, so it is not the cost. If it does return, a U P P U
+  comparison follows when a board is free.
+
+**Prediction.** Not predicted. On F the two protected boots gave no output for at least 3,327 s. The record table is the
+part of the core that P1 changed most, so P1 may complete, or it may stop as F did. If it stops, the frame and B
+against C are the readings. If it completes, M-16 is narrowed to F's table, not fixed: no root cause is claimed from
+this boot.
+
+**What follows.**
+- A: the time is reported, and the U P P U comparison is scheduled.
+- B or C: the frame reduces the capture for a folder under `fpga-repros/`; the appendix row reads "does not complete
+  on P1, M-16".
+
+## Appendix D completeness on P1: mruby, PHP, Perl and memcached
+
+These four were not timed on silicon before. Each runs on P1 (`…-pagedtbl_d83d3a633`, kit bkit91) with the design of
+the P1 sections above: stock against the lifetime patch, U P P U, the same counters, the same repeat rule (1 %
+`run_cycles`, 2 % `between_cycles`, else not read). **Every patch is the dev-era two-operand revision**, not the one on
+native-kernel-new-qemu (5060011844e) that Fig. 10 used: Fig. 10's revisions call the one-operand
+`capstone_cap_release` (and memcached's CRENEW), which P1 does not implement. Every image is a virtual-profile domain
+compiled and linked through the FRCDKMS SDK (`perf/cclever/arms/FRCDKMS/sdk`, llvm-c9, the F/P1 flags), as the
+CPython, PostgreSQL and FFmpeg images were. Stages are made by `nested/appd/make-abba-stage.py` (one boot, the four
+commands in order, a fresh tmpfs per command, the arm's image staged as given) and read by `nested/appd/parse-abba.py`
+(the normalised output's sha256 against the native reference) and `nested/p1/abba.py`.
+
+### Pre-registration: mruby on P1, both arms in one boot (written 2026-11-17 23:55, before the boot)
+
+**Configuration.**
+- mruby 4.0.0-rc2 (pin 9d523e2f), built by the compiler lane (llvm-capstone `appd-native-images` c839ecfb2add, from
+  dev 83f60f4660cb; `perf/appd/mruby/build.sh`). Stripped images: stock `9d61ccdd…`, protected `67217aa5…` (full
+  `081a8f55…` / `de2f200f…`).
+  - Protected: patch 0008 `gc-slots-as-sublet-lifetimes`, dev's revision (blob `1541cee2`) **with this lane's Q-15
+    repair** (blob `15c05a92`, `nested/appd/mrb-q15/0008-q15.patch`), live under `-DMRB_CAPSTONE_SUBLET`.
+    - Why the repair: the dev revision's protected image faulted on the twin at its first heap page (cause 29 at the
+      CDERIVE in `add_heap`, vaddr 0x4ad5e; twin `nmrb-2`). Its `page->life` is 80 KiB at a 16-byte-aligned
+      address, and the compact format's granule for 80 KiB is 128 (`capstone/representable.h`), so the virtual
+      profile refuses it (Q-15).
+    - The repair makes `life` the smallest representable range around `objects`: the base rounded down into
+      `issued[]`, the end rounded up into a new 256-byte `life_pad`, and objects' offset kept in `life_skew`. Only
+      the slots' 80-byte children (exact below 4 KiB) are handed out.
+  - The port applies 0001-0003 and 0008-0010 to both arms. The stock arm's `gc.o` is byte-identical to `gc.c` with
+    0008 reversed, for the repaired 0008 too.
+  - CREVOKE census (encoding `(w & 0xfe00707f) == 0xa400105b`, 2-byte stride): protected 0 with rs2 = x0 and 8 with
+    rs2 != x0 (2 from 0008, 6 in the libc's mallocng); stock 0 and 6 (the same six).
+  - mrb_malloc sits on the libc's mallocng in both arms.
+- Workload, Fig. 10's: `mruby bm_ao_render.rb 16` (`bm_ao_render.rb` `e44efffd…`, from the same tree). The answer is the
+  PPM on stdout; native reference `cfd73bb1…` (781 bytes), the same from both arms' native builds.
+- Stage `nested/p1a/mrb` (`mrb.SHA256SUMS`): bkit91's `make-train-stage.sh` around `nested/appd/mrb/stage`, copied unchanged;, commands u1 p1 p2 u2 in one
+  boot. Board 2, after the SPEC lane's chain pid 1217768; the chain flashes P1 (board 2 is on the matched bitstream)
+  from the seal, sha256 checked, and reads it back by name. Chain `nested/p1a/b2-mrb.*`. Budget 1200 (x4 = `BAKED_TIMEOUT=4800`), booking 70 min.
+- Checked off the board: real bake, `BOARD_STUB=2` on a returning and a non-returning transcript (both rc 0, both
+  print 4,800), real firmware 19,566,088 B (`c52a7e42…`), and an `NR_DRY=1` pass of the chain.
+- Twin control `nmrb-3` (slot 28, `perf/natio/images`, flat-table model): all four commands rc 0 with the native PPM,
+  4.4-4.5 s each. In-context u1 / p1 / p2 / u2 = 4,384.1 / 4,455.9 / 4,455.9 / 4,384.1 M, **+1.64 %**, repeats 0.00 %.
+
+**Outcomes and bands.**
+- Answers: every command's PPM equals the native reference, else VOID for the cost.
+- Repeat rule as above.
+- In-context cost, protected vs not: +0.5 % to +10 % (the twin's +1.64 % times the 1.9 to 3.5 silicon-to-twin cost
+  ratios of PostgreSQL, CPython and speedtest1 on P1, widened).
+- Duration: 6 to 14 min per command (the twin's in-context x 2.3 to 4.5, at 25 M cycles/s).
+- Record-TLB misses (hpm3): more in the protected arm.
+- **VOID** if `b0-stats`, `b0-hello` or the smoke fails beyond the kit's waiver.
+
+### Pre-registration: memcached on P1, an in-process driver, two boots (written 2026-11-18 00:20, before the boots)
+
+**Why a driver.** The native route refuses memcached's server by design: `native-syscall-table.c` lists `socket`,
+`socketpair`, `bind`, `listen`, `connect`, `sendto`, `setsockopt`, `shutdown`, `epoll_create1`/`epoll_ctl`, `eventfd2` and
+`timerfd_*` as NS_REFUSE, and there are no threads. So this row runs **memcached 1.6.45's own item and slab code in one
+process, not the server**: `items.c` (unchanged, through `nested/mc/driver/items_tu.c`), `slabs.c`, `assoc.c`, the hash
+functions and `cache.c`, with libevent's types, the mutexes, the condition variables and the thread starts stubbed
+(`nested/mc/driver/`). No socket, thread or event loop is built.
+
+**Configuration.**
+- Driver `nested/mc/driver/mcdrv.c`, built by `nested/mc/build-mcdrv.sh` through the FRCDKMS SDK with the F/P1 flags.
+  - The command stream is Fig. 10's mc-crusher mix (`experiments/study/reuse-hooks/memcached/mc-crusher-established.conf`
+    at 5060011844e): 16 connections, per prefix a:/b:/c:/d: one set and three get connections, values 100 / 500 /
+    2,000 / 8,000 bytes, 10,000 keys drawn zipf(0.25), pipelines of 4, 15,000 commands per connection, 240,000 in all,
+    a fixed seed. A set follows `do_store_item`'s NREAD_SET path; a get is `item_get` then `item_remove`; one `cache.c`
+    read buffer per pipeline; one LRU maintainer pass every 256 commands.
+  - Settings are `settings_init`'s with `-o slab_automove=0` and `-m` from argv[1].
+  - It prints the stream's hash, a CHECK line (hits, misses, set failures, value-integrity failures, items, slab
+    allocations, evictions) and ends `MCDRV-END rc=0`. The answer is the stream hash, `set_fail=0` and `bad=0` (the
+    other CHECK fields are layout-dependent).
+- Arms: stock = patches 0001-0005; protected = + 0006 `slabs-and-cache-sublet-lifetimes` (dev's revision, blob
+  `311a14e7`, two-operand) **with this lane's Q-15 repair**: under `MC_CAPSTONE_SUBLET` the cache's buffer size, the slab
+  class sizes, a page's generation length and a page's own length go through `capstone_repr_round`, so every CDERIVE is
+  exact (`nested/mc/src-prot` against `src-prot-0006`). Without it the protected driver faulted on the twin at its first
+  `cache_alloc` (cause 29: 16,400 bytes is not a multiple of its granule, 32; twin `nmc-1`). `diff -rq src-stock
+  src-prot` lists only the four files 0006 touches.
+- Images: stock `02cc0e9a…` (full `96680334…`), protected `df5744e2…` (full `0ce78f23…`). CREVOKE census: stock 0 with
+  rs2 = x0 and 6 with rs2 != x0 (mallocng); protected 0 and 11 (5 from 0006).
+- **Two boots, one chain** (`nested/p1a/b2-mc.*`, stages `nested/p1a/mc128` and `mc32`, bkit91 wraps of `nested/appd/mc128` and `mc32`), board 2 after this lane's mruby chain:
+  1. `mc128`: `-m 128`, **the reading**. Nothing is evicted in either arm, so both arms do the same work: on the twin
+     both read 88,691 hits, 0 evictions and 30,360 items.
+  2. `mc32`: `-m 32`, Fig. 10's setting. 0006 adds `sublet_parent` to the item header, and the Q-15 repair rounds the
+     class sizes, so the protected arm holds fewer items and evicts more: on the twin the protected arm reads 53,506 hits and 29,807 evictions against 57,586 and 27,108, and its in-context cycles are 2.41 % fewer. **The arms do different
+     work here**, and the row says so; it is reported, not read as the cost.
+  - Each: u1 p1 p2 u2 in one boot, budget 900 (x4 = 3,600 s), booking 50 min.
+- Twin controls `nmc128-1`, `nmc32-1`: all commands rc 0 with the native normalised output. `mc128` in-context
+  3,177.9 / 3,180.9 / 3,180.9 / 3,177.9 M, **+0.10 %**, kernel +6.9 %.
+- Natively the protected driver makes 120,065 CDERIVE and 105,188 CREVOKE per run at `-m 32`.
+
+- Checked off the board, for every stage: real bake, `BOARD_STUB=2` on a returning and a non-returning transcript (rc 0, the budgets printed as registered), real firmware (19,566,088 B), and an `NR_DRY=1` pass of the chain (`nested/p1a/b2-mc.*`).
+
+**Outcomes and bands.**
+- Answers: stream hash, `set_fail=0` and `bad=0` in every command, else VOID for the cost.
+- Repeat rule as above.
+- `mc128` in-context cost, protected vs not: -1 % to +3 %.
+- `mc128`: the hit, miss, eviction and item counts equal between the arms (read from the CHECK lines).
+- Duration: 5 to 10 min per command.
+- **VOID** as above.
+
+### Pre-registration: PHP on P1, both arms in one boot (written 2026-11-18 00:15, before the boot)
+
+**Configuration.**
+- PHP 5.0.0, built by the compiler lane (llvm-capstone `appd-native-images` 1ab971367ac4, from dev 83f60f4660cb;
+  `perf/appd/php/build.sh`, `build-virtual.sh realphp` with the FRCDKMS SDK and the F/P1 flags at -O2). **One image for
+  both arms**, `php-nested.strip.dom` `d63abbc5…` (full `1ec91755…`), with `zend-alloc/sublet` patch 0001 (blob
+  `a0274b91`) and `zend-cap-mode.c` (blob `2851e112`, dev's revision: `heap_end(block, ptr)`, the two-operand CREVOKE).
+- **The arms are run-time modes of that one image** (`PHP_CAP_MODE`, read from the environment; the image aborts if it
+  is unset, and prints its mode to stderr):
+  - not protected, **mode 4**: blocks returned to mallocng, and the caller handed a SHRINKed copy of the block over the
+    bound (`zend-cap-mode.c:150-155`);
+  - protected, **mode 6**: the same block geometry and the same bound, the caller handed a CDERIVE child
+    (`heap_issue`), ended at efree by `heap_end(block, ptr)`.
+  - So the arms differ in the lifetime alone. This is **not Fig. 10's pairing**: Fig. 10's stock arm was a second,
+    pristine binary (`php-stock` `13d187b0…` here), which also differs in block geometry. The row says so.
+- CREVOKE census: the image has 0 with rs2 = x0 and 7 with rs2 != x0 (1 in `zend_cap_reclaim`, 6 in mallocng).
+- Workload: Fig. 10's pinned tenth of bench.php (`bench-tenth.php` `6b9fc8f9…`, Fig. 10's own bench.php hash), run as
+  `php -n bench10-check.php`, where `bench10-check.php` (`655fd6d4…`) differs from it in one line (end_test's
+  `ob_end_clean()` is `ob_end_flush()`) so that every test's result is printed. The answer is the output with the
+  timing column stripped (`sed -E 's/ +[0-9]+\.[0-9]{3}$//'`): native reference `8f692e64…` (two native runs identical).
+  The printed results add a little output work to both arms.
+- Stage `nested/p1a/php10` (bkit91's wrap of `nested/appd/php10/stage`), u1 p1 p2 u2 in one boot. Board 2, after this
+  lane's memcached chain. Budget 2400 (x4 = 9,600 s), booking 120 min.
+- Twin control `nphp10-1`: four commands rc 0 with the native normalised output; the domain printed `ZEND_CAP_MODE 4
+  … revoke=0` and `6 … revoke=1`. In-context 8,765.5 / 8,779.2 / 8,779.2 / 8,765.5 M, **+0.16 %**, repeats 0.00 %. In
+  the smaller bench100g twin (`nphp-1`) the protected arm issued and revoked 364,388 children per run.
+
+- Checked off the board, for every stage: real bake, `BOARD_STUB=2` on a returning and a non-returning transcript (rc 0, the budgets printed as registered), real firmware (19,566,088 B), and an `NR_DRY=1` pass of the chain (`nested/p1a/b2-php.*`).
+
+**Outcomes and bands.**
+- Answers: every command's normalised output equals the native reference, else VOID for the cost.
+- Repeat rule as above.
+- In-context cost, protected vs not: -1 % to +3 % (the twin's +0.16 % is the smallest of these applications; on P1 the
+  others ran 1.9 to 3.5 times their twin cost).
+- Duration: 13 to 26 min per command (the twin's in-context x 2.3 to 4.5 at 25 M cycles/s).
+- **VOID** as above.
+
+### Pre-registration: Perl on P1, both arms in one boot, a 2^20-record table (written 2026-11-18 00:35, before the boot)
+
+**Configuration.**
+- Perl 5.36.3 built for the native route by this lane (`nested/perl/build-arms.sh`: the port's `build-perl-domain.sh`
+  with its virtual SDK build replaced by the FRCDKMS SDK, the F/P1 flags at -O2; perl-cross c2d8f8b7027e; the release
+  tarball `f2a1ad88…`). Stripped images: stock `3012f392…`, protected `ac2507d3…` (full `1a768a52…` / `2ba4dd05…`).
+  - Protected: `perl/sublet` patch 0001 `sv-heads-as-sublet-lifetimes` (dev's revision, blob `72db9236`, two-operand
+    `capstone_cap_revoke_child`), selected by the port's `PERLD_SUBLET=1` (`-DPERL_CAPSTONE_SUBLET`). The two arms'
+    `config.sh` differ only in that define and its include path.
+  - CREVOKE census: stock 0 with rs2 = x0 and 6 with rs2 != x0 (mallocng); protected 0 and 9 (3 in `Perl_sv_replace`,
+    `Perl_sv_clear` and `Perl_sv_free2`).
+- Workload, Fig. 10's: SPEC CPU2017 500.perlbench_r train `suns.pl` (`7545b37d…`, with `WORDS` `f32a0a4b…`), run as
+  `PERL_HASH_SEED=0 perl -I. -I./lib suns.pl`. The answer is stdout against SPEC's `suns.out` (`01688ea0…`). suns.pl
+  loads no module (a native `%INC` dump), so the stage carries suns.pl and WORDS without the lib tree.
+- **The record table.** At bkit91's `node_flat_records=262144` the protected arm cannot run: on the twin it ends with
+  cause 30 (node exhaustion) in both protected commands (`nperl-1`). The peak is bracketed on the twin's table model: the protected arm still ends with cause 30 at 327,680 records (`nperl-320k`) and completes at 393,216 (`nperl-384k`), 655,360 (`nperl-640k`) and 1,048,576 (`nperl-1m`), so its peak lies between 327,680 and 393,216 records, counting the floor and the context's other lifetimes. So this boot runs a copy of the kit,
+  `nested/kits/bkit91-rec1m`, which differs from bkit91 in one word of `board.env` (`node_flat_records=1048576`; `diff -r`
+  shows only that line), and **both arms run under it**. The tree build grows the table up to that ceiling
+  (`capstone_vm.c:362-364, 887-905`); 2^20 is the module's own default (`:415`). The row says: the record table is
+  configured for 2^20 records for this program, because the default 262,144 is exhausted by its peak of 327,680 to 393,216 live records.
+- Stage `nested/p1a/perl` (the rec1m kit's wrap of `nested/appd/perl/stage`), u1 p1 p2 u2 in one boot, images
+  xz-compressed in the stage. Board 1, after this lane's tshark heartbeat chain (pid 1526065); board 1 is on P1, read back
+  by name. Chain `nested/p1a/b1-perl.*`. Budget 900 (x4 = 3,600 s), booking 45 min.
+- Checked off the board: real bake on the rec1m kit, `BOARD_STUB=2` on a returning and a non-returning transcript (both
+  rc 0, both print 3,600), real firmware 23,760,392 B (`69c4d8a1…`), the stub's relinked kernel configuration carrying
+  `node_flat_records=1048576`, and an `NR_DRY=1` pass of the chain.
+- Twin control `nperl-1m` (2^20 records): four commands rc 0 with SPEC's `suns.out`. In-context 1,731.9 / 2,429.1 /
+  2,429.1 / 1,731.9 M, **+40.3 %**, repeats 0.00 %; kernel +14.5 %.
+
+**Outcomes and bands.**
+- Answers: every command's stdout equals `suns.out`, else VOID for the cost.
+- Repeat rule as above.
+- In-context cost, protected vs not: +20 % to +150 % (the twin's +40.3 %; the P1 cost ratios of the other applications
+  would put it at 75-140 %, widened down because Perl's cost may be less cache-bound).
+- Duration: 3 to 8 min per command.
+- Record-table growth (hpm6, event 33): more in the protected arm.
+- **VOID** as above.
+
+### Pre-registration: tshark on P1, U P P U without a heartbeat, one arm per boot (written 2026-11-18 02:30, before the boots)
+
+**Question.** The heartbeat boot above returned (outcome A), so the U P P U comparison it pre-registered follows. What
+does the protection cost tshark on P1? And is the heartbeat boot's long span the beat's own `wc` reading `st.out`
+(H1), or a kernel cost per frame inside tshark that grows over the run (H2)?
+
+**Configuration.**
+- P1 `…-tagoverlap6c-pagedtbl_d83d3a633`, kit bkit91, board 1. The chain `nested/p1tu/p1tu-b1.*` waits for this lane's
+  Perl chain (pid 1793373). Board 1 is on P1; the chain reads it back by name before the first boot.
+- Four boots, one arm each, in the order U P P U, as on F: `tsu-u1`, `tsu-p1`, `tsu-p2`, `tsu-u2`.
+  - The stages come from `nested/p1tu/mk-stages.sh`: bkit91's `make-train-stage.sh` around F's
+    `nested/tshark/board/t-u-stage/train` and `t-p-stage/train`, copied unchanged. A file-for-file sha256 diff is
+    empty, and the wrapper equals the heartbeat stage's. Checksums are in `nested/p1tu/<name>.SHA256SUMS`.
+  - The images are F's: `ts_unprot.xz` (`2ceb6806…`) unpacks to `2061f661…`, with 6 CREVOKE words, all rs2 != x0.
+    `ts_prot.xz` (`c1a1293f…`) unpacks to `bcc251f3…`: wmem 0001, the dev-era two-operand revision with the Q-15
+    repair, with 11 CREVOKE words, all rs2 != x0.
+  - The capture (9,000 frames) and the command line `-r w.pcap -V -n` are the heartbeat boot's. There is no heartbeat.
+  - This is not Fig. 10's workload (tshark over 169 test captures); the appendix row says so.
+- List lines `<stage> 900 60`; the kit's x4 makes `BAKED_TIMEOUT=3600`.
+- Read by `tshark/parse-ts.py` against `wl/ref1000.out` (`056c1f8c…`) and by `nested/p1/abba.py`.
+
+**Checked off the board** (rule 8; `nested/p1tu/recheck-all.sh` runs `nested/p1/recheck-p1.sh` for each stage, with
+output in `nested/p1tu/<name>-recheck/`), for each stage:
+  - The real bake on bkit91 returned 0.
+  - Kit `BOARD_STUB=2` returned 0 on a real transcript that returns: F's `t-u1` for the U stages, and the P1 heartbeat
+    boot's for the P stages. It also returned 0 on that transcript cut after `@@SPEC-BEGIN`, which does not return.
+    Both print `BAKED_TIMEOUT=3600`.
+  - The real firmware build is 23,760,392 B, under the cap.
+- `nested/p1tu/tsu-abba.py` combines the four parses for `abba.py`. On the stubs' real transcripts it reproduces F's U
+  readings. On the cut transcript it exits 2 (`NO @@SPEC-END`).
+- An `NR_DRY=1` pass of the chain reached `DONE` (`nested/p1tu/dry.log`).
+
+**Bands.**
+- Answers: every command returns rc 0 with output equal to stock (`056c1f8c…`, 1,140,005 lines, 9,000 frames).
+  Otherwise that arm is not read.
+- Repeats: 1 % `run_cycles`, 2 % `between_cycles`, per arm pair. Otherwise the difference is not read.
+- In-context cost (ABBA means): +0 % to +6 %. The twin gave +4.4 %. The heartbeat boot gave +1.5 %, but that
+  compared across two bitstreams.
+- Kernel and other: no band.
+
+**H1 against H2, decided by the protected arm's mean.**
+- H1: `between_cycles` at most 8.5 G and an uptime span at most 1,400 s. The heartbeat boot's fit predicts 6.7 G
+  (0.741 M per frame) and about 1,250 s.
+- H2: `between_cycles` at least 14 G, or a span at least 1,600 s. The heartbeat boot had 17.3 G and 1,669 s.
+- Between those, neither is decided.
+
+**Prediction.** H1. In-context +1 % to +5 %. The protected arm's kernel cycles exceed the unprotected arm's: on F
+the unprotected arm had 0.43 M per frame, and the fit gives the protected arm 0.74 M on P1.
+
+**What follows.** If read, the cost goes into the appendix-D row together with the H1/H2 outcome. If H2, the frame
+profile from the heartbeat boot reduces the capture for a folder under `fpga-repros/`.
+
+### Results: speedtest1, PostgreSQL and CREVOKE chains on P1 (board 2, 2026-11-17 17:24-19:22)
+
+**Configuration.** As pre-registered (0a57804ea778; SPEC-lane Addendum 160, spec-silicon f7e660db383b). Board 2 was
+flashed with P1 at 17:24 from the seal (sha256 checked) and read back resident by name. One chain, `nested/p1/p1n-b2.*`,
+nat-run3 pid 537579. Before it: the rule-8 recheck of every stage (`nested/p1/recheck-p1.sh`: real bake, BOARD_STUB=2
+on the stage's real F transcript and on a cut that does not return, real firmware under the 26 MB cap), and an
+`NR_DRY=1` pass of the chain. Transcripts `spec/board/out-nat-p1-nested-b2/<stage>/board.txt`: st1 `adefc453…`
+(firmware `ab7626e5…`), pg `dacb8df4…` (`6a341fd…`), crvt `c905ef59…` (`7d9789f…`). Read by the F parsers and
+`nested/p1/abba.py` (the U P P U table and the repeat rule; it reproduces the F section's figures from F's
+transcripts) and `nested/p1/crvt-read.py`.
+
+**Controls.** In every boot `b0-stats` and `b0-hello` returned 0 and the smoke passed all 9 steps. The kit's classifier
+printed NO RESULT or MALFORMED for these stages' format, as on F; every command printed `@@SPEC-END`. Not VOID.
+
+**speedtest1 `--size 1`.** 32/32 oracle phases equal to the reference in every command.
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 660,481,623 | 674,241,669 | 674,930,135 | 659,578,365 | 0.14 % / 0.10 % | **+2.21 %** (+14.6 M) |
+| `between_cycles` | 5,051,005,067 | 5,127,715,362 | 5,133,707,324 | 5,051,341,672 | 0.01 % / 0.12 % | **+1.57 %** |
+| uptime span, s | 229.32 | 232.94 | 233.20 | 229.28 | 0.02 % / 0.11 % | **+1.64 %** |
+| hpm3 record-TLB misses | 15,383 | 17,842 | 17,843 | 15,383 | | +2,460 |
+| hpm4 walk cycles | 530,390 | 431,503 | 617,533 | 508,026 | | +5 k (noisy) |
+| hpm5 paged record accesses | 75,580 | 571,807 | 571,810 | 75,579 | | +496 k |
+| hpm7 event 23 | 69,323 | 115,473 | 117,689 | 69,283 | | +47.3 k |
+| hpm8 L1D misses | 3,011,267 | 3,192,803 | 3,217,104 | 2,980,705 | | +6.97 % |
+
+The unprotected arm's record-TLB misses equal its context entries (15,383), one per entry.
+
+**PostgreSQL.** Every command gives the native answers (4 CHECK lines, 2,000 rows).
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 11,734,796,918 | 12,652,577,957 | 12,653,535,263 | 11,733,066,120 | 0.01 % / 0.01 % | **+7.83 %** (+919 M) |
+| `between_cycles` | 8,720,320,127 | 8,795,808,032 | 8,800,476,915 | 8,737,671,836 | 0.20 % / 0.05 % | **+0.79 %** |
+| uptime span, s | 821.21 | 861.29 | 861.51 | 821.82 | 0.07 % / 0.03 % | **+4.86 %** |
+| hpm3 record-TLB misses | 201,628 | 1,278,719 | 1,289,702 | 201,627 | | +1.08 M |
+| hpm4 walk cycles | 7,392,286 | 33,711,607 | 33,401,230 | 7,336,900 | | +26.2 M |
+| hpm5 paged record accesses | 1,849,553 | 30,203,048 | 30,195,876 | 1,849,558 | | +28.3 M |
+| hpm7 event 23 | 1,411,111 | 3,470,832 | 3,461,592 | 1,410,790 | | +2.06 M |
+| hpm8 L1D misses | 66,619,089 | 75,020,134 | 75,164,650 | 66,513,338 | | +12.8 % |
+
+**CREVOKE chains.** hpmcounter3/4 read from the domain (`p-hpm` rc 0), so the misses below are read around the one
+CREVOKE. `mcycle` faults (rc 139), as on F.
+
+| chain | N | CREVOKE cycles | per node | record-TLB misses | walk cycles |
+|---|---|---|---|---|---|
+| contiguous | 1,000 | 16,926 | 16.9 | 0 | 0 |
+| contiguous | 10,000 | 318,824 | 31.9 | 40 | 1,063 |
+| contiguous | 100,000 | 3,217,879 | 32.2 | 391 | 10,038 |
+| scattered (64 pages) | 1,000 | 38,868 | 38.9 | 1,001 | 6,650 |
+| scattered (64 pages) | 10,000 | 382,475 | 38.3 | 10,001 | 61,863 |
+| scattered (400 pages) | 100,000 | 3,853,815 | 38.5 | 100,001 | 611,824 |
+
+The 10^6 probe reported 65,537, 131,073 and 196,609 nodes and died (rc 139) before 262,145, with 39 grow events
+(hpm6) over the command.
+
+**Against the pre-registration.**
+- Answers, repeats, controls: **met** for both applications. Both pairs pass the repeat rule on both counters.
+- In-context cost: speedtest1 **+2.21 %**, band +0.5 % to +5 %, **met**; PostgreSQL **+7.83 %**, band +3 % to +25 %,
+  **met**.
+- Record-TLB misses, more in the protected arm: **met** for both (+16 %, and 6.4 times).
+- CREVOKE contiguous, 15 to 60 per node at 10,000 and 100,000: **met** (31.9, 32.2).
+- Scattered more than contiguous: **met** (+6.4 cycles per node at 100,000). The scatter took: the scattered CREVOKE
+  misses once per node, 256 times the contiguous count (the check needed 4). Scattered 40 to 400 per node: **missed,
+  low** (38.3 and 38.5).
+- 10^6: the count reached is 196,609; the process died before 262,145. A 10^6-node subtree cannot be built here.
+
+**Reading.**
+- PostgreSQL's in-context cost is read on silicon for the first time: +7.83 %, with repeats 0.01 %. On F the same images
+  missed the repeat rule (ABBA mean +6.67 %, not read). The walker's own cycles (+26.2 M) are 2.8 % of the +919 M, so
+  the record TLB is not where most of PostgreSQL's cost goes on P1; event 23 (+2.06 M replays) and the L1D misses
+  (+8.5 M) are larger candidates, and this boot does not attribute the rest.
+- speedtest1 costs +2.21 % in-context on P1 against +1.67 % on F.
+- A record-TLB miss costs about 6 walk cycles (611,824 over 100,001 misses), so the three dependent reads of a walk hit
+  the L1D here. A CREVOKE whose subtree's records sit on a different page at every node costs 20 % more per node than a
+  contiguous one. The worst single CREVOKE measured, 100,000 scattered nodes, holds the core for 3.85 M cycles, about
+  154 ms at 25 MHz, uninterruptible.
+
+### Results: CPython on P1, first session (board 2, 2026-11-17 19:22-21:15)
+
+**Configuration.** As pre-registered (0a57804ea778), the same chain as the section above (`nested/p1/p1n-b2.*`, nat-run3
+pid 537579), after the PostgreSQL stage. Four one-arm boots, U P P U: `cpy-u1` 19:22, `cpy-p1` 19:49, `cpy-p2` 20:18,
+`cpy-u2` 20:47. F's images unchanged: unprotected `b0b29e89…`, protected `eabba900…`. Transcripts
+`spec/board/out-nat-p1-nested-b2/cpy-*/board.txt` (sha256 `b8f310ce…`, `ef2f8b45…`, `170d24ea…`, `6406ce24…`), read by
+`cpy/parse-cpy.py` and `nested/p1/cpy-abba.py`. The analyzer was F's, which read event 23 from hpm8; on P1 hpm8 counts
+L1D misses and event 23 is hpm7, and it was corrected before this reading.
+
+**Controls.** In every boot `b0-stats` and `b0-hello` returned 0 and the smoke passed all 9 steps under the kit's
+waiver (the two accounting checks); all seven commands printed `@@SPEC-END`. Not VOID.
+
+**Answers.** 28 of 28 commands exit 0 with CHECK equal to native.
+
+| benchmark | in-context, not protected (mean) | `run_cycles` repeats u / p | `between_cycles` repeats u / p | **in-context cost** | kernel cost | hpm3 record-TLB misses, u / p | hpm7 event 23, p − u |
+|---|---|---|---|---|---|---|---|
+| json_dumps | 1,435.1 M | 0.05 % / 0.02 % | 0.24 % / 0.10 % | **+7.40 %** | +0.58 % | 18,910 / 145,744 | +723,746 |
+| json_loads | 1,303.0 M | 0.06 % / 0.03 % | 0.21 % / 0.01 % | **+6.46 %** | +0.40 % | 19,472 / 183,556 | +744,244 |
+| pickle | 1,217.1 M | 0.01 % / 0.03 % | 0.27 % / 0.09 % | **+5.01 %** | +0.67 % | 21,908 / 178,226 | +799,672 |
+| richards | 7,349.7 M | 0.02 % / 0.04 % | 0.10 % / 0.13 % | **+2.70 %** | +0.68 % | 28,172 / 676,478 | +1,741,838 |
+| deltablue | 1,319.9 M | 0.02 % / 0.08 % | 0.06 % / 0.23 % | **+4.54 %** | +0.46 % | 21,188 / 170,412 | +778,012 |
+| regex_v8 | 3,325.6 M | 0.15 % / 0.11 % | 0.06 % / 0.36 % | **+5.32 %** | +0.76 % | 42,536 / 275,124 | +930,196 |
+| nbody | 7,118.3 M | 0.02 % / 0.15 % | 0.20 % / 0.00 % | **+3.90 %** | +0.76 % | 23,960 / 167,274 | +1,426,855 |
+
+All seven pass the repeat rule, so all seven are read (on F richards was not). Summed over the seven:
+
+| | not protected | protected | protected vs not |
+|---|---|---|---|
+| in-context (`run_cycles`) | 23,068.8 M | 24,033.3 M | **+4.18 %** (+964.5 M) |
+| kernel and other (`between_cycles`) | 2,862.4 M | 2,880.3 M | +0.63 % |
+| uptime span | 1,051 s | 1,091 s | +3.78 % |
+| hpm3 record-TLB misses | 176,148 | 1,796,816 | x10.2 |
+| hpm4 walk cycles | 6.40 M | 40.83 M | +34.4 M |
+| hpm5 paged record accesses | 2.60 M | 54.27 M | +51.7 M |
+| hpm6 table grows (cause 30) | 1 | 19 | +18 |
+| hpm7 event 23 | 823,383 | 7,967,946 | **+7.14 M** |
+| hpm8 L1D misses | 58.08 M | 68.57 M | +18.1 % |
+
+Over F's six (without richards), for comparison with F: +4.87 % in-context (+766.0 M), against F's +5.17 % (+877.6 M).
+
+**Against the pre-registration.**
+- Answers: **met**, 28/28. Controls: **met**.
+- Repeats: **met** for all 14 pairs on both counters (largest 0.15 % `run_cycles`, 0.36 % `between_cycles`).
+- In-context cost, the benchmarks read, summed: **+4.18 %**, band +3 % to +25 %, **met**.
+- Record-TLB misses, more in the protected arm: **met** for every benchmark (6.5 to 24 times).
+
+**Reading.**
+- CPython's in-context cost on P1 is +4.18 % over all seven, each read, +2.7 % (richards) to +7.4 % (json_dumps).
+- The paged table's walker is a small part of it: +34.4 M walk cycles are 3.6 % of the +964.5 M. Event 23 at 17-20
+  cycles per replay explains 12.6-14.8 %, about the share it had on F (10.5-12.3 % over six). L1D misses rise 18 %. As
+  on F and for PostgreSQL here, most of the cost is not attributed by these counters.
+- The unprotected arm runs 7.4 % fewer in-context cycles on P1 than on F over the same six (15,719 M against
+  16,983 M), so P1's cost sits on a smaller base. The two bitstreams differ in more than the table, and this run does
+  not separate which difference moved the base.
+
+### Results: CPython on P1, second session, and the two sessions together (board 3, 2026-11-17 20:28-22:20)
+
+**Configuration.** As in the session-2 addendum above (858ddee10a4f; SPEC-lane Addendum 161, spec-silicon
+35a7194b03da). P1 was already resident on board 3 and read back by name, so there was no flash. One chain,
+`nested/p1s2/p1s2-b3.*`, nat-run3 pid 860657, after the same rule-8 recheck. Four one-arm boots, U P P U: `cpy2-u1`
+20:28, `cpy2-p1` 20:56, `cpy2-p2` 21:24, `cpy2-u2` 21:53. The stages are session 1's, the same images. Transcripts
+`spec/board/out-nat-p1s2cpy-nested-b3/cpy2-*/board.txt` (sha256 `b240cdf7…`, `21ec0605…`, `ae544fa9…`, `3f193174…`),
+read by `nested/p1/cpy-abba.py` (with the `cpy2` prefix).
+
+**Controls.** In every boot `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver
+(the two accounting checks), and all seven commands printed `@@SPEC-END`. Not VOID. **Answers:** 28 of 28 commands exit
+0 with CHECK equal to native.
+
+| benchmark | in-context, not protected (mean) | `run_cycles` repeats u / p | `between_cycles` repeats u / p | session 2 cost | session 1 cost | **two-session mean** | hpm7 event 23, p − u |
+|---|---|---|---|---|---|---|---|
+| json_dumps | 1,434.8 M | 0.03 % / 0.02 % | 0.09 % / 0.42 % | +7.43 % | +7.40 % | **+7.41 %** | +722,624 |
+| json_loads | 1,302.8 M | 0.03 % / 0.01 % | 0.68 % / 0.38 % | +6.49 % | +6.46 % | **+6.48 %** | +744,004 |
+| pickle | 1,216.6 M | 0.10 % / 0.05 % | 0.11 % / 0.36 % | +5.03 % | +5.01 % | **+5.02 %** | +799,524 |
+| richards | 7,349.8 M | 0.03 % / 0.00 % | 0.34 % / 0.12 % | +2.70 % | +2.70 % | **+2.70 %** | +1,742,515 |
+| deltablue | 1,320.2 M | 0.03 % / 0.06 % | 0.12 % / 0.24 % | +4.52 % | +4.54 % | **+4.53 %** | +778,063 |
+| regex_v8 | 3,327.1 M | 0.05 % / 0.08 % | 0.08 % / 0.17 % | +5.24 % | +5.32 % | **+5.28 %** | +930,124 |
+| nbody | 7,118.9 M | 0.03 % / 0.04 % | 0.18 % / 0.25 % | +3.94 % | +3.90 % | **+3.92 %** | +1,426,605 |
+
+Summed over the seven, session 2: in-context **+4.18 %** (+965.1 M), kernel +0.66 %, wall-clock +3.79 %; record-TLB
+misses 176,114 against 1,797,613; walk cycles +34.4 M; event 23 +7.14 M; L1D misses +18.0 %.
+
+**Against the pre-registration.**
+- Answers, controls: **met**. Repeats: **met** for all 14 pairs on both counters (largest 0.10 % and 0.68 %), so every
+  benchmark is read in both sessions.
+- In-context cost summed, band +3 % to +25 %: **met**, +4.18 %.
+- Two-session rule: both sessions pass for every benchmark, so the reading is the mean of the two ABBA means. Summed
+  over the seven: **+4.18 %** (session 1 +4.181 %, session 2 +4.183 %).
+
+**Reading.**
+- On two boards, the two sessions agree to 0.08 points or better per benchmark, and to 0.002 points summed. The
+  unprotected arms' in-context cycles agree to 0.05 % per benchmark across boards. The P1 CPython figure, **+4.18 %**,
+  is reproducible at the boot-to-boot level these counters resolve.
+- The attribution is session 1's: the walker 3.6 %, event 23 12.6-14.8 %, the rest not attributed.
+
+
+### Results: FFmpeg on P1 (board 1, 2026-11-17 23:52 - 2026-11-18 00:13)
+
+**Configuration.** As in the session-2 addendum (858ddee10a4f; SPEC-lane Addendum 161). Board 1 was flashed with P1 at
+23:52 from the seal (sha256 checked) and read back by name; chain `nested/p1s2/p1s2-b1.*`, nat-run3 pid 886911. Stage
+`nested/p1s2/ff`, F's `f2-stage` train unchanged (image set w4). Transcript
+`spec/board/out-nat-p1s2-nested-b1/ff/board.txt` (sha256 `40ec2aa5…`, firmware `46facaf2…`), read by `ffmpeg/parse-ff.py`
+and `nested/p1/abba.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0 and the smoke passed all 9 steps under the kit's waiver; all five
+commands printed `@@SPEC-END` with rc 5, as on F: the decode driver's success status, `FFAPP_M5_ALL` "every frame decoded, decoder drained" (`ports/ffmpeg/app/src/shared/ffapp_decode.h:20`, set at `ffapp_decode.c:173-174` after the drain), and every command's output ends `STAGE M5 frames=300 packets=300`. The stage's `train/` equals F's `f2-stage/train` file for file. Not VOID.
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| frames equal to stock (of 300) | 300 | 300 | 300 | 300 | | |
+| `run_cycles` (in-context) | 1,663,440,646 | 1,661,793,248 | 1,663,049,013 | 1,664,390,287 | 0.06 % / 0.08 % | **-0.09 %** (-1.5 M) |
+| `between_cycles` | 79,112,595 | 79,348,369 | 78,672,314 | 78,738,866 | 0.47 % / 0.86 % | +0.11 % |
+| uptime span, s | 70.57 | 70.51 | 70.53 | 70.60 | 0.04 % / 0.03 % | -0.09 % |
+| hpm3 record-TLB misses | 1,130 | 1,128 | 1,128 | 1,130 | | -2 |
+| hpm5 paged record accesses | 118,526 | 167,252 | 167,248 | 118,527 | | +48.7 k |
+| hpm7 event 23 | 34,008 | 35,354 | 35,392 | 34,019 | | +1,360 |
+| hpm8 L1D misses | 6,729,147 | 6,729,147 | 6,728,823 | 6,727,175 | | +0.01 % |
+
+The flipped-input control fp decodes 300 frames with 3 hashes different: FIRES.
+
+**Against the pre-registration.**
+- Answers: **met**, every command matches stock's framemd5 and fp fires.
+- Repeats: **met** on both counters (largest 0.08 % `run_cycles`, 0.86 % `between_cycles`), so the difference is read.
+- In-context cost: **-0.09 %**, band -1 % to +1 %, **met**.
+- Event 23: **met**, +1,360 per command (band under +10,000).
+
+**Reading.** FFmpeg's protection is read on silicon for the first time (on F the unprotected repeats missed the rule):
+it costs nothing measurable, -0.09 % with repeats of 0.06-0.08 %. Its 3,300 lifetimes per decode add 48.7 k paged-record
+accesses and no record-TLB misses.
+
+### Results: PostgreSQL on P1, second session, and the two sessions together (board 1, 2026-11-18 00:13-01:35)
+
+**Configuration.** As in the session-2 addendum (858ddee10a4f; SPEC-lane Addendum 161), the same chain and flash as
+FFmpeg above, the boot after it. Stage `nested/p1s2/pg2`, the same stage and images as session 1's `pg` (`ccdbfbdd…`).
+Transcript `spec/board/out-nat-p1s2-nested-b1/pg2/board.txt` (sha256 `0d192aaf…`, firmware `5e70c31c…`), read by
+`pg/parse-pg.py` (`PG_REF=pg/work/nref4-main/ref.txt`) and `nested/p1/abba.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver, and all four
+commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command gives the native answers (4 CHECK lines,
+2,000 rows).
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 11,731,540,161 | 12,647,014,256 | 12,651,830,481 | 11,731,043,711 | 0.00 % / 0.04 % | **+7.83 %** (+918 M) |
+| `between_cycles` | 8,718,865,729 | 8,770,925,841 | 8,838,944,285 | 8,731,608,422 | 0.15 % / 0.78 % | **+0.91 %** |
+| uptime span, s | 821.01 | 860.06 | 862.97 | 821.49 | 0.06 % / 0.34 % | +4.90 % |
+| hpm3 record-TLB misses | 201,631 | 1,184,331 | 1,313,986 | 201,631 | | +1.05 M |
+| hpm4 walk cycles | 7,408,181 | 31,364,659 | 33,898,942 | 7,383,398 | | +25.2 M |
+| hpm5 paged record accesses | 1,849,511 | 30,180,731 | 30,197,405 | 1,849,556 | | +28.3 M |
+| hpm6 grow | 0 | 25 | 0 | 0 | | |
+| hpm7 event 23 | 1,410,942 | 3,447,424 | 3,460,509 | 1,411,749 | | +2.04 M |
+| hpm8 L1D misses | 66,598,412 | 74,977,730 | 75,172,420 | 66,679,856 | | +12.7 % |
+
+**Against the pre-registration.**
+- Answers, controls: **met**. Repeats: **met** on both counters (0.04 % `run_cycles`, 0.78 % `between_cycles`), so the
+  session is read.
+- In-context cost, band +3 % to +25 %: **met**, +7.83 %. Record-TLB misses more in the protected arm: **met** (5.9 times).
+- Two-session rule: both sessions pass, so the reading is the mean of the two ABBA means: in-context **+7.83 %**
+  (session 1 +7.833 %, session 2 +7.826 %); kernel and other **+0.85 %** (+0.79 %, +0.91 %).
+
+**Reading.**
+- On two boards, the two sessions agree to 0.007 points in-context, and the unprotected arms' in-context cycles agree
+  to 0.03 %. The P1 PostgreSQL figure, **+7.83 %**, is reproducible at the boot-to-boot level these counters resolve.
+- The first protected command grew the record table 25 times and the second none, as in session 1 (25, 0). The two protected commands' record-TLB misses differ by 11 % and their walk cycles by 8 %, while
+  their in-context cycles agree to 0.04 %: the walker's +25 M is 2.7 % of the +918 M, as in session 1.
+
+### Results: the protected tshark with a heartbeat on P1 (board 1, 2026-11-18 01:35-02:23): A, it returns with stock's output
+
+**Configuration.** As pre-registered (2475d3fb7944). The chain `nested/p1ts/p1ts-b1.*`, nat-run3 pid 1526065, waited for
+the pg2 chain. P1 was resident on board 1 and was read back by name, so there was no flash. Transcript
+`spec/board/out-nat-p1ts-nested-b1/tsph/board.txt` (sha256 `d4e0052e…`, firmware `955dadb6…`), read by
+`tshark/hb-frames.py` and `tshark/parse-ts.py` against `wl/ref1000.out` (`056c1f8c…`).
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver, and the command
+printed `@@SPEC-END` with rc 0. Not VOID.
+
+**Outcome: A.** The beats continued and the output grew through the run. The command returned rc 0 after 1,669.4 s of
+uptime (`@@SPEC-BEGIN` at 267.4 s), and its output equals stock: sha256 `056c1f8c…`, 1,140,005 lines, 9,000 frames.
+
+| beat | uptime, s | since the previous beat, s | `st.out`, MB | frame | `run_cycles` per frame in the beat | `between_cycles` per frame in the beat |
+|---|---|---|---|---|---|---|
+| 3 | 307.5 | | 1.46 | 276 | | |
+| 4 | 377.1 | 69.6 | 4.58 | 863 | 2.68 M | 0.95 M |
+| 6 | 565.0 | 102.6 | 11.96 | 2,249 | 2.70 M | 1.47 M |
+| 8 | 830.8 | 143.7 | 21.17 | 3,981 | 2.70 M | 1.89 M |
+| 10 | 1,194.0 | 195.1 | 32.69 | 6,146 | 2.71 M | 2.22 M |
+| 12 | 1,679.0 | 259.5 | 47.06 | 8,847 | 2.72 M | 2.50 M |
+
+Over the whole command: `run_cycles` 24,407 M, `between_cycles` 17,261 M, hpm3 record-TLB misses 7.16 M, hpm4 walk
+cycles 90.5 M, hpm5 paged record accesses 98.9 M, hpm6 grow 8, hpm7 event 23 11.27 M, hpm8 L1D misses 129.6 M.
+
+**Where the time went: the overrun of the heartbeat's own beats.**
+- The beats are 60 s apart by `sleep`. During the command each beat ran past its period by more, from 9.6 s at beat 4 to
+  199.5 s at beat 12. Before the command the overrun was 1.6 s.
+- The overrun grows with the size of `st.out`: 4.47 s per MB, minus 10.8 s, a linear fit over beats 4-12. The only
+  step of a beat whose work depends on that size is `wc -c < st.out`. In the shared buildroot target `wc` is busybox
+  1.36.1, whose `wc` reads every byte with `getc` (`coreutils/wc.c:166`; its header notes that the old `-c` stat
+  shortcut was removed); the kit's own rootfs was not checked.
+- Over the nine intervals between beats, the two counters fit to within 0.13 %:
+  - in-context: 2.683 M cycles per frame, constant through the run;
+  - kernel and other: 0.741 M cycles per frame, plus 12.5 M cycles per second of overrun.
+- So the in-context cost per frame does not grow as the run proceeds. The 12.5 M cycles per second of overrun over
+  4.47 s per MB come to about 56 cycles per byte of `st.out`, a plausible cost for a `getc` loop. That fits the beat
+  reading the whole output each time, charged to `between_cycles`. The beat's `$(up)` is taken before its `wc` and
+  `$(cnt)` after it, so the counters at each beat are read when its `wc` ends.
+- 12.5 M cycles per second is half the core's 25 MHz clock (PostgreSQL's U arms count 24.9 M cycles per second of
+  uptime). That is what a single core shared evenly between the beat's `wc` and tshark would show, with tshark
+  still running during the overrun. Over the whole command the two counters add to 41.67 G cycles, 1,667 s at 25 MHz,
+  so the counters cover the span. Taking out 12.5 M cycles for each second of overrun (about 833 s over beats 3-12,
+  about 10.4 G) leaves about 31.3 G, which is about 1,250 s. On the twin a 1 s beat stretched the span from 8.32 s to 11.46 s, which is consistent with this.
+
+**Against the pre-registration.**
+- A with a return inside 7,200 s: **met**, and the output equals stock's.
+- The pre-registered slowdown, the uptime span against F's unprotected mean of 1,118 s, reads **+49 %**. But this boot
+  shows that most of it is the beat's own overrun, so it is not read as the protection's cost.
+- In-context `run_cycles`, 24,407 M against F's unprotected mean of 24,036 M: +1.5 %. That compares across two bitstreams
+  in one boot, so it is not the cost either.
+
+**Reading.**
+- On P1, the protected tshark completes, with stock's output. On F, the same image gave nothing for at least 3,327 s in
+  two boots. ~~So M-16 is narrowed to F's flat lifetime table.~~ **Withdrawn 2026-11-18:** without the heartbeat the
+  protected arm did not return on P1 either ("Results: tshark on P1, U P P U without a heartbeat"). This boot
+  shows only that the protected arm can complete on P1 under a 60 s heartbeat. That is not a root cause, and nothing
+  is fixed on F.
+- The output's size grows with the frames processed, so this boot cannot by itself exclude a kernel cost per frame
+  that grows with the run; the fit and the `getc` cost favour the beat's own reads. The U P P U comparison without
+  the heartbeat, which follows as pre-registered, tells them apart and gives the protection's cost on P1. (It
+  gave no cost: one of its two protected boots did not return. See "Results: tshark on P1, U P P U without a
+  heartbeat".)
+
+### Results: mruby on P1 (board 2, 2026-11-18 01:57-02:37)
+
+**Configuration.** As pre-registered (f7b222e43189). The chain `nested/p1a/b2-mrb.*` (nat-run3 pid 1671139) waited for the
+SPEC lane's chain, then flashed P1 at 01:57 from the seal (sha256 checked) and read it back by name. Stage `nested/p1a/mrb`,
+commands u1 p1 p2 u2 in one boot. Transcript `spec/board/out-nat-p1a-mrb-b2/mrb/board.txt` (sha256 `40f83990…`, firmware
+`68c9437f…`), read by `nested/appd/parse-abba.py` and `nested/p1/abba.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver, and all four
+commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's PPM equals the native reference
+(`cfd73bb1…`).
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 10,355,627,967 | 10,785,150,505 | 10,785,737,662 | 10,355,031,358 | 0.01 % / 0.01 % | **+4.15 %** (+430 M) |
+| `between_cycles` | 143,994,494 | 145,280,458 | 144,998,140 | 142,419,166 | 1.11 % / 0.19 % | +1.35 % |
+| uptime span, s | 420.93 | 438.17 | 438.18 | 420.83 | 0.02 % / 0.00 % | +4.11 % |
+| hpm3 record-TLB misses | 415,450 | 2,279,942 | 2,279,563 | 416,178 | | +1.86 M |
+| hpm4 walk cycles | 8,768,363 | 28,381,542 | 28,293,493 | 8,748,182 | | +19.6 M |
+| hpm5 paged record accesses | 20,467,276 | 39,137,469 | 39,138,102 | 20,467,393 | | +18.7 M |
+| hpm6 grow | 1 | 2 | 0 | 0 | | |
+| hpm7 event 23 | 1,720,965 | 5,745,913 | 5,746,536 | 1,721,116 | | +4.03 M |
+| hpm8 L1D misses | 33,904,175 | 39,646,362 | 39,637,220 | 33,899,227 | | +16.9 % |
+
+**Against the pre-registration.**
+- Answers, controls: **met**. Repeats: **met** on both counters (0.01 % `run_cycles`, 1.11 % `between_cycles`), so the
+  difference is read.
+- In-context cost, band +0.5 % to +10 %: **met**, **+4.15 %**.
+- Duration, 6 to 14 min per command: **met**, 7.0-7.3 min.
+- Record-TLB misses more in the protected arm: **met** (5.5 times).
+
+**Reading.**
+- mruby's protection (patch 0008 with the Q-15 repair, the dev-era two-operand revision) costs **+4.15 %** in-context on
+  P1, against +1.64 % on the twin: a silicon-to-twin ratio of 2.5, inside the 1.9-3.5 of the other applications.
+- The walker's own cycles (+19.6 M) are 4.6 % of the +430 M. Event 23 (+4.03 M replays) and the L1D misses (+5.7 M)
+  are larger candidates; this boot does not attribute the rest.
+- This is not Fig. 10's revision of 0008 (that one calls the one-operand `capstone_cap_release`, which P1 does not
+  implement); the appendix row says so.
+
+### Results: Perl on P1, a 2^20-record table (board 1, 2026-11-18 02:24-03:04)
+
+**Configuration.** As pre-registered (ff011c64d374). The chain `nested/p1a/b1-perl.*` (nat-run3 pid 1793373) ran on the
+rec1m kit copy after the tshark heartbeat chain; P1 was resident and read back by name. The boot's kernel command line
+carries `capstone_vm.node_flat_records=1048576`. Stage `nested/p1a/perl`, still matching `perl.SHA256SUMS`; its images
+unpack to `3012f392…` (stock) and `ac2507d3…` (protected). Transcript `spec/board/out-nat-p1a-perl-b1/perl/board.txt`
+(sha256 `90101a1a…`, firmware `bf734d65…`), read by `nested/appd/parse-abba.py` and `nested/p1/abba.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver, and all four
+commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's stdout equals SPEC's `suns.out`
+(`01688ea0…`).
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 4,915,780,479 | 15,139,569,760 | 15,137,911,482 | 4,912,103,328 | 0.07 % / 0.01 % | **+208.1 %** (+10.22 G) |
+| `between_cycles` | 409,343,475 | 579,997,839 | 565,192,418 | 401,287,422 | **2.01 %** / **2.62 %** | not read (+41.3 %) |
+| uptime span, s | 217.30 | 634.11 | 633.45 | 216.84 | 0.21 % / 0.10 % | +192.0 % |
+| context entries | 4,600 | 7,262 | 7,194 | 4,550 | | +58.0 % |
+| hpm3 record-TLB misses | 691,108 | 49,445,643 | 49,445,271 | 690,378 | | +48.75 M (71 times) |
+| hpm4 walk cycles | 18,497,874 | 1,114,841,431 | 1,114,716,428 | 18,545,254 | | +1.10 G |
+| hpm5 paged record accesses | 15,471,124 | 131,204,043 | 131,202,594 | 15,468,357 | | +115.7 M |
+| hpm6 grow | 41 | 52 | 0 | 0 | | |
+| hpm7 event 23 | 1,360,181 | 101,963,779 | 101,962,474 | 1,357,428 | | +100.6 M |
+| hpm8 L1D misses | 14,518,929 | 274,831,168 | 274,799,352 | 14,505,393 | | +260.3 M (19 times) |
+
+**Against the pre-registration.**
+- Answers, controls: **met**. Repeats: **met** for `run_cycles` (0.07 % / 0.01 %), so the in-context cost is read;
+  **missed** for `between_cycles` (2.01 % and 2.62 %, band 2 %), so the kernel difference is not read.
+- In-context cost, band +20 % to +150 %: **missed, high: +208.1 %**.
+- Duration, 3 to 8 min per command: met for the stock arm (3.6 min), **missed** for the protected arm (10.6 min).
+- Record-table growth more in the protected arm: hpm6 reads 41 / 52 / 0 / 0. The table grows during the boot's first two commands
+  and then stays grown, so this counter does not compare the arms; not read.
+
+**Reading.**
+- On P1, Perl's protection (`perl/sublet` 0001, dev's two-operand revision, a lifetime per SV head) costs **+208 %**
+  in-context: the protected arm's in-context cycles are 3.08 times the stock arm's, 15.14 G against 4.91 G. On the twin it costs +40.3 %.
+  The stock arm's silicon-to-twin ratio is 2.84, as for the other applications; the protected arm's is 6.2.
+- The counters put the difference in the record table:
+  - the protected arm misses the record TLB 49.4 M times per command, against 0.69 M (71 times);
+  - it makes 131 M paged record accesses against 15.5 M;
+  - it takes 260 M more L1D misses, 19 times the stock arm's 14.5 M;
+  - and it adds 100.6 M event-23 replays.
+- Perl's peak of 327,680-393,216 live records fills 1,280-1,536 pages of 256 records, against a 16-entry record TLB.
+- The walker's own cycles, +1.10 G at 22.5 cycles per miss, are 10.7 % of the +10.22 G. The rest is not attributed by
+  this boot. If the extra L1D misses carried it all, each would cost 39 cycles; how much comes from the table's
+  pages evicting the program's data is not shown here.
+- The protected live set is 80-96 times the record TLB's reach. The counters point at the paged table rather
+  than at the instructions the patch adds, which the twin prices at +40.3 %.
+- The record table is configured for 2^20 records for this program; the default 262,144 is exhausted by its peak of
+  327,680 to 393,216 live records.
+
+### Results: memcached on P1, the in-process driver (board 2, 2026-11-18 02:37-03:20)
+
+**Configuration.** As pre-registered (c3d5b844728e; Addendum 170, `5eeb893bb63e`). The chain `nested/p1a/b2-mc.*` (nat-run3
+pid 1771874) waited for this lane's mruby chain; P1 was resident and read back by name. Stages `nested/p1a/mc128` and
+`mc32`, commands u1 p1 p2 u2 in each boot. Transcripts `spec/board/out-nat-p1a-mc-b2/mc128/board.txt` (sha256
+`b030d2e2…`, firmware `7e6335c9…`) and `…/mc32/board.txt` (sha256 `b21d60c1…`, firmware `c0271018…`), read by
+`nested/appd/parse-abba.py` and `nested/p1/abba.py`; the CHECK lines are read from each command's `st.out` in the
+transcript.
+
+**Controls.** In both boots `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver,
+and all four commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's stream hash equals the
+native reference (`f7733aa9…` at `-m 128`, `b897c51d…` at `-m 32`), with `set_fail=0`, `bad=0` and `MCDRV-END rc=0`.
+
+`mc128`, the reading:
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 5,005,998,913 | 5,102,897,092 | 5,103,534,319 | 5,009,583,660 | 0.07 % / 0.01 % | **+1.91 %** (+95.4 M) |
+| `between_cycles` | 414,090,695 | 441,882,640 | 440,203,590 | 413,417,945 | 0.16 % / 0.38 % | +6.60 % (+27.3 M) |
+| uptime span, s | 223.49 | 228.98 | 228.95 | 223.62 | 0.06 % / 0.01 % | +2.42 % |
+| context entries | 2,912 | 3,075 | 3,070 | 2,912 | | +5.5 % |
+| hpm3 record-TLB misses | 4,904 | 322,834 | 322,807 | 4,904 | | +0.318 M (66 times) |
+| hpm4 walk cycles | 176,793 | 10,430,353 | 10,402,157 | 170,994 | | +10.2 M |
+| hpm5 paged record accesses | 48,620 | 1,761,957 | 1,761,891 | 48,627 | | +1.71 M |
+| hpm6 grow | 0 | 7 | 0 | 0 | | |
+| hpm7 event 23 | 48,219 | 382,718 | 382,655 | 48,295 | | +0.334 M |
+| hpm8 L1D misses | 20,228,321 | 21,086,346 | 21,086,549 | 20,224,523 | | +4.25 % |
+
+CHECK, all four commands: hits 88,691, misses 91,309, items 30,360, slab allocations 60,000, evicted 0, as on the twin.
+The one field that differs is the LRU maintainer's `maint_moves`: 49,512 in both stock commands, 49,509 in both
+protected ones.
+
+`mc32`, reported and not read as the cost (the arms do different work):
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 3,907,830,017 | 3,870,755,500 | 3,871,697,661 | 3,904,145,928 | 0.09 % / 0.02 % | -0.89 % (-34.8 M) |
+| `between_cycles` | 171,274,360 | 172,040,263 | 171,502,387 | 170,956,290 | 0.19 % / 0.31 % | +0.38 % |
+| uptime span, s | 166.18 | 164.75 | 164.77 | 166.01 | | -0.80 % |
+| hpm3 record-TLB misses | 1,542 | 218,816 | 218,620 | 1,542 | | +0.217 M |
+| hits / evictions / items | 57,586 / 27,108 / 13,739 | 53,506 / 29,807 / 12,396 | the same as p1 | the same as u1 | | |
+
+The hit, eviction and item counts are the twin's, arm for arm.
+
+**Against the pre-registration.**
+- Answers, controls: **met** in both boots. Repeats: **met** on both counters in both boots, so `mc128`'s difference is read.
+- `mc128` in-context cost, band -1 % to +3 %: **met**, **+1.91 %**.
+- `mc128` hits, misses, evictions and items equal between the arms: **met**. `maint_moves` is not one of the registered
+  fields and differs by 3, which the row discloses.
+- Duration, 5 to 10 min per command: **missed, short**: 3.7-3.8 min at `-m 128`, 2.7-2.8 min at `-m 32`.
+
+**Reading.**
+- At `-m 128`, where both arms do the same work, memcached's protection (0006 with the Q-15 repair, the dev-era
+  two-operand revision) costs **+1.91 %** in-context on P1 and +6.6 % in the kernel. On the twin it cost +0.10 % and
+  +6.9 %.
+- The stock arm runs 1.58 times its twin cycles, against 2.84 for Perl and 2.55 for PHP. The twin's cost (+0.10 %) is too
+  small for a silicon-to-twin ratio of the costs (19) to be compared with the 1.9-3.5 of the other applications.
+- The walker's own cycles (+10.2 M) are 10.7 % of the +95.4 M. The protected arm misses the record TLB 66 times as
+  often, though at 0.32 M misses per command that is still few. This boot does not attribute the rest.
+- At `-m 32`, Fig. 10's setting, the protected arm evicts 2,699 more items and serves 4,080 fewer hits, and it runs
+  0.89 % fewer in-context cycles (the twin: 2.41 % fewer). That is the different work, not a saving from the
+  protection.
+
+### Results: PHP on P1 (board 2, 2026-11-18 03:21-04:31)
+
+**Configuration.** As pre-registered (c3d5b844728e; Addendum 170, `5eeb893bb63e`). The chain `nested/p1a/b2-php.*`
+(nat-run3 pid 1771932) waited for the memcached chain; P1 was resident and read back by name. Stage `nested/p1a/php10`,
+commands u1 p1 p2 u2 in one boot. Transcript `spec/board/out-nat-p1a-php-b2/php10/board.txt` (sha256 `8ec4e742…`,
+firmware `aacdf7ac…`), read by `nested/appd/parse-abba.py` and `nested/p1/abba.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver, and all four
+commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's normalised output equals the native
+reference (`8f692e64…`). **Modes**, from each command's `st.err`: u1 and u2 print `ZEND_CAP_MODE 4 exact=0 revoke=0`,
+p1 and p2 print `ZEND_CAP_MODE 6 exact=0 revoke=1`. Every command reports 1,088,437 blocks and 3,442,469 issues; the
+protected commands retire and revoke all 3,442,469 (`live=0`), the stock ones none.
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 22,369,239,344 | 22,897,759,008 | 22,908,679,228 | 22,389,029,560 | 0.09 % / 0.05 % | **+2.34 %** (+524 M) |
+| `between_cycles` | 426,939,061 | 431,539,605 | 429,081,292 | 424,053,296 | 0.68 % / 0.57 % | +1.13 % |
+| uptime span, s | 913.35 | 934.71 | 935.04 | 914.02 | 0.07 % / 0.04 % | +2.32 % |
+| context entries | 7,503 | 7,570 | 7,563 | 7,496 | | +0.9 % |
+| hpm3 record-TLB misses | 402,352 | 1,012,800 | 1,012,584 | 402,363 | | +0.61 M |
+| hpm4 walk cycles | 6,045,947 | 15,433,397 | 15,425,147 | 6,024,824 | | +9.4 M |
+| hpm5 paged record accesses | 19,810,404 | 74,406,491 | 74,406,720 | 19,810,458 | | +54.6 M |
+| hpm6 grow | 10 | 8 | 0 | 0 | | |
+| hpm7 event 23 | 2,341,379 | 2,677,368 | 2,677,663 | 2,341,526 | | +0.336 M |
+| hpm8 L1D misses | 98,671,519 | 100,323,517 | 100,345,205 | 98,679,914 | | +1.68 % |
+
+**Against the pre-registration.**
+- Answers, controls, modes: **met**. Repeats: **met** on both counters, so the difference is read.
+- In-context cost, band -1 % to +3 %: **met**, **+2.34 %**.
+- Duration, 13 to 26 min per command: **met**, 15.2-15.6 min.
+- hpm6 reads 10 / 8 / 0 / 0: the table grows in the boot's first two commands, as for Perl, so it is not read.
+
+**Reading.**
+- On P1 the lifetime alone (mode 6 against mode 4, one image, the dev-era two-operand `heap_end`) costs **+2.34 %**
+  in-context and +1.1 % in the kernel. That is 152 cycles per child issued and ended (3,442,469 per command). On the
+  twin it cost +0.16 %, +13.7 M cycles against P1's +524 M.
+- The stock arm runs 2.55 times its twin cycles (Perl: 2.84). The added cycles are 38 times the twin's, and the cost ratio, 14.6,
+  lies far outside the 1.9-3.5 the band was drawn from; the band held only because the twin's cost was so small.
+- The protected arm makes 54.6 M more paged record accesses, 15.9 per child, and misses the record TLB 2.5 times as
+  often. The walker's own cycles (+9.4 M) are 1.8 % of the +524 M; event 23 and the L1D misses add 0.34 M and 1.67 M.
+  This boot does not attribute the rest.
+- This is not Fig. 10's pairing (a pristine second binary); the appendix row says so.
+
+### Results: tshark on P1, U P P U without a heartbeat (board 1, 2026-11-18 03:04-06:07): p1 did not return, p2 did; no cost is read
+
+**Configuration.** As pre-registered (e42113e2b85d; Addendum 173, `0fe1da3b0398`). The chain `nested/p1tu/p1tu-b1.*`
+(nat-run3 pid 1980951) waited for this lane's Perl chain; P1 was resident and read back by name. One arm per boot.
+- **Disclosure:** the u2 line of `p1tu-b1.list` was commented out in place from about 04:53 to 05:00, while p2 ran, and
+  then restored byte-identical (`cmp` against the original). The chain had not read that line in either state, so the
+  run follows the list as registered.
+
+**tsu-u1** (transcript `…/out-nat-p1tu-nested-b1/tsu-u1/board.txt`, sha256 `ff973eb4…`, firmware `f327637d…`):
+- `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps.
+- rc 0, with stock's output: `056c1f8c…`, 1,140,005 lines, 9,000 frames (`parse-ts.py` against `wl/ref1000.out`).
+- Uptime span 1,064.75 s. In-context 22,743,759,258 cycles, `between_cycles` 3,821,114,782, 25,853 context entries.
+- hpm3-8: 279,902 / 11,382,678 / 45,386,001 / 1 / 3,041,091 / 108,891,108.
+
+**tsu-p1** (transcript `…/tsu-p1/board.txt`, sha256 `d179bf9a…`, firmware `7128b53b…`):
+- `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps.
+- `@@SPEC-BEGIN 0 run p1` at about 266 s uptime, then nothing: `vbatch: no return within 3600s (ActionTimeout)`. So it
+  ran at least about 3,330 s, 3.1 times u1's span, with no `@@SPEC-END`.
+- The runner's apertures after the timeout (`BAKED_WEDGE_APERTURES=1`), verbatim:
+  - trap log `0x89`; sw=224 `0x05`; sw=225 `0x96`; sw=226 `0x00`; sw=227 `0x07`; sw=228 `0x9f`; sw=229 `0x00`;
+  - sw=192-195 all `0x00`, so `commit_instr[0].valid` = 0; sw=219 `0xd7`; sw=220 `0x8c`; sw=221 `0x02`; sw=222 `0x00`;
+  - commit pc `0x0000003ff6780f04`; trap-log mepc `0xffffffff80007376`, tval `0x73`;
+  - rev_node_debug_ex `0x000010ff40001134`, head `0x0071`, serving index `0x000011de`.
+- These are M-16's F readings: the same commit pc, `0x3ff6780f04`, which is slot-0 residue at the CDERIVE of
+  `wmem_block_fast_sublet_alloc`, and the same sw=225 and sw=220. Only the serving index differs: F read `0x116c` and
+  `0xcb1`.
+
+**tsu-p2** (transcript `…/tsu-p2/board.txt`, sha256 `f464e437…`, firmware `6c2ffae9…`): the same stage as p1 (`diff -r`
+of the two stage directories is empty) and the same kit, no heartbeat, the next boot on the same board.
+- The kernel differs by more than the bake's usual relink: its bake recompiled `arch/riscv/kernel/setup.o`, `drivers/of/fdt.o`, `arch/riscv/kernel/pi/cmdline_early.o` and
+  `drivers/firmware/efi/libstub/efi-stub.o` in the shared kernel tree `perf/k2n/linux-board-k2n-native-hpm2tree`;
+  the other three bakes recompiled only `init/version-timestamp.o`. The cause is this lane's B5a kit recheck
+  (`nested/b5a/recheck-kit.sh`, two relinks, 04:47:01-04:47:11), which relinked the same tree under its `.native-kernel.lock` with
+  bkit94-rec1m's command line (`node_flat_records=1048576`); p2's bake put 262144 back, and kbuild recompiled the
+  objects that depend on `CONFIG_CMDLINE`. p2's `.config` `CONFIG_CMDLINE` and its dmesg command line equal p1's
+  (runtime, Addendum 176, and re-read here). The objects come from the same source and configuration, but they are not
+  archived, so their identity with p1's is not shown, and p1 to p2 is not shown to be one variable.
+- `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps.
+- rc 0, with stock's output: `056c1f8c…`, 1,140,005 lines, 9,000 frames.
+- Uptime span 1,118.38 s. In-context 24,073,705,090 cycles, `between_cycles` 3,830,848,086, 25,862 context entries.
+- hpm3-8: 8,600,200 / 99,813,106 / 98,841,736 / 8 / 11,238,778 / 126,754,707 (u1 and u2 read 0.28 M record-TLB
+  misses and 1 grow).
+
+**tsu-u2** (transcript `…/tsu-u2/board.txt`, sha256 `bda62b6d…`, firmware `07ab36a2…`):
+- `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps.
+- rc 0, with stock's output: `056c1f8c…`, 1,140,005 lines, 9,000 frames.
+- Uptime span 1,073.60 s. In-context 22,942,461,402 cycles, `between_cycles` 3,843,747,930, 25,853 context entries.
+- hpm3-8: 282,369 / 11,684,611 / 45,317,736 / 1 / 3,075,009 / 109,124,212.
+- u1 and u2 agree within the repeat rule: `run_cycles` 0.87 % apart, `between_cycles` 0.59 %.
+
+**Against the pre-registration.**
+- **The pre-registration listed no outcome in which the protected arm does not return.** It said only that an arm
+  without stock's output "is not read".
+- So p1 is not read. H1 against H2 is **undecided**. The span is undefined, and a timeout is not read as "at least
+  1,600 s".
+- Runtime's Addendum 175 (`9eb0bcf50990`) reads a cost only if both protected boots return. p1 did not, so **no cost is
+  read** from p2 either.
+- Reported and not read: p2 against the mean of u1 and u2 is +5.39 % in-context and +4.60 % in uptime span.
+- The prediction (H1, in-context +1 % to +5 %) **missed**: no cost is read.
+
+**Reading, and a retraction.**
+- On P1 the protected tshark has now returned in 2 of 3 boots: the heartbeat boot and p2 returned, p1 did not. p1 and
+  p2 are the same stage and kit, both without the heartbeat, in consecutive boots on one board; p2's kernel also
+  carries four recompiled objects (above). So the heartbeat is not needed for a return, and the non-return is
+  intermittent across P1 boots, which are not shown to differ in one variable only.
+- **Withdrawn:** "M-16 is narrowed to F's flat lifetime table" (497d4d6a189e, in the heartbeat result above and in
+  ISSUES M-16). One return under a 60 s heartbeat does not place the non-return on F's table.
+- No mechanism is claimed. On F the protected arm did not return in 2 of 2 boots, on P1 in 1 of 3; counts this small
+  do not tell the two bitstreams apart.
+- The sleep-and-echo beat proposed after p1 is no longer needed: a boot without any beat returned.
