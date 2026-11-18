@@ -5541,3 +5541,27 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
 - **Reading rule, fixed now.** The table value is the mean of every +Spatial xz run that completes with 12/12 specdiff PASS and smoke 9/9. The spread and each run's board are reported.
   - Band: 4,906-5,006 s (first run ±1 %).
   - A run outside the band is reported and not averaged in, pending a reason.
+
+## Addendum 179 (2026-11-18 10:35 +08, before it runs): Plain with a 250 Hz tick, to test the timer-interrupt correction
+
+- **Question.** 7.3 corrects Sublet/Plain ratios by the share of time Plain loses to 100 Hz timer interrupts. The probe
+  hiccup3m gives 7.92 % (factor 1.0811, Addenda 159a/159b/169). Does that share carry over to SPEC? A program-committee
+  review panel and a methodology review both asked for this test, and the lead approved it.
+- **Intervention.** Plain on the matched baseline, the same stages and kit with only the kernel tick changed:
+  - kit t3-smoke/bkit96-k2n-rvm-hz250 = bkit95-k2n-rvm with board-run.sh's tree set to perf/k2n/linux-board-k2n-hz250
+    and a gate on CONFIG_HZ=250;
+  - the tree's .config differs from linux-board-k2n only in HZ_250/HZ=250 (diffed; CONFIG_GCC_PLUGINS kept off);
+  - the gates pass, and the negative control (the same gate on the 100 Hz tree) fires.
+- **Chain.** natstage/hz250-b3.{conf,list}, thrun.sh on board 3 (matched riscv-base 8db8f9cda already resident). Stages:
+  hic3m-rv-al3, imagick, nab, lbm, gcc train01, mcf, xz (perf/fair/stages, the rvm runs' stages). About 5 h of board.
+  The thrun dry run (NB_DRY=1) reached DONE; the kit's relink gate was exercised by hand as above.
+- **Predictions, if a tick costs the same at 250 Hz as at 100 Hz:**
+  - the probe loses 2.5 x 7.92 = 19.8 % (band 17-21 %);
+  - each benchmark's ratio r = T(250 Hz)/T(100 Hz) is (1-s)/(1-2.5s) with s = 7.2-7.9 %, so r = 1.13-1.15.
+- **Reading.** Per benchmark, s = (r-1)/(2.5r-1). The 100 Hz reference is the matched-plain run (RESULTS 2026-11-17
+  15:17-23:45; the mean of two where a second run exists). lbm, mcf and xz references ran on board 2, so their r is
+  cross-board (same-build spread across boards at most 0.3 %).
+  - If every s lies in 6.7-8.4 %: the uniform factor stands, and 7.3 says it was checked on six of eight benchmarks.
+  - Otherwise: 7.3 uses each benchmark's measured s for these six and the probe's range for perlbench and x264.
+  - r < 1.10 for a benchmark means the correction overstates its tick share; r > 1.19 means it understates it.
+- Answers must pass SPEC's validation, as in every plain run. A failed benchmark is reported and gives no s.
