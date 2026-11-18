@@ -5586,3 +5586,30 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
 - **Placement.** Board 2, behind nat-run3 pid 2534574 (spa3x-b2, Addendum 178). It stays on P1.
 - **For later P1 bakes.** The lane's recheck relinked the shared hpm2tree with 1048576 at about 10:30. The next P1 bake
   from that tree recompiles the four CMDLINE objects (Addendum 177).
+
+## Addendum 181 (2026-11-18 11:15 +08): repeats read, CREVOKE at capacity read, Perl attribution withdrawn; x264 second runs and a short board 2 filler registered, before they run
+
+- **Addendum 171/178's outcome: +Spatial mcf and xz second runs.** Read by the SPEC lane with run-stage.py read on each boot; specdiff PASS and smoke 9/9 in all three.
+  - mcf (spa3b-b1, board 1): 5,659.87 s, first run 5,658.99 s (+0.02 %).
+  - xz (spa3b-b1, board 1): 4,956.82 s. xz (spa3x-b2, board 2): 4,956.75 s. First run 4,956.84 s. All three are inside the 4,906-5,006 s band; their mean is 4,956.80 s.
+  - With RESULTS 2026-11-18 09:20, +Spatial and Full now have two runs of every benchmark except x264, and the largest difference between a first and a second run is 0.09 %.
+- **Addendum 180's outcome: CREVOKE at the table's capacity.** Lane record nested-workloads 37feada47b52; the SPEC lane recomputed the readings from out-nat-p1cap-crvt-b2/crvt/board.txt.
+  - Contiguous subtrees cost 32 cycles per node and scattered ones 38-39, at 100,000 nodes and at 450,000 (0.580 s and 0.690 s at 25 MHz). Both are inside the predicted bands and within ±15 % of the same boot's 100k.
+  - 10^6 nodes was refused by the 2^20-record table, as on the QEMU twin. No value is read for it.
+- **Perl (Addenda 174, 178): the lane withdrew its attribution.** dev c1cacf6f4ab7 (lane 51d757f4139c) withdraws "the record table's reach" as the cause of +208 % on P1.
+  - The lane's record now names the patch's linear arena search. The SPEC lane has not verified that reading.
+  - The lane built a repaired patch and will measure it again under its own pre-registration. Until then the paper carries no Perl row and no cause.
+- **Registration 1: spa3v-b1.** A second +Spatial run of 525.x264_r on P1, board 1. The first run was cj-b2 on board 2, 30,669.13 s.
+  - Files: natstage/spa3v-b1.{conf,list}. The conf is spa3b-b1.conf with TAG, LIST and its comment changed. Stage board-frcdkmsspa3/525.x264_r-native, budget 108000 s, as in the first run's list.
+  - Band: 30,362-30,976 s (first run ±1 %). About 9.1 h with input generation.
+- **Registration 2: a3v-b3.** A second Full run of 525.x264_r on P1, board 3, after the 250 Hz chain (Addendum 179, thrun pid 2657209). The first run was ci-b1 on board 1, 30,674.0 s.
+  - Files: natstage/a3v-b3.{conf,list}. The conf is a3rep-b3.conf with TAG, LIST and its comment changed. nat-run3.sh reads back the resident bitstream (the matched plain build) and flashes P1 from its seal, as in Addendum 178.
+  - Band: 30,367-30,981 s.
+- **Registration 3: a3t-b2.** Third Full runs of 519.lbm_r and 544.nab_r on P1, board 2. About 30 min; the board then goes to the nested lane's Perl rerun.
+  - Files: natstage/a3t-b2.{conf,list}; the conf is a3rep-b3.conf with TAG, LIST and its comment changed.
+  - Bands: lbm 979-999 s (989.16 and 989.17 so far), nab 687-701 s (693.97 and 694.11).
+- **Rule-8 dry runs.** All three (NR_DRY=1, this commit's predecessor as a stand-in for NR_PREREG) reached DONE, rc 0.
+- **Reading rules, fixed now.**
+  - A run counts if SPEC's validation passes on every command and the smoke is 9/9. The table keeps the first run's value; the second run is reported as a repeat with its board.
+  - If both x264 second runs are inside their bands, 7.3's Setup sentence drops "except x264". Outside a band, the run is reported and the sentence stays.
+  - The third lbm and nab runs change no paper number. They are reported as repeats.
