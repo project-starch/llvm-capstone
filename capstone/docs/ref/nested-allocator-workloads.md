@@ -2809,3 +2809,63 @@ with the lookup repaired and nothing else changed. It asks what a lifetime per S
   - A counter above its bound with the cost in the first band is reported, not explained.
 - **What this boot cannot show:** it changes the lookup only. It does not separate the cost of CDERIVE and CREVOKE from
   the cost of checking each head's own record.
+
+## Perl on SPEC's own perlbench test, with SV heads protected
+
+### Pre-registration: 500.perlbench_r test on P1 with the sv-heads protection, one boot (written 2026-11-18 11:35, before the boot)
+
+**Why.** The lane owner chose SPEC's perlbench test as the Perl row of the appendix: the workload of the paper's SPEC
+table, run on SPEC's own Perl 5.22.1 sources and checked against SPEC's reference outputs. suns.pl on stock Perl
+5.36.3 is no longer the row.
+
+**Images.** SPEC CPU2017 500.perlbench_r, the table's Full build (FRCDKMSa3, the SPEC lane's).
+- Stock: the table's image itself, stripped `c1744e87…`.
+- Protected: the same build with the sv-heads patch ported to 5.22.1 (`nested/perlspec/port-sv-heads.py`, `0020f23c…`;
+  from patch 0001, blob `72db9236`) and the arena-lookup repair (`nested/perl/lookup-fix/fix-lookup.py`,
+  `f5ccf26e…`), under `-DPERL_CAPSTONE_SUBLET`. Stripped `83703c92…` (full `1cdc258b…`).
+  - Port differences from 5.36.3: `uproot_SV` and `S_more_sv` live in `sv.c`, and the eval compiler is `S_doeval`.
+  - **Control:** the ported sources compiled without the define give 69 of 69 objects byte-identical to the table's
+    build, and the relink reproduces its image (`51bfbd41…`).
+  - CREVOKE census: stock 0 with rs2 = x0 and 6 with rs2 != x0; protected 0 and 9.
+
+**Stage** `nested/p1g/ptest` (`ptest.SHA256SUMS`, 574 files): kit bkit91's wrap of `nested/perlspec/stage-test5`, made
+by `make-perltest-stage.py` (`4b536a30…`) from the table's stage `stages-frcdkmsa3-full/500.perlbench_r-native`. `in/`
+and `natperl` are byte-identical to the table's board stage. One boot, cheap commands first:
+- commands 0-3: `makerand.pl` as u1 p1 p2 u2;
+- commands 4-5 (`pt`): `makerand.pl` and `test.pl` with the protected image. test.pl runs each of its test scripts
+  with the arm's image as `../sw/perl`, as in the table's run.
+- **test.pl has no stock arm in this boot.** A stock test.pl takes 12,799 s, and the deadline leaves room for one such
+  run. Its reference is the SPEC lane's two Full runs on board 3:
+  - `out-nat-p1-final-a3-perl-b3` (`bc778b6f…`): makerand 276.01 s, 6,837,496,467 in-context cycles; test.pl
+    12,798.66 s, 267,212,372,330 in-context cycles, 44,357,708,022 kernel + other;
+  - `out-nat-p1-a3rep-b3` (`6f4d9f8e…`): 276.11 s and 6,840,289,021; 12,799.00 s, 267,230,625,762 and 44,358,613,410.
+  - The two differ by 0.04 % (makerand) and 0.007 % (test.pl) in in-context cycles. The SPEC lane's measured spread
+    between boards for one build is at most 0.3 %.
+- Board 2, after this lane's Perl suns.pl chain (nat-run3 pid 2985665); P1 is resident. Chain `nested/p1g/b2-ptest.*`.
+  Budget 86400 as the table's run (`BAKED_TIMEOUT` 345600), booking 1,440 min.
+- Expected wall time: makerand 4.6 min per command; test.pl 3.6 h plus its cost. The row is usable for the deadline
+  if the boot ends by about 18:45, which holds if test.pl's cost is under about +70 %.
+- Checked off the board (`nested/p1g/ptest-recheck`): real bake; `BOARD_STUB=2` on the table's transcript and on its
+  cut, rc 0 and 0, `BAKED_TIMEOUT=345600` in both; real firmware 23,760,392 B (`89467f76…`); an `NR_DRY=1` pass of
+  the chain to DONE (`nested/p1g/dry-ptest.log`).
+- **Twin, and a deviation.** The linear-search image passed makerand as U P P U on the twin with SPEC's
+  `makerand.out` in all four commands (`npspec-t1`, `npspec-mrx`; in-context +2.6 %). The twin of this stage
+  (`npspec-t5`, the repaired image) is queued behind the gcc twin and will not have finished test.pl when the boot
+  starts. It serves as an early warning: if it shows the protected test.pl failing, the boot is stopped.
+
+**Outcomes and bands.**
+- **VOID** as for every P1 boot.
+- **Answers.** `makerand.out` equals SPEC's reference (`539d02dc…`) in all five makerand commands, and `test.out`
+  passes specdiff against SPEC's reference with the tool the table used. A makerand mismatch voids that command's
+  cost. **If test.out fails specdiff, the protected Perl is reported as failing its tests, with the failing tests
+  listed, and no test.pl cost is read.**
+- **makerand, interleaved.** Repeat rule as for every P1 boot. In-context cost, protected against stock: predicted
+  +1 % to +8 %.
+- **makerand, cross-board check.** This boot's stock makerand against the reference's 6,837.5 M in-context cycles:
+  within ±1 %. If it is outside, the test.pl comparison below is reported with that offset stated, not corrected.
+- **test.pl, not interleaved, another board.** Cost = this boot's protected test.pl against the mean of the two
+  reference runs, for in-context cycles and for the uptime span.
+  - A difference under 1 % is reported as "not distinguishable from the cross-board spread".
+  - Predicted: +5 % to +30 % in-context.
+  - ≥ +100 %: the protection has a cost in test.pl that the lookup repair did not remove; reported as such.
+- The row states that test.pl's stock run is the table's, from another board and day.
