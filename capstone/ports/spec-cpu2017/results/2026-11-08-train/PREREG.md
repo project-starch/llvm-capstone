@@ -5784,3 +5784,20 @@ busy overnight and complete the records.
 - **Addendum 190, Registration 2 (a3w-b2).** Its chain (pid 3426487) is stopped while it is still waiting on pid 3361059, before it touches the board, so that board 2 takes this boot first (about 2.2 h). It is re-queued behind gcc3-b2 with the same conf, list and pre-registration (874f564d8a39).
 - **Limits that travel with any number.** Those of Addendum 191, and: the table is 16 times the kit's default.
 - **Paper rule.** A number goes to the lead as paste-ready text. The paper changes only on the lead's word.
+
+## Addendum 193 (2026-11-18 19:13 +08, outcomes): Addendum 188 (Perl's own allocator on SPEC test) and Addendum 185 (Plain perlbench at 250 Hz)
+
+- **Addendum 188, both boots VALID.** Kit nested/kits/bkit91-rec1m (2^20 records) in both.
+  - Protected, board 1 (stage nested/p1g/pt2): makerand 273.17 s (6,766,079,003 in-context cycles), test.pl 13,488.91 s (282,785,227,858); rc 0, specdiff 2/2 PASS; transcript sha256 f04a17a3...95ffa6.
+  - Stock, board 2 (stage nested/p1g/st2): makerand 276.09 s (6,839,873,599), test.pl 12,796.15 s (267,194,043,894); rc 0, specdiff 2/2 PASS; transcript sha256 9b9feb34...bb0d9e. The read is spec/board/out-nat-p1-st2-b2/st2/read (the chain does not write one for a native boot; its "NO RESULT: no @@SPEC-DONE" line is the chain's generic verdict).
+  - **Registered cost, test.pl: +5.41 % wall clock, +5.84 % in-context cycles.** Inside the predicted +5..+30 % band.
+  - Control: stock test.pl against board 3's Full run (12,798.66 s, 267,212.4 M): -0.020 % wall clock, -0.007 % cycles. Met (within 1 %), so the kit is not a second variable.
+  - **Deviation, stated: the paper uses makerand + test.pl together**, +5.28 % wall clock (13,072.24 -> 13,762.08 s), +5.66 % in-context, because Fig. 8's perlbench bar is the sum of both commands. Over Plain: 1.2099 x 1.0528 = 1.2737.
+  - Limits: one run per arm, arms on two boards, not interleaved. The nested lane's record of the same boots is nested-workloads 2fe25616fc04; its numbers and this lane's recomputation agree.
+  - Retraction already surfaced (17:53): a 17:47 statement that the protected boot was still running above 6 % was wrong; it had ended valid at 17:44.
+  - Paper: PR #18 (preliminary stock = board 3's Full run, +5.26 %) was pasted into Overleaf by the lead and closed. PRs #19 (final dat row, no printed number changes), #20 (wording), #21 (Table 3's Perl row on this input) are open on the lead's word.
+- **Addendum 185, VALID, prediction MISSED.** out-thp2-hz250p-b3: makerand 271.80 s, test.pl 12,993.19 s (hart cycles 324,845,504,962), rc 0, specdiff 2/2 PASS, ended 19:06:44.
+  - Against the two 100 Hz runs on board 3 (means 241.09 s and 10,564.20 s): makerand r = 1.1274, s = 7.01 % (inside 6.7-8.4 %); test.pl r = 1.2299, s = 11.08 %, above the predicted 11,840-12,249 s. Both commands together: r = 1.2276, **s = 11.00 %**.
+  - By the Addendum's rule perlbench takes its own measured s. Seven shares measured, 7.37-11.00 %, mean 8.45 % (stands for x264 alone). Estimate without timer interrupts: perlbench 32.90 / 35.33 % (+Spatial / Full; it was 28.59 / 30.95 % with the mean of six), dashed bar 42.47 %, geometric means 16.95 / 18.15 %.
+  - Not explained: why test.pl's share is above every other benchmark's. One 250 Hz run. test.pl starts many short processes, which the other benchmarks do not; that is a guess, not a finding.
+  - Paper: appendix only, PR #22, for the lead to decide.
