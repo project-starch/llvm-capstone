@@ -196,6 +196,43 @@ perl and x264 are registered when their CRVC0 profiles finish. perl's first CRVC
 lacked perl's module flags (`dom_grant_root`, `dom_null`, `dom_local_tmp`) and images (`images-a0ed`). A second was
 void too, on the command-line limit. Both are kept as void-*.
 
+## Step 4, part 1 FAILED on its first three readings; the corrected model, registered for the other rows (2026-11-21)
+
+**What part 1 got wrong.** Its "predicted saving" took the census set over the whole image, less the folded
+sites. That omits two terms.
+1. **The FP forms a CRVC image gives up.** Under option B the whole image is decoded in the mode, so a CRVC image
+   cannot use C.FLD, C.FSD, C.FLDSP or C.FSDSP anywhere. The census called that option A's cost, but it is the
+   cost of every image that sets the mode. Option B's real difference is per-image choice: an FP-heavy image can
+   stay out of the mode, losing nothing and gaining nothing.
+2. **The prebuilt libc and runtime.** The feature does not compile them, so their fitting sites stay 4-byte.
+
+Measured against part 1's prediction for those rows (the deviation is far outside any noise):
+- imagick saved 0.375 % against 1.478 % predicted;
+- nab GREW by 3.53 % against 2.405 % predicted saved;
+- lbm GREW by 2.98 % against 0.074 % predicted saved.
+
+**The corrected model.** Saving = 2 × (program-function set − folded − program-function 16-bit FP) / fetch bytes.
+Program functions are those not defined in the linked runtime, libc and builtins archives. Census by enclosing
+function on CRVC0's `.full` image, with the same text as the stage binary. Checked post hoc on the three readings it
+was built to explain (so these do not test it):
+
+| row | CRVC0 fetch bytes | corrected model | measured CRVC1m |
+|---|---:|---:|---:|
+| 538.imagick_r-test-ref | 354,828,474 | 353,510,490 (0.371 %) | 353,498,934 (0.375 %) |
+| 544.nab_r-test | 25,574,753,800 | 26,478,158,384 (-3.532 %) | 26,478,142,612 (-3.532 %) |
+| 519.lbm_r-test | 23,242,892,232 | 23,935,961,556 (-2.982 %) | 23,935,966,956 (-2.982 %) |
+
+**Registered now, before any of their CRVC1m readings is opened** (those runs were launched under part 1 and have
+not been read):
+
+| row | CRVC0 fetch bytes | program set executions | folded | program 16-bit FP | predicted CRVC1m fetch bytes | predicted saving |
+|---|---:|---:|---:|---:|---:|---:|
+| 502.gcc_r-train01 | 41,953,281,372 | 3,103,226,080 | 155,266 | 12,523 | 35,747,164,790 | **14.793 %** |
+| 505.mcf_r-test | 87,376,393,242 | 2,889,054,374 | 0 | 0 | 81,598,284,494 | **6.613 %** |
+| 557.xz_r-test | 173,387,788,550 | 1,611,151,616 | 0 | 0 | 170,165,485,318 | **1.858 %** |
+
+perl and x264 are registered on this model when their CRVC0 profiles finish, before their CRVC1m runs start.
+
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
 `CVA6Cfg.RVZCB`), with `CVA6ConfigZcbExtEn = 1` in `capstone_cv64a6_imafdc_sv39_config_pkg.sv`.
