@@ -46,11 +46,11 @@ clang/lib/CodeGen/CGExprScalar.cpp | +154 -4 | #include "llvm/IR/IntrinsicsCapst
 clang/lib/CodeGen/CGStmt.cpp | +3 -0 | // Capstone: a switch on an __intcap switches on its address.
 clang/lib/CodeGen/CMakeLists.txt | +2 -0 | TargetBuiltins/Capstone.cpp
 clang/lib/CodeGen/CodeGenFunction.h | +8 -0 | llvm::Value *EmitCapstoneBuiltinExpr(unsigned BuiltinID, const CallExpr *E,
-clang/lib/CodeGen/CodeGenModule.cpp | +6 -1 | // agree everywhere except on a capability target, where a pointer carries
+clang/lib/CodeGen/CodeGenModule.cpp | +11 -1 | case llvm::Triple::capstone32:
 clang/lib/CodeGen/CodeGenTypes.cpp | +8 -0 | // Capstone: an __intcap is a capability, the same LLVM type as a pointer
 clang/lib/CodeGen/ItaniumCXXABI.cpp | +2 -0 | case BuiltinType::IntCap:   // Capstone: no runtime typeinfo for these
-clang/lib/CodeGen/TargetInfo.h | +4 -0 | createCapstoneTargetCodeGenInfo(CodeGenModule &CGM, unsigned XLen,
-clang/lib/Driver/ToolChains/CommonArgs.cpp | +4 -0 | case llvm::Triple::capstone32:
+clang/lib/CodeGen/TargetInfo.h | +9 -0 | createCapstoneTargetCodeGenInfo(CodeGenModule &CGM, unsigned XLen,
+clang/lib/Driver/ToolChains/CommonArgs.cpp | +11 -0 | // Capstone keeps a frame in every function that calls (the launcher's fault
 clang/lib/Driver/ToolChains/Gnu.h | +12 -0 | // A bare Capstone target (no OS) is the Capstone application platform, whose
 clang/lib/Driver/ToolChains/Linux.cpp | +12 -0 | case llvm::Triple::capstone32:
 clang/lib/Frontend/InitPreprocessor.cpp | +11 -0 | if (TI.SupportsCapabilities()) {
@@ -71,7 +71,6 @@ clang/lib/Sema/SemaType.cpp | +11 -0 | // Capstone: an integer held in a capabil
 clang/lib/Serialization/ASTCommon.cpp | +6 -0 | case BuiltinType::UIntCap:
 clang/lib/Serialization/ASTReader.cpp | +6 -0 | case PREDEF_TYPE_UINTCAP_ID:
 clang/lib/Support/CMakeLists.txt | +1 -0 | CapstoneVIntrinsicUtils.cpp
-llvm/include/llvm/Analysis/IVUsers.h | +10 -0 | /// Whether stepping a capability-typed induction variable by \p Step keeps a
 llvm/include/llvm/BinaryFormat/Dwarf.def | +2 -0 | HANDLE_DW_CC(0xd1, LLVM_CapstoneVectorCall)
 llvm/include/llvm/BinaryFormat/ELF.h | +32 -1 | EM_CAPSTONE = 259,      // Capstone
 llvm/include/llvm/BinaryFormat/ELFRelocs/Capstone_nonstandard.def | +32 -0 | #ifndef ELF_Capstone_NONSTANDARD_RELOC
@@ -89,12 +88,12 @@ llvm/include/llvm/Object/ELFObjectFile.h | +27 -0 | Expected<SubtargetFeatures> 
 llvm/include/llvm/TargetParser/CMakeLists.txt | +3 -0 | set(LLVM_TARGET_DEFINITIONS ${PROJECT_SOURCE_DIR}/lib/Target/Capstone/Capstone.td)
 llvm/include/llvm/TargetParser/Triple.h | +15 -0 | capstone32,  // Capstone: capstone32
 llvm/include/llvm/Transforms/Utils/ScalarEvolutionExpander.h | +20 -0 | const Loop *NonIntegralHoistLimit = nullptr;
-llvm/lib/Analysis/IVUsers.cpp | +89 -1 | static bool gepRunsOnEveryIteration(const Instruction *I, const Loop *L) {
+llvm/lib/Analysis/IVUsers.cpp | +10 -0 | // Keep the integer index as the IV user instead. LSR's separate capability
 llvm/lib/Analysis/ValueTracking.cpp | +33 -0 | // On a target whose pointers are CAPABILITIES, address arithmetic is not a
 llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp | +50 -2 | // Some targets, including Capstone with addrspace(200) capability
 llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp | +4 -1 | // Capstone: stripAndAccumulate... wants the INDEX width, which is not the
 llvm/lib/CodeGen/AtomicExpandPass.cpp | +15 -1 | // non-integral address space (a capability) is more than its bits: taken
-llvm/lib/CodeGen/CodeGenPrepare.cpp | +5 -3 | return ConstantInt::get(IntPtrTy, BaseOffs, /*IsSigned=*/true);
+llvm/lib/CodeGen/CodeGenPrepare.cpp | +135 -13 | // a load through the exact base. Loads reject UNINIT and sealed capabilities,
 llvm/lib/CodeGen/CodeGenTargetMachineImpl.cpp | +9 -0 | if (TmpAsmInfo->getExceptionHandlingType() !=
 llvm/lib/CodeGen/DwarfEHPrepare.cpp | +26 -4 | // space 0. On a capability target (Capstone: addrspace(200), declared
 llvm/lib/CodeGen/EarlyIfConversion.cpp | +7 -0 | if (TII->canTrap(MI)) {
@@ -106,7 +105,7 @@ llvm/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp | +7 -7 | DAG.getConstantPool(LLVM
 llvm/lib/CodeGen/SelectionDAG/LegalizeFloatTypes.cpp | +8 -2 | // space 0, a capability target passes it as an integer (C-86, see
 llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp | +128 -17 | return Type.isInteger() || Type.isCheriCapability();
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits cannot be represented here at all. Targets with capability (wider than
-llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +111 -23 | (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&
+llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +142 -26 | (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&
 llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp | +53 -9 | // pool's pointer type. On a fat-pointer target that is a capability type,
 llvm/lib/CodeGen/TargetLoweringBase.cpp | +6 -0 | MVT TargetLoweringBase::getConstantPoolPtrTy(const DataLayout &DL) const {
 llvm/lib/CodeGen/ValueTypes.cpp | +4 -0 | // Same shape as the fat pointer below it. There is no capability type in IR,
@@ -119,12 +118,14 @@ llvm/lib/Support/CMakeLists.txt | +3 -0 | CapstoneAttributes.cpp
 llvm/lib/TargetParser/CMakeLists.txt | +2 -0 | CapstoneISAInfo.cpp
 llvm/lib/TargetParser/TargetDataLayout.cpp | +46 -0 | static std::string computeCapstoneDataLayout(const Triple &TT,
 llvm/lib/TargetParser/Triple.cpp | +21 -1 | case capstone32:     return "capstone32";
-llvm/lib/Transforms/InstCombine/InstructionCombining.cpp | +11 -1 | // Not for a non-integral (Capstone capability) pointer. Both rewrites below
-llvm/lib/Transforms/Scalar/LoopStrengthReduce.cpp | +19 -0 | Rewriter.setNonIntegralHoistLimit(L);
+llvm/lib/Transforms/InstCombine/InstructionCombining.cpp | +26 -1 | // capability cursor. It may lose its tag at an address-policy or bounds
+llvm/lib/Transforms/Scalar/LICM.cpp | +7 -0 | // Swapping the offsets creates a capability cursor the loop never formed.
+llvm/lib/Transforms/Scalar/LoopStrengthReduce.cpp | +314 -0 | // against an accessed capability cursor. Sharing a byte IV avoids adding a
 llvm/lib/Transforms/Scalar/LoopTermFold.cpp | +6 -0 | Expander.setNonIntegralHoistLimit(L);
 llvm/lib/Transforms/Scalar/SROA.cpp | +145 -0 | /// Capstone: does a value of type \p Ty hold a pointer wider than its index --
+llvm/lib/Transforms/Scalar/SeparateConstOffsetFromGEP.cpp | +6 -0 | // On a capability pointer, returning to the original final address cannot
 llvm/lib/Transforms/Utils/BuildLibCalls.cpp | +56 -33 | // targets. On Capstone every C pointer is a capability in the address space the
-llvm/lib/Transforms/Utils/ScalarEvolutionExpander.cpp | +14 -1 | bool SCEVExpander::hoistStopsAt(const Loop *L, Type *Ty) const {
+llvm/lib/Transforms/Utils/ScalarEvolutionExpander.cpp | +28 -2 | // Splitting a capability offset by loop creates partial cursors that
 llvm/lib/Transforms/Utils/SimplifyLibCalls.cpp | +1 -1 | Src = B.CreateGlobalString(SrcStr, "str", /*AddressSpace=*/std::nullopt,
 llvm/utils/TableGen/Basic/CMakeLists.txt | +1 -0 | CapstoneTargetDefEmitter.cpp
 llvm/utils/TableGen/Basic/VTEmitter.cpp | +19 -3 | if (IsCapstoneVecTuple) {
