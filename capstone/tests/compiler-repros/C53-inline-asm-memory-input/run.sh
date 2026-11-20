@@ -13,14 +13,15 @@ CLANG=${CLANG:-llvm/cmake-build-debug/bin/clang}
 [[ -x $CLANG ]] || { echo "no clang at $CLANG (set CLANG=)"; exit 2; }
 F=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -c)
 O=${TMPDIR:-/tmp}/c53.$$.o
-SIG='InOperandVal.getValueType'
+# The assertion's text changed with C-80 (7ce213020f87); either form counts as the defect.
+SIG='InOperandVal.getValueType\|Memory operands expect pointer values'
 present=0; control_bad=0
 for src in output-pointer output-local input-pointer input-local input-global; do
   line=$(printf "  %-16s" "$src")
   for o in -O0 -O1; do
     rm -f "$O"
     if out=$("$CLANG" "${F[@]}" $o "$D/src/$src.c" -o "$O" 2>&1); then r=ok
-    elif grep -q "$SIG" <<<"$out"; then r=ASSERT; else r=other; fi
+    elif grep -q -e "$SIG" <<<"$out"; then r=ASSERT; else r=other; fi
     line+=$(printf " %s:%-6s" "$o" "$r")
     case $src in
       output-*) [[ $r == ok ]] || control_bad=1 ;;

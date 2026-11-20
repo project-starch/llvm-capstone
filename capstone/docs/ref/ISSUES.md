@@ -10811,7 +10811,7 @@ recorded input so the pass still runs. It is negative-tested: forcing
 `materializeFrameBaseRegister` back to GPR+ADDI makes it fail with `%21:gpr = ADDI %stack.1, 0`.
 Updating the old CHECKs instead would have left a guard that cannot fail.
 
-### C-53 — an inline-asm `"m"` INPUT operand crashes isel ("Memory operands expect pointer values"); `"=m"` outputs compile `OPEN — COMPILER; found 2026-09-23 through CPython's configure; blocks no port today`
+### C-53 — an inline-asm `"m"` INPUT operand crashed isel ("Memory operands expect pointer values"); `"=m"` outputs compiled `FIXED by C-80's change to visitInlineAsm's check (7ce213020f87, 2026-10-14); closed 2026-11-20 with a lit test — COMPILER; found 2026-09-23 through CPython's configure`
 
 **What happens.** `__asm__ volatile("lw zero, %0" : : "m"(*p))` asserts in
 `SelectionDAGBuilder::visitInlineAsm` at `-O0` and `-O1`, whether the memory is reached through a
@@ -10824,6 +10824,17 @@ asserts the operand's type is `TLI.getPointerTy(DL)`, address space 0's `i64`; t
 
 **Reproducer.** `capstone/tests/compiler-repros/C53-inline-asm-memory-input/run.sh` (the two
 output shapes are controls); PRESENT on `d030df93d4a4`, `d5b5f11cae8f` and `f7b50f081ca4`.
+
+**Fixed by C-80 (7ce213020f87, 2026-10-14), found 2026-11-20 while working through the open list.** C-80 changed
+the check this entry names: a memory operand may be a pointer in its own address space, so a c128 capability passes.
+- Every input shape now compiles at -O0 and -O1, with dev's compiler and with every stored build since C-80
+  (98337e20741b, 29027126f39b, 4e3bae5d83fc).
+- The memory is addressed through the capability: the pointer argument's own, a stack slot's or a global's,
+  narrowed with `shrink`.
+- The reproducer reported ABSENT by a signature that could no longer match: it looked for the old assertion text
+  (`InOperandVal.getValueType`). It now matches the current message too.
+- Lit `c53-inline-asm-memory-input.ll` (pointer, local, global). Negative control: with the old assertion put back
+  in visitInlineAsm it FAILS on that assertion; with the source restored it passes.
 
 ### C-55 — two cascaded selects on a capability with a null operand put the physical `$c0` into a PHI; LiveVariables / PHIElimination assert `FIXED 2026-09-23 on compiler/c55-cascaded-select (b3fdbbe081e1), merged into dev 2026-09-24 as #79 (59a2c523632c): the cascaded path now COPYs a physical source into a vreg as the single-select path does; a RESIDUAL of d5b5de228b38`
 
