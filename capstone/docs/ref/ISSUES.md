@@ -4565,8 +4565,11 @@ Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the 
 - **So:** within one arm the same physical id is DEAD when its probe is served under srevroot = the context's table and
   ALLOW under srevroot 0. The probe resolves a physical id in the namespace active when the unit serves it; index 1 of
   a flat table is a header slot. **The trigger is a PC-capability id change while srevroot holds a table, then code
-  under that id**; the service resume only supplies the id change in this arm. NOT YET PRINTED: the record value the
-  unit read for slot 1 of tbl3 (a header word with the valid bit 0, by reading).
+  under that id**; the service resume only supplies the id change in this arm. **The record the probe read (printed
+  2026-11-20, a sim-only print of the unit's D$ reads):** the probe of id 1, accepted at cycle 87,354, reads physical
+  address 0x80009010 -- slot 1 of the CONTEXT's table tbl3 (16-byte records from 0x80009000), not the physical pool at
+  0xBFF00000 -- and gets 0x0000000000000000, no valid bit: DEAD. (The unit's next reads, at tbl3 + 0x000, return the
+  table's header word 0x8000000000000400.)
 - **Earlier readings under the new account:** `va-rc-bare` / `va-rc-bare-nosum` (S sets srevroot = tbl3 and ecalls, no
   context) pass: no id change, so no probe. `va-fetchsplit-s` (one entry and one escape, srevroot = tbl3 afterwards)
   passes: NOT YET EXPLAINED under this account (a candidate: the escape's id change resolves before any code runs
