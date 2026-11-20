@@ -31,23 +31,23 @@
 // Traps. CIncOffset and CIncOffsetImm raise UNEXPECTED_CAP_TYPE (26) on a sealed or
 // uninitialised %old (CapstoneInstrInfo.cpp, trapsOnUntaggedOperand). Moving one
 // below other instructions can change which instruction traps first, and so the
-// trap's cause and PC. The pass therefore sinks a trapping increment only when the
-// first instruction after it that is not pure (cannot trap, no side effect) is a
-// LOAD whose base is %old itself:
-//  - if %old is sealed or uninitialised, that load raises the same cause, 26: the
-//    RTL rejects every type but linear and non-linear (load_store_unit.sv, the
-//    cause-26 branch) and QEMU every type but linear, non-linear and a
-//    synchronous sealed-return (op_helper.c, type_ok), and CIncOffset traps on
-//    uninitialised and sealed alone. Only the trap's PC moves, to the load;
-//  - if the load completes, %old was not uninitialised or sealed, so the
-//    increment would not have trapped either, and nothing after the load can
-//    observe the order.
-// A STORE does not qualify: QEMU accepts a store through an uninitialised
-// capability, so a sunk increment would let the store write and then trap. The
-// RTL rejects that store with 26, so the two models differ there; until they
-// agree, stores keep the order (-capstone-sink-loop-increment-past-stores lifts
-// this, for measurement only). An ADDI cannot trap and is sunk below anything
-// that does not read its result.
+// trap's cause and PC. The pass sinks a trapping increment only when the first
+// instruction after it that is not pure (cannot trap, no side effect) is a LOAD
+// whose base is %old itself. What that guarantees depends on the model:
+//  - QEMU checks the base's type before the access (op_helper.c, type_ok): a
+//    sealed or uninitialised %old makes the load raise 26 where the increment
+//    would have; only the trap's PC moves.
+//  - The RTL checks the type of a scalar access's base only in M-mode with
+//    capability mode on (load_store_unit.sv, the cap_violation_detection gate).
+//    Outside M, where domains run, the load through a sealed or uninitialised
+//    %old is not refused: it completes or takes a page fault before the sunk
+//    increment raises 26. There the trap's cause can change too.
+// Whether that is acceptable for a base that traps in either order is not settled;
+// until it is, this pass stays off and does not land. A STORE never qualifies:
+// QEMU and the specification accept a scalar store through an uninitialised
+// capability, so a sunk increment would let the store write and then trap
+// (-capstone-sink-loop-increment-past-stores lifts this, for measurement only).
+// An ADDI cannot trap and is sunk below anything that does not read its result.
 //
 // Off by default (-capstone-enable-sink-loop-increment).
 //
