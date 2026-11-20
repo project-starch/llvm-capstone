@@ -163,6 +163,39 @@ fitting sites whose offset carries a relocation.
     precision).
   - Without them the census set reads 9.77 % and 15.35 %, unchanged. The retraction is on dev at b33a7a87d6f6.
 
+## Step 4 pre-registration, part 1 (2026-11-21, before any CRVC1m run)
+
+**Arms.** CRVC1m is CRVC1 with the standard link script: the same code, with only `.capstone_virtual` differing, in
+all 11 images. The twin's native-route loader (binfmt-dom, another lane's code) accepts only `CV_IMAGE_MAGIC`, and
+`x-capstone-crvc-force` puts every context in the mode.
+- Both arms run on the same prototype QEMU binary (41debeb7d1382427), CRVC0 without the mode and CRVC1m with
+  `x-capstone-crvc=on,x-capstone-crvc-force=on`.
+- natio images, 524,288 flat records, shift-1 capmix3, every command window.
+
+**Prediction from CRVC0's profiles** (the census over CRVC0's own profile and binary). "Saving" is the fetch bytes the
+compiler can remove: every fitting site except the folded %pcrel_lo ones (fold.py). The census column adds the folded
+sites back, which is what link-time compression would add.
+
+| row | CRVC0 image insns | CRVC0 fetch bytes | set executions (census) | folded executions | predicted CRVC1m fetch bytes | predicted saving | census (with folded) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 502.gcc_r-train01 | 12,221,841,750 | 41,953,281,372 | 3,219,826,413 | 479,839 | 35,514,588,224 | **15.347 %** | 15.350 % |
+| 505.mcf_r-test | 26,643,806,738 | 87,376,393,242 | 2,933,711,398 | 0 | 81,508,970,446 | **6.715 %** | 6.715 % |
+| 519.lbm_r-test | 6,092,487,936 | 23,242,892,232 | 8,561,719 | 0 | 23,225,768,794 | **0.074 %** | 0.074 % |
+| 538.imagick_r-test-ref | 95,383,602 | 354,828,474 | 2,622,612 | 0 | 349,583,250 | **1.478 %** | 1.478 % |
+| 544.nab_r-test | 7,154,822,856 | 25,574,753,800 | 307,550,465 | 0 | 24,959,652,870 | **2.405 %** | 2.405 % |
+| 557.xz_r-test | 49,630,300,219 | 173,387,788,550 | 1,870,626,057 | 0 | 169,646,536,436 | **2.158 %** | 2.158 % |
+
+**Further predictions:**
+- CRVC1m's image instructions equal CRVC0's within 0.05 %, since compression changes only encoding (branch-range
+  choices may differ by a few instructions);
+- every row's output validates as CRVC0's does;
+- a context the mode does not reach would execute the CRVC words as FP and fail validation, which is the check
+  that the native route's contexts reach the mode.
+
+perl and x264 are registered when their CRVC0 profiles finish. perl's first CRVC0 attempt was VOID: the gcc recipe
+lacked perl's module flags (`dom_grant_root`, `dom_null`, `dom_local_tmp`) and images (`images-a0ed`). A second was
+void too, on the command-line limit. Both are kept as void-*.
+
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
 `CVA6Cfg.RVZCB`), with `CVA6ConfigZcbExtEn = 1` in `capstone_cv64a6_imafdc_sv39_config_pkg.sv`.
