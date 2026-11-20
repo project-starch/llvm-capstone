@@ -149,3 +149,33 @@ in `lattr/CONE.full.rpt` (`report_timing -path_type full -input_pins`). The guar
   - A net under `rev_node/` that is named after the scoreboard's `mem_q` shows it has happened here.
   - Cell and net hierarchy in the routed netlist is therefore approximate RTL ownership. The spatial-only comparison
     (the same families 74-86 levels shorter) does not depend on it.
+
+## Reading: the split at the rd_data crossing, and the next family once the rev_node cone is cut (rtl lane's ask, 2026-11-20)
+
+Read-only on P1's routed checkpoint: `<mnt-hdd>/synth/twc/lattr/CONE.full.rpt` (the split) and `next-family.tcl` →
+`NEXT.log` / `NEXT.next.rpt`. The period is 40.000 ns.
+
+**(1) Arrival at the crossing.** The three named paths, with the cumulative time in the report:
+
+| Path | Launch clock pin | `rev_node/rd_data[5]` | Endpoint arrival | Required | Before / after the crossing |
+|---|---|---|---|---|---|
+| cur_idx_q[3] → fu_data_q[cap_metadata_a][19] (worst, 111 levels) | 1.281 | 26.625 | 54.537 | 41.364 | 25.344 / 27.912 ns |
+| cpmp_q[5][bE][1] → the same endpoint (121 levels) | 1.588 | 26.658 | 54.570 | 41.424 | 25.070 / 27.912 ns |
+
+- Before the crossing, the path runs through the D$ data banks, the adapter's `data_rdata_q` logic and the missunit
+  into `rd_data[5]`.
+- A naive split on P1's placement, as arithmetic and not a prediction: a flop taking the data at that pin leaves about
+  +14.7 ns before it, and launching from it leaves about +11.7 to +11.9 ns after it.
+
+**(2) The worst path that does not cross rev_node.**
+- Scan: none of P1's worst 5,000 paths (down to -9.999 ns) is free of cells under the rev_node hierarchy.
+- With timing disabled in memory through all 8,291 primitive cells under rev_node, the worst path is **-4.631 ns, 56
+  levels, `dom_switcher/cur_idx_q[3]` → `lsu_i/lsu_bypass_i/mem_q[0][data]/CE`**. All of the worst 20 are that
+  family.
+- Controls: before disabling, the worst path carries rev_node cells; after it, none of the reported 20 does.
+- On spatial-only, the same start to the same lsu_bypass endpoints reads +3.525 ns over 48 levels.
+- Limits:
+  - disabling every cell under the hierarchy is wider than a cut on `rv_rd_res`, which leaves the unit's own internal
+    paths and the post-cut side;
+  - retiming makes the hierarchy approximate (see above);
+  - re-placement after an RTL change moves all of these numbers.
