@@ -6180,3 +6180,37 @@ Full, so the estimates for imagick disagree by four times.
 is recorded as not fitting.
 
 **Dry runs** (stubbed): `perf/natstage/dry202/`.
+
+## Addendum 203 (2026-11-20 19:03 +08, before it runs): P1 with 64-byte I-cache lines against P1, board 2, ahead of the train chains
+
+**Why.** It is the I-cache lever of the performance batch. Build 3ce15b95741a differs from P1 (d83d3a633) in
+`IcacheLineWidth` only, 128 to 512 bits, with 32 KiB and 8 ways kept. Its full build is sealed (board lane, 20 Nov),
+sha256 d37f68ca86fe…99d8: PASS 4 of 4 keys against P1's seal. That is congestion 4, no loop, WNS -12.136 ns (P1
+-13.173), routed clean, 188,412 LUT (+1,044). The seal is handed over only after the rtl lane's 95-test sweep with the
+RVFI compare on 3ce15b95741a reads clean. A hardware decision outranks the train readings queued behind it, so this
+chain goes first on board 2.
+
+**Chain** ic-b2.conf (TAG p1ic64b-frcdkms), kit bkit99 = bkit91 with the two bitstream fields changed. The stages
+are `perf/natstage/board-frcdkms/`: perlbench, gcc train01 and mcf, the stages of P1's cq-b2 on this board (Addendum
+156): perl 275.12 s, gcc 1,763.31 s, mcf 5,943.66 s. P1 with bkit91 is the fallback.
+
+**Order on board 2.** The L1D pair (Addendum 199) is unchanged. Then this chain, then Addendum 200 and 202's train
+chains. Those two are still waiting and have not booted, so they are stopped and relaunched behind this one with the
+same conf, list and pre-registrations. Their empty out directories are removed first. The launch happens only once
+the sweep has read clean and the seal file exists. If the sweep fails, nothing changes on board 2 and this
+addendum's chain is not launched.
+
+**Prediction.** Longer lines halve the I-cache misses of sequential code and double each refill. The counters of
+bkit91 (events 29, 30, 31, 33, 23, 2) do not include event 1, so only time is graded.
+- *gain*: gcc train01 or perlbench more than 0.5 % faster than P1's cq-b2 reading, specdiff PASS. The line width goes
+  into the performance batch.
+- *no gain*: every row within 0.5 %. The lever is dropped.
+- *loss*: a row more than 0.5 % slower. Dropped, reported with the row.
+- mcf has a small loop body, so it is predicted within 0.2 % (5,931.77 to 5,955.55 s). An mcf move outside 0.5 % with
+  gcc and perl flat would point at the D-side or the refill path, not at the fetch, and is reported as that.
+
+**Tier 1 and stops.** As Addendum 199: shell, smoke with no FAIL other than task 70, no illegal-instruction line, rc 0,
+specdiff PASS; otherwise the chain stops, the trap lines are read, and board 2 goes back to P1 with bkit91's
+perlbench stage.
+
+**Dry run** (stubbed): `perf/natstage/dry203/`.
