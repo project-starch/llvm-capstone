@@ -30,24 +30,17 @@
 //
 // Traps. CIncOffset and CIncOffsetImm raise UNEXPECTED_CAP_TYPE (26) on a sealed or
 // uninitialised %old (CapstoneInstrInfo.cpp, trapsOnUntaggedOperand). Moving one
-// below other instructions can change which instruction traps first, and so the
-// trap's cause and PC. The pass sinks a trapping increment only when the first
-// instruction after it that is not pure (cannot trap, no side effect) is a LOAD
-// whose base is %old itself. What that guarantees depends on the model:
-//  - QEMU checks the base's type before the access (op_helper.c, type_ok): a
-//    sealed or uninitialised %old makes the load raise 26 where the increment
-//    would have; only the trap's PC moves.
-//  - The RTL checks the type of a scalar access's base only in M-mode with
-//    capability mode on (load_store_unit.sv, the cap_violation_detection gate).
-//    Outside M, where domains run, the load through a sealed or uninitialised
-//    %old is not refused: it completes or takes a page fault before the sunk
-//    increment raises 26. There the trap's cause can change too.
-// Whether that is acceptable for a base that traps in either order is not settled;
-// until it is, this pass stays off and does not land. A STORE never qualifies:
-// QEMU and the specification accept a scalar store through an uninitialised
-// capability, so a sunk increment would let the store write and then trap
-// (-capstone-sink-loop-increment-past-stores lifts this, for measurement only).
-// An ADDI cannot trap and is sunk below anything that does not read its result.
+// below an access through %old would turn trap-before-read into read-then-trap on
+// silicon: the RTL checks a scalar access's base type only in M-mode with
+// capability mode on (load_store_unit.sv, the cap_violation_detection gate), so in a
+// domain the load or store through a sealed or uninitialised base goes ahead
+// (ISSUES Q-36, R-30, R-31). A trapping increment is therefore moved only when it
+// cannot trap: when %old is PROVEN a linear or non-linear capability on every path,
+// i.e. every value that reaches the loop PHI is derived in this function, through
+// copies, offset increments, narrowings (SHRINK, SHRINKTO) and PHIs alone, from a stack slot or a global's base
+// (PseudoCapGlobalBase), never through a load or an argument. An increment keeps
+// the type, so such a base stays usable and the increment cannot raise 26. ADDI
+// cannot trap at all. Every other trapping increment keeps its place.
 //
 // Off by default (-capstone-enable-sink-loop-increment).
 //
@@ -68,14 +61,8 @@ using namespace llvm;
 #define CAPSTONE_SINK_LOOP_INCREMENT_NAME "Capstone sink loop increment"
 
 STATISTIC(NumSunk, "Loop increments sunk below their base's last use");
-STATISTIC(NumKeptTrapOrder, "Trapping increments kept in place to preserve trap order");
-
-// Measurement only: lets a store through the old base settle the trap order too
-// (see the file comment for why that is not safe on QEMU's profile).
-static cl::opt<bool> PastStores(
-    "capstone-sink-loop-increment-past-stores", cl::Hidden, cl::init(false),
-    cl::desc("Also sink a trapping loop increment below a store through its "
-             "base (measurement only)"));
+STATISTIC(NumSunkProven, "Trapping increments sunk because their base is proven usable");
+STATISTIC(NumKeptTrapOrder, "Trapping increments kept in place: base not proven usable");
 
 namespace {
 
@@ -101,7 +88,7 @@ private:
   const CapstoneInstrInfo *TII = nullptr;
   MachineRegisterInfo *MRI = nullptr;
 
-  bool isPure(const MachineInstr &MI) const;
+  bool provenUsable(Register Reg, SmallPtrSetImpl<MachineInstr *> &Seen) const;
   bool sinkOne(MachineInstr &PHI, MachineLoop &L);
 };
 
@@ -119,13 +106,6 @@ FunctionPass *llvm::createCapstoneSinkLoopIncrementPass() {
   return new CapstoneSinkLoopIncrement();
 }
 
-// Cannot trap and has no effect another instruction could observe.
-bool CapstoneSinkLoopIncrement::isPure(const MachineInstr &MI) const {
-  return !MI.mayLoadOrStore() && !MI.isCall() && !MI.isTerminator() &&
-         !MI.hasUnmodeledSideEffects() && !MI.isPHI() &&
-         !TII->canTrap(MI) && !MI.hasOrderedMemoryRef();
-}
-
 static bool isIncrement(const MachineInstr &MI) {
   switch (MI.getOpcode()) {
   case Capstone::CIncOffsetImm:
@@ -137,17 +117,43 @@ static bool isIncrement(const MachineInstr &MI) {
   }
 }
 
-// A load (or, with PastStores, a store) addressed as `base, imm` with base Reg
-// (operand 1, as every scalar and capability load and store of this target is
-// laid out).
-static bool isAccessThrough(const MachineInstr &MI, Register Reg) {
-  if (MI.isCall() || MI.hasUnmodeledSideEffects() || MI.getNumOperands() < 3 ||
-      !MI.getOperand(1).isReg() || MI.getOperand(1).getReg() != Reg ||
-      !MI.getOperand(2).isImm())
+// Reg holds a linear or non-linear capability on every path: it is a stack slot's
+// address or a global's base, or reaches one through copies, offset increments,
+// narrowings and PHIs. A cycle through a PHI adds no new source, so a PHI already being visited
+// counts as proven.
+bool CapstoneSinkLoopIncrement::provenUsable(
+    Register Reg, SmallPtrSetImpl<MachineInstr *> &Seen) const {
+  if (!Reg.isVirtual())
     return false;
-  if (MI.mayLoad() && !MI.mayStore())
+  MachineInstr *Def = MRI->getVRegDef(Reg);
+  if (!Def)
+    return false;
+  switch (Def->getOpcode()) {
+  case Capstone::PseudoCapGlobalBase:
     return true;
-  return PastStores && MI.mayStore() && !MI.mayLoad();
+  case Capstone::CIncOffsetImm:
+  case Capstone::CIncOffset:
+  case Capstone::SHRINK:
+  case Capstone::SHRINKTO:
+    // An offset change or a narrowing keeps the type of a usable capability.
+    if (Def->getOperand(1).isFI())
+      return true;
+    return Def->getOperand(1).isReg() &&
+           provenUsable(Def->getOperand(1).getReg(), Seen);
+  case TargetOpcode::COPY:
+    return Def->getOperand(1).isReg() &&
+           provenUsable(Def->getOperand(1).getReg(), Seen);
+  case TargetOpcode::PHI:
+    if (!Seen.insert(Def).second)
+      return true;
+    for (unsigned I = 1, E = Def->getNumOperands(); I < E; I += 2)
+      if (!Def->getOperand(I).isReg() ||
+          !provenUsable(Def->getOperand(I).getReg(), Seen))
+        return false;
+    return true;
+  default:
+    return false;
+  }
 }
 
 bool CapstoneSinkLoopIncrement::sinkOne(MachineInstr &PHI, MachineLoop &L) {
@@ -193,31 +199,26 @@ bool CapstoneSinkLoopIncrement::sinkOne(MachineInstr &PHI, MachineLoop &L) {
   if (!Last)
     return false;
 
-  // Nothing between Inc and Last may read New, and any other operand of Inc
-  // (CIncOffset's offset register) is already defined above Inc.
+  // A trapping increment moves only when its base is proven usable, so it
+  // cannot trap (see the file comment).
   bool Trapping = TII->canTrap(*Inc);
-  bool OrderSettled = !Trapping;
+  if (Trapping) {
+    SmallPtrSet<MachineInstr *, 8> Seen;
+    if (!provenUsable(Old, Seen)) {
+      ++NumKeptTrapOrder;
+      return false;
+    }
+  }
+  // Nothing between Inc and Last may read New; any other operand of Inc
+  // (CIncOffset's offset register) is already defined above Inc.
   for (auto It = std::next(Inc->getIterator());; ++It) {
     MachineInstr &MI = *It;
-    if (!MI.isDebugInstr()) {
+    if (!MI.isDebugInstr())
       for (const MachineOperand &MO : MI.uses())
         if (MO.isReg() && MO.getReg() == New)
           return false;
-      if (!OrderSettled) {
-        if (isAccessThrough(MI, Old))
-          OrderSettled = true;
-        else if (!isPure(MI)) {
-          ++NumKeptTrapOrder;
-          return false;
-        }
-      }
-    }
     if (&MI == Last)
       break;
-  }
-  if (!OrderSettled) {
-    ++NumKeptTrapOrder;
-    return false;
   }
 
   MBB->splice(std::next(Last->getIterator()), MBB, Inc->getIterator());
@@ -225,6 +226,8 @@ bool CapstoneSinkLoopIncrement::sinkOne(MachineInstr &PHI, MachineLoop &L) {
   // only in the direction of being conservative, but clear them all to be exact.
   MRI->clearKillFlags(Old);
   ++NumSunk;
+  if (Trapping)
+    ++NumSunkProven;
   return true;
 }
 
