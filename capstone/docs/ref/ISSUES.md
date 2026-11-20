@@ -5246,7 +5246,20 @@ userspace binary die in M-mode will actually look; also in `fpga-debugging-recip
 handler, so only that invocation dies and the rest of the run still returns data — the "make every run
 RETURN" rule applied to privilege rather than to control flow.
 
-### C-32 — `OPEN — LIVE ON SILICON until Q-04 (b) lands in the RTL: the lead decided Q-04 option 1 on 2026-10-14 (plan 2026-10-14-movc-untagged-source.md); capstone-qemu #27 fixes the virtual profile; no RTL commit exists yet (audit 2026-10-16). History: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (2026-09-15), so every optimised-image board number of that port is a lookaside-OFF run; DESIGN A merged 2026-09-15 (46c53b7b6ae2) and measured not to fix this site; reproducer in capstone/tests/c32-sinkfold-repro/`
+### C-32 — `FIXED IN THE RTL by Q-04 (b), capstone-ariane 48982f544 (2026-10-20), which P1 (d83d3a633) contains; confirmed in RTL simulation 2026-11-20 (movc-untagged-source: P1 passes, the field RTL c7e6f604f fails at TESTNUM 1); not re-measured on silicon. Remedy (b) stays the rule for any board on an older bitstream. History: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (2026-09-15), so every optimised-image board number of that port is a lookaside-OFF run; DESIGN A merged 2026-09-15 (46c53b7b6ae2) and measured not to fix this site; reproducer in capstone/tests/c32-sinkfold-repro/`
+
+> **2026-11-20: the RTL side is in P1, confirmed in simulation (compiler lane).**
+> - Q-04 (b) is capstone-ariane 48982f544 (2026-10-20): MOVC keeps an untagged (NOT_CAP) source. It is an ancestor
+>   of d83d3a633, the bitstream perf/natstage/RESULTS records as P1, and of 7180a83b6 and eeb654104. It is NOT in
+>   vp2c 8522d72fe. No silicon run of the test is recorded.
+> - Directed test `movc-untagged-source` (testlist_sup.yaml), Verilator, seed 1, worktrees under sup-runs/c32-*:
+>   - P1 RTL d83d3a633: `*** SUCCESS *** (tohost = 0) after 865 cycles`, far below the 2,000,000-cycle limit.
+>   - Field RTL c7e6f604f, the negative arm the test's header names (test file and testlist entry added to that
+>     worktree only): `*** FAILED ***`, the trace writing 3 to tohost, which is TESTNUM 1, "NOT_CAP non-zero source
+>     nulled -- Q-04 (b) absent", as predicted.
+> - What follows: for a board on P1 or later, images built with `+movc-keeps-integer-source` match the RTL's MOVC.
+>   Remedy (b) (images built without the feature) is needed only on older bitstreams. Changing the board images'
+>   build is the board lane's call; this entry changes nothing there.
 
 > **2026-10-20: C-32 IS THE CAUSE OF THE vp2 TIER 3 SILICON-ONLY STOPS, and the 2026-10-14 "resolved for the virtual
 > profile" below holds on QEMU only, not on vp2 silicon.**
