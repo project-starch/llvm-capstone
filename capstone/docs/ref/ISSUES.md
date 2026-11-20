@@ -10500,7 +10500,7 @@ return on P1. Next steps:
   tell the bitstreams apart; more boots on each would give the rate;
 - then, if a boot stops, a capture reduced to the frame where it stops, for a folder under `tests/fpga-repros/`.
 
-### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
+### C-59 — `isValidInsnFormat` and fifteen more symbols were defined at external linkage in BOTH the RISCV and the Capstone target, so a static build of LLVM could not link `FIXED 2026-11-20 (lane compiler/c59-odr-rest): no strong external symbol is defined in both targets any more; a full BUILD_SHARED_LIBS=OFF build was not run`
 
 > **Scope, measured 2026-09-25 by the compiler lane.** Every strong (T/D/B) defined symbol in both
 > target trees was enumerated and intersected, and each pair was reproduced with `ld -r`. **Sixteen
@@ -10533,6 +10533,21 @@ dynamic linker.
 **Fix shape (not done).** Give the Capstone copy internal linkage (`static`, or an anonymous
 namespace), or rename it. That is a one-line change, but it is in the compiler lane's area.
 Verify it with a static build of `llvm-ar`, which is exactly what fails today.
+
+**Fixed 2026-11-20, the remaining fifteen.**
+- The twelve `isTune*Fusion` predicates are generated from the fusion records' names. Capstone's records are
+  renamed `TuneCapstone*Fusion` (CapstoneMacroFusion.td, CapstoneProcessors.td, and the one C++ use in
+  CapstoneMatInt.cpp). Their feature strings (`lui-addi-fusion`, ...) are unchanged, so `-mattr` and processor
+  definitions are not affected.
+- `getPredicatedOpcode` and `isRegImmLoadOrStore` are `static`.
+- The option variable is `CapstonePreferredLandingPadLabel`; the option string stays `capstone-landing-pad-label`.
+
+Checks:
+- Intersection of strong external symbols (T/D/B/R) defined in llvm/lib/Target/Capstone's and llvm/lib/Target/RISCV's
+  objects: 0. On a build of dev's sources the same script lists exactly the fifteen above.
+- No generated code changes: all 678 SPEC objects equal the previous build apart from `.comment` and gcc's embedded
+  version string. CodeGen/Capstone and MC/Capstone 176/176; RISC-V's fusion tests pass.
+- Not run: a full `BUILD_SHARED_LIBS=OFF` link.
 
 ### C-60 — any `-fstack-protector*` asserted in "Insert stack protectors" on capstone64, because `llvm.stackprotector` is not address-space overloaded `CLOSED 2026-11-20 by option (b): the driver refuses the flag — COMPILER, crash; found 2026-09-24 by the tshark port; the threat-model question is OPEN with the lead`
 

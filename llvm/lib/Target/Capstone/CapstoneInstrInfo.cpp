@@ -1796,7 +1796,7 @@ bool CapstoneInstrInfo::isBranchOffsetInRange(unsigned BranchOp,
 // If the operation has a predicated pseudo instruction, return the pseudo
 // instruction opcode. Otherwise, return Capstone::INSTRUCTION_LIST_END.
 // TODO: Support more operations.
-unsigned getPredicatedOpcode(unsigned Opcode) {
+static unsigned getPredicatedOpcode(unsigned Opcode) {
   switch (Opcode) {
   case Capstone::ADD:   return Capstone::PseudoCCADD;   break;
   case Capstone::SUB:   return Capstone::PseudoCCSUB;   break;

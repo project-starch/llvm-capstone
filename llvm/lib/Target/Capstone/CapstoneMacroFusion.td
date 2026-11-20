@@ -13,7 +13,7 @@
 //   rd = imm[31:0] which decomposes to
 //   lui rd, imm[31:12]
 //   addi(w) rd, rd, imm[11:0]
-def TuneLUIADDIFusion
+def TuneCapstoneLUIADDIFusion
   : SimpleFusion<"lui-addi-fusion", "HasLUIADDIFusion",
                  "Enable LUI+ADDI macro fusion",
                  CheckOpcode<[LUI]>,
@@ -22,7 +22,7 @@ def TuneLUIADDIFusion
 // Fuse AUIPC followed by ADDI:
 //   auipc rd, imm20
 //   addi rd, rd, imm12
-def TuneAUIPCADDIFusion
+def TuneCapstoneAUIPCADDIFusion
   : SimpleFusion<"auipc-addi-fusion", "HasAUIPCADDIFusion",
                  "Enable AUIPC+ADDI macrofusion",
                  CheckOpcode<[AUIPC]>,
@@ -31,7 +31,7 @@ def TuneAUIPCADDIFusion
 // Fuse zero extension of halfword:
 //   slli rd, rs1, 48
 //   srli rd, rd, 48
-def TuneZExtHFusion
+def TuneCapstoneZExtHFusion
   : SimpleFusion<"zexth-fusion", "HasZExtHFusion",
                  "Enable SLLI+SRLI to be fused to zero extension of halfword",
                  CheckAll<[
@@ -48,7 +48,7 @@ def TuneZExtHFusion
 // Fuse zero extension of word:
 //   slli rd, rs1, 32
 //   srli rd, rd, 32
-def TuneZExtWFusion
+def TuneCapstoneZExtWFusion
   : SimpleFusion<"zextw-fusion", "HasZExtWFusion",
                  "Enable SLLI+SRLI to be fused to zero extension of word",
                  CheckAll<[
@@ -66,7 +66,7 @@ def TuneZExtWFusion
 //   slli rd, rs1, 32
 //   srli rd, rd, x
 //   where 0 <= x < 32
-def TuneShiftedZExtWFusion
+def TuneCapstoneShiftedZExtWFusion
   : SimpleFusion<"shifted-zextw-fusion", "HasShiftedZExtWFusion",
                  "Enable SLLI+SRLI to be fused when computing (shifted) word zero extension",
                  CheckAll<[
@@ -83,7 +83,7 @@ def TuneShiftedZExtWFusion
 // Fuse load with add:
 //   add rd, rs1, rs2
 //   ld rd, 0(rd)
-def TuneLDADDFusion
+def TuneCapstoneLDADDFusion
   : SimpleFusion<"ld-add-fusion", "HasLDADDFusion", "Enable LD+ADD macrofusion",
                  CheckOpcode<[ADD]>,
                  CheckAll<[
@@ -97,7 +97,7 @@ defvar Load = [LB, LH, LW, LD, LBU, LHU, LWU];
 // Fuse add(.uw) followed by a load (lb, lh, lw, ld, lbu, lhu, lwu):
 //   add(.uw) rd, rs1, rs2
 //   load rd, imm12(rd)
-def TuneADDLoadFusion
+def TuneCapstoneADDLoadFusion
   : SimpleFusion<"add-load-fusion", "HasADDLoadFusion", "Enable ADD(.UW) + load macrofusion",
                  CheckOpcode<[ADD, ADD_UW]>,
                  CheckOpcode<Load>>;
@@ -105,7 +105,7 @@ def TuneADDLoadFusion
 // Fuse AUIPC followed by by a load (lb, lh, lw, ld, lbu, lhu, lwu)
 //   auipc rd, imm20
 //   load rd, imm12(rd)
-def TuneAUIPCLoadFusion
+def TuneCapstoneAUIPCLoadFusion
   : SimpleFusion<"auipc-load-fusion", "HasAUIPCLoadFusion",
                  "Enable AUIPC + load macrofusion",
                  CheckOpcode<[AUIPC]>,
@@ -114,17 +114,17 @@ def TuneAUIPCLoadFusion
 // Fuse LUI followed by a load (lb, lh, lw, ld, lbu, lhu, lwu)
 //   lui rd, imm[31:12]
 //   load rd, imm12(rd)
-def TuneLUILoadFusion
+def TuneCapstoneLUILoadFusion
   : SimpleFusion<"lui-load-fusion", "HasLUILoadFusion",
                  "Enable LUI + load macrofusion",
                  CheckOpcode<[LUI]>,
                  CheckOpcode<Load>>;
 
-// Bitfield extract fusion: similar to TuneShiftedZExtWFusion
+// Bitfield extract fusion: similar to TuneCapstoneShiftedZExtWFusion
 // but without the immediate restriction
 //   slli rd, rs1, imm12
 //   srli rd, rd, imm12
-def TuneBFExtFusion
+def TuneCapstoneBFExtFusion
   : SimpleFusion<"bfext-fusion", "HasBFExtFusion",
                  "Enable SLLI+SRLI (bitfield extract) macrofusion",
                  CheckOpcode<[SLLI]>,
@@ -133,7 +133,7 @@ def TuneBFExtFusion
 // Fuse ADDI followed by a load (lb, lh, lw, ld, lbu, lhu, lwu)
 //   addi rd, rs1, imm12
 //   load rd, imm12(rd)
-def TuneADDILoadFusion
+def TuneCapstoneADDILoadFusion
   : SimpleFusion<"addi-load-fusion", "HasADDILoadFusion",
                  "Enable ADDI + load macrofusion",
                  CheckOpcode<[ADDI]>,
@@ -142,7 +142,7 @@ def TuneADDILoadFusion
 // Fuse shXadd(.uw) followed by a load (lb, lh, lw, ld, lbu, lhu, lwu)
 //   shXadd(.uw) rd, rs1, rs2
 //   load rd, imm12(rd)
-def TuneSHXADDLoadFusion
+def TuneCapstoneSHXADDLoadFusion
   : SimpleFusion<"shxadd-load-fusion", "HasSHXADDLoadFusion",
                  "Enable SH(1|2|3)ADD(.UW) + load macrofusion",
                  CheckOpcode<[SH1ADD, SH2ADD, SH3ADD, SH1ADD_UW, SH2ADD_UW, SH3ADD_UW]>,

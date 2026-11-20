@@ -342,8 +342,8 @@ def SIFIVE_X390 : CapstoneProcessorModel<"sifive-x390",
 
 defvar SiFiveP400TuneFeatures = [TuneNoDefaultUnroll,
                                  TuneConditionalCompressedMoveFusion,
-                                 TuneLUIADDIFusion,
-                                 TuneAUIPCADDIFusion,
+                                 TuneCapstoneLUIADDIFusion,
+                                 TuneCapstoneAUIPCADDIFusion,
                                  TunePostRAScheduler];
 
 def SIFIVE_P450 : CapstoneProcessorModel<"sifive-p450", SiFiveP400Model,
@@ -375,8 +375,8 @@ def SIFIVE_P470 : CapstoneProcessorModel<"sifive-p470", SiFiveP400Model,
 
 defvar SiFiveP500TuneFeatures = [TuneNoDefaultUnroll,
                                  TuneConditionalCompressedMoveFusion,
-                                 TuneLUIADDIFusion,
-                                 TuneAUIPCADDIFusion,
+                                 TuneCapstoneLUIADDIFusion,
+                                 TuneCapstoneAUIPCADDIFusion,
                                  TunePostRAScheduler];
 
 def SIFIVE_P550 : CapstoneProcessorModel<"sifive-p550", SiFiveP500Model,
@@ -407,8 +407,8 @@ def SIFIVE_P670 : CapstoneProcessorModel<"sifive-p670", SiFiveP600Model,
                                        FeatureUnalignedVectorMem]),
                                       [TuneNoDefaultUnroll,
                                        TuneConditionalCompressedMoveFusion,
-                                       TuneLUIADDIFusion,
-                                       TuneAUIPCADDIFusion,
+                                       TuneCapstoneLUIADDIFusion,
+                                       TuneCapstoneAUIPCADDIFusion,
                                        TuneNoSinkSplatOperands,
                                        TuneVXRMPipelineFlush,
                                        TunePostRAScheduler]>;
@@ -431,8 +431,8 @@ def SIFIVE_P870 : CapstoneProcessorModel<"sifive-p870", SiFiveP800Model,
                                        FeatureUnalignedVectorMem]),
                                       [TuneNoDefaultUnroll,
                                        TuneConditionalCompressedMoveFusion,
-                                       TuneLUIADDIFusion,
-                                       TuneAUIPCADDIFusion,
+                                       TuneCapstoneLUIADDIFusion,
+                                       TuneCapstoneAUIPCADDIFusion,
                                        TuneNoSinkSplatOperands,
                                        TuneVXRMPipelineFlush,
                                        TunePostRAScheduler]>;
@@ -594,14 +594,14 @@ def VENTANA_VEYRON_V1 : CapstoneProcessorModel<"veyron-v1",
                                               TuneDisableMISchedLoadClustering,
                                               TuneDisablePostMISchedLoadClustering,
                                               TuneDisablePostMISchedStoreClustering,
-                                              TuneLUIADDIFusion,
-                                              TuneAUIPCADDIFusion,
-                                              TuneZExtHFusion,
-                                              TuneZExtWFusion,
-                                              TuneShiftedZExtWFusion,
-                                              TuneADDLoadFusion,
-                                              TuneAUIPCLoadFusion,
-                                              TuneLUILoadFusion]> {
+                                              TuneCapstoneLUIADDIFusion,
+                                              TuneCapstoneAUIPCADDIFusion,
+                                              TuneCapstoneZExtHFusion,
+                                              TuneCapstoneZExtWFusion,
+                                              TuneCapstoneShiftedZExtWFusion,
+                                              TuneCapstoneADDLoadFusion,
+                                              TuneCapstoneAUIPCLoadFusion,
+                                              TuneCapstoneLUILoadFusion]> {
   let MVendorID = 0x61f;
   let MArchID = 0x8000000000010000;
   let MImpID = 0x111;
@@ -629,9 +629,9 @@ def XIANGSHAN_NANHU : CapstoneProcessorModel<"xiangshan-nanhu",
                                            FeatureStdExtZicbom,
                                            FeatureStdExtZicboz],
                                            [TuneNoDefaultUnroll,
-                                            TuneZExtHFusion,
-                                            TuneZExtWFusion,
-                                            TuneShiftedZExtWFusion]>;
+                                            TuneCapstoneZExtHFusion,
+                                            TuneCapstoneZExtWFusion,
+                                            TuneCapstoneShiftedZExtWFusion]>;
 
 def XIANGSHAN_KUNMINGHU : CapstoneProcessorModel<"xiangshan-kunminghu",
                                               NoSchedModel,
@@ -656,9 +656,9 @@ def XIANGSHAN_KUNMINGHU : CapstoneProcessorModel<"xiangshan-kunminghu",
                                                FeatureStdExtSsstrict,
                                                FeatureStdExtZvl128b]),
                                               [TuneNoDefaultUnroll,
-                                               TuneZExtHFusion,
-                                               TuneZExtWFusion,
-                                               TuneShiftedZExtWFusion]>;
+                                               TuneCapstoneZExtHFusion,
+                                               TuneCapstoneZExtWFusion,
+                                               TuneCapstoneShiftedZExtWFusion]>;
 
 def SPACEMIT_X60 : CapstoneProcessorModel<"spacemit-x60",
                                        SpacemitX60Model,

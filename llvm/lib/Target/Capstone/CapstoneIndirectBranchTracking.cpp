@@ -25,7 +25,7 @@
 
 using namespace llvm;
 
-cl::opt<uint32_t> PreferredLandingPadLabel(
+cl::opt<uint32_t> CapstonePreferredLandingPadLabel(
     "capstone-landing-pad-label", cl::ReallyHidden,
     cl::desc("Use preferred fixed label for all labels"));
 
@@ -68,11 +68,11 @@ bool CapstoneIndirectBranchTracking::runOnMachineFunction(MachineFunction &MF) {
     return false;
 
   uint32_t FixedLabel = 0;
-  if (PreferredLandingPadLabel.getNumOccurrences() > 0) {
-    if (!isUInt<20>(PreferredLandingPadLabel))
+  if (CapstonePreferredLandingPadLabel.getNumOccurrences() > 0) {
+    if (!isUInt<20>(CapstonePreferredLandingPadLabel))
       report_fatal_error("capstone-landing-pad-label=<val>, <val> needs to fit in "
                          "unsigned 20-bits");
-    FixedLabel = PreferredLandingPadLabel;
+    FixedLabel = CapstonePreferredLandingPadLabel;
   }
 
   bool Changed = false;

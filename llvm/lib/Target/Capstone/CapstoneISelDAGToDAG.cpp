@@ -4390,7 +4390,7 @@ static bool isWorthFoldingAdd(SDValue Add) {
   return true;
 }
 
-bool isRegImmLoadOrStore(SDNode *User, SDValue Add) {
+static bool isRegImmLoadOrStore(SDNode *User, SDValue Add) {
   switch (User->getOpcode()) {
   default:
     return false;
