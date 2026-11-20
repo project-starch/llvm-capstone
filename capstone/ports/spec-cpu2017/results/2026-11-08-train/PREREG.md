@@ -6267,3 +6267,29 @@ chains go behind it.
 illegal-instruction line before the probe marker, a non-zero status, a specdiff FAIL.
 
 **Dry runs** (stubbed): `perf/natstage/dry204/`.
+
+## Addendum 205 (2026-11-20 23:33 +08, outcome): Addendum 199, the 64 KiB 16-way L1D against its base on board 2
+
+Both bitstreams flashed and booted clean on board 2: shell, the nine smoke steps with task 70 waived, no
+illegal-instruction line, no SIGILL, no Oops, no panic. Every row is valid with specdiff PASS. Hashes are of `board.txt`.
+
+| Row | eeb654104 (F2) | b0f02bac7 (F2 + L1D 64 KiB) | Seconds | Cycles | L1D misses (event 2) |
+|---|---|---|---|---|---|
+| perlbench makerand | 289.88 s (c7dd627646e531c1) | 291.68 s (340c293a3d7a99ed) | +0.62 % | +0.59 % | -5.6 % |
+| mcf | 6,552.33 s (22dca96a9ce6e756) | 6,304.32 s (8ce5e267136de1c5) | -3.79 % | -3.87 % | -6.84 % |
+| gcc train01 | 1,944.98 s (659bc374dc1b045d) | 1,905.69 s (d4d24426ebb8a0e8) | -2.02 % | -2.07 % | -12.09 % |
+
+- **Independent reference:** eeb654104's mcf, 6,552.33 s, is 0.035 % from board 1's 6,550.06 s. The band was met.
+- **Registered reading of the build's plan:** L1D misses fall on all three rows (met). The cycles fall where the miss
+  was binding, on gcc and mcf. perlbench's cycles rise although its misses fall, which the registered reading does not
+  predict.
+- **Decision:** both clauses fire. *gain* fires on gcc and mcf, two of the problem rows, by 2 to 4 %. *loss* fires on
+  perlbench makerand, the shortest row (290 s), whose cycles are ungraded (Addendum 153a), by 0.6 %. The pre-registered
+  rule did not say what follows when both fire, so this is a resolution made after the reading, and it is stated as
+  such. The lever goes on, but only to the cheapest, reversible next step: a synthesis-only gate of a P1 variant with
+  the 48 KiB 12-way L1D, the prepared option b9ab75c41. b0f02bac7 itself failed its WNS and congestion keys, and P1 has
+  about 150 slices free. No bitstream is built and no board time is spent on the lever before that gate reads. If a P1
+  variant reaches the board, its pair runs perlbench makerand twice. A perlbench slowdown above 0.5 % that repeats on
+  both runs blocks the lever from the performance batch.
+- **Footing:** F2 is the flat-table footing. These deltas are not transferable to P1 as numbers, only as the sign and
+  the rough size of the lever.
