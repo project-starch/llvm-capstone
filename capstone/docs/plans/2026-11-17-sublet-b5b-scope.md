@@ -87,17 +87,39 @@ Re-read at source here:
 So **the trap route is an addition, not a deletion**. Protected U, S rule 1 and the tagged sscratch give the
 processor a per-access check outside M that it has never had. And CPTAG is a new hardware structure.
 
-## R-75 does not block the trap route
+## R-75 IS live on the trap route (corrected 2026-11-20)
 
-R-75 is the S trap below M after a CSRUNV service resume. The discriminating arms are on capstone-ariane
-rtl/record-cache 90e439a7f (tests only), run on 6e82d7bd2's RTL:
-- **`va-rc-bare` and `va-rc-bare-nosum` pass.** S holds srevroot = the table it uses (0x80009000) and ecalls with no
-  context ever entered, with SUM set and without. `csrr mcause` retires at mtvec.
-- **The controls read as filed:** `va-fetchsplit-s` (one entry and one escape) passes, va-rc-trap-z passes, and
-  va-rc-trap loops.
+**WITHDRAWN:** this section said "R-75 does not block the trap route": a trap-route S, running with srevroot non-zero
+by design, would not meet it, because the defect needed a service resume and a second escape. That rested on R-75's
+first mechanism (an illegal instruction from the CSR privilege check), which was RETRACTED on 2026-11-20 (ISSUES R-75;
+the cause had come from the retirement tracer's stale label, fixed on capstone-ariane rvfi-tracer-cause 0f59f7260).
 
-The defect needs the service resume and the second escape. A trap-route S, which runs with srevroot non-zero by
-design, does not meet it on this RTL. If CSRUNV is deleted, the path R-75 lives on goes with it.
+**What R-75 is** (ISSUES R-75, localised on P1 by matched readings): after an escape the PC tracker re-adopts the caller's
+PHYSICAL code capability, and the R-43 probe resolves it in the table at srevroot (DEAD), where under srevroot 0 the
+same id is ALLOW; code under that capability then takes cause 25 (here the M trap handler, for ever). The trigger is a
+PC-capability id change while srevroot holds a table, then code under that id. The resume only supplies the id change
+in the arm; a trap-route S, which holds srevroot by design and changes its PC capability at every capability jump,
+meets the same shape.
+
+**The reference model chooses the store by the RUNNING privilege, per operation** (capstone-qemu 9289114e06,
+`target/riscv/capstone_table.c:171-177`): `if (env->priv == PRV_U) return env->capstone_u_active; return env->priv ==
+PRV_S && env->srevroot != 0;` -- protected U and S with srevroot use the table at srevroot, "M keeps the host tree"
+(`capstone_table.h`). Neither the id nor the probe carries a namespace; the namespace is the running code's. The RTL
+instead resolves a PC verdict once, in the namespace active when the unit serves the probe, and keeps it across a
+change of privilege, because the PC tracker ignores the namespace flush by the 2026-10-20 ruling (item 1, isa.md;
+`commit_stage.sv`'s pc_revnode_tracking). In R-75's arm the verdict made at S under srevroot = the context's table is
+still in force when the handler runs at M, where the reference would read the host tree and find it live.
+
+**Must-pass for B5b-2 (the trap route):** the PC tracker's probe, and every check that resolves an id, resolves it in
+the namespace the REFERENCE assigns to the code that runs under it (the running privilege and srevroot, per
+`capstone_uses_guest_table`), and a verdict made under one namespace is not reused under another. **Directed test of
+R-75's shape, must pass on the B5b-2 RTL:** an M-minted PC capability, srevroot non-zero at S, a PC-capability id change
+at S, then code at S and then at M under that capability; each verdict must equal the reference model's for the same
+privilege and root. R-75's own arm (va-rc-trap) and its CS4_ZERO control carry over as regression arms.
+
+**Spec question for the lead, before RTL:** the 2026-10-20 ruling (the PC tracker ignores the namespace flush) and the
+reference model's per-operation, per-privilege choice of store disagree for exactly this case. Either the ruling is
+revised (re-resolve the PC verdict on a namespace change), or the reference is changed to cache, or ids gain a namespace.
 
 ## The scope question for the lead
 
