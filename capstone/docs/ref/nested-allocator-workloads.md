@@ -3384,7 +3384,7 @@ known scripts).
 - An O(1) lookup with the protection unchanged (`own-allocators/500.perlbench_r/fix-lookup-pages.py`): **+2.894 %**,
   -1,188 M instructions, at +0.86 MB of peak memory on test.pl. A first line that aligned arenas to 4 KiB reached
   +2.859 % but cost +8.56 MB (mallocng's aligned blocks), which the memory runs caught; it was replaced.
-- The fixture (`heads-fixture-main.c`, an interpreter embedded from the build's own objects): freed heads fault (cause
+- The fixture (`make-heads-fixture.py`, from the build's own perlmain.c, which stays outside the repository; an interpreter embedded from the build's own objects): freed heads fault (cause
   25), live heads read, a second interpreter's heads read while the first one's fault, with the normal table and with
   a 1-slot table; a build without the verify-on-hit faults with cause 24 on live heads.
 - Not yet read: cycles. The board's +5.84 % on test.pl (prot2) is the paper's footing; the new image needs its own P1
