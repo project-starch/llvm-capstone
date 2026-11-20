@@ -1,0 +1,2 @@
+8a6ebfe make-diag-amalgamation.py: FTS3CMP hook for case 11
+16207c9 kit 19cases: kit heap256 at 4789284, with capstone/ports/sqlite and capstone/bug-corpora/sqlite from llvm-capstone dev fe1d2dad2ebe

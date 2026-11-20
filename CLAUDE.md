@@ -655,6 +655,7 @@ time pressure on a shared resource, where the cost of skipping a step is a wrong
 | Skill | Use it for |
 |---|---|
 | `board-run` | ANY board execution: bake into the image, boot, invoke, classify, release. Also read it before interpreting a run that produced no result. |
+| `paper-audit` | Auditing paper text or a paper PR with subagents: which auditors to launch, what their prompts must contain, how to triage their findings before any edit, and when to audit again. |
 
 A skill is just `.claude/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`);
 no tooling is needed to add one. Two things to know:

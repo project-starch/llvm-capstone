@@ -1,0 +1,6 @@
+35f1febd1c6a29a4f444193b9c9f0cb8533400b9079b8dda607a995babe4916c  work/build/qemu/qemu-system-riscv64xcheri
+ab2192d7b850c03de9ad692fe4a909c9a3802a85b109ec9a1b96620399fa6d41  work/output/rootfs-riscv64-purecap/boot/kernel/kernel
+401626c455653838b8bd7f144df738b3cfd48f4f3eb3c72a3076f873b6310db5  work/output/cheribsd-riscv64-purecap.img
+c8652f09235371db3cd0a513b6d4b3ff63dd27891c0627c328c7077928119adf  work/sdk/share/qemu/bbl-riscv64cheri-virt-fw_jump.bin
+8848ea3a026d45d435f05dc05ae39082cdf28d68b24d07c1ed8037ccc1b0aed3  work/build/llvm/bin/clang
+23a5692948a2845d847edc71a4c5ad6a959be5e9d6ca79006e750e79f16c291e  sqlite/amalgamation-published/sqlite3.c

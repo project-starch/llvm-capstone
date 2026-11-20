@@ -1,0 +1,79 @@
+--- a/sv.c	2026-11-18 11:00:50.420818596 +0800
++++ b/sv.c	2026-11-18 11:00:50.431818596 +0800
+@@ -266,16 +266,55 @@
+ 
+ static SV *sv_arena_last;	/* the arena found last; most lookups repeat it */
+ 
++/* Every arena, sorted by address. A lookup searches this array and reads no
++   arena: walking PL_sv_arenaroot instead costs one load through each arena,
++   and each arena is a heap object with a lifetime of its own. */
++static SV **sv_arena_index;
++static size_t sv_arena_count, sv_arena_cap;
++
++/* Enter a new arena in the index. Perl_more_sv is the only caller, and the
++   only place that adds an arena. */
++static void
++S_sv_arena_register(SV *sva)
++{
++    size_t lo = 0, hi = sv_arena_count;
++    if (sv_arena_count == sv_arena_cap) {
++        sv_arena_cap = sv_arena_cap ? sv_arena_cap * 2 : 64;
++        Renew(sv_arena_index, sv_arena_cap, SV *);
++    }
++    while (lo < hi) {
++        const size_t mid = lo + (hi - lo) / 2;
++        if (PTR2UV(sv_arena_index[mid]) < PTR2UV(sva))
++            lo = mid + 1;
++        else
++            hi = mid;
++    }
++    Move(sv_arena_index + lo, sv_arena_index + lo + 1, sv_arena_count - lo, SV *);
++    sv_arena_index[lo] = sva;
++    sv_arena_count++;
++}
++
+ /* The arena holding the head at sv's address, or NULL. sv is never read. */
+ static SV *
+ S_sv_arena_of(const SV *sv)
+ {
+     SV *sva = sv_arena_last;
++    size_t lo = 0, hi = sv_arena_count;
+     if (sva && PTR2UV(sv) - PTR2UV(sva + 1) < SV_ARENA_HEADS * sizeof(SV))
+         return sva;
+-    for (sva = PL_sv_arenaroot; sva; sva = MUTABLE_SV(SvANY(sva)))
+-        if (PTR2UV(sv) - PTR2UV(sva + 1) < SV_ARENA_HEADS * sizeof(SV))
+-            return sv_arena_last = sva;
++    /* the last arena that starts at or below sv */
++    while (lo < hi) {
++        const size_t mid = lo + (hi - lo) / 2;
++        if (PTR2UV(sv_arena_index[mid]) <= PTR2UV(sv))
++            lo = mid + 1;
++        else
++            hi = mid;
++    }
++    if (lo == 0)
++        return NULL;
++    sva = sv_arena_index[lo - 1];
++    if (PTR2UV(sv) - PTR2UV(sva + 1) < SV_ARENA_HEADS * sizeof(SV))
++        return sv_arena_last = sva;
+     return NULL;
+ }
+ 
+@@ -365,6 +404,7 @@
+     /* The heads, then the child each was handed out as (above plant_SV). */
+     Newxz(chunk, PERL_ARENA_SIZE + SV_ARENA_HEADS * sizeof(SV *), char);
+     sv_add_arena(chunk, PERL_ARENA_SIZE, 0);
++    S_sv_arena_register((SV *)chunk);
+     ((SV *)chunk)->sv_u.svu_rv = (SV *)capstone_cap_derive(chunk,
+         __builtin_capstone_cap_get_cursor(chunk)
+             - __builtin_capstone_cap_get_base(chunk), PERL_ARENA_SIZE);
+@@ -781,6 +821,9 @@
+     PL_sv_root = 0;
+ #ifdef PERL_CAPSTONE_SUBLET
+     sv_arena_last = NULL;
++    Safefree(sv_arena_index);
++    sv_arena_index = NULL;
++    sv_arena_count = sv_arena_cap = 0;
+ #endif
+ }
+ 

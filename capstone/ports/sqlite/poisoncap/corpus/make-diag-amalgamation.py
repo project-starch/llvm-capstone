@@ -3,7 +3,7 @@
 
     make-diag-amalgamation.py SRC_DIR OUT_DIR
 
-Never used for a verdict. It exists to explain individual results (cases 12 and 15 of the temporal
+Never used for a verdict. It exists to explain individual results (cases 11, 12 and 15 of the temporal
 run): which blocks their memsys5 frees and when, when the quarantine is flushed, whether a reallocation
 stays in place or moves, and which buffer the FTS5 readers in those cases read. Every insertion is a
 print to stderr; nothing else in the source changes, and each anchor must occur exactly once.
@@ -38,6 +38,18 @@ HOOKS = [
      '    fprintf(stderr, "DIAG EXTENDLEVEL aSeg=%p nByte=%d\\n", (void *)pLvl->aSeg, nByte);\n'
      "    aNew = sqlite3_realloc(pLvl->aSeg, nByte);\n"
      '    fprintf(stderr, "DIAG EXTENDLEVEL new=%p\\n", (void *)aNew);\n'),
+    # case 11's read site: the two terms fts3SegReaderCmp hands to memcmp, and that memcmp returned.
+    # The first 32 calls only: on an arm that does not stop the read, the case can loop.
+    ("static int fts3SegReaderCmp(Fts3SegReader *pLhs, Fts3SegReader *pRhs){\n  int rc;\n"
+     "  if( pLhs->aNode && pRhs->aNode ){\n    int rc2 = pLhs->nTerm - pRhs->nTerm;\n",
+     "static int fts3SegReaderCmp(Fts3SegReader *pLhs, Fts3SegReader *pRhs){\n  int rc;\n  static int diag_calls;\n"
+     "  if( pLhs->aNode && pRhs->aNode ){\n    int rc2 = pLhs->nTerm - pRhs->nTerm;\n"
+     '    if( diag_calls<32 ) fprintf(stderr, "DIAG FTS3CMP lhs=%#lx nl=%d lhs_tag=%d rhs=%#lx nr=%d rhs_tag=%d\\n",'
+     ' (unsigned long)cheri_getaddress(pLhs->zTerm), pLhs->nTerm, (int)cheri_gettag(pLhs->zTerm),'
+     ' (unsigned long)cheri_getaddress(pRhs->zTerm), pRhs->nTerm, (int)cheri_gettag(pRhs->zTerm));\n'),
+    ("    if( rc==0 ){\n      rc = rc2;\n    }\n  }else{\n    rc = (pLhs->aNode==0) - (pRhs->aNode==0);\n",
+     '    if( diag_calls++<32 ) fprintf(stderr, "DIAG FTS3CMP memcmp returned %d\\n", rc);\n'
+     "    if( rc==0 ){\n      rc = rc2;\n    }\n  }else{\n    rc = (pLhs->aNode==0) - (pRhs->aNode==0);\n"),
 ]
 
 

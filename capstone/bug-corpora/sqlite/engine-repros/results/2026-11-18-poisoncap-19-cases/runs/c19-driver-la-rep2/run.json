@@ -1,0 +1,20 @@
+{
+ "build": "builds/c19-driver-la",
+ "expect": "published",
+ "libc_revocation": "off",
+ "cases": [
+  "02_b9e0f62c3a_backup_pager_after_detach",
+  "11_dee0359ddb_fts3_zterm_stale_buffer",
+  "13_fix-2026-06-08_fts5_near_stale_phrase"
+ ],
+ "started_utc": "2026-11-18T06:09:35Z",
+ "unpacked": "12",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "gate": {
+  "heap_perm_poison=0 in every control": true,
+  "reuse_clean returns": true,
+  "libc_revoke_enabled=0": true,
+  "uaf_read faults with SIGPROT code 3 and a poison console line": true
+ },
+ "finished_utc": "2026-11-18T06:21:38Z"
+}
