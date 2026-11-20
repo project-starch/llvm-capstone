@@ -29,3 +29,28 @@ fresh detached worktree (`twc/codec/run-codec.sh`). The board flow is not touche
   decompress mismatches;
 - both mutant controls fire.
 - The lint gate does not see the codec (it is in no Flist), so it was not run.
+
+## Reading: PASS, 3 of 3 hard checks (apollo, 2026-11-20, 12:07-12:09Z)
+
+Record: `<mnt-hdd>/synth/codec-2fcbebf64-gate-out/grade-codec.txt`, with `gate/util_hier.rpt`, `gate/timing.rpt` and
+`gate/codec.dcp`. The guard exited 0 after 50 s at a peak RSS of 2.19 GB. The log's peak is 2,735 MB.
+
+| Check | Reading | |
+|---|---|---|
+| loops | check_timing loops 0 (toy control 1) | PASS |
+| latches | `[Synth 8-327]` 0 (P1's log 2, the control); LD* cells 0 | PASS |
+| > 2,500 LUT per module | none | PASS |
+
+| Module | LUT (util_hier) | Estimate |
+|---|---|---|
+| sublet_cap_compress | **1,110** | 400-900: above |
+| sublet_cap_decompress | 779 | 500-1,200: in |
+| gate top | 1,889 (714 FF, all the gate's own registers) | |
+
+- Register-to-register worst slack at 20 ns: +5.859 ns (MET).
+- The probe's primitive census reads 1,290 and 820 LUT* cells. That is a different unit from report_utilization's
+  rows; the rows are the reading.
+- **Reported to the rtl lane, not graded:** synthesis reports `cursor_i[63:38]` of sublet_cap_compress as having no
+  load (`[Synth 8-7129]`, 26 bits). The encoder reads only the cursor's low 38 bits. Whether that is the format's
+  intent is the rtl lane's to confirm. The reference model's vectors would not show it if the reference truncates the
+  same way.
