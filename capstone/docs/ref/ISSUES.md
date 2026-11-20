@@ -11136,7 +11136,7 @@ unknown alignment correctly needs a run-time alignment test in the expansion; no
   marker from clang (CHERI's `no_preserve_cheri_tags` is the model) would let typed copies such as
   `double complex` inline again.
 
-### C-87 — `-g` changes the generated code: a debuggable build does not run the code that was measured `OPEN 2026-11-20 — COMPILER; found by the C2 weighting`
+### C-87 — `-g` changes the generated code: a debuggable build does not run the code that was measured `MOSTLY FIXED 2026-11-20 (two Capstone passes); one generic-LLVM residual OPEN — COMPILER; found by the C2 weighting`
 
 **What happens.** With the measured SPEC flag set (FRCDKMS), compiling with `-g` changes `.text` in some objects:
 9 of 69 in 500.perlbench_r, 24 of 387 in 502.gcc_r, 2 of 98 in 538.imagick_r; none in mcf, lbm, nab or xz. In
@@ -11150,8 +11150,29 @@ describes a different program. Found when the C2 weighting needed line tables fo
 `20-11-2026_18-26-10_c2-cantrap-census-and-weighting.md`; it links the objects that differ from the build without
 `-g`).
 
-**Not yet known.** Which pass. A first cut: compare `-print-after-all` MIR with and without `-g` for one function of
-`av.o`, ignoring `DBG_*` lines, and find the first pass after which the instructions differ.
+**Cause, found by diffing every pass's dump with and without `-g` (debug lines, locations and metadata numbers
+stripped).** Two Capstone passes let a debug use decide a transformation:
+- `CapstoneCursorReadFold` (perlbench's `Perl_av_reify`, the first differing function): its "every reader is
+  integer-only" test walked `use_operands`, which includes `DBG_VALUE`. A debug use is never an integer reader, so
+  under `-g` the `PseudoTRUNC_CAP` write stayed: one `mv` more per site. It now decides on `use_nodbg_operands` and
+  still redirects every use, the debug ones included.
+- `CapstoneMergeBaseOffset`, the `-capstone-fold-global-lo` fold (perlbench's `S_new_he`): `hasOneUse` and
+  `use_operands` counted debug uses, and the comment named a debug use as a reason to refuse. It now decides on
+  non-debug uses. After the fold `vcap` holds a partial address, so its `DBG_VALUE`s, and the erased `addi`'s, are
+  set undefined ("optimized out") rather than left showing a wrong pointer.
+
+**Result, with the measured flags, every object of seven benchmarks compiled with and without `-g` (code sections
+compared):** perlbench 0 of 69 differ (was 9), gcc 1 of 387 (was 24), imagick 0 of 98 (was 2), mcf, lbm, nab and xz
+0. Without `-g` every object is byte-identical to dev's compiler, and the seven QEMU fixture images, plain and with
+the measured flags, are identical apart from `.comment`. Lit test `c87-cursor-read-fold-debug-use.ll`: on dev's
+unfixed compiler the run with debug information fails (an extra `mv a0, a0`) and the stripped run passes.
+
+**Residual, OPEN.** gcc's `calls.o`, function `emit_library_call_value_1`: Loop Strength Reduction (generic LLVM)
+reuses an existing `zext` for a loop's trip count under `-g` and forms `%wide.trip.count` without it, the first
+difference in the pass-by-pass comparison. Not Capstone code; not yet reduced.
+
+**Before this fix**, a `-g` build of any of these benchmarks did not run the measured code: perlbench 9, gcc 24 and
+imagick 2 objects had different instructions.
 
 ### C-86 — `modf`, `modff`, `modfl` and `frexp` expanded from their intrinsics pass the output pointer as an integer, so the callee faults storing through it `FIXED 2026-10-16 on compiler/modf-capability-pointer — COMPILER; found 2026-10-16 by SPEC CPU2017 500.perlbench_r (op/pack.t's unpack checksums call modf)`
 

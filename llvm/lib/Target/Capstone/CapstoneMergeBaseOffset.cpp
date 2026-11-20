@@ -712,8 +712,11 @@ bool CapstoneMergeBaseOffsetOpt::mergeGlobalBaseUses(MachineInstr &Lo,
 // no delin, no shrink), only when nothing in the function writes gp, and only
 // when vcap's every use is the base (never the value) of a load or store with
 // one common immediate offset. A SHRINK/SHRINKTO, copy, call argument, store of
-// vcap, cincoffset or debug use leaves the address whole. The cursor of vcap is
-// the partial address: see CapstoneFoldGlobalLo for the rule this relies on.
+// vcap or cincoffset leaves the address whole. The cursor of vcap is the partial
+// address: see CapstoneFoldGlobalLo for the rule this relies on. Debug uses do
+// not decide (C-87: -g must not change the code); since vcap no longer holds
+// the variable's address once folded, its DBG_VALUEs, and those of the erased
+// Lo, become undefined ("optimized out").
 bool CapstoneMergeBaseOffsetOpt::foldIntoCapGlobalMemoryOps(MachineInstr &Hi,
                                                          MachineInstr &Lo) {
   if (!CapstoneFoldGlobalLo || !capstoneImageGpAbiActive() || GpModified)
@@ -725,18 +728,18 @@ bool CapstoneMergeBaseOffsetOpt::foldIntoCapGlobalMemoryOps(MachineInstr &Hi,
   if (!HiOp.isGlobal() && !HiOp.isCPI())
     return false;
   Register LoReg = Lo.getOperand(0).getReg();
-  if (!MRI->hasOneUse(LoReg))
+  if (!MRI->hasOneNonDBGUse(LoReg))
     return false;
-  MachineInstr &Base = *MRI->use_instr_begin(LoReg);
+  MachineInstr &Base = *MRI->use_instr_nodbg_begin(LoReg);
   if (Base.getOpcode() != Capstone::PseudoCapGlobalBase ||
       Base.getOperand(1).getReg() != LoReg)
     return false;
   Register CapReg = Base.getOperand(0).getReg();
-  if (!CapReg.isVirtual() || MRI->use_empty(CapReg))
+  if (!CapReg.isVirtual() || MRI->use_nodbg_empty(CapReg))
     return false;
 
   std::optional<int64_t> CommonOffset;
-  for (const MachineOperand &MO : MRI->use_operands(CapReg)) {
+  for (const MachineOperand &MO : MRI->use_nodbg_operands(CapReg)) {
     const MachineInstr &UseMI = *MO.getParent();
     switch (UseMI.getOpcode()) {
     default:
@@ -778,10 +781,15 @@ bool CapstoneMergeBaseOffsetOpt::foldIntoCapGlobalMemoryOps(MachineInstr &Hi,
   Hi.getOperand(1).setOffset(NewOffset);
   const MachineOperand &ImmOp = Lo.getOperand(2); // %pcrel_lo of Hi's label
   for (MachineInstr &UseMI :
-       llvm::make_early_inc_range(MRI->use_instructions(CapReg))) {
+       llvm::make_early_inc_range(MRI->use_nodbg_instructions(CapReg))) {
     UseMI.removeOperand(2);
     UseMI.addOperand(ImmOp);
   }
+  for (Register R : {CapReg, LoReg})
+    for (MachineInstr &DbgMI :
+         llvm::make_early_inc_range(MRI->use_instructions(R)))
+      if (DbgMI.isDebugValue())
+        DbgMI.setDebugValueUndef();
   Register HiReg = Hi.getOperand(0).getReg();
   Base.getOperand(1).setReg(HiReg);
   MRI->clearKillFlags(HiReg);
