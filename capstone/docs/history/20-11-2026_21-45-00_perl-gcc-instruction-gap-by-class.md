@@ -113,3 +113,42 @@ shows, re-materialisations under register pressure: two instructions, the same a
 only move that cost, not remove it. This was not confirmed per site.
 
 Tool: `c4/sccrep.py`.
+
+## The bounds census (shrink / shrinkto)
+
+Each executed narrowing is classed by where the narrowed capability comes from, traced backward in the function
+through offsets, copies and other narrowings. `shrink rd, rs1, rs2` narrows rd in place to [rs1, rs2), and
+`shrinkto rd, rs1, imm` narrows a copy of rs1. A first version traced `shrink`'s integer bound instead and reported
+most of perlbench's narrowing as "other: mv"; it was corrected before any figure was reported.
+
+| origin | perlbench test-sw | gcc train01 |
+|---|---:|---:|
+| all shrink / shrinkto | 931 M, 1.10 % | 129 M, 1.05 % |
+| a global (`scc gp`) | 0.48 % (yyparse, malloc, free) | 0.59 % (record_reg_classes, ggc_alloc) |
+| traced across a call | 0.30 % (leave_scope, regmatch, yyparse) | 0.16 % |
+| a stack slot | 0.24 % | 0.23 % |
+| a loaded capability | 0.09 % | 0.07 % |
+| runtime and libc functions | 0.29 % | 0.12 % |
+
+Narrowing a stack slot or a loaded pointer is the spatial-safety policy, not redundancy. A global's narrowing is
+already dropped by `-capstone-drop-redundant-shrink` (in the measured flags) wherever every access through it is
+in bounds at a constant offset. What it leaves is indexed or escaping access. The redundant part that could still
+go is a repeat of the same global's narrowing (same address, same size) within a function. The ceiling for that is
+8.2 M on perlbench (0.01 %) and 3.7 M on gcc (0.03 %), under the 0.5 % gate. No change is designed. The C5 question,
+what the redundant-shrink drop still misses under the measured flags, has the same answer. Making those flags the
+link driver's default is a defaults change that moves no measured number. Tools: `c4/bounds.py`, `c4/shrinkrep.py`.
+
+## The compiler levers on perlbench and gcc: sized and closed
+
+Every class of the instruction gap has now been sized against its gate.
+- Moves (24.2 % of perlbench's gap): the coalescable excess over GCC is about +0.02 % of instructions. C3 is closed.
+- `scc gp` (24.4 %): the same-global reuse ceiling is 0.17 %.
+- Bounds (10.0 %): the redundant ceiling is 0.01 %.
+- The add family (19.4 %) and loads (8.1 %): net of what capability addressing saves, and spread over the runtime's
+  allocator and copy routines with no hot spot. Earlier levers already took the shares that could be taken (the
+  `%pcrel_lo` fold, pool-base sharing, the memcpy alignment dispatch).
+- The loop-copy pass (the sink pass) measured at most -0.04 % and is not landed.
+
+Framing, from the runtime lane and not re-read here: on these rows the time gap exceeds the instruction gap. Most
+of the time cost is therefore cycles per instruction (verdict-cache misses, page walks, tag traffic), which is the
+hardware lines' territory rather than the compiler's.
