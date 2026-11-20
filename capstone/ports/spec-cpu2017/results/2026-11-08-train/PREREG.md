@@ -6337,3 +6337,33 @@ number this arm exists for. It is reported beside the paper's estimate, and the 
 **Stops** keyed to failures, as Addendum 199, with the smoke rule above. Fallback: P1 with bkit91.
 
 **Dry run** (stubbed): `perf/natstage/dry206/`.
+
+## Addendum 207 (2026-11-21 02:41 +08, outcome): Addendum 204, bitstream 1 and the R-76 user-mode probe on board 2
+
+**Bitstream 1** (9e801ab5e, sha256 01707b37…f83, kit bkit100). Flash rc 0 and readback ok. Three boots, each with a
+shell and the nine smoke steps (task 70 waived), no Oops or panic. Every row is inside P1's board-2 band, with specdiff PASS:
+
+| Row | Seconds | Band | board.txt |
+|---|---|---|---|
+| perlbench makerand | 274.95 | 273.74-276.50 | 57f324b82e6c5f56 |
+| gcc train01 | 1,763.23 | 1,759.78-1,766.84 | 46068024f04e430b |
+| mcf | 5,944.83 | 5,931.77-5,955.55 | 2229eb1b800d0ac0 |
+
+**Probe on bitstream 1.** After `@@R76PROBE-BEGIN` the monitor printed exactly two illegal-instruction records, as
+pre-registered. One is the control, at MEPC 0x1071C with MTVL 0. The other is the probe word, at MEPC 0x1075E with
+MTVL 0x001072DB, the ccsrrw. So the probe was REFUSED with cause 2.
+
+**Instrument defect (this lane's).** The probe's SIGILL handler then read the faulting word with a 4-byte load at the
+2-aligned PC 0x1075E. The binary is RVC code, and the load is misaligned: a cause-4 record and SIGBUS (rc 135). The program's
+own verdict line therefore never printed, and the verdict is read from the monitor's records. A fixed probe (v2, the word
+read as two halfwords, sha256 811af0101c9ffc50) is built for any later use and is not part of this run.
+
+**Probe on P1** (d83d3a633, kit bkit91, board 2 reflashed 02:18-02:20, readback ok; board.txt dad3564a0f5c79e9).
+perlbench makerand 275.34 s, specdiff PASS. The probe printed:
+`R76PROBE control sigill=1 word=0x00000000`, `R76PROBE probe sigill=0 word=0x00000000 t0=0x0000000000000000`,
+`R76PROBE-RESULT retval=0 verdict=RETIRED`. There was one monitor illegal-instruction record, the control's.
+
+**Outcome: both predictions met.** P1 retires a user-mode `ccsrrw` on CIH outside supervision, which is R-76's defect,
+reproduced on silicon from plain Linux user mode. Bitstream 1 refuses it with cause 2, and costs no measurable time
+on perlbench, gcc or mcf. By Addendum 204's rule, the registry may say of R-76 "fixed on silicon (bitstream 1,
+sha256 01707b372e93…f83), defect reproduced on P1 from user mode (board 2, 21 Nov)".
