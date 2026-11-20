@@ -159,6 +159,11 @@ The options:
 - **(C) Staged.** B5b-1 is the format, the record and the instructions (CREVOKE single-operand, CSMINT in hardware,
   the NOGROW failure, the release-time generation), with CSRUNV kept. B5b-2 is the trap route, the raw tag moves and
   the deletions.
+  - **Measured 2026-11-21 (llvm-capstone dev 32affba2a61d, `docs/plans/2026-11-21-lineb-monitor-census.md`):** the
+    Sublet format has no type and no rights, and the live monitor (capstone-sbi 22a907f) is typed end to end. Its C
+    file mentions LINEAR 74 times, UNINIT/INIT 34, type reads 27, SPLIT 19 and SEAL/CALL/RETURN 7. Its carving,
+    reinitialisation, domain entry and revocation all rest on types. So "with CSRUNV kept", in B and here, is a monitor
+    REDESIGN, not a port. Only the two emulators' bit sites (about a dozen) port behind a define.
 
 **Recommendation: (C).** (Premise corrected on 2026-11-17, below in "What proceeds now": B5b-1 likely needs a monitor
 port, because the Sublet format has no types. C's remaining advantage is that the format gets its own synthesis gate.)
