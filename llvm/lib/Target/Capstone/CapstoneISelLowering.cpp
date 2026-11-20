@@ -24498,7 +24498,9 @@ SDValue CapstoneTargetLowering::LowerFormalArguments(
         SDValue Offset = DAG.getIntPtrConstant(PartOffset, DL);
         if (PartVA.getValVT().isScalableVector())
           Offset = DAG.getNode(ISD::VSCALE, DL, XLenVT, Offset);
-        SDValue Address = DAG.getNode(ISD::ADD, DL, PtrVT, ArgValue, Offset);
+        // C-68: the indirect argument's address is a capability under the purecap
+        // ABI; step it at its own type (a PTRADD for c128), not as an i64 ADD.
+        SDValue Address = DAG.getMemBasePlusOffset(ArgValue, Offset, DL);
         InVals.push_back(DAG.getLoad(PartVA.getValVT(), DL, Chain, Address,
                                      MachinePointerInfo()));
         ++i;
@@ -24838,8 +24840,9 @@ SDValue CapstoneTargetLowering::LowerCall(CallLoweringInfo &CLI,
       for (const auto &Part : Parts) {
         SDValue PartValue = Part.first;
         SDValue PartOffset = Part.second;
-        SDValue Address =
-            DAG.getNode(ISD::ADD, DL, PtrVT, SpillSlot, PartOffset);
+        // C-68: the spill slot is a frame index of getFrameIndexTy, a c128
+        // capability; an i64 ADD over it is ill-typed at construction.
+        SDValue Address = DAG.getMemBasePlusOffset(SpillSlot, PartOffset, DL);
         MemOpChains.push_back(
             DAG.getStore(Chain, DL, PartValue, Address,
                          MachinePointerInfo::getFixedStack(MF, FI)));

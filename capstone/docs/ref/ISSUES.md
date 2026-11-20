@@ -11844,7 +11844,7 @@ independently as the minimum workaround. No compiler fix is claimed.
 - The port recipe's `-O1 -fno-omit-frame-pointer` is no longer needed for this defect. Changing the recipe and
   re-qualifying it is the FFmpeg port's call; this entry does not do it.
 
-### C-68 — `LowerCall` asserts on a split scalar integer argument wider than 128 bits: an integer `ADD` built over a capability stack slot `OPEN — COMPILER, crash, low priority: pre-existing, not reachable from C; found 2026-09-28 by the compiler lane's frame-index sweep; reproduced by the board lane`
+### C-68 — `LowerCall` asserted on a split scalar integer argument wider than 128 bits, and the indirect address was passed as an integer `FIXED 2026-11-20 (lane compiler/c68-split-indirect) — COMPILER, crash; found 2026-09-28 by the compiler lane's frame-index sweep`
 
 **What happens.** A call passing a scalar integer wider than 128 bits that ends up split or
 indirect (`i256` after seven `i64` arguments) aborts in
@@ -11877,6 +11877,23 @@ live instance. The compiler lane's sweep
 **latent, checked, not fixed**. They are quiet only because their offsets never take the
 `add` → `or disjoint` rewrite that made C-50 fault, not because their types are right. The vararg
 save loop is one alignment change from live.
+
+**Fixed 2026-11-20. The assertion hid an ABI defect.**
+- The crash: `LowerCall` built each part's address as an `ISD::ADD` at `getPointerTy()` (i64) over the c128 spill
+  slot, and `LowerFormalArguments` did the same over the received address. Both now use `getMemBasePlusOffset`,
+  which gives this target's `PTRADD` for a capability.
+- Behind it: `CC_Capstone` gave the indirect address `LocVT = XLenVT` and an X register (X17 here), so the caller
+  copied the capability slot into an integer register and the callee loaded through an untagged base. QEMU would
+  trap there, and silicon in a domain does not check a scalar access's base type (Q-36). Under a capability
+  alloca address space, the end of a pending split now takes a C register from `getArgGPCRs`, or a 16-byte,
+  16-aligned stack slot, with location type c128, as any capability argument does.
+- This changes the convention only for split scalars wider than 128 bits (`_BitInt(>128)`, i256), which pass by
+  address. No SPEC object or QEMU fixture image changes: all 678 objects and 14 images are identical to the build
+  without this change.
+- Lit `c68-split-integer-indirect-capability.ll`: caller and callee, register and stack. The address is in `$c17`,
+  or stored with `stc` and reloaded with `ldc`. dev's llc aborts on the test. CodeGen/Capstone and MC/Capstone
+  176/176.
+- The reproducer `repro.ll` gains the callee case.
 
 ### C-75 — a pointer slot whose initializer names an alias is never tagged: `__capstone_cap_init` skipped every `GlobalAlias` `FIXED 2026-09-30 on compiler/cap-init-alias (a6e8d967140b and gp-captable function-alias follow-up fd82fef2a70d, on 7d01722aab88; gp-captable variable aliases remain open); found by delegation-threads, a fork in CPython's test_threading while the test's threads ran`
 
