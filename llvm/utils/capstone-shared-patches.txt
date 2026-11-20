@@ -73,7 +73,7 @@ clang/lib/Serialization/ASTCommon.cpp | +6 -0 | case BuiltinType::UIntCap:
 clang/lib/Serialization/ASTReader.cpp | +6 -0 | case PREDEF_TYPE_UINTCAP_ID:
 clang/lib/Support/CMakeLists.txt | +1 -0 | CapstoneVIntrinsicUtils.cpp
 llvm/include/llvm/BinaryFormat/Dwarf.def | +2 -0 | HANDLE_DW_CC(0xd1, LLVM_CapstoneVectorCall)
-llvm/include/llvm/BinaryFormat/ELF.h | +32 -1 | EM_CAPSTONE = 259,      // Capstone
+llvm/include/llvm/BinaryFormat/ELF.h | +34 -1 | EM_CAPSTONE = 259,      // Capstone
 llvm/include/llvm/BinaryFormat/ELFRelocs/Capstone_nonstandard.def | +32 -0 | #ifndef ELF_Capstone_NONSTANDARD_RELOC
 llvm/include/llvm/CodeGen/TargetInstrInfo.h | +19 -0 | /// is safe to move. A target whose arithmetic can fault -- Capstone's
 llvm/include/llvm/CodeGen/TargetLowering.h | +8 -0 | /// target such as Capstone (C-80) it is a capability type, not the AS0

@@ -91,6 +91,8 @@ void CapstoneTargetELFStreamer::finish() {
 
   if (hasRVC())
     EFlags |= ELF::EF_CAPSTONE_RVC;
+  if (hasCRVC())
+    EFlags |= ELF::EF_CAPSTONE_CRVC;
   if (hasTSO())
     EFlags |= ELF::EF_CAPSTONE_TSO;
 

@@ -182,6 +182,32 @@ uint32_t RISCV::calcEFlags() const {
       Err(ctx) << f << ": cannot link object files with different EF_RISCV_RVE";
   }
 
+  // Capstone stage 2 (EF_CAPSTONE_CRVC): an image with it is decoded in the
+  // CRVC mode, where C.FLD, C.FSD, C.FLDSP, C.FSDSP and C.LUI x0 mean
+  // capability instructions. An object compiled with C but without the mode
+  // may hold those forms, so it cannot join a CRVC image. An object without
+  // EF_CAPSTONE_RVC holds no 16-bit instruction and can.
+  // capstone/docs/plans/2026-11-21-capability-rvc-stage2-prototype.md
+  if (ctx.arg.emachine == EM_CAPSTONE) {
+    const InputFile *crvc = nullptr;
+    for (InputFile *f : ctx.objectFiles)
+      if (getEFlags(ctx, f) & EF_CAPSTONE_CRVC) {
+        crvc = f;
+        break;
+      }
+    if (crvc) {
+      target |= EF_CAPSTONE_CRVC;
+      for (InputFile *f : ctx.objectFiles) {
+        uint32_t eflags = getEFlags(ctx, f);
+        if ((eflags & EF_CAPSTONE_RVC) && !(eflags & EF_CAPSTONE_CRVC))
+          Err(ctx) << f
+                   << ": cannot link an object with compressed instructions "
+                      "but without EF_CAPSTONE_CRVC into an image with it, from "
+                   << crvc;
+      }
+    }
+  }
+
   return target;
 }
 

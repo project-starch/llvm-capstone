@@ -109,6 +109,7 @@ void CapstoneTargetStreamer::setTargetABI(CapstoneABI::ABI ABI) {
 
 void CapstoneTargetStreamer::setFlagsFromFeatures(const MCSubtargetInfo &STI) {
   HasRVC = STI.hasFeature(Capstone::FeatureStdExtZca);
+  HasCRVC = STI.hasFeature(Capstone::FeatureCapCRVC);
   HasTSO = STI.hasFeature(Capstone::FeatureStdExtZtso);
 }
 

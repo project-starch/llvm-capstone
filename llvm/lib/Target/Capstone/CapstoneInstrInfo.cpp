@@ -3055,6 +3055,12 @@ bool CapstoneInstrInfo::verifyInstruction(const MachineInstr &MI,
         case CapstoneOp::OPERAND_UIMM9_LSB000:
           Ok = isShiftedUInt<6, 3>(Imm);
           break;
+        case CapstoneOp::OPERAND_UIMM9_LSB0000:
+          Ok = isShiftedUInt<5, 4>(Imm);
+          break;
+        case CapstoneOp::OPERAND_UIMM10_LSB0000:
+          Ok = isShiftedUInt<6, 4>(Imm);
+          break;
         case CapstoneOp::OPERAND_SIMM10_LSB0000_NONZERO:
           Ok = isShiftedInt<6, 4>(Imm) && (Imm != 0);
           break;

@@ -361,6 +361,10 @@ def GPCRC : CapstoneRegisterClass<[CLenVT], 128,
 def GPCRSP : CapstoneRegisterClass<[CLenVT], 128, (add C2)> {
   let RegInfos = CLenRI;
 }
+// gp, the implicit base of c.scc (cap-crvc).
+def GPCRGP : CapstoneRegisterClass<[CLenVT], 128, (add C3)> {
+  let RegInfos = CLenRI;
+}
 
 def GPR : GPRRegisterClass<(add (sequence "X%u", 10, 17),
                                 (sequence "X%u", 5, 7),

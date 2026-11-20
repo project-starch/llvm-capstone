@@ -34,6 +34,7 @@ struct CapstoneOptionArchArg {
 class CapstoneTargetStreamer : public MCTargetStreamer {
   CapstoneABI::ABI TargetABI = CapstoneABI::ABI_Unknown;
   bool HasRVC = false;
+  bool HasCRVC = false;
   bool HasTSO = false;
 
 public:
@@ -65,6 +66,7 @@ public:
   CapstoneABI::ABI getTargetABI() const { return TargetABI; }
   void setFlagsFromFeatures(const MCSubtargetInfo &STI);
   bool hasRVC() const { return HasRVC; }
+  bool hasCRVC() const { return HasCRVC; }
   bool hasTSO() const { return HasTSO; }
 };
 

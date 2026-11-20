@@ -1727,6 +1727,23 @@ def HasCapBaseRVC : Predicate<"Subtarget->hasCapBaseRVC()">,
                     AssemblerPredicate<(all_of FeatureCapBaseRVC),
                                        "Capability-base RVC">;
 
+// Compressed capability instructions, stage 2 option B (default off; see
+// capstone/docs/plans/2026-11-21-capability-rvc-stage2-prototype.md). An image
+// built with it is decoded in the CRVC mode: C.FLD, C.FSD, C.FLDSP, C.FSDSP and
+// C.LUI x0 are reinterpreted as c.ldc, c.stc, c.ldcsp, c.stcsp and
+// c.cincoffset16sp, and Q0 100 [12:10] = 100..110 hold c.movc, c.scc and
+// c.cincoffset. So the displaced forms are never emitted under it, and every
+// object is marked EF_CAPSTONE_CRVC.
+def FeatureCapCRVC
+    : SubtargetFeature<"cap-crvc", "CapCRVC", "true",
+                       "Compressed capability instructions (CRVC decode mode)",
+                       [FeatureStdExtZca]>;
+def HasCapCRVC : Predicate<"Subtarget->hasCapCRVC()">,
+                 AssemblerPredicate<(all_of FeatureCapCRVC),
+                                    "Compressed capability instructions">;
+def NoCapCRVC : Predicate<"!Subtarget->hasCapCRVC()">,
+                AssemblerPredicate<(all_of (not FeatureCapCRVC))>;
+
 def FeatureSaveRestore : SubtargetFeature<"save-restore", "EnableSaveRestore",
                                           "true", "Enable save/restore.">;
 
