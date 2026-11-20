@@ -258,6 +258,44 @@ perl and x264 are registered on this model when their CRVC0 profiles finish, bef
   imagevalidate. CRVC1m must read the same.
 - The x264 binary maps 95.48 % of the profile; the rest is ldecod's input generation at its link address.
 
+## Zcb arm ZCB1, pre-registration (2026-11-21, before any ZCB1 run)
+
+**CORRECTION to the identities above.** This LLVM build has `BUILD_SHARED_LIBS=ON`, so `clang-22` and `lld` are thin
+drivers, and "clang 518578ef40a76b19, lld b9f671e793ab869d" do not identify the compiler; the target code lives in
+`libLLVMCapstone*.so` and `liblldELF.so`.
+- What does hold: CRVC0, CRVC1 and CRVC1m were all built from one build, of step 1's source 76061a895cb3, before the
+  next rebuild.
+- From here on the libraries are hashed. ZCB1 was built from f89f633f3d50: libLLVMCapstoneCodeGen bc5683c1913660e5,
+  libLLVMCapstoneDesc f072cc59d71f7c02, liblldELF 904e381cad71c6cc.
+
+**Arm.** ZCB1 is CRVC0 plus `+zcb` and `+cap-base-zcb`, with no CRVC.
+- It measures Zcb as a whole: the five capability-base byte and halfword forms, plus Zcb's own c.zext.b, c.not and
+  c.mul, which `+zcb` turns on.
+- It runs on the same prototype QEMU, with `zcb=true` and no CRVC mode.
+
+**Static check, already read on the objects (the instrument's control):**
+- The five capability-base forms match the prediction exactly in all eight benchmarks, relocated offsets excluded.
+- c.zext.b, c.not and c.mul come in higher than predicted, in every benchmark (gcc's c.not 837 against 568). The
+  extra sites come from the feature-on build; the pass responsible was not identified. These three are therefore
+  predicted as a lower bound.
+
+**Dynamic prediction from CRVC0's profiles:** program functions only, folded offsets excluded, 2 bytes per
+execution.
+
+| row | CRVC0 fetch bytes | predicted compressible executions | predicted ZCB1 fetch bytes | predicted saving |
+|---|---:|---:|---:|---:|
+| 500.perlbench_r-test-sw | 295,259,424,034 | 1,308,910,170 | 292,641,603,694 | **0.887 %** |
+| 502.gcc_r-train01 | 41,953,281,372 | 123,290,647 | 41,706,700,078 | **0.588 %** |
+| 525.x264_r-test | 1,863,354,369,930 | 11,920,434,717 | 1,839,513,500,496 | **1.279 %** |
+| 505.mcf_r-test | 87,376,393,242 | 22,703,758 | 87,330,985,726 | **0.052 %** |
+| 519.lbm_r-test | 23,242,892,232 | 0 | 23,242,892,232 | **0.000 %** |
+| 538.imagick_r-test-ref | 354,828,474 | 1,742,476 | 351,343,522 | **0.982 %** |
+| 544.nab_r-test | 25,574,753,800 | 20,513,814 | 25,533,726,172 | **0.160 %** |
+| 557.xz_r-test | 173,387,788,550 | 1,091,468,515 | 171,204,851,520 | **1.259 %** |
+
+The reading must show at least that saving: exact for the capability-base forms, above it by the extra Zcb forms.
+Every row must validate as CRVC0's does.
+
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
 `CVA6Cfg.RVZCB`), with `CVA6ConfigZcbExtEn = 1` in `capstone_cv64a6_imafdc_sv39_config_pkg.sv`.
