@@ -6214,3 +6214,56 @@ specdiff PASS; otherwise the chain stops, the trap lines are read, and board 2 g
 perlbench stage.
 
 **Dry run** (stubbed): `perf/natstage/dry203/`.
+
+## Addendum 204 (2026-11-20 19:46 +08, before it runs): Addendum 203 void; bitstream 1 (P1 + the R-76 term) and the R-76 user-mode probe on board 2
+
+**Addendum 203 is void.** The board lane withdrew the I-cache build's seal (3ce15b95741a, d37f68ca…) under its
+pre-registered branch, because the rtl lane's 95-test sweep was not clean: 72 identical, 20 differ, and ldc and
+s06-query-route take an exception that P1 does not. Its chain was never launched. Its conf and list are renamed
+`*.VOID`, and kit bkit99 is kept for identity only.
+
+**Bitstream 1.** capstone-ariane 9e801ab5e (branch p1-ccsrrw-priv) is P1 plus `core/csr_regfile.sv` +9: the R-76
+privilege term of 7180a83b6, token for token, with a corrected comment. Its gates (rtl lane): lint identical to P1 on
+every counter; the 95-test sweep identical to P1 in values, RVFI traces and cycles, 92 of 92. The full build is
+pre-registered by the rtl and board lanes (land/rtl-b1-prereg 4b9fe9f2c579, board/meas-pw 120d80c0e4e5). Its kit,
+bkit100, is bkit91 with the two bitstream fields set from the board lane's seal. It is made, checked and dry-run
+once the seal exists, and the chain is launched only then.
+
+**The probe** (`perf/r76probe/r76probe`, sha256 fa22a6c582b95184; source ae78ee2b147ddffe). A plain static RV64 program
+runs in U under the native kernel, outside supervision: R-76's case. Arm 0, the control, executes `.word 0`, illegal
+on every revision, and must count exactly one SIGILL, or the verdict is VOID. Arm 1 sets t0 to a sentinel, then
+executes `ccsrrw t0, CIH, x0` (0x001072db). It prints RETIRED (no signal, t0 = 0), REFUSED (one SIGILL at that word, t0
+still the sentinel) or OTHER. CIH has no consumer at P1 and the monitor never writes it, so the probe changes nothing
+the system reads. It runs from the stage `perf/natstage/board-frcdkms-r76p/500.perlbench_r-native`: the cq-b2
+perlbench stage plus the binary and three lines at the end of `spec.sh`, after the SPEC run, last in the boot.
+
+**Chains on board 2**, after the L1D pair (Addendum 199):
+1. b1-b2 (bitstream 1, bkit100): the probe stage (perlbench makerand, then the probe), gcc train01, mcf, from
+   `board-frcdkms/`;
+2. p1probe-b2 (P1, bkit91): the probe stage alone;
+3. then Addendum 200's and 202's train chains, unchanged, stopped while waiting and relaunched behind these two.
+
+If the seal arrives after the L1D pair has ended, the train chain of Addendum 200 runs first, and bitstream 1's two
+chains go behind it.
+
+**Prediction.**
+- *Probe on P1:* control 1 SIGILL; probe RETIRED, t0 = 0. The defect is reachable from plain Linux U on silicon.
+- *Probe on bitstream 1:* control 1 SIGILL; probe REFUSED, t0 = the sentinel, word 0x001072db.
+- *Bitstream 1's rows* repeat P1's cq-b2 within the board bands: perlbench 273.74 to 276.50 s, gcc train01 1,759.78 to
+  1,766.84 s, mcf 5,931.77 to 5,955.55 s, each with specdiff PASS.
+- Monitor illegal-instruction lines (ILLX/MTVL) are expected only after `@@R76PROBE-BEGIN`, one per SIGILL the probe
+  counts: one on P1, two on bitstream 1. Any such line before the marker is a stop.
+
+**Other outcomes.**
+- P1 REFUSED as well: the defect is not reachable from plain Linux U on this software stack, for example because U is
+  not in capmode there. The registry records that, with the trap lines. R-76 stays a defect for any S or U code that
+  runs in capmode, and the sim arms show it.
+- VOID: nothing is concluded about R-76.
+- A row outside its band on bitstream 1 refutes "the term adds no cycle". It is reported with both readings.
+- If both probes read as predicted, the registry may say of R-76 "fixed on silicon (bitstream 1, sha256 …), defect
+  reproduced on P1 from user mode".
+
+**Stops** as Addendum 199, keyed to failures: no shell, a smoke FAIL other than task 70, a missing smoke step, an
+illegal-instruction line before the probe marker, a non-zero status, a specdiff FAIL.
+
+**Dry runs** (stubbed): `perf/natstage/dry204/`.
