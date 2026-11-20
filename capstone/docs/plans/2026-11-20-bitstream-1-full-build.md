@@ -54,3 +54,29 @@ would point to the build's nondeterminism at 99.7 % slices (memory: routability 
 `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76_<hash9>.bit`.
 It is sealed with sha256 and handed to the runtime lane, which flashes and runs it. The silicon predictions (u-ccsrrw
 refused; gcc, mcf and perl within 0.2 % of P1) are the programme's and the runtime lane's, not this build's.
+
+## Reading: routed, PASS 4 of 4 against P1's seal; sealed (apollo, tag b1r76-9e801ab5e, 2026-11-20)
+
+The rtl lane handed over 9e801ab5e with lint at baseline and a clean 95-test sweep (`b1-wt/.sup/swb1`: 92/92 values and
+traces identical, 0 cycle differences). That hand-over was checked at source before the 11:44:40Z launch: `core/` is 9
+added lines, `corev_apu/` is unchanged, and the submodule pins equal P1's.
+
+The build sealed at 13:47:24Z as
+`caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76_9e801ab5e.bit`.
+- sha256 01707b372e93ab1c49890a8917395d28dc7dc6addc8f8ade44fa275ff1486f83; the stored copy hashes equal;
+- tarball 83409457fc7b…; PROVENANCE HEAD 9e801ab5e;
+- guard exit 0 at a 29.55 GB run peak (P1 27.39), collector 15.34 GB;
+- in-flight loops-only PASS; LUTLP-1 0.
+
+| Key | Reading | Prediction | |
+|---|---|---|---|
+| placer congestion ≤ 5 | 5 (P1 4) | | PASS |
+| check_timing loops | 0 | 0 | PASS |
+| WNS in the ±3.74 null band | -14.595 (Δ -1.422) | inside | PASS |
+| routed clean | 0 errors, 243,568 / 243,568 | | PASS |
+| placed LUT (reported) | 188,594 (+1,226) | ± 2,000 | in |
+| placed FF (reported) | 76,492 (-51) | ± 300 | in |
+| slices (reported) | 50,810 (99.73 %, +10) | about 50,800 | in |
+
+The failure branch did not fire. The seal goes to the runtime lane, which flashes and runs it. Record: SEAL.txt "full grade" line
+and `<mnt-hdd>/synth/b1r76-9e801ab5e-full-out/grade-board/grade-full.txt`.
