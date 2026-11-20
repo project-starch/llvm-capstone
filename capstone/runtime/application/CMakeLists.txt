@@ -34,6 +34,7 @@ option(CAPSTONE_HEAP_SCRUB_FREE "Virtual heap: zero a payload on free" OFF)
 # OBJECT_BOUNDS=OFF (the Caps arm): malloc returns mapping authority, cursor at the object, instead
 # of a capability over the object alone. It needs LIFETIMES=OFF (a lifetime per object is a bounded child).
 option(CAPSTONE_HEAP_OBJECT_BOUNDS "Virtual heap: a capability over each object's own bytes" ON)
+option(CAPSTONE_MEMSET_CAP_ZERO "Virtual runtime: memset(0) over whole aligned granules stores null capabilities" OFF)
 if(NOT CAPSTONE_APPLICATION_VIRTUAL AND (NOT CAPSTONE_HEAP_LIFETIMES OR CAPSTONE_HEAP_SCRUB_FREE OR NOT CAPSTONE_HEAP_OBJECT_BOUNDS))
   message(FATAL_ERROR "CAPSTONE_HEAP_LIFETIMES, CAPSTONE_HEAP_SCRUB_FREE and CAPSTONE_HEAP_OBJECT_BOUNDS are switches of the virtual heap")
 endif()
