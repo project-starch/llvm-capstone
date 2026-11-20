@@ -12,6 +12,7 @@ which and what the 2026-09-05 sweep (`docs/plans/bug-sweep-2026-09.md`) found fo
 | `C21-i128-select-of-constants` | C-21 | a select of two `__int128` constants could not be selected | GONE with the c128 carrier; `run.sh` PRESENT on the pre-c128 and 08-19 builds, ABSENT now |
 | `C22-i128-or-sext-folds-to-constant` | C-22 | `c ? (__int128)-1 : k` dropped the condition | GONE with the c128 carrier; `run.sh` PRESENT on the pre-c128 build, ABSENT on 08-19 and now |
 | `C23-i128-high-half-silently-dropped` | C-23 | an `__int128` computed on its low half only | NOT REPRODUCIBLE on any recorded compiler (the parent of its filing commit is clean, positive control fires); current compiler clean |
+| `C56-undefined-weak-null` | C-56 | an undefined weak symbol's address was not null in a domain (linker and compiler halves); `run.sh` needs an SDK and a QEMU kit | not in the sweep; FIXED 2026-11-20, `run.sh` PRESENT on dev's toolchain, ABSENT after |
 | `H01-beebs-matmult-float-host-headers` | H-01 | BEEBS matmult-float picked up host glibc headers | FIXED; `src/repro.sh` clean |
 
 A folder stays after its defect is fixed: the `run.sh` is the instrument that shows the fix, and

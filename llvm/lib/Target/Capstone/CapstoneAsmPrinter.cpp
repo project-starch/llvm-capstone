@@ -541,6 +541,35 @@ void CapstoneAsmPrinter::emitInstruction(const MachineInstr *MI) {
                                        .addReg(AsIntReg(MI->getOperand(0).getReg()))
                                        .addImm(0));
       return;
+    case Capstone::PseudoCapWeakGlobal: {
+      // C-56, see the pseudo's definition. The integer write leaves rd an
+      // untagged 0 when the symbol is undefined; otherwise rd is formed from gp.
+      Register Dst = MI->getOperand(0).getReg();
+      Register Addr = MI->getOperand(1).getReg();
+      int64_t ShrinkImm = MI->getOperand(2).getImm();
+      if (AsIntReg(Dst) != Addr)
+        EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::ADDI)
+                                         .addReg(AsIntReg(Dst))
+                                         .addReg(Addr)
+                                         .addImm(0));
+      MCSymbol *Null = OutContext.createTempSymbol();
+      EmitToStreamer(*OutStreamer,
+                     MCInstBuilder(Capstone::BEQ)
+                         .addReg(Addr)
+                         .addReg(Capstone::X0)
+                         .addExpr(MCSymbolRefExpr::create(Null, OutContext)));
+      EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::SCC)
+                                       .addReg(Dst)
+                                       .addReg(Capstone::C3)
+                                       .addReg(Addr));
+      if (ShrinkImm)
+        EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::SHRINKTO)
+                                         .addReg(Dst)
+                                         .addReg(Dst)
+                                         .addImm(ShrinkImm));
+      OutStreamer->emitLabel(Null);
+      return;
+    }
     }
   }
 

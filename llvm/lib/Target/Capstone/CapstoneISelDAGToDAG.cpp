@@ -1744,6 +1744,33 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   // Inside one pseudo, no LINEAR value is ever an SSA value with multiple uses:
   // the operand is the scalar symbol offset and the result is already NONLIN.
   (void)GP; // gp is an implicit Use of the pseudo (Uses = [X3]).
+
+  // C-56: an extern-weak global may be undefined, and then its address is 0.
+  // See PseudoCapWeakGlobal: the base is formed only when the address is not 0,
+  // so `&weak == NULL` holds and an undefined object is never SHRINKed. Only at
+  // offset 0, where lld's absolute value is 0; image-gp only, where the address
+  // is the integer cursor.
+  if (capstoneImageGpAbiActive())
+    if (auto *GA = dyn_cast<GlobalAddressSDNode>(Symbol);
+        GA && GA->getOffset() == 0 && GA->getGlobal()->hasExternalWeakLinkage()) {
+      int64_t ShrinkImm = 0;
+      if (const auto *GVar = dyn_cast<GlobalVariable>(GA->getGlobal());
+          CapstoneShrinkGlobals && GVar && !GVar->isThreadLocal() &&
+          GVar->getValueType()->isSized()) {
+        uint64_t Size =
+            CurDAG->getDataLayout().getTypeAllocSize(GVar->getValueType());
+        uint64_t Imm = Size + (CapstoneShrinkToGlobals ? CapstoneShrinkToEndAdjust : 0);
+        if (Size > 0 && Imm <= 2047)
+          ShrinkImm = (int64_t)Imm;
+      }
+      ReplaceNode(Node, CurDAG->getMachineNode(
+                            Capstone::PseudoCapWeakGlobal, DL, PtrVT,
+                            SDValue(Offset, 0),
+                            CurDAG->getSignedTargetConstant(
+                                ShrinkImm, DL, Subtarget->getXLenVT())));
+      return;
+    }
+
   SDNode *Delined = CurDAG->getMachineNode(Capstone::PseudoCapGlobalBase, DL,
                                            PtrVT, SDValue(Offset, 0));
 

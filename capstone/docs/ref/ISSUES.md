@@ -10934,7 +10934,64 @@ including CPython's reduced `dict___contains__`) and PRESENT with dev's. lit:
 `CodeGen/Capstone/cascaded-select-null-cap.ll` (fails on the unfixed llc); CoreMark validated;
 BEEBS 76 of 81 with the five known host-header skips.
 
-### C-56 — the address of an undefined weak symbol is not NULL in a domain `OPEN — TOOLCHAIN (the runtime no longer depends on it: #84, merged 2026-09-24); found 2026-09-23 when exit() from a CPython-shaped domain halted at the image base; the runtime's one dependence on it is removed (runtime/c56-weak-at-exit)`
+### C-56 — the address of an undefined weak symbol is not NULL in a domain `FIXED 2026-11-20 in the linker and the compiler (lane compiler/c56-undef-weak-null) — TOOLCHAIN; found 2026-09-23 when exit() from a CPython-shaped domain halted at the image base; the runtime's dependence was removed earlier (runtime/c56-weak-at-exit, #84)`
+
+> **FIXED 2026-11-20, in two halves; both are needed** (compiler lane). Reproducer:
+> `tests/compiler-repros/C56-undefined-weak-null/` (`run.sh` takes an SDK and a QEMU kit).
+>
+> 1. **Linker.** On Capstone, lld resolves a `%pcrel_hi`/`%pcrel_lo` pair that names an undefined weak symbol
+>    to the absolute value (0 plus the addend) and rewrites the `auipc` as a `lui` with the same register
+>    (`InputSection.cpp` getRelocTargetVA, `Arch/RISCV.cpp` relocate). A call is unchanged
+>    (`R_RISCV_CALL` reaches relocate with no symbol), and so are RISC-V and defined symbols.
+>    - Pinned by `lld/test/ELF/capstone-undefined-weak-pcrel.s`; dev's lld fails it. The lld RISC-V and
+>      Capstone tests pass 52/52.
+>    - `isUndefined()` also covers a hidden undefined weak symbol, which lld has turned local, and a non-weak
+>      undefined one under `--unresolved-symbols=ignore`.
+>    - Under image-gp a call to an undefined weak function is an `auipc/addi/jalr` with `PCREL_HI20`, so it
+>      now jumps to 0 instead of the image base. Both fault.
+> 2. **Compiler.** The base of an undefined weak OBJECT was SHRINKed at a cursor outside gp's bounds, which
+>    faults before any test can run: cause 29 with dev's lld, and cause 24 on QEMU with the new one, whose
+>    `scc` of an out-of-window cursor clears the tag.
+>    - Under `-capstone-image-gp`, an extern-weak global at offset 0 is now selected as PseudoCapWeakGlobal.
+>      The AsmPrinter emits `mv rd, addr; beqz addr, 1f; scc rd, gp, addr; [shrinkto rd, rd, size]; 1:`. So
+>      an undefined symbol yields the integer 0, an untagged null, and no capability with gp's authority.
+>    - A function gets no SHRINKTO, nor does an object too large for the immediate; their bounds stay gp's.
+>    - The branch exists only in emitted code, so no MIR pass can hoist the SHRINK above the test.
+>    - Pinned by `c56-extern-weak-null.ll` (dev's llc fails it at -O2 and -O0). CodeGen/Capstone and
+>      MC/Capstone 179/179.
+>
+> **Readings, QEMU kit-unq, one boot, -O0 and -O2.** The probe's six checks run in this order: a control, a
+> defined weak object and function, the undefined function, the undefined object stored and reloaded, and
+> the undefined object tested directly.
+> - New compiler and new lld: all six pass, failures=0.
+> - New compiler, dev's lld: the function check FAILs (the address is the image base); the object then
+>   faults (cause 26).
+> - Dev's compiler, new lld: the function check passes; the object faults at its SHRINK (cause 24).
+> - Dev's toolchain: the function check FAILs, then the object faults (cause 29).
+> - The defined-weak checks pass in all four arms.
+>
+> **What else changed.**
+> - The 678 SPEC objects under the measured flags are unchanged, apart from .comment and gcc's version
+>   string. The eight benchmarks declare no extern-weak global.
+> - Linking changes exactly one pair in every image we build: `_DYNAMIC` in musl's `static_init_tls`. It is
+>   the only undefined symbol in each of the eight SPEC images, CPython, FFmpeg, Postgres and tshark, and in
+>   the 14 QEMU fixtures. Each fixture differs from its previous build by exactly that pair, `auipc/addi t0`
+>   becoming `lui/mv t0`.
+> - The pair is inert: `phdr->p_type == PT_DYNAMIC && _DYNAMIC` short-circuits, because no image has a
+>   PT_DYNAMIC header.
+> - The SPEC images were not relinked; for them the claim rests on the census.
+> - The 14 fixtures, previous and new builds, ran in one QEMU boot with identical output and exit status for
+>   every pair (hosted-contract 45/45 both ways). The plain gate lacks some runners' module arguments, so
+>   fp-, mapcache- and pthread-contract stop the same way on both sides.
+>
+> **Residual.**
+> - Silicon was not run. The skipped path leaves a null only because an integer write clears the
+>   register's capability shadow. On the RTL that was measured in simulation: in capstone-ariane's
+>   `alu-write-clears-shadow.S` the only exception is the positive control's.
+> - A weak global reached at an offset (`&weak_arr[k]`) is guarded at its base. The offset is then applied
+>   to the null, and that faults as arithmetic on any null capability does.
+> - ABIs other than image-gp keep the old sequence.
+
 
 **What happens.** `extern int hook(int) __attribute__((weak)); ... if (hook) hook(x);` with `hook`
 undefined: the test is TRUE in a domain and the call jumps to the image base (cause 2). The address

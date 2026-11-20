@@ -919,6 +919,14 @@ uint64_t InputSectionBase::getRelocTargetVA(Ctx &ctx, const Relocation &r,
         dest = getRISCVUndefinedRelativeWeakVA(r.type, p) + a;
       else
         dest = r.sym->getVA(ctx, a);
+      // Capstone (C-56): an image runs at a load base other than its link
+      // address, without relocation, so an auipc cannot form the value 0: it
+      // would yield the load delta, and `if (&weak)` would be true.
+      // RISCV::relocate rewrites the auipc as a lui, so the pair forms the
+      // absolute value instead, and its %pcrel_lo takes the low bits of the same
+      // value through RE_RISCV_PC_INDIRECT.
+      if (ctx.arg.emachine == EM_CAPSTONE && r.type == R_RISCV_PCREL_HI20)
+        return dest;
     } else {
       dest = r.sym->getVA(ctx, a);
     }

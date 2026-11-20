@@ -2763,6 +2763,20 @@ def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8, Uses = [X3] in
 def PseudoCapGlobalBase : Pseudo<(outs GPCR:$rd), (ins GPR:$rs1), []>;
 
+// C-56: the base of an extern-weak global under -capstone-image-gp, which may be
+// undefined. lld resolves an undefined weak %pcrel_hi/%pcrel_lo pair to an
+// absolute 0 (lld/ELF/Arch/RISCV.cpp), so $rs1 is 0 exactly when the symbol is
+// undefined. The AsmPrinter emits
+//   mv rd, rs1 ; beqz rs1, 1f ; scc rd, gp, rs1 ; [shrinkto rd, rd, size] ; 1:
+// so an undefined symbol yields the integer 0, an untagged null, instead of a
+// capability with gp's authority and a cursor outside gp's bounds (whose SHRINK
+// faults). $size 0 means no SHRINKTO: a function, or an object whose size does
+// not fit the immediate. The branch exists only in the emitted code, so no MIR
+// pass sees it, and no MIR pass can hoist the SHRINK above the test.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 16, Uses = [X3] in
+def PseudoCapWeakGlobal : Pseudo<(outs GPCR:$rd),
+                                 (ins GPR:$rs1, simm12_i64_op:$size), []>;
+
 // MREV: Create revocation capability
 // hasSideEffects: allocates a revocation-tree node and deepens the source's, so
 // two MREVs of the same register are not interchangeable with one.

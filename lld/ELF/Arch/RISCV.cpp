@@ -431,8 +431,17 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
 
-  case R_RISCV_GOT_HI20:
   case R_RISCV_PCREL_HI20:
+    // Capstone (C-56): a pc-relative reference to an undefined weak symbol is
+    // resolved to the absolute value (getRelocTargetVA), so the auipc becomes a
+    // lui with the same rd and an absolute address of 0 is formed. A call
+    // (R_RISCV_CALL) reaches here through relocateNoSym, with no symbol, and
+    // is unchanged.
+    if (ctx.arg.emachine == EM_CAPSTONE && rel.sym && rel.sym->isUndefined() &&
+        (read32le(loc) & 0x7f) == 0x17)
+      write32le(loc, (read32le(loc) & ~0x7fu) | 0x37);
+    [[fallthrough]];
+  case R_RISCV_GOT_HI20:
   case R_RISCV_TLSDESC_HI20:
   case R_RISCV_TLS_GD_HI20:
   case R_RISCV_TLS_GOT_HI20:
