@@ -45,6 +45,10 @@ python3 run-c8.py --adapter <kit>/adapter --qemu <kit>/qemu-system-riscv64 --ima
   --application c8-copy.dom --work <new dir>
 ```
 
+Run it in the environment of `capstone/tests/capstone-test-env.sh`: the staged runner takes the QEMU lock that file
+names. Exit 0 is PASS and 1 is FAIL. Exit 2 means nothing ran (no `run-staged.py`, or no serial log), which is not a
+test result.
+
 ## Results (2026-11-14, llvm-c8 = f9217feb4d06 + this change; kit spec/kit-prof)
 
 The arms are FR's configuration: `-capstone-fold-global-lo`, `+relax`, padded link script.

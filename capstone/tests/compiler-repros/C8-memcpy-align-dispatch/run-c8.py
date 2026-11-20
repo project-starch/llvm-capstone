@@ -5,12 +5,15 @@ control fired, the C8_DONE line with zero failures, and exit 0. A missing line i
 import argparse, json, re, shutil, subprocess, sys
 from pathlib import Path
 p = argparse.ArgumentParser()
-p.add_argument('--runtime', type=Path, default=Path(__file__).resolve().parents[2] / 'runtime/virtual',
+p.add_argument('--runtime', type=Path, default=Path(__file__).resolve().parents[3] / 'runtime/virtual',
                help='runtime/virtual checkout with run-staged.py (default: this repo\'s)')
 for n in ('adapter', 'application', 'qemu', 'images', 'work'):
     p.add_argument('--' + n, type=Path, required=True)
 a = p.parse_args()
 R = a.runtime
+if not (R / 'run-staged.py').is_file():
+    print(f'run-c8: no run-staged.py in {R}: nothing was run (this is not a test result)', file=sys.stderr)
+    sys.exit(2)
 a.work.mkdir(parents=True, exist_ok=False)
 st = a.work / 'stage'; st.mkdir()
 shutil.copy2(a.adapter / 'capstone-vexec', st / 'capstone-vexec')
@@ -25,11 +28,16 @@ echo C8_EXIT:$?
 rmmod capstone_vm
 echo VIRTUAL_STAGED_DONE
 ''')
-subprocess.run([sys.executable, str(R / 'run-staged.py'), '--qemu', str(a.qemu.resolve()), '--images',
-                str(a.images.resolve()), '--stage', str(st.resolve()), '--work', str((a.work / 'guest').resolve()),
-                '--timeout', '600', '--no-exact-bounds'])
+ran = subprocess.run([sys.executable, str(R / 'run-staged.py'), '--qemu', str(a.qemu.resolve()), '--images',
+                      str(a.images.resolve()), '--stage', str(st.resolve()), '--work',
+                      str((a.work / 'guest').resolve()), '--timeout', '600', '--no-exact-bounds'])
 serial = a.work / 'guest/serial.log'
-log = serial.read_text(errors='replace').replace('\r', '') if serial.exists() else ''
+if not serial.exists():
+    print(f'run-c8: run-staged.py exited {ran.returncode} and left no serial log: the guest never ran (this is not a '
+          'test result). It needs the environment of capstone/tests/capstone-test-env.sh, which names the QEMU lock.',
+          file=sys.stderr)
+    sys.exit(2)
+log = serial.read_text(errors='replace').replace('\r', '')
 got = dict(re.findall(r'^C8_CHECK:(\w+):(PASS|FAIL)$', log, re.M))
 want = [f'{c}_{n}_{k}' for c in ('both_aligned', 'dst_misaligned', 'src_misaligned', 'both_8_mod_16')
         for n in (16, 32) for k in ('matches_memcpy', 'tags')] + ['control_word_copy_drops_tag']
