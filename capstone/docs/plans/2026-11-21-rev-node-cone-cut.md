@@ -30,6 +30,20 @@ on the board's images:
 | mcf test | 181.24 M | +0.125 % (of 144.686 G) |
 | perl test | 252.1 M | no silicon base |
 
+## Considered and not batched: a second cut at the next family
+
+The predicted next limiter (cur_idx_q -> lsu_bypass mem_q CE, -4.631 at 56 levels with rev_node disabled) ships uncut.
+- **What it is.** mem_q's enable is `lsu_req_valid_i || pop_ld_i || pop_st_i` (lsu_bypass.sv:81-96). That is the LSU's
+  issue and its acceptance by the load and store units, which depends on the D$ grant, so the family is the LSU <-> D$
+  handshake, a member of the standing UNOPTFLAT list.
+- **Cost.** A register there costs a cycle per memory access, not per record read, orders of magnitude above the
+  0.2 % rule before any gain.
+- **Risk.** It feeds a cone that already carries a combinational loop.
+- **The number is an estimate.** It is the whole hierarchy disabled, and the same family reads +3.525 at 48 levels on
+  the spatial core.
+
+This build measures where the limiter really is. A second design follows only if WNS still misses 40 ns.
+
 ## Pre-synthesis gates
 
 - lint;
@@ -39,6 +53,11 @@ on the board's images:
   invariant).
 
 The sweep enters the table namespace almost nowhere, so the arms, not the sweep, are the pairing gate.
+
+**Lint on 5155e8e02 (read 2026-11-21):** PASS. Every counter equals P1's: LATCH 44, MULTIDRIVEN 3, ALWCOMBORDER 0, COMBDLY 0,
+UNOPTFLAT 39, BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 1480, CASEOVERLAP 2, SELRANGE 100, ANVIL_UNOPTFLAT 0. The 39 UNOPTFLAT
+names are identical to the bitstream-1 tree's. Lint counts constructs and cannot see path depth, so this says the cut
+adds no hazard; it says nothing about what the cut buys.
 
 ## Keys for the synthesis-only gate (P1's gate as reference: core 162,403 LUT, mapping 5,041.7 MB)
 
