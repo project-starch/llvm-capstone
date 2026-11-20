@@ -5815,3 +5815,17 @@ busy overnight and complete the records.
 - **For comparison.** Pools alone (Addendum 186): +5.09 %. Over Plain with gcc's Full at +20.15 %: 1.2015 x 1.1542 = 1.3868, about 39 %. Pools alone: about 26 %.
 - **Limits that travel with the number.** One boot, two runs per arm, one board. It is the P1 adaptation of Addendum 191, not the collaborator's design: the GC heap has no release at collection (an object's lifetime ends only at `ggc_free`), pools are the nested lane's header port. The table is 16 times the kit's default; with the default the protected arm cannot run train01. The cost is not attributed among the three allocators.
 - **Paper.** Nothing changes without the lead's word. The paper states the pool port only (+5.1 %, about 26 % over Plain) and "below 30%"; this arm would be above that bound.
+
+## Addendum 195 (2026-11-20 13:09 +08, outcomes): Addendum 190, the three x264 runs (spa3w-b1, a3w-b2, hz250x-b3)
+
+- **Registration 1, spa3w-b1: VALID, inside its band.** spec/board/out-nat-p1-spa3rep-w-b1, board 1, 2026-11-18 17:51:31 to 2026-11-19 03:24:28. Smoke 9/9, rc 0. Input generation 2,111.65 s, encode **30,671.49 s** (first run 30,669.13 s, +0.008 %; band 30,362-30,976 s). run_cycles at the end 757,756,907,868. board.txt sha256 f49e4f76...5a7f18.
+- **Registration 2, a3w-b2: VALID, inside its band.** spec/board/out-nat-p1-a3rep-w-b2, board 2, 2026-11-18 21:27:36 to 2026-11-19 07:01:06. Smoke 9/9, rc 0. Input generation 2,111.54 s, encode **30,672.80 s** (first run 30,674.00 s, -0.004 %; band 30,367-30,981 s). run_cycles at the end 757,784,662,833. board.txt sha256 b258666c...d29381.
+  - The 15 hashed outputs are equal between the two runs and equal to the first runs' (out-nat-p1-final-spa3-b2, out-nat-p1-final-a3-b1).
+  - The chain's "SPEC rc=2, NO RESULT" line for both is its classifier misreading the native stage's transcript, as in Addenda 193 and 194; the readings above are from board.txt.
+  - **By Addendum 181's rule every benchmark now has two runs per build on P1**, so 7.3's "except x264" may be dropped. That is a paper change and waits for the lead's word.
+- **Registration 3, hz250x-b3: VALID, prediction MET.** spec/board/out-thp2-hz250x-b3, board 3, kit bkit96-k2n-rvm-hz250, 2026-11-18 19:07:12 to 2026-11-19 06:49:24. 2/2 commands rc 0. The three imagevalidate comparisons report NO-OUTPUT, as in rvm-b1: the stage does not run imagevalidate, so validity rests on the frame hashes below. Input generation 2,520.00 s, encode **37,968.21 s** (prediction 37,538-38,832 s). hart cycles 949,220,867,181, instructions 563,527,062,241. board.txt sha256 5c07c935...bf6c9e.
+  - Against rvm-b1 at 100 Hz (33,060.23 s): r = 1.14846, **s = 7.93 %**, inside the 7.0-9.5 % rule, so x264 takes its own share. Eight shares are now measured, 7.37-11.00 %.
+  - Estimate without timer interrupts for x264 with its own share: +Spatial +0.30 %, Full +0.32 % (the appendix prints 0.87 / 0.89 % from the mean share 8.45 %).
+  - Of the 15 hashed outputs 14 equal rvm-b1's, the frames among them. `log.dec` differs. The cause is not known; it is a text log, not a frame file, so the reading rule (frames byte-identical) is met.
+  - Limits: one run at each tick rate.
+- **Paper.** Unchanged. The submitted text keeps "except x264" and the mean share for x264. Both changes are small and are the lead's to ask for.
