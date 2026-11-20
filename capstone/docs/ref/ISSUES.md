@@ -4628,6 +4628,74 @@ ccsrrw (S and U, return and ecall-escape variants), and they read identically on
 
 **For B5b:** under the trap route, protected U is the defended boundary. So this gate and F-A's are required there, not optional.
 
+### R-75 — after a CSRUNV escape the PC tracker re-adopts the caller's PHYSICAL code capability unresolved; its probe goes out at the next M-mode moment, and when that moment is the switcher's RESUME transit (M with sup_active, so the table namespace) the id resolves in the context's table, where ids 0 and 1 are header slots: DEAD; a one-cycle lag of the record clear then delivers that DEAD to the M trap handler, which takes cause 25 for ever `OPEN 2026-11-16 — DEMONSTRATED IN SIMULATION on P1 d83d3a633 (tests only added) and on capstone-ariane rtl/record-cache; LOCALISED 2026-11-20 by matched readings and a one-variable pair (below), claim-audited; two accounts RETRACTED on 2026-11-20 (the 2026-11-16 "illegal instruction" mechanism, and the same day's trigger "an id change while srevroot holds a table, then code under that id"); NOT MEASURED ON SILICON; the SPEC native route is unaffected by construction (below); an option-(a) prototype passes in simulation (sim only, not a fix)`
+
+Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the same ROOT -- ids carry no namespace identity -- reached there through the index-only invalidation broadcast; here through the R-43 probe), R-43 (the probe path).
+
+**Reading** (P1 d83d3a633 with the tests of capstone-ariane rtl/record-cache: `verif/tests/custom/capstone/va-fetchsplit.S`, testlist_sup entries `va-rc-trap` and `va-rc-trap-z`; S12_MEM_DELAY 12; 2026-11-20 in a local worktree with sim-only prints of the PC tracker's adopts, verdicts and every invalidation broadcast, plus the committed R43_TRACE):
+- **The arm.** `-DVA_RC_CTX -DVA_RC_TRAP -DFS_SAMETBL -DCS4_TWO`:
+  - the caller at S sets srevroot = the context's own table (tbl3, flat) and enters a CSRUNV context with options bit 0;
+  - the context ecalls (a kind-3 escape); S resumes it with action 2; the context ecalls again (a second escape);
+  - S continues at CSRUNV+4, prints its readings, and executes `ecall` (a7 = 1) to M.
+- **Where the PC check runs.** The PC-capability check and its probe request are armed only at M with capmode
+  (`commit_stage.sv:392`, the pc_cap_check gate; `:503`, `pcc_chk_o = ... pc_revnode_unk_q && (priv_lvl_i == M) &&
+  capmode_i`), so code at S under an unresolved id commits unchecked, and the probe for that id goes out at the next
+  M-mode moment, in the namespace active then (the table term, `csr_regfile.sv:2941`: in a context; at S with srevroot
+  set; at M only under csupctl.table or while `sup_active` with runv).
+- **`va-rc-trap`** (sim-only prints of the probe request's state, the table term's inputs and the unit's D$ reads;
+  `.sup/r75fs3`, deterministic across r75fs2/r75fs3): id 1 is re-adopted unresolved at S after the first escape (80,487)
+  and S code runs unchecked. The next M-mode moment is the RESUME's switcher transit: the probe request rises at 85,687
+  with priv 3, sup_active 1, the table term 1 throughout (no change between 59,542 and 92,163). The probe waits for the
+  switcher's flush (flush has priority over starting a probe, `load_store_unit.sv:1776`, `:1785`; the scoreboard is
+  flushed every cycle 85,688-87,352), is accepted at 87,354 and reads 0x80009010, slot 1 of the context's table tbl3:
+  DEAD (87,359). In the table namespace ids 0 and 1 are header slots and resolve DEAD whatever memory holds
+  (`ex_stage.sv:1730`, `vp_hdr_rd = vctx_rev_q && (rev_rd_idx_q < 2)`; `:2281`); the 0x0 the print showed is
+  incidental. The LSU keeps that DEAD as its record (`load_store_unit.sv:1670`, `:1762-1765`). After the second escape
+  id 1 is re-adopted (91,958); S's ecall takes the core to M at 92,163, where the table term drops 1 -> 0 and the probe
+  request rises. The namespace flush is registered one cycle later (`ex_stage.sv:1693-1702`), so at 92,163 the record
+  still matches and the verdict latches DEAD; the tracker consumes it at 92,164, and the record is cleared
+  (`load_store_unit.sv:1748-1752`) one edge too late. The M handler then runs under id 1 and takes cause 25
+  (`commit_stage.sv:416-419`) for ever: 15,399 lines of cause 25 at 0x80002000 to this run's 200,000-cycle cut, 272,541 at the sweep's 2,000,000. The 2026-10-20 ruling
+  (the PC tracker ignores the namespace flush) is what keeps the stale verdict from being undone; it does not produce
+  it. ZERO invalidation broadcasts in the window, which is the evidence against S-23's broadcast form.
+- **The one-variable pair, `va-rc-trap-zp` against `-p`** (`-DCS4_ZERO` only; `.sup/r75zp`, the same tree, R75_RERESOLVE
+  undefined): the same transit probe reads DEAD (87,464), but CS4_ZERO's `csrw 0x5c1, x0` at S drops the table term at
+  91,917 and the flush at 91,918 clears the records BEFORE id 1 is re-adopted (92,068); the M-mode probe at 92,351 goes
+  fresh to the pool and reads ALLOW, and the arm passes (94,094 cycles). `va-rc-trap-z` (the same without R75_PRINT)
+  passes likewise; `va-rc-bare` / `va-rc-bare-nosum` (S sets srevroot = tbl3 and ecalls, no context) pass: no id change.
+- **`va-fetchsplit-s` passes for the same reason** (it differs from `va-rc-trap` in four defines, so this is a reading,
+  not an isolation): its first M-mode moment under id 1 is an ordinary ecall (request at 81,550, priv 3, sup_active 0;
+  the table term drops in the same cycle), no record for id 1 exists, and the probe, issued after the namespace register
+  has followed, reads 0xBFF00010 in the pool: ALLOW.
+- **The trigger, as read:** the caller's physical PC id re-adopted unresolved, a probe of it served while the table
+  namespace is on at M (the switcher's resume transit), and that DEAD record still matching when the next M entry
+  consumes a verdict in the cycle before the namespace flush. An id change at S with srevroot set, followed by code at
+  S and M, is NOT sufficient (`va-fetchsplit-s`).
+- **The reference has no PC-liveness check.** capstone-qemu 9289114e06 raises INVALID_CAP only for lifetime operations
+  (`op_helper.c:1101`, `:1127`, `:1214`) and data accesses (`:1472`), and demotes an LDC result's tag (`:1766`); a search
+  of `target/riscv` for `capstone_cap_revoked`, `cr_tree`, `pcc` and `pc_cap` finds no fetch-side check, and CSRUNV is one
+  instruction there, so there is no transit moment. The PC check is the RTL's own (the CJALR fix); R-75 is the RTL
+  refusing where the reference never checks. The reference's per-privilege store choice (`capstone_table.c:171-177`)
+  governs its data and lifetime checks, not this one.
+- **RETRACTED 2026-11-20, the same day (surfaced to the runtime lane):** "the trigger is a PC-capability id change while
+  srevroot holds a table, then code under that id", with its consequence "R-75 is live on the trap route" (B5b scope
+  note) and "the reference would read the host tree and find it live". `va-fetchsplit-s` has that shape and passes; it
+  was listed here as "not yet explained" beside the generalisation. Explaining it refuted the trigger (above).
+- **RETRACTED 2026-11-20 (surfaced to the runtime lane the same day):** "the handler takes ILLEGAL_INSTR on its first
+  instruction ... the CSR privilege check `access_priv < csr priv` fires, so the handler runs below M". The cause came
+  from the retirement trace's LABEL, which `corev_apu/tb/rvfi_tracer.sv:129-139` reuses from the previous named cause
+  for any cause it has no name for (fixed on capstone-ariane rvfi-tracer-cause 0f59f7260, where the same traps print
+  CAUSE_25). With an ADDI as the handler's first instruction the ADDI "faults" too, which no CSR check can do.
+- **For B5b (the trap route):** B5b deletes CSRUNV and the supervisor, so the switcher transit this arm needs does not
+  exist there. What remains is the general hazard the arm exposes: a probe served in one namespace leaves a record that
+  a verdict consumed in the cycle before the next namespace flush can still match. On P1 records are made only by
+  M-mode PC probes and the R-43 data path; B5b adds checks outside M (protected U, S rule 1), so whether a record made
+  under the table can match a PC id at an M entry within that cycle is a question for B5b's design, not answered here.
+  Its must-pass: `va-rc-trap` and `-zp` as regression arms, and the record clear taking effect no later than the
+  namespace change it follows.
+
+**Exposure.** The native module's `run()`/`run_x0()` (`capstone_vm.c:2009`, `:2021`, bkit91 kernel; the runtime lane's reading) put `csrw 0x5c1, zero` in the same asm statement as every CSRUNV. So the SPEC native route never takes an S trap with srevroot non-zero after an escape, and its service resumes (gcc train01: about 2,450 per run) complete on P1 silicon with every smoke 9/9. Any other CSRUNV caller, including B5b's replacement of CSRUNV, must keep that write or have this fixed.
+
 ### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `OPEN 2026-11-20 — DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
 
 Siblings: R-43 (whose fix introduced the probe and chose fail-closed timeouts; its entry does not record the timeout path), R-35 (the verdict cache). R-75 and R-76 are on llvm-capstone `land/rtl-sublet-p2`, not yet on dev.
