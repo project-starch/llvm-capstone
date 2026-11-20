@@ -13064,7 +13064,56 @@ model, which is a design question and not a missing pattern.
 `-DMUSL_WRITE_PROBE_WANT_BADFD`, which reads `errno` after a refused fd and so cannot pass unless the
 thread pointer survives.
 
-### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `OPEN — OBSERVED LIVE 2026-09-24 for direct-call targets (the direct-call instance fixed at 563e0765953e, merged 2026-09-25 at 3979abd8e9a3); the MOVC modelling itself is unchanged. The fix shape this entry first implied is WRONG — see the box`
+### C-46 — `MOVC` is modelled as side-effect-free with `$rs1` a pure USE, so the machine model does not know it CONSUMES a linear source `CLOSED 2026-11-20 by guarding the values (decision: the runtime lane); MOVC also marked side-effecting at no measured cost, which is NOT the fix; residual stated below — originally OBSERVED LIVE 2026-09-24 for direct-call targets (fixed at 563e0765953e)`
+
+> **CLOSED 2026-11-20 (compiler lane; decision: the runtime lane, which took the trade below once its cost was
+> measured).** The fault needs two things: a LINEAR value that codegen can copy, and a READ of the copy's
+> source after the `movc`. Each is now closed on its own path.
+>
+> 1. **Codegen mints no LINEAR capability for the allocator to copy.**
+>    - Under the default capability ABI, a direct call's target goes through PseudoCapGlobalBase
+>      (cincoffset + delin, 563e0765953e).
+>    - Under the application SDK's ABI (`-capstone-gp-free -capstone-image-gp`) no capability is built for
+>      a direct call at all: the target is an integer and the call a plain `jalr`. Pinned by the new IG arm
+>      of `c46-call-target-nonlinear.ll`; splicing back a `cjalr` or a `delin` fails it.
+>    - Under image-gp, gp is NONLIN by stated contract, so every SCC/CIncOffset of it is NONLIN (C-27).
+> 2. **No read of a MOVC's source survives on the silicon configuration.** C-32's live-source rule
+>    (`CapstoneLiveSourceCopy`) runs after copy propagation, the post-RA scheduler and late branch-opt.
+>    It rewrites every MOVC whose source is read again as STC+LDC. Its check-only instance after
+>    MakeCompressible fails the build if one survives.
+>
+> **Also landed: MOVC is `hasSideEffects = 1`.** This prevents deleting or moving the MOVC itself. It does
+> NOT make a later read of its source depend on it, and that read is what faulted on 2026-09-24. So it is
+> not the fix, and must not be read as one. Its cost, measured on lane `compiler/c46-movc-side-effects`
+> (15af4164db2d) against dev's compiler in the same tree:
+> - all 678 SPEC objects identical apart from .comment and gcc's version string;
+> - the 14 QEMU fixture images byte-identical;
+> - CodeGen/Capstone and MC/Capstone 177/177.
+>
+> The flag is live: `dead-mi-elimination` deletes a dead MOVC under the old model and keeps it now
+> (`c46-movc-side-effects.mir`). It costs nothing because a MOVC exists only after register allocation,
+> and no pass there asks whether it is pure.
+>
+> **Residual, stated rather than closed.**
+> - Under `+movc-keeps-integer-source` (the virtual SDK) the live-source rule is OFF, for linear sources
+>   too. A LINEAR capability loaded from memory, which the allocator then copies with its source still
+>   live, is unguarded there. That is a C program duplicating a linear pointer: the program's linearity
+>   violation, not a value the compiler minted.
+> - The rule exempts gp, sp and tp as always NONLIN. That holds only where gp really is NONLIN: R-21's
+>   scan recorded older entry glue minting a LINEAR gp by split.
+>
+> **Triggers that reopen it** (each a build-configuration change, not a source change):
+> - under `+movc-keeps-integer-source`, a tuned `-mcpu` that enables the post-RA scheduler, which could
+>   then move a read of a source past its MOVC with no rewrite to catch it. On the silicon configuration
+>   the scheduler runs before the rewrite and is not a trigger;
+> - linear capabilities handed to C code under the virtual SDK;
+> - an ABI whose gp is not NONLIN.
+>
+> The machine outliner is no trigger. It is in the default pipeline (`setSupportsDefaultOutlining(true)`,
+> `CapstoneTargetMachine.cpp:200`; it outlines minsize functions). It runs after the rewrite and only
+> moves instructions, so the MOVCs it sees have dead sources. The 2026-09-10 boxes below call it "not
+> opted in"; that is wrong, as the comment above MOVC's definition already records.
+
 
 > **What the merged fix does NOT guard.** `llvm/test/CodeGen/Capstone/c46-call-target-nonlinear.ll` is
 > a codegen-SHAPE test: it checks that the target is built non-linear, not that a program survives.
