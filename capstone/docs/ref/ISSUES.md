@@ -2726,6 +2726,43 @@ too (`op_helper.c:1944-1946, :2105-2111, :2229-2243`).
 same on both paths); the RTL at the superproject's pin 776d9d859 (6d0e754d5 and vp2c were read); and whether any
 shipped code executes a scalar store through UNINIT.
 
+## Q-37 — QEMU refuses a CSRUNV admission by raising illegal-instruction at the CSRUNV, which halts the machine in the M-mode firmware; the module's refusal path expects the RTL's shape, no event record `OPEN — twin fidelity, filed 2026-11-21 by the compiler lane while testing the stage-2 CRVC refusal; one observation, cause chain read in QEMU's source`
+
+**What happens.** capstone-qemu's CSRUNV admission checks the frame and raises
+`capstone_raise_cap_fault(env, RISCV_EXCP_ILLEGAL_OP_VAL, 0, GETPC())` when anything is wrong:
+- a satp that is not Sv39 or not allowed;
+- a zero, misaligned or over-capacity srevroot table;
+- an untagged initial PCC;
+- an unknown options bit;
+- a frame too small for nonzero options.
+
+This is `capstone_supervisor.c` in the admission branch (`(options & ~3)`; at a0501ebc39, the twin's tree). The
+CSRUNV runs in the S-mode kernel module, so the trap goes to the M-mode firmware.
+
+Observed once (2026-11-21): prototype QEMU 05706b2e11 without `x-capstone-crvc`, kit-unq images, a module admitting
+with options 7. The firmware printed `0xdeadbeef` and `0x1d`, then faulted itself ("Cap mem access requires
+capability", cause 24, pc 0x8002522a), and the machine halted. The refused context never ran.
+
+**What the module expects.** capstone_vm handles a refusal as a CSRUNV that wrote no event record: it prints
+"wrote no event record (refused)", ends the context with `CV_CAUSE_REFUSED` and returns to the launcher. That is the
+refusal shape the module was written against, the RTL's. On QEMU that path is unreachable: every refused admission
+halts the guest instead of failing one context.
+
+**Why it matters.**
+- A twin run cannot exercise any refusal path: the stage-2 kit-cannot-set-the-mode case, a bad satp, a bad table.
+- A refusal there looks like a firmware crash, not a refused context.
+
+**Not established:**
+- whether the RTL in fact writes no event record for every one of these checks (the module's comment says so; the
+  RTL was not read for this entry);
+- what the firmware's handler at 0x8002522a does with an illegal instruction from S, and why it faults itself.
+
+The same halt signature appeared when a module of a different table build (not flat-table) ran on the kit; that
+case was not attributed to a refused admission.
+
+**Fix shape (QEMU):** refuse as the RTL does, writing no event record and returning to the caller, so the module's
+path is the one exercised.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than

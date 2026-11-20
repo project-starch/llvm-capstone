@@ -15,6 +15,11 @@ option A (`plans/2026-11-14-capability-rvc-stage2-decoder-sketch.md`), per bench
   `cincoffsetimm rd, rd, imm6`, for which option A has no slot.
 - A compiler-only addition, Zcb's byte and halfword forms with a capability base, would add 1.26 % on x264 and take
   it to 3.48 %. It was not built.
+- **The GO numbers are upper bounds by more than register allocation** (step 3 of the prototype, 2026-11-21). The
+  census reads linked images, where a `%pcrel_lo` folded into a load or store (`-capstone-fold-global-lo`) has a
+  resolved offset. The compiler cannot compress those sites, because their offset is a relocation. Statically that
+  is 2,729 c.ldc and 1,033 c.stc sites on perl, and 10,205 and 388 on gcc (`plans/2026-11-21-capability-rvc-stage2-
+  prototype.md`). The dynamic share comes from the twin runs.
 
 ## Instrument
 
