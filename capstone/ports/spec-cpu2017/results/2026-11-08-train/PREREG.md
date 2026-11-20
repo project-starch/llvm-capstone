@@ -5889,3 +5889,84 @@ cancelled while it waits if the train-size Plain stages are ready first.
 
 **Dry runs** (stubbed, each reached its last stage with rc 0): `perf/natstage/dry196/` holds
 `r3a3-b1-dry.log`, `r3spa3-b1-dry.log`, `r3rvm-b3-dry.log` and `r3rvmx-b3-dry.log`.
+
+## Addendum 197 (2026-11-20 13:56 +08, before it runs): the record cache with the `ccsrrw` privilege term (7180a83b6) on board 2: first boot of the build, and its mcf reading
+
+**Why.** Three questions, one chain.
+1. Build 7180a83b6 is B5a's write-through record cache plus the privilege term for R-76 in `csr_regfile.sv`. It is
+   sealed and graded and has never been flashed. A new bitstream and a new kit need their own Tier 1 boot.
+2. The record cache has a reading on gcc (+0.39 % on board 2, +0.41 % on board 1) and on perlbench, and none on
+   mcf: the chain of 17 Nov was stopped before mcf's boot produced a transcript. mcf is the row where it can
+   matter. On P1 it takes 180.6 M verdict-cache miss replays (event 23) and 181.6 M record accesses (event 31)
+   in 144.7 G cycles.
+3. The reading calibrates the record-cache model of the post-submission programme (hardware line B), which
+   decides whether a record cache is built on the new record format.
+
+**Chain.**
+
+| Chain | Board | Bitstream | Kit | Rows |
+|---|---|---|---|---|
+| b5ar76-b2.conf (TAG b5ar76-hpmrc-frcdkms) | 2 | `…-pagedtbl-reccache-r76_7180a83b6`, sha256 b339149665e4…95ee7 | bkit97 | perlbench, mcf, gcc train01 |
+
+- **Kit:** bkit97 is bkit94 with the two bitstream fields of `board.env` changed. Firmware wrap, monitor, kernel
+  tree and kernel command line are bkit94's. The firmware selects events 34, 35, 31, 37, 36 and 2 into
+  hpm3..hpm8.
+- **Stages:** `perf/natstage/board-frcdkms/`, the directories that chains cq-b2 (P1) and cs-b2 (B5a) ran on this
+  board. perlbench and mcf run SPEC's test input and gcc the train01 command, as in the paper's rows. perlbench
+  goes first because it is the shortest boot.
+- **Build grade:** full build PASS, 4 of 4 keys: congestion level 4, no timing loop, WNS -13.615 ns against P1's
+  -13.173 ns (band 3.74 ns), routed clean. 189,920 LUT, 2,552 above P1.
+- **Flash:** board 2 goes from P1 (sha256 dc411e36…1a40) to this bitstream. The runner checks the sha256 against
+  the seal before the flash and reads the name back after it. P1 stays registered as the fallback, with bkit91.
+- **Time:** about 3 h, boots included.
+
+**Checked before the flash.** The term refuses `ccsrrw` below M outside supervision, so any S or U code on the
+measured path that issues it would die with an illegal instruction. Counted by disassembly (`ccsrrw` is opcode
+0x5b with funct3 7), each count with a control that shows the disassembly was read:
+
+| Binary | `ccsrrw` | Control |
+|---|---|---|
+| native kernel `vmlinux` | 0 of 603,732 four-byte instructions | 43 `csrrw` |
+| `capstone.ko` in the image | 0 of 3,336 | none: the module has no `csrrw` |
+| entry-driver, task-driver, musl-pipe | 0 of about 72,000 each | 2 `csrrw` each |
+| the six smoke domains | 0 | 6,579 to 8,754 opcode-0x5b instructions each |
+| mcf, perlbench and gcc images | 0 | 10,327, 181,045 and 838,786 opcode-0x5b instructions |
+
+No simulation arm has run a supervised context below M issuing `ccsrrw`. None of these binaries issues the
+instruction, so this chain does not exercise that case either.
+
+**Prediction.**
+1. *Tier 1.* Every boot reaches its shell. Smoke prints the nine verdict lines of cs-b2: eight PASS, and task 70
+   with its two accounting checks waived. No illegal-instruction line from the monitor and no SIGILL. Every row is
+   valid in `read/result.json`.
+2. *gcc train01.* The term adds no cycle on this path, so the row repeats B5a's reading on this board, 1,770.04 s
+   and 42,051,915,561 run cycles, within 0.2 %: 1,766.50 to 1,773.58 s, 41,967,811,729 to 42,136,019,392 cycles.
+   Read hit rate 62.3 % (event 34 over events 34 + 35), and event 31 - event 35 - event 37 is not negative.
+3. *perlbench.* 274.85 s on B5a; 273.48 to 276.22 s (0.5 %; its cycles are not graded, Addendum 153a).
+4. *mcf, the new reading.* P1 on this board: 5,943.66 s, 144,685,962,914 run cycles. mcf keeps few records live,
+   so nearly every record read should find its line: read hit rate above 95 %, fill reads (event 37) below 1 % of
+   record accesses. What a served read saves is not known. The bounds are 2 cycles (a D-cache hit avoided) and the
+   whole 15.5-cycle miss path, which give 5,828 to 5,929 s (-0.25 % to -1.95 %). This model is coarse and fitted to
+   nothing, and gcc's reading already contradicts "a hit always saves". So the three outcomes are fixed here:
+   - *gain*, below 5,931.77 s: the record cache pays where verdict-cache misses are dense. The model takes the
+     saving per hit as (P1's cycles - these cycles) / event 34.
+   - *no change*, 5,931.77 to 5,955.55 s (0.2 % either side of P1): a record read through the D-cache is not what
+     mcf's verdict-cache miss costs. The lever is the miss path itself (verdict-cache size, the replay).
+   - *loss*, above 5,955.55 s: as on gcc. With a hit rate above 95 % fill reads cannot explain it, and the cause is
+     looked for in events 37 and 2 before anything is concluded.
+
+**Refutation.**
+- A boot without a shell, a smoke line that differs from cs-b2's, or an illegal-instruction line refutes "the term
+  is invisible to the measured path". The chain stops, the trap lines are read, and board 2 goes back to P1.
+- gcc outside its band refutes "the term adds no cycle". The row is reported with both readings.
+- An mcf read hit rate below 95 % refutes the few-records model, whatever the seconds say.
+
+**Use.** The mcf outcome goes into the record-cache decision for line B. A clean Tier 1 lets the registry say of
+R-76's fix "flashed, boots, the measured path is unaffected". It does not let it say "fixed on silicon": that
+needs the user-mode probe, which gets its own simulation arm and its own pre-registration and runs as the last
+stage of a later boot. mcf has one run on this bitstream; P1's two runs on board 1 are 0.035 % apart.
+
+**Stops.** A failed smoke stage or a command with a non-zero status ends the chain. If the first boot does not
+reach a shell, board 2 is reflashed to P1 and bkit91's perlbench stage confirms the board.
+
+**Dry run** (stubbed, reached its last stage with rc 0): `perf/natstage/dry197/b5ar76-b2-dry.log`.
