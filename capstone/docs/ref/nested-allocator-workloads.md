@@ -3293,3 +3293,49 @@ per arm, train01, -icount shift=0; every output matches SPEC's reference:
 **Next.** The obstack port first (a lifetime per chunk or per free-to-mark region, so that a free ends a subtree in
 one CREVOKE), with a fixture that a freed object's reference still faults; then the typed free lists, objects of 4 KiB
 and more and growing obstack objects, each priced alone the same way.
+
+### gcc's obstack port refined: +0.654 % to +0.348 % (QEMU, 2026-11-20)
+
+Profiled first, with the protection held fixed. Exact counts of every function of gcc's code (TCG plugin
+`capstone/tests/record-trace/zones.c`, one boot per arm on the 71ce199d8fea environment, train01) put the obstack
+port's +91.6 M in the out-of-line issue call (+34.9 M, 1.29 M calls), the callers of the obstack macros (about +28 M),
+the walk that pops a dropped chunk's references one by one (+11.0 M), and memcpy (+9.9 M). A counting build shows
+memcpy's excess to be the reference stack's growth: 2,043 reallocs copied 26,327,552 bytes, 9,872,832 instructions
+predicted against +9,944,403 measured. The CREVOKEs themselves are 105,684 in all.
+
+A lifetime per chunk or per free-to-mark region was considered and rejected: an object freed to a mark inside a chunk
+that stays live would keep a live reference, and the cost it would remove (the CREVOKEs) is not where the cost is.
+
+Three refinements (`capstone/ports/spec-cpu2017/own-allocators/502.gcc_r/obstack-variant.py`), priced alone and
+together against the arm with only the gcc fix:
+
+| arm | gcc's code against fix |
+|---|---:|
+| obstack port as the collaborator wrote it | +0.654 % |
+| a: issue fast path inline | +0.475 % |
+| b: O(1) forgetting of a dropped chunk's references | +0.592 % |
+| a and b | +0.413 % |
+| a, b and c: the reference stack in segments, never copied | **+0.348 %** |
+| all three allocators, the collaborator's | +0.784 % |
+| all three allocators, obstacks refined | **+0.478 %** |
+
+- Every output matches SPEC's reference. A fixture of six modes (`obstack-fixture.c`) answers the same for the
+  collaborator's obstack and every refinement: the controls read, every freed object faults with cause 25, the
+  survivors of a partial free read; stock obstack reads the freed objects of an in-chunk free.
+- Two slips caught before any reading: b's new chunk field first moved every chunk's first object 4 bytes off its
+  alignment (a pad keeps it at 16); the fixture first had fewer objects than one stack segment, so c's segment
+  boundary was not exercised (a sixth mode crosses it).
+- What remains of the obstacks' +48.7 M is mostly in the callers that now carry the inline path, above all
+  bitmap_element_allocate (+23.6 M before c), which serves most calls from its own free list: the typed free lists
+  are next.
+
+### Opcode census of the +Spatial images for the spatial-only core (QEMU twin, 2026-11-20)
+
+For the rtl lane: every executed 0x5B instruction counted by code region (plugin `capstone/tests/record-trace/opcount.c`
+on the twin a0501ebc39), on the FRCDKMSspa3 images of gcc train01 (3d8bfb5a…), mcf test (17b2fa0b…) and perlbench test
+(cdd368de…). The images execute CDERIVE (26,065 / 318 / 163,069) and CREVOKE (22,441 / 276 / 46,242), from the SDK
+runtime's `__heap_mapping` and `__heap_unmapping`, although the SDK's heap lifetimes are off; a spatial-only core
+must not make them illegal. REVOKE, TIGHTEN, DELIN, SPLIT, MREV, DROP, CALL, RETURN, CSSUPERVISE, CSRETIRE, CSNODE and
+LCC with zimm 0 execute 0 times in every image (LDC, the positive control, 1.7-8.1 G). The twin's kernel and firmware
+are not the board's (Linux 6.1 against the board's 6.4.14, kit-unq's firmware against the board monitor), so their
+counts are a proxy only; the rtl lane reads the board's kernel and monitor statically.

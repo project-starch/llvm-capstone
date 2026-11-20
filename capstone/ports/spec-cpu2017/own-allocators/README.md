@@ -49,3 +49,19 @@ Measured 2026-11-18 on silicon (bitstream P1). The record, with pre-registration
   +5.09 % run time**, output hash equal to SPEC's reference.
 - **Not protected:** the garbage-collected heap (`ggc-page.c`; SPEC's build never collects, so every object would
   stay live) and obstacks.
+
+## 502.gcc_r: the collaborator's one-operand port of all three allocators, refined
+
+The port of gcc's pools, GC heap and obstacks with one-operand CREVOKE and CRENEW is the collaborator's
+(`origin/native-kernel-new-qemu:capstone/ports/spec-cpu2017/sublet/502.gcc_r`). Two files here refine its obstack part
+without changing what it protects (every object keeps a lifetime of its own, a free still ends every object it cuts
+off):
+
+| file | what it does |
+|---|---|
+| `502.gcc_r/obstack-variant.py DIR abc` | on a tree that the port's `apply.py` produced: (a) the issue fast path inline in `obstack_finish`; (b) a dropped chunk's references forgotten in O(1) by the stack depth kept in each chunk (with a pad, so that a chunk's `contents` stays 16-byte aligned); (c) the reference stack in segments of 1,024 that are never copied |
+| `502.gcc_r/obstack-fixture.c` | six modes, built against an obstack: the controls must read, every freed object must fault (cause 25), the survivors must read; stock obstack reads the freed objects of modes 1, 4 and 5 |
+
+Measured on QEMU (the environment of revision 71ce199d8fea, train input 1, exact counts of gcc's own code): the
+obstack port costs +0.654 % as the collaborator wrote it and +0.348 % refined; all three allocators +0.784 % and
++0.478 %. Record: `capstone/docs/ref/nested-allocator-workloads.md`.
