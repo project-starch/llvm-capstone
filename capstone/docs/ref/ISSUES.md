@@ -10974,7 +10974,7 @@ representation that capstone64 violates. They lie on two axes:
 - **address space:** C-54 (fixed), C-60 (open), C-61 (open);
 - **width, pointer vs. index:** this one (fixed).
 
-### C-63 — a `landingpad` cannot be selected: the exception pointer is zero-extended as an integer `OPEN — COMPILER, crash; found 2026-09-24 behind C-61; reproduced with the tree's llc; its fix needs an EH ABI decision; C++ exceptions are THREE layers deep (C-61, this, no unwinder)`
+### C-63 — a `landingpad` cannot be selected: the exception pointer is zero-extended as an integer `COMPILER HALF FIXED 2026-11-20 (exception pointer in C10); C++ exceptions compile but do not link — no unwinder or C++ ABI runtime for a domain (OPEN, parked); found 2026-09-24 behind C-61`
 
 **What happens.** `Capstone DAG->DAG Pattern Instruction Selection` aborts with
 `Assertion 'VT.isInteger() && N1.getValueType().isInteger() && "Invalid ZERO_EXTEND!"'`
@@ -11035,7 +11035,33 @@ but sufficient. Hand-written IR calling `_Unwind_Resume` directly could force a 
 been done. **`-fno-exceptions` is not a workaround pending a fix. It is the only
 configuration in which C++ compiles today.** C-61 alone does not make C++ "nearly work".
 
-**Fix: none yet. The ABI decision is the lead's.**
+**Fix, the compiler half (2026-11-20; register contract set by the runtime lane as the capability-ABI owner).**
+- Under a capability personality (address space 200), `getExceptionPointerRegister` returns `C10`, the
+  capability half of a0. The selector stays an integer in `X11`. An integer personality keeps `X10`.
+- `PrepareEHLandingPad` gives the exception pointer's live-in the register class of the landingpad's first element
+  type when that type is a capability.
+- `visitLandingPad` copies a capability exception pointer at its own type, with no zero-extend.
+- Shared files touched: `SelectionDAGISel.cpp` and `SelectionDAGBuilder.cpp` (manifest updated). The change only
+  applies when the landingpad's pointer is a capability, so no other target is affected.
+
+Verification:
+- The registry's reproducer and a catching landingpad select at -O0 and -O2 under `-verify-machineinstrs`. dev's
+  unfixed llc aborts on both.
+- The landing pad takes `$c10` (gpcr) and `$x11` live in. The exception object reaches `__cxa_begin_catch`
+  unchanged, and `.gcc_except_table` and `.eh_frame` are emitted.
+- A C++ `try`/`catch` compiles to an object with `-fexceptions`, where dev's clang++ asserts. Its runtime is left
+  undefined (`__gxx_personality_v0`, `__cxa_begin_catch`, ...).
+- Lit `c63-landingpad-capability-exception-pointer.ll`. CodeGen/Capstone and MC/Capstone 173/173. 156
+  exception-related X86 and RISC-V CodeGen tests pass, with one expected failure.
+- Code without exceptions is unchanged. 677 of 678 SPEC objects are byte-identical to dev's compiler (gcc's
+  `toplev.o` embeds the compiler version string), and the 14 QEMU fixture images are identical apart from
+  `.comment`.
+
+**Still OPEN (parked, priority with the lead): the runtime.** No unwinder (`_Unwind_RaiseException`,
+`_Unwind_Resume`) and no C++ ABI runtime (`__cxa_throw`, `__gxx_personality_v0`) exists for a domain. C++ with
+exceptions therefore compiles but does not link. `-fno-exceptions` remains the working configuration. A port of
+libunwind and libc++abi must honour the contract above: exception pointer in C10, selector in X11. None of the
+paper's workloads is C++ with exceptions.
 
 ### C-65 — musl-capstone's `pthread_cond_t` cannot hold its own fields: `_c_tail` lies 32 bytes past the 48-byte object `FIXED 2026-09-30 by musl-patches/0006 (delegation-threads, T4); found 2026-09-24 by the tshark port; GLib's workaround (ports/wireshark/app/deps/patches/glib-0008) removed 2026-09-30, GLib's cond test passing 4 of 4 in a domain with threads; source read in musl 1.2.5 as prepare-musl-capstone.sh prepares it, at 93860ed`
 

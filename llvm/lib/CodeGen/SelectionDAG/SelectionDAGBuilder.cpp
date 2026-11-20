@@ -3536,7 +3536,12 @@ void SelectionDAGBuilder::visitLandingPad(const LandingPadInst &LP) {
   // Get the two live-in registers as SDValues. The physregs have already been
   // copied into virtual registers.
   SDValue Ops[2];
-  if (FuncInfo.ExceptionPointerVirtReg) {
+  if (FuncInfo.ExceptionPointerVirtReg && ValueVTs[0].isCheriCapability()) {
+    // A capability exception pointer (Capstone, C-63) is copied at its own
+    // type: it can be neither zero-extended nor truncated into place.
+    Ops[0] = DAG.getCopyFromReg(DAG.getEntryNode(), dl,
+                                FuncInfo.ExceptionPointerVirtReg, ValueVTs[0]);
+  } else if (FuncInfo.ExceptionPointerVirtReg) {
     Ops[0] = DAG.getZExtOrTrunc(
         DAG.getCopyFromReg(DAG.getEntryNode(), dl,
                            FuncInfo.ExceptionPointerVirtReg,

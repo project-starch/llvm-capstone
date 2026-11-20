@@ -105,7 +105,8 @@ llvm/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp | +7 -7 | DAG.getConstantPool(LLVM
 llvm/lib/CodeGen/SelectionDAG/LegalizeFloatTypes.cpp | +8 -2 | // space 0, a capability target passes it as an integer (C-86, see
 llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp | +128 -17 | return Type.isInteger() || Type.isCheriCapability();
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits cannot be represented here at all. Targets with capability (wider than
-llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +142 -26 | (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&
+llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +148 -27 | (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&
+llvm/lib/CodeGen/SelectionDAG/SelectionDAGISel.cpp | +13 -2 | // Mark exception register as live in. On a capability target the
 llvm/lib/CodeGen/SelectionDAG/TargetLowering.cpp | +53 -9 | // pool's pointer type. On a fat-pointer target that is a capability type,
 llvm/lib/CodeGen/TargetLoweringBase.cpp | +6 -0 | MVT TargetLoweringBase::getConstantPoolPtrTy(const DataLayout &DL) const {
 llvm/lib/CodeGen/ValueTypes.cpp | +4 -0 | // Same shape as the fat pointer below it. There is no capability type in IR,

@@ -25963,8 +25963,16 @@ ISD::NodeType CapstoneTargetLowering::getExtendForAtomicCmpSwapArg() const {
   return Subtarget.hasStdExtZacas() ? ISD::ANY_EXTEND : ISD::SIGN_EXTEND;
 }
 
+// C-63: where the personality is a capability (address space 200, the purecap ABI),
+// the exception pointer is a capability and comes back in C10, the capability
+// half of a0; the selector stays an integer in X11. Code with an integer
+// personality keeps RISC-V's X10. This is the register contract an unwinder for
+// a domain has to honour.
 Register CapstoneTargetLowering::getExceptionPointerRegister(
     const Constant *PersonalityFn) const {
+  if (PersonalityFn && PersonalityFn->getType()->isPointerTy() &&
+      PersonalityFn->getType()->getPointerAddressSpace() == 200)
+    return Capstone::C10;
   return Capstone::X10;
 }
 
