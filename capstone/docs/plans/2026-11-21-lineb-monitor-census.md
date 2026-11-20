@@ -80,3 +80,17 @@ STC, LCC, CINCOFFSET, CSMINT, CDERIVE, CREVOKE and CSSHRINK (B5b scope note, "Wh
   - step (a) = this census plus the emulators' `CSC_SUBLET` sites, on capstone-sbi `lineb-monitor-port`, never on
     `native/cscheck-emu-ids55-paged`, which running kits pin;
   - the C monitor's redesign waits for the lead's A/B/C ruling, which this census informs.
+
+## Step (a)'s emulator edits (2026-11-21, the runtime lane's go)
+
+capstone-sbi `lineb-monitor-port` 4e61c34 (on 22a907f) adds `CSC_SUBLET`, exclusive with CSC_IDS55, for every
+emulator row of the table above except the header words, which are already the Sublet root's.
+- **Off-path identity, the first check.** `capstone/tools/lineb-monitor/offpath-ident.sh`: with CSC_SUBLET undefined,
+  both files assemble to 22a907f's section bytes and symbols under three define sets (the kits' set; IDS55 without
+  the tree; neither). Positive control: one nop outside any #ifdef makes 3 of 3 combinations differ (rc 1).
+- **The Sublet path assembles.** Its objects contain 0 CAPTYPE and 0 CAPPERM words; the ids55 objects contain 9 and 20
+  of each.
+- **Not tested:** no Sublet table exists in the twin yet, so there has been no run against c1985bb529. The CSNODE
+  allocation in CSMINT's csupctl.table window is unchanged; whether Line B keeps CSNODE before step (c)'s hardware
+  CSMINT is open.
+- Nothing has landed on `native/cscheck-emu-ids55-paged`, which running kits pin.
