@@ -788,12 +788,24 @@ static void relaxTlsLe(Ctx &ctx, const InputSection &sec, size_t i,
     sec.relaxAux->relocTypes[i] = R_RISCV_RELAX;
     remove = 4;
     break;
-  case R_RISCV_TPREL_LO12_I:
+  case R_RISCV_TPREL_LO12_I: {
     // addi rd, rd, %tprel_lo(x) => addi rd, tp, st_value(x)
+    //
+    // Capstone (C-47): the thread pointer is a capability, and the sequence is
+    // `lui rd, %tprel_hi(x); addi rd, rd, %tprel_lo(x); cincoffset rc, tp, rd`.
+    // There is no %tprel_add: the integer addi forms the offset and the
+    // cincoffset adds tp. Its relaxed form must keep the offset an integer,
+    // `addi rd, zero, st_value(x)`; rebasing it on tp would add tp twice.
+    // A capability-form consumer (cincoffsetimm, opcode custom-2) is the
+    // plain-RISC-V case and takes tp.
+    unsigned base = X_TP;
+    if (ctx.arg.emachine == EM_CAPSTONE && (insn & 0x7f) == 0x13)
+      base = 0;
     sec.relaxAux->relocTypes[i] = R_RISCV_32;
-    insn = (insn & ~(31 << 15)) | (X_TP << 15);
+    insn = (insn & ~(31 << 15)) | (base << 15);
     sec.relaxAux->writes.push_back(setLO12_I(insn, val));
     break;
+  }
   case R_RISCV_TPREL_LO12_S:
     // sw rs, %tprel_lo(x)(rd) => sw rs, st_value(x)(rd)
     sec.relaxAux->relocTypes[i] = R_RISCV_32;
