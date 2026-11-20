@@ -248,6 +248,16 @@ perl and x264 are registered on this model when their CRVC0 profiles finish, bef
 - Expected from gcc: call relaxation (more calls in `jal` range) may add a small extra saving and remove a few
   instructions.
 
+## Step 4, x264 registered on the corrected model (2026-11-21, before its CRVC1m run)
+
+| row | CRVC0 image insns | CRVC0 fetch bytes | program set | folded | program 16-bit FP | predicted CRVC1m fetch bytes | predicted saving |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 525.x264_r-test | 508,109,995,900 | 1,863,354,369,930 | 20,055,998,138 | 0 | 5,566 | 1,823,242,384,786 | **2.153 %** |
+
+- Both commands returned 0. specdiff reads 0/3 as on every x264 twin run, because the twin plan does not run
+  imagevalidate. CRVC1m must read the same.
+- The x264 binary maps 95.48 % of the profile; the rest is ldecod's input generation at its link address.
+
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
 `CVA6Cfg.RVZCB`), with `CVA6ConfigZcbExtEn = 1` in `capstone_cv64a6_imafdc_sv39_config_pkg.sv`.
