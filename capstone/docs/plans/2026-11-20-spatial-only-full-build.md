@@ -123,3 +123,29 @@ By that test the reading is the lifetime cone, not placement. This is N = 1 buil
 levels that lies outside the 31 cells inside rev_node is not attributed here.
 
 The spatial core's own deepest path, issue_read_operands → itself at 98 levels, meets 40 ns by 0.523 ns.
+
+## Reading: where P1's worst paths cross the rev_node hierarchy (rtl lane's register-cut ask, 2026-11-20)
+
+Script: `<mnt-hdd>/synth/twc/lattr/cone-ports.tcl` on P1's routed checkpoint. Log `lattr/CONE.log`; full path reports
+in `lattr/CONE.full.rpt` (`report_timing -path_type full -input_pins`). The guard peaked at 3.42 GB.
+
+- **The port lookup did not resolve.** Every crossing reads `?noport(...)`: no hierarchical port pin of rev_node was
+  found on the net segments of the routed netlist. The names below are the nets at the boundary pins, not port names.
+- The three named paths cross identically. They are the worst path (-13.173, 111 levels; cur_idx_q[3] →
+  fu_data_q[0][cap_metadata_a][19]), the cur_idx_q family, and the cpmp_q family (-13.146, 121 levels). Each crosses:
+  1. IN at `ex_stage_i/rev_node/rd_data[5]`;
+  2. OUT at `issue_read_operands/_ep_res_valid_selector_q[1]_i_8__0_2`;
+  3. IN again at `ex_stage_i/rev_node/mem_q[6][sbe][cap_result][rs1_metadata][26]_i_28_0`;
+  4. OUT at `ex_stage_i/dyn_unit/_spawn_0/compress_bounds0[t]_return__1[2]`.
+- **Histogram over the worst 500.** All 500 have cells under the rev_node hierarchy, and none was VOID.
+  - 461 enter at `rev_node/rd_data[5]` and leave into `issue_read_operands/_ep_res_valid_selector_q[1]_i_8__0_2`.
+    Of those, 72 cross a second time via `_ep_res_valid_selector_q_reg[5]_21` / `[4]_15`, and 94 re-enter at the
+    `mem_q[6]...rs1_metadata` net (93 leave into `dyn_unit/_spawn_0/compress_bounds0[t]_return__1[0..8]`, 1 into a
+    dyn_unit `mem_q_reg`). 295 + 72 + 94 = 461.
+  - 39 enter at `rev_node/rv_rd_res[data_rvalid]` and leave into `i_scoreboard/pc_revnode_unk_d145_out`.
+- **Caveat on every hierarchy-based count in this document, the "31 cells inside rev_node" included.**
+  - The flow synthesizes with the default hierarchy mode and `RETIMING true` (`run.tcl:87`), so logic and registers
+    move across module boundaries.
+  - A net under `rev_node/` that is named after the scoreboard's `mem_q` shows it has happened here.
+  - Cell and net hierarchy in the routed netlist is therefore approximate RTL ownership. The spatial-only comparison
+    (the same families 74-86 levels shorter) does not depend on it.
