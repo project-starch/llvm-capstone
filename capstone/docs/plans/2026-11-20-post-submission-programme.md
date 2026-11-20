@@ -71,7 +71,7 @@ Specification: `capstone/docs/design/sublet-reference-model.md` at 32dde56a6b42.
 
 | Item | State |
 |---|---|
-| the measured configuration (FRCDKMS, compiler build c9) | not buildable from `origin/dev`. In the measured images by content (v, corrected 20 Nov): fold-global-lo, cap-base-rvc, memcpy alignment dispatch, drop-redundant-shrink, direct calls, frame setup (compiler c9, built at 29027126f39b); memset null-capability (SDK source beb1bbabe26a); node-table pool code in the kernel. The runtime sits on the native route, 111 commits that `origin/dev` lacks. NOT in the measured images: the C-69 fix, kfast, the heap-excess patch |
+| the measured configuration (arms FRCDKMSa3 for Full and FRCDKMSspa3 for +Spatial, compiler build c9) | not buildable from `origin/dev`. In the measured images by content (v, corrected twice on 20 Nov): fold-global-lo, cap-base-rvc, memcpy alignment dispatch, drop-redundant-shrink, direct calls, frame setup (compiler c9, built at 29027126f39b); memset null-capability (in the SDK source, branch alloc-lean 9950c04d384f, as 7166a346d516); node-table pool code in the kernel. The SDK (`perf/alean/sdkm13b`, +Spatial `sdksp13b`) was built by llvm-c4 from alloc-lean, 128 commits that `origin/dev` lacks, the native route included. NOT in the measured images: the C-69 fix, kfast, the heap-excess patch |
 | compiler C2 (hoist `cincoffset`) and C3 (capabilities in registers) | not done: `canTrap` marks every `cincoffset` trapping; no rematerialisation, no hints |
 | compiler C4 (move round trips), C5 (redundant bounds) | C4 not counted per benchmark; C5 built, default off, not in the link driver |
 | open compiler issues | C-32, C-46, C-53, C-56, C-57, C-59, C-60, C-63 (C++ exceptions), C-68, C-70, C-74 |
@@ -271,18 +271,23 @@ In this order; items 1 to 3 are independent of each other and can overlap.
 ### 7.3 compiler lane
 
 1. **Put the measured configuration on `dev`.** Corrected on 20 Nov after the compiler lane's reading, re-checked
-   at the measured arm's `sdk.json`, the compiler's build file and the images. In the paper's images: 2f3ff76eba7b,
+   at the measured arm's `sdk.json`, the compiler's build file and the images. (Corrected again the same day: the first
+   re-check read arm FRCDKMS, whose SDK is `perf/memset` at beb1bbabe26a. The paper's Full rows come from arm FRCDKMSa3,
+   whose SDK is `perf/alean/sdkm13b`, from branch alloc-lean 9950c04d384f. The conclusions below hold on FRCDKMSa3,
+   re-checked there.) In the paper's images: 2f3ff76eba7b,
    74080cce29e5, 29027126f39b, 331d73414667, 5069028a65b0 (ancestors of the compiler source 29027126f39b), the
-   frame setup e241065990d9 (there as f9d76538e477), the memset change b68bbde23c79 (in the SDK source
-   beb1bbabe26a as 7166a346d516) and the node-table pool 7719bccb8ca4 (its parameter is in the measured kernel
+   frame setup e241065990d9 (there as f9d76538e477), the memset change b68bbde23c79 (in the SDK source,
+   alloc-lean 9950c04d384f, as 7166a346d516) and the node-table pool 7719bccb8ca4 (its parameter is in the measured kernel
    image). NOT in the paper's images: the C-69 fix c77dd6e705ad (the measured compiler's build file has no
    `CapstoneMisalignedCapAccess.cpp`), kfast 3f7c8e19fecc (no `kfast` string in the measured kernel image) and the
-   heap-excess patch 76455aff7e7a (`__malloc_calloc_alloc` occurs 0 times in the measured libc and perlbench
+   heap-excess patch 76455aff7e7a (`__malloc_calloc_alloc` occurs 0 times in FRCDKMSa3's libc and perlbench
    image, 3 times in the control library). An earlier version of this section listed all eleven as measured; that
    was wrong for those three. Land the measured ones each as one squashed change after lit and the QEMU suites.
    Acceptance: a compiler built from `dev` produces the paper's SPEC images byte for byte, or the differences are
-   listed and explained. The three others land as changes of their own. The measured runtime is on the native
-   route (111 commits that `dev` lacks, two authors); who lands it is the lead's decision.
+   listed and explained. The three others land as changes of their own. The measured runtime is alloc-lean 9950c04d384f
+   (128 commits that `dev` lacks, the native route among them, plus alloc-lean's own mallocng series); who lands it is the lead's
+   decision. A compiler from `dev` with the measured runtime reproduces 10 of 11 FRCDKMSa3 images byte for byte, and gcc
+   differs only in clang's embedded version string (the compiler lane's reading of 20 Nov, not re-run here).
 2. **C2:** `cincoffset` is marked trapping everywhere (`CapstoneInstrInfo.cpp`, `canTrap`), so it is never hoisted.
    Make it non-trapping where the bounds are proven, then hoist. **C3:** rematerialisation and allocation hints, so
    capabilities stay in registers. **C4:** count the move round trips per benchmark, then fix. **C5:** the
