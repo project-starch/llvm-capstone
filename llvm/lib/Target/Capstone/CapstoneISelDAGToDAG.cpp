@@ -4329,7 +4329,11 @@ static bool selectConstantAddr(SelectionDAG *CurDAG, const SDLoc &DL,
                                  CurDAG->getTargetConstant(Hi20, DL, VT)),
           0);
     } else {
-      Base = CurDAG->getRegister(Capstone::X0, VT);
+      // C-57: a capability-typed base is the null capability, C0. X0 and C0
+      // share an encoding, but X0 is not in a capability register class, and the
+      // machine verifier rejects it as a load's base.
+      Base = CurDAG->getRegister(isCapabilityVT(VT) ? Capstone::C0 : Capstone::X0,
+                                 VT);
     }
     Offset = CurDAG->getSignedTargetConstant(Lo12, DL, VT);
     return true;

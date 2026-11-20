@@ -10880,7 +10880,7 @@ image against dev's hostcall.c halts with cause 2 at the image base.
 belongs in codegen or the linker (an undefined weak must produce a null capability), not in each
 caller.
 
-### C-57 — a load through the null capability selects `$x0`, a GPR, as its base `OPEN — COMPILER; verifier-only on everything seen so far; found 2026-09-23 while reducing C-52`
+### C-57 — a load through the null capability selected `$x0`, a GPR, as its base `FIXED 2026-11-20 (lane compiler/c57-null-base) — COMPILER; verifier-only; found 2026-09-23 while reducing C-52`
 
 **What happens.** A load from `ptr addrspace(200) null`, or from null plus a constant, selects the
 integer zero register as the address. A store to the same address does not (it verifies clean), so
@@ -10904,6 +10904,22 @@ none). What is NOT known: whether any pass after isel can act on the wrong class
 **Where to look.** The null capability in a load address reaches the address-mode selection
 as a constant 0 and is materialized as `X0`; `lowerSELECT` already maps a null capability to the
 zero capability register for selects (`d5b5de228b38`), and the address path needs the same.
+
+**Fixed 2026-11-20.** The address matcher's constant-address case (`selectConstantAddr`,
+CapstoneISelDAGToDAG.cpp) named `X0` as the base at the address's own type, so a capability-typed address got the
+integer zero register. It now names `C0`, the null capability, when the type is a capability. The store path
+already reached `C0` through a copy.
+- The emitted instruction is unchanged (`lw a0, 0(zero)`): x0 and c0 share an encoding. The machine verifier now
+  accepts the reproducer at -O0 and -O2, and dev's llc fails it.
+- Lit `c57-null-capability-load-base.ll`, with null plus a small constant and a null store as controls.
+  CodeGen/Capstone and MC/Capstone 175/175.
+- SPEC objects against dev's compiler, measured flags: 677 of 678 byte-identical apart from `.comment` (and gcc's
+  embedded version string). One differs: gcc's `mcf.o`, where three loads through null after one call are
+  scheduled in another order.
+  - `X0` is declared constant and `C0` is not, so the scheduler orders reads of `$c0`.
+  - All three loads raise the same fault on page 0, so only the first one's PC and faulting address change
+    (0 instead of 8). Nothing else runs before the trap in either order.
+  - Declaring `C0` constant would restore the order, but would touch every `COPY $c0` in the target. Not done here.
 
 ### C-58 — MachineLICM hoists capability arithmetic above the NULL test that guards it, and CIncOffset of NULL traps `FIXED 2026-09-23 on compiler/c58-no-speculative-cap-arith (c1510d99aa5d), merged into dev 2026-09-24 as #80 (bb246e69f5f4): CIncOffset(Imm), LCC and SHRINK are hoisted only from blocks that run on every iteration`
 
