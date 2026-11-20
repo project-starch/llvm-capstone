@@ -5829,3 +5829,63 @@ busy overnight and complete the records.
   - Of the 15 hashed outputs 14 equal rvm-b1's, the frames among them. `log.dec` differs. The cause is not known; it is a text log, not a frame file, so the reading rule (frames byte-identical) is met.
   - Limits: one run at each tick rate.
 - **Paper.** Unchanged. The submitted text keeps "except x264" and the mean share for x264. Both changes are small and are the lead's to ask for.
+
+## Addendum 196 (2026-11-20 13:35 +08, before they run): third runs of the SPEC rows on P1 and on matched Plain, so every row has an interval
+
+**Why.** Every row of the SPEC comparison rests on two runs per build, and Plain x264 on one. The lead asked for
+intervals. The boards have been idle since 11-19 07:01, and train-size stages exist only for gcc. These chains use
+the stages, kits and bitstreams of the recorded runs unchanged, so they can start now. They are replaced by
+train-size runs once those stages are built and checked on the QEMU twin.
+
+**Chains.**
+
+| Chain | Board | Bitstream | Kit | Rows |
+|---|---|---|---|---|
+| r3a3-b1.conf (TAG p1-r3a3) | 1 | P1 (d83d3a633), resident | bkit91 | Full: gcc train01, imagick, mcf, xz, perlbench (lbm and nab already have three runs) |
+| r3spa3-b1.conf (TAG p1-r3spa3), behind the first | 1 | P1 | bkit91 | +Spatial: gcc train01, lbm, nab, imagick, mcf, perlbench (xz already has three) |
+| r3rvm-b3.conf (TAG r3rvm) | 3 | matched Plain (8db8f9cda), resident | bkit95 (100 Hz) | Plain: gcc train01, lbm, nab, imagick, mcf, xz, perlbench |
+| r3rvmx-b3.conf (TAG r3rvmx), behind the third | 3 | matched Plain | bkit95 | Plain: x264, its second 100 Hz run |
+
+- **Stages:** those of Addenda 165 (Full), 166 and 171 (+Spatial) and 164 (Plain), by the same directories.
+- **Time:** about 7.6 h (Full), 6.6 h (+Spatial), 7.1 h (Plain) and 9.8 h (Plain x264), boots included.
+- **Plain tags** do not start with `rvm`, so the paper's data generator does not pick these runs up by its glob.
+- **Board 2** is not in this addendum: it gets the record-cache bitstream with the `ccsrrw` fix under its own
+  pre-registration.
+
+**Prediction.** Each third run lies within 0.2 % of the mean of the row's two earlier runs (imagick within 1 %:
+it lasts 17 s). Every command ends with status 0, and every output check equals that of the earlier runs.
+
+| Build | Row | Earlier runs, s | Mean, s | Band, s | Earlier spread |
+|---|---|---|---|---|---|
+| Full | gcc train01 | 1771.70, 1770.94 | 1771.32 | 1767.78 to 1774.86 | 0.043 % |
+| Full | imagick | 17.25, 17.24 | 17.24 | 17.07 to 17.42 | 0.058 % |
+| Full | mcf | 5945.18, 5944.53 | 5944.85 | 5932.97 to 5956.74 | 0.011 % |
+| Full | xz | 4956.68, 4956.79 | 4956.74 | 4946.82 to 4966.65 | 0.002 % |
+| Full | perlbench | 13074.67, 13075.11 | 13074.89 | 13048.74 to 13101.04 | 0.003 % |
+| +Spatial | gcc train01 | 1752.53, 1752.39 | 1752.46 | 1748.96 to 1755.96 | 0.008 % |
+| +Spatial | lbm | 989.21, 989.31 | 989.26 | 987.28 to 991.24 | 0.010 % |
+| +Spatial | nab | 691.65, 691.77 | 691.71 | 690.33 to 693.09 | 0.017 % |
+| +Spatial | imagick | 17.24, 17.24 | 17.24 | 17.07 to 17.41 | 0.000 % |
+| +Spatial | mcf | 5658.99, 5659.87 | 5659.43 | 5648.11 to 5670.75 | 0.016 % |
+| +Spatial | perlbench | 12839.14, 12827.34 | 12833.24 | 12807.57 to 12858.91 | 0.092 % |
+| Plain | gcc train01 | 1474.53, 1473.14 | 1473.84 | 1470.89 to 1476.78 | 0.094 % |
+| Plain | lbm | 1003.87, 1003.83 | 1003.85 | 1001.84 to 1005.86 | 0.004 % |
+| Plain | nab | 659.11, 659.27 | 659.19 | 657.87 to 660.51 | 0.024 % |
+| Plain | imagick | 16.52, 16.53 | 16.52 | 16.36 to 16.69 | 0.061 % |
+| Plain | mcf | 4875.31, 4874.76 | 4875.03 | 4865.28 to 4884.79 | 0.011 % |
+| Plain | xz | 4683.32, 4682.54 | 4682.93 | 4673.56 to 4692.30 | 0.017 % |
+| Plain | perlbench | 10806.01, 10804.55 | 10805.28 | 10783.67 to 10826.89 | 0.014 % |
+| Plain | x264 | 35209.97 | one run | 35139.6 to 35280.4 | none |
+
+**Refutation.** A third run outside its band. That row is then reported with all three readings and its full
+range. No reading is dropped, and the cause is looked for before the row is used: the three runs of a row are
+on different boards, and boot history is a variable.
+
+**Use.** Each row gets the mean and the range of its three runs, per build, in the measurements document. The
+paper is not changed by this addendum.
+
+**Stops.** A failed smoke stage or a command with a non-zero status ends that chain. The Plain x264 chain is
+cancelled while it waits if the train-size Plain stages are ready first.
+
+**Dry runs** (stubbed, each reached its last stage with rc 0): `perf/natstage/dry196/` holds
+`r3a3-b1-dry.log`, `r3spa3-b1-dry.log`, `r3rvm-b3-dry.log` and `r3rvmx-b3-dry.log`.
