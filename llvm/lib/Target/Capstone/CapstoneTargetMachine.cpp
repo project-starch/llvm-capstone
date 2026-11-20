@@ -107,6 +107,16 @@ static cl::opt<bool> EnableRedundantShrink(
              "constant-offset load or store inside the object"),
     cl::init(false));
 
+// Off by default. On, a loop increment (CIncOffset, CIncOffsetImm, ADDI) whose
+// base is the loop's PHI moves below the base's last use in its block, so the
+// register allocator needs no copy to close the iteration
+// (CapstoneSinkLoopIncrement.cpp).
+static cl::opt<bool> EnableSinkLoopIncrement(
+    "capstone-enable-sink-loop-increment", cl::Hidden,
+    cl::desc("Sink a loop increment below the last use of its base so the "
+             "iteration needs no closing copy"),
+    cl::init(false));
+
 static cl::opt<bool>
     EnableLoopDataPrefetch("capstone-enable-loop-data-prefetch", cl::Hidden,
                            cl::desc("Enable the loop data prefetch pass"),
@@ -135,6 +145,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeKCFIPass(*PR);
   initializeCapstoneDeadRegisterDefinitionsPass(*PR);
   initializeCapstoneCursorReadFoldPass(*PR);
+  initializeCapstoneSinkLoopIncrementPass(*PR);
   initializeCapstoneRedundantShrinkPass(*PR);
   initializeCapstoneLateBranchOptPass(*PR);
   initializeCapstoneMakeCompressibleOptPass(*PR);
@@ -723,6 +734,11 @@ void CapstonePassConfig::addPreRegAlloc() {
     addPass(&MachinePipelinerID);
 
   addPass(createCapstoneVMV0EliminationPass());
+
+  // Last before PHI elimination, so the coalescer sees each increment after the
+  // final use of the value it replaces.
+  if (TM->getOptLevel() != CodeGenOptLevel::None && EnableSinkLoopIncrement)
+    addPass(createCapstoneSinkLoopIncrementPass());
 }
 
 void CapstonePassConfig::addFastRegAlloc() {
