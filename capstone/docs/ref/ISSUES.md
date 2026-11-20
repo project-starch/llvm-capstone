@@ -4548,6 +4548,86 @@ do); no other `%Error`. The probe control fires under the same build and is matc
 separately; the 101 sites are what the built model contains, read from its generated code. A zero on P1's 95 tests is
 a statement about those tests' coverage, not about the RTL in general.
 
+### R-76 — outside supervision, S and U in capmode execute ccsrrw on CTVEC, CEPC, CSCRATCH and CPMP0-15: they read the monitor's capability out and install their own `FIXED ON SILICON 2026-11-21 (bitstream 1, capstone-ariane 9e801ab5e, sha256 01707b372e93…f83, board 2); DEFECT REPRODUCED ON P1 FROM LINUX USER MODE (board 2, 21 Nov); first observed 2026-11-13, filed 2026-11-17; claim-audited (mechanism SUPPORTED)`
+
+Siblings:
+- F-A of `docs/history/16-10-2026_07-00-00_rtl-audit-sublet.md`: the five debug mints are refused only under supervision. It is the same boundary, and its fence is still the lead's decision.
+- M-13: the monitor's `_cap_trap_entry` swaps cscratch in.
+
+**Mechanism** (capstone-ariane, read at 6e82d7bd2):
+- `csr_regfile.sv:3040` checks the privilege only for `csr_op_i inside {CSR_WRITE, CSR_SET, CSR_CLEAR, CSR_READ}`. ccsrrw is its own op.
+- It acts whenever capmode is set (`:2654`).
+- Its only gates are a virtual context, which refuses everything (`decoder.sv:1432`), and supervision, which refuses only CIH and CPMP (`csr_regfile.sv:3083-3090`; "CTVEC/CEPC/CSCRATCH stay legal, the runtime's probe uses them").
+- `capstone_csr_unit.anvil:3-51` writes on any rs1. A NONLIN rs1 also puts the old value in rd.
+- **CIH is the exception:** once it holds a capability it is neither read nor written (`:11-24`).
+- Capmode is sticky and set before S's first instruction (R-44, "Why it is not latent"), so Linux and its userspace run under it.
+- The write block has had no U gate since it first appeared (e318a4fea, 2025-05-06). It is the same text at bf3db3175, c721c1a2a, e7af48457, d83d3a633 and 6e82d7bd2, and at the resident-bitstream commits d93a8d66b, 776d9d859, 715bdd1fe, afcd19bea and 0568f93a9 (a source reading, not a run).
+- The dev-pinned QEMU refuses ccsrrw in U since 0d28cc3c82 (2026-10-07; `trans_csccsrrw`). QEMU before that allowed it, and `address-space-root` deletes the instruction.
+
+**Readings** (Verilator, retired traces; the leading number is the privilege):
+- **First observation:** capstone-ariane `perf/ccsrrw-priv` 5e5ad76c9 (2026-11-13), `verif/tests/custom/capstone/ccsrrw-priv.S`, run `vp9-wt/.sup/ccpriv2` (dirty=no).
+  - In U, `ccsrrw cpmp1 <- a2` retires (`0 ... (0x0116705b)`), and a plain load then reads `secret` through the new entry (`x31 0x5ec2e7 mem 0x80003000`).
+  - `ccsrrw ctvec <- a3` retires (`0x0006f05b`), and U's ecall then enters M at the arm's `evil` label (s7 = 0xe1).
+  - The S arm reads the same with 0x9. The plain-CSR control (csrr mtvec) traps 2. Every value is as pre-registered for "no privilege test".
+- **Re-derived on 2026-11-17** (capstone-ariane rtl/record-cache 48d84957f, `u-ccsrrw.S`, runs `rc-wt/.sup/uccs` and `uccs2` on 90e439a7f's RTL, byte-identical):
+  - U's `ccsrrw t1, cpmp1, a2` (`0x0116735b`) and `ccsrrw t1, cscratch, a2` (`0x0046735b`) retire at privilege 0;
+  - t1 receives M's NONLIN capability A (cursor 0x80003000, type 2, perm 6);
+  - the CSR then holds U's capability B (0x80003040);
+  - the M-mode control reads 0xb / 0x4 / A / B.
+
+**Reach on today's stack: plausible, not measured.** From the monitor source (`caplifive-system/.../capstone-sbi`; the revision on the board is not established):
+- while S or U runs, CSCRATCH holds the monitor's stack capability (`sbi_capstone.S:14`, `:185`);
+- CPMP0-2 hold its linear genesis capabilities (`sbi_capstone_dom.c:8-15`);
+- CTVEC holds `_cap_trap_entry` (`:38`).
+
+So an unsupervised Linux process could, in decreasing order of support:
+- (1) deny service, by swapping an integer into CPMP0-2, CTVEC or CSCRATCH (source only, not run);
+- (2) take those capabilities, where the legacy PMP and the page tables bound what they reach (not checked);
+- (3) choose M's next trap target or stack with a capability it holds. The CTVEC half is shown in simulation with a capability M handed over; a real attacker would need F-A's debug mints or another source.
+
+**What would settle it:**
+- a U arm that swaps an integer into cpmp0, after which M reads its tag (the DoS case);
+- on silicon, a benign userspace binary that swaps cscratch out and back and prints a0's tag and type. Expect a capability or SIGILL. Run it last in its boot.
+
+**Fix: FIX IN RTL (simulation), not synthesised.** capstone-ariane `r76-ccsrrw-priv` 7180a83b6, on rtl/record-cache 48d84957f.
+- **The change:** one term after the supervision gate in `csr_regfile.sv` privilege_check: `ccsr_en && priv_lvl_o != M && !sup_active_q && !(DebugEn && debug_mode_q)`.
+  - Under supervision today's list stands. The runtime's test probe (`capstone/runtime/tests/application/context-probe-asm.S`) issues ccsrrw on CSCRATCH and CEPC below M inside a supervised context, as the runtime lane found.
+  - The runtime outside tests/ and the SPEC native images have no ccsrrw (runtime lane: 0 words matching `(w & 0x707f) == 0x705b`, with a positive control).
+- **Readings** (`.sup/r76fix`, dirty=no):
+  - u-ccsrrw and u-ccsrrw-scr read 0x2, 0x0, 0x0 and A, as pre-registered: the ccsrrw traps 2 and the CSR keeps M's capability.
+  - u-ccsrrw-m reads 0xb, 0x4, A, B, unchanged. q24-deleg-on, va-rc-ctx and va-runv are unchanged.
+- **Gates:**
+  - lint PASS, every counter at baseline;
+  - the 95-sweep (`rcsw6`) is identical to B5a's (`rcsw5`) in values, retired traces and cycles (92/92);
+  - sup-guards, sup-hostile and the six sup-mswap arms have identical retired traces on the fix and its base.
+- **NOT EXERCISED on this tree** (exercised since on bitstream 1's, below): a supervised domain BELOW M issuing ccsrrw, which is the case the fix must keep legal. Every retired ccsrrw in those supervised arms is at privilege 3 (exact-mask count). Its correctness rests on the term's `!sup_active_q`, a source reading.
+- `privilege_violation` and `ccsr_en` are on the standing UNOPTFLAT list. Every input of the new term is already an input of privilege_violation, but it is a loop-cone edit, so a synthesis-only gate comes before any bitstream.
+
+**Bitstream 1 (P1 d83d3a633 + this term, capstone-ariane p1-ccsrrw-priv fb2299b96 / 1c26498c1 / 9e801ab5e; control
+p1-ccsrrw-base f56263c24; sealed 01707b37…f83, every full-build key met; pre-registration llvm-capstone 4b9fe9f2c579).**
+The NOT EXERCISED case above is now exercised. `sup-ccsrrw-low.S` runs a supervised domain BELOW M that issues four
+ccsrrw (S and U, return and ecall-escape variants), and they read identically on the term and its control:
+- default `0 9 4 1 0 0x18 0x10`; ECALL `0 9 4 5 9 0x10 0x10`; the four stub ccsrrw retire at privilege 1 (U: 0) on both;
+- CTRL, the same ccsrrw unsupervised: the term `0x2, 0x0` (refused), the control `0x9, 0x4` (it retired at privilege 1).
+`u-ccsrrw -DUCCS_CIH` reads `0x2 0x0 0x0 0x0` on the term and `0x8 0x4 0x0 0x0` on P1.
+
+**Silicon** (the runtime lane, train PREREG Addendum 207, spec-silicon dd159df82226; board 2):
+- **On P1** (d83d3a633, kit bkit91, reflashed 02:18-02:20, readback ok; board.txt dad3564a0f5c79e9): a plain Linux
+  user-mode `ccsrrw t0, CIH, x0` RETIRED (`R76PROBE probe sigill=0 ... t0=0x0000000000000000`,
+  `verdict=RETIRED`). The monitor printed one illegal-instruction record, the control's. The defect is reproduced on
+  silicon from user mode.
+- **On bitstream 1** (9e801ab5e, kit bkit100, flash rc 0, readback ok; board.txt 57f324b82e6c5f56): the monitor recorded
+  exactly two illegal-instruction records, the control's (MEPC 0x1071C, MTVL 0) and the probe word's (MEPC 0x1075E,
+  MTVL 0x001072DB, the ccsrrw). REFUSED with cause 2.
+  - The probe's own verdict line was lost to a defect in the probe's SIGILL handler, the runtime lane's: a 4-byte read of
+    the faulting word at the 2-aligned PC 0x1075E, a misaligned load that raised cause 4 and SIGBUS (rc 135). So this
+    reading is the MONITOR's record, not the program's. A fixed probe (v2, sha256 811af0101c9ffc50) exists and did not
+    run.
+  - Rows on bitstream 1 inside P1's board-2 bands, specdiff PASS: perlbench makerand 274.95 s, gcc train01 1,763.23 s,
+    mcf 5,944.83 s. No measurable cost.
+
+**For B5b:** under the trap route, protected U is the defended boundary. So this gate and F-A's are required there, not optional.
+
 ### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `OPEN 2026-11-20 — DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
 
 Siblings: R-43 (whose fix introduced the probe and chose fail-closed timeouts; its entry does not record the timeout path), R-35 (the verdict cache). R-75 and R-76 are on llvm-capstone `land/rtl-sublet-p2`, not yet on dev.
