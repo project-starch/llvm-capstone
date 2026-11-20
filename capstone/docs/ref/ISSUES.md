@@ -11136,6 +11136,23 @@ unknown alignment correctly needs a run-time alignment test in the expansion; no
   marker from clang (CHERI's `no_preserve_cheri_tags` is the model) would let typed copies such as
   `double complex` inline again.
 
+### C-87 — `-g` changes the generated code: a debuggable build does not run the code that was measured `OPEN 2026-11-20 — COMPILER; found by the C2 weighting`
+
+**What happens.** With the measured SPEC flag set (FRCDKMS), compiling with `-g` changes `.text` in some objects:
+9 of 69 in 500.perlbench_r, 24 of 387 in 502.gcc_r, 2 of 98 in 538.imagick_r; none in mcf, lbm, nab or xz. In
+perlbench's `av.o` the `-g` build has an extra `mv` and a reordered compare (`ld a4, 0x20(a0); beq a4, a3` becomes
+`ld a2, 0x20(a0); mv a4, a3; beq a2, a4`). The same object differs under `-g` with dev's compiler (clang
+4e3bae5d83fc) and with the measured one (clang 29027126f39b). LLVM's contract is that debug information does not
+change code generation; a debug intrinsic or `DBG_VALUE` that a pass counts or keys on breaks it.
+
+**Why it matters.** A `-g` build of a measured image is not the measured code, so a debugger or a line table on it
+describes a different program. Found when the C2 weighting needed line tables for the profiled images (history
+`20-11-2026_18-26-10_c2-cantrap-census-and-weighting.md`; it links the objects that differ from the build without
+`-g`).
+
+**Not yet known.** Which pass. A first cut: compare `-print-after-all` MIR with and without `-g` for one function of
+`av.o`, ignoring `DBG_*` lines, and find the first pass after which the instructions differ.
+
 ### C-86 — `modf`, `modff`, `modfl` and `frexp` expanded from their intrinsics pass the output pointer as an integer, so the callee faults storing through it `FIXED 2026-10-16 on compiler/modf-capability-pointer — COMPILER; found 2026-10-16 by SPEC CPU2017 500.perlbench_r (op/pack.t's unpack checksums call modf)`
 
 **What happens.** clang turns `modf` into `llvm.modf`, and SelectionDAG expands that (and
