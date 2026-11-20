@@ -4542,26 +4542,43 @@ So an unsupervised Linux process could, in decreasing order of support:
 
 **For B5b:** under the trap route, protected U is the defended boundary. So this gate and F-A's are required there, not optional.
 
-### R-75 — after a CSRUNV service resume (action 2) and the context's next escape, an S-mode trap taken while srevroot still holds the context's table enters its handler BELOW M: the handler's first `csrr mcause` is an illegal instruction, in a loop `OPEN 2026-11-16 — DEMONSTRATED IN SIMULATION on P1 d83d3a633 (tests only added) and on capstone-ariane rtl/record-cache, identical retired traces; NOT ROOT-CAUSED; NOT MEASURED ON SILICON; the SPEC native route is unaffected by construction (below); no fix written`
+### R-75 — after a CSRUNV escape, the PC tracker re-adopts the caller's PHYSICAL code capability and its probe is served in the CONTEXT's table (srevroot still holds it), where that index is not its record: the verdict comes back DEAD, and code under that capability, here the M trap handler, takes cause 25 at its first instruction, for ever `OPEN 2026-11-16 — DEMONSTRATED IN SIMULATION on P1 d83d3a633 (tests only added) and on capstone-ariane rtl/record-cache; LOCALISED 2026-11-20 by matched readings (below); the 2026-11-16 mechanism ("an illegal instruction: the CSR privilege check, the handler below M") RETRACTED the same day; NOT MEASURED ON SILICON; the SPEC native route is unaffected by construction (below); no fix written`
 
-Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the S caller's first fetch after a CSRUNV return, a CPMP denial: a different signature).
+Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the same ROOT -- ids carry no namespace identity -- reached there through the index-only invalidation broadcast; here through the R-43 probe), R-43 (the probe path).
 
-**Reading** (capstone-ariane rtl/record-cache, `verif/tests/custom/capstone/va-fetchsplit.S`, testlist_sup entries `va-rc-trap` and `va-rc-trap-z`, S12_MEM_DELAY 12, run on P1 d83d3a633 with the tests applied):
+**Reading** (P1 d83d3a633 with the tests of capstone-ariane rtl/record-cache: `verif/tests/custom/capstone/va-fetchsplit.S`, testlist_sup entries `va-rc-trap` and `va-rc-trap-z`; S12_MEM_DELAY 12; 2026-11-20 in a local worktree with sim-only prints of the PC tracker's adopts, verdicts and every invalidation broadcast, plus the committed R43_TRACE):
 - **The arm.** `-DVA_RC_CTX -DVA_RC_TRAP -DFS_SAMETBL -DCS4_TWO`:
-  - the caller at S sets srevroot = the context's own table (tbl3) and enters a CSRUNV context with options bit 0;
-  - the context ecalls (a kind-3 escape);
-  - S resumes it with action 2; the context ecalls again (a second kind-3 escape);
-  - S continues at CSRUNV+4 with a2 = 3, prints its readings, and executes `ecall` (a7 = 1).
-- **`va-rc-trap`:** the handler at mtvec (0x80002000) takes ILLEGAL_INSTR on its first instruction, `csrr t0, mcause`, 9,069 times, until the cycle limit.
-  - The check that fires is the CSR privilege check `access_priv < csr priv` (`csr_regfile.sv:2985`), so the handler runs below M.
-  - The SUP trace shows the namespace flag falling 1 -> 0 at the ecall, as it would on entry to M with csupctl.table clear, and `flush_ex` with `ex_valid` at each retry.
-- **`va-rc-trap-z`:** the same arm plus `-DCS4_ZERO`, i.e. `csrw 0x5c1, x0` immediately after EACH CSRUNV. It reaches M, runs the handler and passes, with the same four readings before the ecall.
-- **What it needs (2026-11-17, capstone-ariane rtl/record-cache 90e439a7f, tests only, run on 6e82d7bd2's RTL):** more than srevroot.
-  - `va-rc-bare` and `va-rc-bare-nosum`: S sets srevroot = tbl3 (0x80009000, the value va-rc-trap holds) and ecalls with no context ever entered, with SUM set and without. The handler's `csrr mcause` retires and both pass.
-  - `va-fetchsplit-s` (one entry and one escape, srevroot = tbl3 afterwards) passes.
-  - So the trap goes below M only after the service resume and the second escape.
-  - For B5b: a trap-route S, which runs with srevroot non-zero by design, does not meet R-75 on this RTL, unless the replacement of CSRUNV keeps the resume path.
-- **Not yet separated:** whether the trap is DELEGATED (medeleg/stvec as restored by the exchange, ids 5 and 61, `csr_regfile.sv:2061-2074`) or taken to M with the privilege then lowered. What would settle it is one arm that prints sepc/scause/stvec (readable at S) after the loop's first iteration, or a trace of priv_lvl_q and medeleg_q at the ecall.
+  - the caller at S sets srevroot = the context's own table (tbl3, flat) and enters a CSRUNV context with options bit 0;
+  - the context ecalls (a kind-3 escape); S resumes it with action 2; the context ecalls again (a second escape);
+  - S continues at CSRUNV+4, prints its readings, and executes `ecall` (a7 = 1) to M.
+- **`va-rc-trap`:** the caller's code capability is node 1 (minted at M by CAPENTER, PHYSICAL). Probed before the context
+  runs: live, ALLOW. After the first escape the PC tracker re-adopts id 1 (cycle 80,487) and its probe resolves
+  live = 0, DEAD (87,359); after the second escape again (adopt 91,958, DEAD 92,164, the cycle S's ecall drops the
+  namespace flag 1 -> 0). The M handler at mtvec runs under the same id 1, so at its first instruction the commit stage
+  raises cause 25 from the PC tracker (`commit_stage.sv:416-419`, `!pc_revnode_valid_d`) -- at privilege 3,
+  sup_active 0, the instruction itself carrying no exception -- and re-enters the handler: 272,541 times to the cycle
+  limit. ZERO invalidation broadcasts in that window, which is the evidence against S-23's broadcast form.
+- **`va-rc-trap-z`** (`-DCS4_ZERO`: `csrw 0x5c1, x0` after each CSRUNV), the same prints: the first escape's probe of id 1,
+  served after the resume had put srevroot back to tbl3 (flag 1), is DEAD here too (87,474), harmless because the next
+  entry resumes the context first; after the second escape CS4_ZERO sets srevroot = 0 and the flag to 0 (91,918), the
+  probe of id 1 (92,068) is ALLOW, and the arm passes.
+- **So:** within one arm the same physical id is DEAD when its probe is served under srevroot = the context's table and
+  ALLOW under srevroot 0. The probe resolves a physical id in the namespace active when the unit serves it; index 1 of
+  a flat table is a header slot. **The trigger is a PC-capability id change while srevroot holds a table, then code
+  under that id**; the service resume only supplies the id change in this arm. NOT YET PRINTED: the record value the
+  unit read for slot 1 of tbl3 (a header word with the valid bit 0, by reading).
+- **Earlier readings under the new account:** `va-rc-bare` / `va-rc-bare-nosum` (S sets srevroot = tbl3 and ecalls, no
+  context) pass: no id change, so no probe. `va-fetchsplit-s` (one entry and one escape, srevroot = tbl3 afterwards)
+  passes: NOT YET EXPLAINED under this account (a candidate: the escape's id change resolves before any code runs
+  under it, as in va-rc-trap-z's first escape).
+- **RETRACTED 2026-11-20 (surfaced to the runtime lane the same day):** "the handler takes ILLEGAL_INSTR on its first
+  instruction ... the CSR privilege check `access_priv < csr priv` fires, so the handler runs below M". The cause came
+  from the retirement trace's LABEL, which `corev_apu/tb/rvfi_tracer.sv:129-139` reuses from the previous named cause
+  for any cause it has no name for (fixed on capstone-ariane rvfi-tracer-cause 0f59f7260, where the same traps print
+  CAUSE_25). With an ADDI as the handler's first instruction the ADDI "faults" too, which no CSR check can do.
+- **For B5b (the trap route):** S runs with srevroot non-zero BY DESIGN, so this shape is live there: any PC-capability id
+  change at S followed by code under the new id resolves a physical id in the process's table. The earlier line here
+  ("a trap-route S ... does not meet R-75") is withdrawn with the mechanism it rested on.
 
 **Exposure.** The native module's `run()`/`run_x0()` (`capstone_vm.c:2009`, `:2021`, bkit91 kernel; the runtime lane's reading) put `csrw 0x5c1, zero` in the same asm statement as every CSRUNV. So the SPEC native route never takes an S trap with srevroot non-zero after an escape, and its service resumes (gcc train01: about 2,450 per run) complete on P1 silicon with every smoke 9/9. Any other CSRUNV caller, including B5b's replacement of CSRUNV, must keep that write or have this fixed.
 
