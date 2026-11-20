@@ -223,7 +223,7 @@ QEMU's internally saved continuations.
 | 0, 8 | 8 each | Initial Sv39 `satp`, nonzero `srevroot` |
 | 16, 24, 32, 40 | 8 each | Event kind, cause, PC, fault address/data |
 | 48 | 8 | Legacy raw low-word a0 view |
-| 56 | 8 | Options: bit 0 resumable ECALL, bit 1 resumable page faults |
+| 56 | 8 | Options: bit 0 resumable ECALL, bit 1 resumable page faults; bit 2 CRVC, the compressed-capability decode mode (allocated 2026-11-21 for the stage-2 prototype; not implemented in QEMU's admission check or on the RTL yet, see `plans/2026-11-21-capability-rvc-stage2-prototype.md`) |
 | 64 | 16 | Initial tagged PCC |
 | `64 + 16*i`, i=1..31 | 16 each | Initial full-width x1..x31 |
 | 576..639 | 64 total | Scalar cursor/value views of a0..a7 |

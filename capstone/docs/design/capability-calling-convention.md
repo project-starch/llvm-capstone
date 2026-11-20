@@ -29,3 +29,17 @@ address went in an X register (`XLenVT`), and no caller compiled. Pinned by
 Under a capability personality (address space 200) the exception pointer arrives at a landing pad in `C10` and the
 selector in `X11`. Under an integer personality the pointer is `X10`. A domain's unwinder has to honour this; none
 exists yet. Pinned by `llvm/test/CodeGen/Capstone/c63-landingpad-capability-exception-pointer.ll`.
+
+## Image flags
+
+`e_flags` bits of a Capstone ELF object or image, beyond RISC-V's (`EF_CAPSTONE_RVC` 0x0001, float ABI 0x0006, RVE
+0x0008, TSO 0x0010):
+
+| Bit | Name | Meaning |
+|---|---|---|
+| 0x0100 | `EF_CAPSTONE_CRVC` | Decoded in the compressed-capability mode, stage 2 option B (CSRUNV options bit 2). Allocated 2026-11-21 for the prototype; see `plans/2026-11-21-capability-rvc-stage2-prototype.md`. |
+
+An object with the flag contains none of the five 16-bit forms that the mode reinterprets: C.FLD, C.FSD, C.FLDSP,
+C.FSDSP and C.LUI x0. Two rules follow:
+- the linker refuses to combine it with an object that has `EF_CAPSTONE_RVC` but not `EF_CAPSTONE_CRVC`;
+- an adapter that cannot admit a context in the mode refuses an image with the flag.

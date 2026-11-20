@@ -36,10 +36,18 @@ option A (`plans/2026-11-14-capability-rvc-stage2-decoder-sketch.md`), per bench
   - The mapping is per window. imagick and imagevalidate run in different windows and share an arena-sized block,
     and a summed profile mixed them (caught by the 99 % check, then fixed). perl and mcf read the same before and
     after that change.
-  - Not mapped: perl 3.70 % (in its second window), x264 4.52 %, and imagick 38.4 %, which is imagevalidate (its own
-    window). gcc test maps 99.58 %, the rest 100.00 %.
+  - Not mapped, and none of it the benchmark:
+    - perl 3.70 %, almost all of it (3.04 G of 3.24 G) the test harness's `natperl`, a plain RISC-V perl that runs
+      `test.pl` at its link address and launches the Capstone perl for each test;
+    - x264 4.52 %, which is window 0, ldecod, the input generator, also at its link address;
+    - imagick 38.4 %, which is imagevalidate in its own window.
+    gcc test maps 99.58 %, and the rest map 100.00 %.
 - **Decode.** llvm-objdump of the binary. Every executed image PC must be an instruction objdump lists, and one that
   is not is an error.
+  - The readings were taken without `--mattr=+f,+d`, so FP instructions printed as `<unknown>` (x264: 7.9 G
+    executions, 0xe2078553 `fmv.x.d` the most common).
+  - No candidate is an FP instruction, and the displaced 16-bit FP forms are classified by encoding bits. Rerun with
+    the attributes, x264's tables are identical; 16 words stay undecoded in its text.
 - **Candidates** (operand rules as the named RVC instruction, `rd'` = x8-x15):
 
 | candidate | form | 16-bit slot it takes (RTL a948e4134 `compressed_decoder.sv`) | displaces |
