@@ -192,3 +192,37 @@ runtime lane's board pair for it is void. The `.bit` stays in the store for iden
 length" was a reading of where the line width is consumed. It did not predict a defect on the data side's lifetime-probe
 path, which the sweep found. The pre-registration sent function to the sweep for exactly this reason, and the sweep
 gated the hand-off as written. The I-cache lever is blocked until the rtl lane finds the cause.
+
+## Next variant: L1D 48 KiB, 12 ways, on P1 (synthesis-only gate; keys written before the port exists)
+
+**Why.** The runtime lane's train PREREG Addendum 205 (spec-silicon 9c78c45ca3f4) read the L1D 64 KiB pair on board 2,
+b0f02bac7 against eeb654104:
+- gcc train01 -2.02 %;
+- mcf -3.79 %;
+- perlbench makerand +0.62 %.
+
+64 KiB does not fit beside P1 by its own prediction, so the next candidate is the prepared 48 KiB, 12-way option.
+
+**Source.** b9ab75c41 (on 5f41c486e) is NOT config-only.
+- Beside the two config lines, it changes `core/cache_subsystem/wt_dcache_missunit.sv`: the victim LFSR's out-of-range
+  ways 12..15 fold onto 8..11.
+- That file is unchanged between 5f41c486e and P1, so the change applies cleanly.
+- 12 is the first non-power-of-two way count on this design, which is why the port, its lint and the sweep go to the rtl
+  lane before the gate.
+
+**Gate keys** (twc/ic/grade-ic.py's keys 1 and 2 unchanged, the same flow and controls; key 3 re-derived):
+- KEY1 memory: growth across Technology Mapping at most P1's + 500 MB; whole-run peak inside the guard.
+- KEY2 loops: no timing-loop header in the `.vds`; check_timing and LUTLP-1 0, each with its toy control; in-flight PASS.
+- **KEY3 fit, against P1's ~150 free slices** (P1 50,800 of 50,950):
+  - The only measured LUT-to-slice ratio for this lever is the pair's: +135 slices for +7,215 placed LUT, so about 0.019
+    slices per LUT. That is N = 1.
+  - **GO if the core post-synth LUT delta is at most +6,000**, which by that ratio is at most about +112 slices and
+    leaves about 38. NO-GO above that.
+  - A GO between +4,000 and +6,000 carries the route-failure branch as the likely one.
+
+**Predictions** (scaled from the 16-way pair: 12 ways add 4 to P1's 8, half of that lever's 8):
+- core LUT about +3,600 (2,000-5,500);
+- FF about +1,000 (`cap_tag_q` and `vld_mirror` at 256 sets × 4 more ways);
+- D$ RAMB36 +8 to +12;
+- TM growth within ±100 MB of P1's;
+- the fold itself, a compare and a subtract on a 4-bit index, a few LUT.
