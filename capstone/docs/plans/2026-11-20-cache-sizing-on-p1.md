@@ -226,3 +226,37 @@ b0f02bac7 against eeb654104:
 - D$ RAMB36 +8 to +12;
 - TM growth within ±100 MB of P1's;
 - the fold itself, a compare and a subtract on a 4-bit index, a few LUT.
+
+## Reading: the L1D 48 KiB / 12-way gate is GO, 3 of 3 (apollo, tag l1d48-0039e34f4, 2026-11-20)
+
+The rtl lane's port, capstone-ariane p1-l1d48-12way 0039e34f4 (parent P1), read at source:
+- the changed lines are identical to b9ab75c41's (an empty diff of the two diffs);
+- lint is at P1's baseline on every counter (the rtl lane's numbers);
+- the way-count audit is in the commit message.
+
+Record: `<mnt-hdd>/synth/l1d48-0039e34f4-gate-out/grade-l1d.txt`, graded by `twc/l1d48/grade-l1d.py`. That grader is
+grade-ic.py with the fit limit at +6,000 and the data-cache rows; it was dry-run on the I-cache gate (D$ +0, 24 D$ BRAM
+rows = 24 RAMB36).
+
+| Key | Reading | |
+|---|---|---|
+| 1 memory | growth across Technology Mapping +8.0 MB (P1 +8.0); TM peak 5,266.6 MB; whole-run 5,414.5 MB | PASS |
+| 2 loops | "Found timing loop" 0; check_timing 0 (toy 1); LUTLP-1 0 (toy 1); in-flight PASS; source-list watch OK | PASS |
+| 3 fit | core LUT +4,544 (limit +6,000); top RAMB36 125 of 445 | PASS |
+
+| Row | LUT (Δ) | FF (Δ) | RAMB36 (Δ) | Prediction |
+|---|---|---|---|---|
+| core | 166,947 (+4,544) | 55,189 (+1,094) | 110 (+12) | LUT about +3,600 (2,000-5,500): in; FF about +1,000: in |
+| i_wt_dcache | 17,362 (+4,459) | 5,394 (+1,084) | 36 (+12) | RAMB36 +8 to +12: in, at the top |
+| i_wt_dcache_mem | 1,833 (+552) | 3,113 (+1,035) | 36 (+12) | |
+| i_wt_dcache_missunit | 2,247 (+934) | 142 (+1) | 0 | "the fold, a few LUT": the row also carries the way-count scaling of the victim logic, so the fold is not separable |
+| i_adapter | 5,206 (-325) | 934 (0) | 48 (0) | |
+
+- Block RAM: 8 more tag SRAMs and the wider data banks map to 36 D$ RAMB36 (P1 24).
+- Guard: stopped after synth_design by design, at a peak RSS of 31.00 GB (P1's gate 27.35; spatial step A's 32.02).
+
+**Full build: not launched.** By the runtime lane's terms it waits for the rtl lane's 95-test sweep on 0039e34f4.
+- Prediction at the pair's N = 1 ratio: placed slices about 50,800 + 85 = 50,885 of 50,950, so about 65 free;
+- placed LUT about 187,368 + 4,540 = 191,900 ± 2,500.
+- A GO above +4,000 carries the route-failure branch as the likely one, as registered above: no retry, no flow change,
+  and the reading is "48 KiB does not fit beside P1".
