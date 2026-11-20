@@ -96,6 +96,39 @@ by default, byte-identical when off.
 4. **Twin runs** on perl and gcc (specdiff), then the rest. Reported in instructions and fetch bytes; the cycle
    question waits for the RTL step.
 
+## Step 3 pre-registration (2026-11-21, before the feature-on arm is built)
+
+**Arms.** CRVC0 is FRCDKMSa3's SDK, runtime, libc and flags with the current compiler, the feature off: clang
+518578ef40a76b19, lld b9f671e793ab869d, built from dev f94bb28f768b with step 1 compiled in. CRVC1 is the same
+plus `+cap-crvc` and a link script that writes `CV_IMAGE_MAGIC_CRVC`. The feature-off arm is the baseline, not
+FRCDKMSa3, because the compiler has moved since 29027126f39b.
+
+**The prediction, static, per benchmark.** Counted on CRVC0's compiled objects: the 4-byte instructions that fit each
+form, and the 16-bit FP forms. The prebuilt libc and runtime are outside the count, and the feature does not touch
+them.
+
+| benchmark | objects | c.ldcsp | c.stcsp | c.ldc | c.stc | c.cincoffset16sp | c.movc | c.scc | c.cincoffset | set | c.fldsp | c.fsdsp | c.fld | c.fsd | 4-byte fld/fsd |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 500.perlbench_r | 69 | 19,105 | 13,153 | 18,094 | 6,145 | 4,349 | 13,448 | 15,814 | 1,398 | 91,506 | 196 | 150 | 235 | 18 | 93 |
+| 502.gcc_r | 387 | 89,085 | 59,775 | 77,962 | 28,118 | 22,653 | 94,218 | 67,036 | 7,496 | 446,343 | 54 | 37 | 67 | 17 | 54 |
+| 505.mcf_r | 12 | 213 | 194 | 82 | 94 | 46 | 118 | 35 | 3 | 785 | 2 | 2 | 0 | 0 | 1 |
+| 519.lbm_r | 2 | 91 | 95 | 24 | 6 | 28 | 31 | 23 | 4 | 302 | 31 | 32 | 32 | 5 | 355 |
+| 525.x264_r | 96 | 10,391 | 7,108 | 5,709 | 1,686 | 1,695 | 3,881 | 3,802 | 2,475 | 36,747 | 444 | 340 | 208 | 65 | 469 |
+| 538.imagick_r | 98 | 18,484 | 10,422 | 9,402 | 5,042 | 3,595 | 11,988 | 12,989 | 857 | 72,779 | 2,888 | 1,885 | 2,627 | 806 | 5,560 |
+| 544.nab_r | 20 | 1,422 | 1,276 | 1,073 | 464 | 344 | 1,116 | 1,191 | 120 | 7,006 | 246 | 198 | 360 | 195 | 886 |
+| 557.xz_r | 90 | 1,508 | 1,342 | 447 | 216 | 497 | 836 | 671 | 41 | 5,558 | 3 | 3 | 4 | 0 | 7 |
+
+**What the reading must show on CRVC1's objects:**
+- each form's count equals the row above exactly (the compression runs after register allocation, which the
+  feature does not change);
+- no 16-bit FP form;
+- 4-byte fld/fsd equal to CRVC0's 4-byte count plus its four 16-bit FP columns;
+- every image's e_flags carry `EF_CAPSTONE_CRVC`, and its magic is the CRVC one.
+
+The method's control: on the two probe programs, prediction and reading agree in all eight classes (55 = 55), and
+the five 16-bit FP forms become 4-byte (1 + 5 = 6). A shortfall on SPEC is a compiler defect to find, not variance.
+The dynamic prediction for step 4 is registered separately, once CRVC0's profiles exist.
+
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
 `CVA6Cfg.RVZCB`), with `CVA6ConfigZcbExtEn = 1` in `capstone_cv64a6_imafdc_sv39_config_pkg.sv`.
