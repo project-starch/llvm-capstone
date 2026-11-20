@@ -91,8 +91,17 @@ Slot facts, read in the RTL at a948e4134:
 ## Readings
 
 Fetch bytes saved (2 bytes per execution), as a share of the image's executed fetch bytes. "set (B)" is the whole
-set with a decode mode (option B), which keeps the FP forms. "net A" also charges option A for the FP forms it turns
-back into 4 bytes. "text saved" is static: 2 bytes per site, over the image's text bytes.
+set without the FP cost. "net A" also charges the FP forms that become 4 bytes again. "text saved" is static: 2
+bytes per site, over the image's text bytes.
+
+**CORRECTED 2026-11-21: "net A" is the cost of ANY image in the mode, under option B too.** The note first said
+"set (B)" keeps the FP forms. But under option B the whole image is decoded in the mode, so an image built for it
+cannot use C.FLD, C.FSD, C.FLDSP or C.FSDSP either. "set (B)" is the gain only for an image with no 16-bit FP. Option
+B's difference from A is per-image choice: an FP-heavy image can stay out of the mode.
+
+The prototype measured it (`plans/2026-11-21-capability-rvc-stage2-prototype.md`, step 4): in the mode, nab's fetch
+bytes grew 3.53 % and lbm's 2.98 %. The census also counts the prebuilt libc and runtime, which a feature build does
+not compress.
 
 | benchmark | image insns | fetch bytes | mapped | c.ldcsp | c.stcsp | c.ldc | c.stc | c.cincoffset16sp | c.movc | c.scc | c.cincoffset | set (B) | net A | text saved |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -133,8 +142,10 @@ What option A displaces, static / dynamic (each execution becomes 4 bytes), and 
 | nab test | 246 / 119,248,133 | 198 / 46,507,161 | 360 / 462,606,165 | 195 / 90,759,707 | -5.63 % |
 | xz test | 0 / 0 | 0 / 0 | 2 / 0 | 0 / 0 | 0.00 % |
 
-Option A turns lbm and nab negative (-2.93 % and -3.22 % net). Option B, a decode mode, does not, at the cost of the
-mode bit, its flushing CSR write and the ABI agreement the sketch describes.
+In the mode, lbm and nab turn negative under either option (-2.93 % and -3.22 % net here; measured -2.98 % and
+-3.53 % for program code compiled with the feature). **CORRECTED 2026-11-21:** this paragraph first said "option B,
+a decode mode, does not". Under B those two images would be built without the mode, at no cost and no gain. The
+price of B is the mode bit, its admission and refusal path, and the ABI agreement the prototype plan describes.
 
 ## x264, and what would move it
 
