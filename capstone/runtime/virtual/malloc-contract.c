@@ -60,6 +60,18 @@ static void basic(void)
     require(p != NULL, "calloc");
     for (unsigned i = 0; i < 161; ++i) require(!p[i], "calloc zero");
     errno = EDOM; free(p); require(errno == EDOM, "free preserves errno");
+    /* calloc of a slot that was dirtied and freed: its zero check must not take the slot for untouched
+     * memory. The anchor keeps the 200-byte class's group alive, so the rounds cycle through its slots;
+     * kept() makes the compiler materialise the fill before the free and read the calloc block back. */
+    char *reuse_anchor = malloc(200); require(reuse_anchor != NULL, "calloc reuse anchor");
+    for (unsigned round = 0; round < 512; ++round) {
+        char *q = malloc(200); require(q != NULL, "calloc reuse dirty block");
+        memset(q, 0x5a, 200); free(kept(q));
+        q = kept(calloc(4, 50)); require(q != NULL, "calloc reuse");
+        for (unsigned i = 0; i < 200; ++i) require(!q[i], "calloc reuse zero");
+        free(q);
+    }
+    free(reuse_anchor);
     void *aligned = NULL;
     require(!posix_memalign(&aligned, 4096, 5001), "aligned allocation");
     require(!((uintptr_t)aligned & 4095), "alignment"); free(aligned);

@@ -16,7 +16,8 @@ class Guard(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         with tarfile.open(ARCHIVE) as t:t.extractall(self.tmp.name,filter='data')
         self.tree=Path(self.tmp.name)/'musl-1.2.5'
-        for name in ('0009-virtual-mallocng-capabilities.patch','0010-virtual-mallocng-meta-area-at-once.patch'):
+        for name in ('0009-virtual-mallocng-capabilities.patch','0010-virtual-mallocng-meta-area-at-once.patch',
+                     '0011-virtual-mallocng-calloc-and-unlock-without-redundant-work.patch'):
             with (HERE/'musl-patches'/name).open() as f:
                 subprocess.run(['patch','-s','--no-backup-if-mismatch','-p1','-d',str(self.tree)],stdin=f,check=True)
     def check(self,ok):
