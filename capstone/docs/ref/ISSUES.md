@@ -11790,7 +11790,7 @@ not proven (a struct of `long`s) is a memcpy call as well, so this mattered more
 five pointers by value: both pass with this compiler; with the previous one the first faults and
 the process exits 139. Perl's patch 0009 is no longer needed; it is not removed here.
 
-### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism read out of the code 2026-09-30`
+### C-74 — an 8-bit compare-exchange on a lone one-byte global faulted at -O0 in an SDK build `FIXED for globals 2026-11-20 by option A, narrow form (lane compiler/c74-pad-subword-globals); heap case censused: no exposed site in our workloads; option B is the documented backstop, option C (Zabha+Zacas) a bitstream candidate — COMPILER, observed 2026-09-30`
 
 **What happens.** `tests/runtime-qemu/subword-atomics`, built by the application SDK's
 `capstone-cc` and run with `run-delegated-probes.py`, faults at its last case, an 8-bit
@@ -11852,6 +11852,44 @@ every storage class by construction and already linked into every application, b
 pre-AtomicExpand rewrite rather than a hook and costs lock-freedom. Not decided and not
 implemented. Relevant for CPython: `PyMutex` is one byte; a standalone static one is exposed
 wherever it is bounded alone.
+
+**Fixed for globals 2026-11-20: option A in its narrow form** (decision: the runtime lane).
+- `CapstonePadSubwordAtomicGlobals`, an IR module pass before AtomicExpand at every optimization level: a defined
+  global that is the pointer operand, through constant offsets and casts, of a cmpxchg or atomicrmw narrower than 4
+  bytes gets its type padded to a multiple of 4, in a wrapper struct with uses redirected to its start, and an
+  alignment of at least 4.
+- Only such globals change. A lone `uint8_t` becomes 4 bytes 4-aligned, `uint8_t[5]` becomes 8 bytes, and a global
+  with no sub-word atomic is untouched.
+- Option B (the generic libcall) stays the backstop for a sub-word atomic reached through a pointer the module
+  cannot see. Option C (native byte and halfword atomics) is on the runtime lane's candidate list for the
+  performance-batch bitstream; with it this pass can be retired.
+
+Checks:
+- QEMU, kit-unq, `tests/runtime-qemu/subword-atomics` in one boot. dev's compiler at -O0: every check up to the
+  lone byte passes, then a domain fault (cause 28) at it, exit 139. This compiler at -O0: all checks pass,
+  including "8-bit compare-exchange on a lone one-byte global", failures=0. At -O2 both pass and the two images are
+  byte-identical.
+- Lit `c74-pad-subword-atomic-globals.ll` (lone byte, a 5-byte array's last byte, an 8-byte array, an i16, an
+  untouched control). dev's llc fails it. CodeGen/Capstone and MC/Capstone 177/177.
+- All 678 SPEC objects with the measured flags are unchanged against the previous build (apart from .comment and
+  gcc's embedded version): the eight benchmarks have no sub-word atomic site. The 14 QEMU fixture images are
+  unchanged. The SDK's runtime and libc archives were not rebuilt with this compiler.
+
+**Heap census (the runtime lane's condition, 2026-11-20).** With heap lifetimes on, `heap_issue` derives each object
+with exactly the requested size, so a heap object can be bounded tighter than its last word.
+- Static sub-word atomic sites (masked `lr.w` loops; the detector finds 3 in a 3-site control at -O0):
+  - 0 in the eight SPEC images;
+  - 0 in FFmpeg, Postgres and tshark;
+  - 152 in CPython 3.13.7 (`nested/cpy`).
+- CPython's targets, from its source: `PyMutex` (41 struct fields), `PyEvent.v`, `_PyOnceFlag.v` and
+  `PyTypeObject.tp_versions_used`.
+  - Every enclosing struct of the default (GIL) build has a member of at least 4 bytes, mostly pointers, so its
+    size and alignment are multiples of 4 and the widened word stays inside the object. The members that are not
+    are under `Py_GIL_DISABLED`.
+  - No `PyEvent` or `_PyOnceFlag` stands alone. The three static one-byte `PyMutex` globals (`random_mutex`,
+    `_PyOS_ReadlineLock`, `getgrall_mutex`) are the global case this pass covers.
+- So no exposed heap site was found. This is a layout argument from the source, not a measured run; a variable-size
+  allocation ending inside a sub-word atomic's word would need a run.
 
 ### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `FIXED 2026-10-21 by bfcb659f27b1 (PEI: a floated emergency spill slot moves by a multiple of its alignment; merged in #283, 2026-10-26); closed 2026-11-20 — COMPILER`
 

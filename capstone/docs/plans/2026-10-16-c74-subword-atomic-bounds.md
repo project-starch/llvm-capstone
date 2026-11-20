@@ -1,6 +1,6 @@
 # C-74 — sub-word atomics overrun a capability bound: corrected scope, and the three fixes costed
 
-**Status: a decision is wanted, nothing is implemented.** The choice between the options below
+**Status (2026-11-20): option A, narrow form, implemented for globals (ISSUES C-74); B is the backstop, C a bitstream candidate.** Earlier status: a decision was wanted, nothing was implemented. The choice between the options below
 trades lock-freedom against object layout and overrun precision, which is the project lead's call,
 not a lane's. Everything here is static analysis plus compiler output; there is no runtime run, and
 the trap itself remains the observation recorded in `ref/ISSUES.md` under C-74.

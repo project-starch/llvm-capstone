@@ -143,6 +143,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstoneMemcpyAlignDispatchPass(*PR);
   initializeCapstoneMisalignedCapAccessPass(*PR);
   initializeCapstoneCapGlobalInitPass(*PR);
+  initializeCapstonePadSubwordAtomicGlobalsPass(*PR);
   initializeCapstonePostRAExpandPseudoPass(*PR);
   initializeCapstoneMergeBaseOffsetOptPass(*PR);
   initializeCapstoneOptWInstrsPass(*PR);
@@ -499,6 +500,9 @@ bool CapstonePassConfig::addRegAssignAndRewriteOptimized() {
 }
 
 void CapstonePassConfig::addIRPasses() {
+  // C-74: before AtomicExpand widens a sub-word atomic to its word, at every
+  // optimization level (the fault was seen at -O0).
+  addPass(createCapstonePadSubwordAtomicGlobalsPass());
   addPass(createAtomicExpandLegacyPass());
   addPass(createCapstoneZacasABIFixPass());
 
