@@ -47,7 +47,7 @@ Specification: `capstone/docs/design/sublet-reference-model.md` at 32dde56a6b42.
 | Id | What | State |
 |---|---|---|
 | R-76 | outside supervision, S/U `ccsrrw` reads and replaces the monitor's capabilities (security) | 7-line fix in `csr_regfile.sv` (7180a83b6, v); sealed only on top of the record cache; never flashed |
-| R-75 | S trap entered below M after a CSRUNV service resume | simulation only, no fix |
+| R-75 | after a CSRUNV service resume, the second escape and S's ecall, every instruction at the M trap handler's entry is declared illegal, in an endless loop (the earlier "S trap entered below M" / "CSR privilege check" mechanism was withdrawn on 20 Nov: an ADDI first at the handler faults the same way) | simulation only, cause unknown, no fix |
 | M-16 | protected tshark did not return in 1 of 3 boots | no mechanism; Wireshark has no cost row |
 | R-73, R-74, R-44, R-28, S-21, S-22 | debug-module writes around tags; tag-cache fill race; CPMP tracker; audit items | open |
 | R-72, R-68, R-60, R-32 | registry says open, the fix commit is in P1 | silicon check and registry entry missing |
