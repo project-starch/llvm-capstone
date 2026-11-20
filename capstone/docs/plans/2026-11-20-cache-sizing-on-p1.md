@@ -170,3 +170,25 @@ Graded with grade_full.py against P1's seal (`<mnt-hdd>/synth/p1ic-3ce15b957-ful
 The route-failure branch did not fire. **The seal is held, not handed over:** it goes to the runtime lane only after the
 rtl lane's 95-test sweep on 3ce15b95741a reads clean. A failed sweep discards it unflashed. The board pairing is the
 runtime lane's: this bitstream against P1 differs in the I-cache line width only.
+
+## Reading: the 95-test sweep on 3ce15b95741a is NOT clean, so the seal is withdrawn (rtl lane's sweep, 2026-11-20)
+
+Run: `<mnt-hdd>/capstone/ic64-wt/.sup/swic64` (rtl lane; clean tree at 3ce15b957; 95 ran), against P1's
+`sim14-wt/.sup/pwsw6` with the same script, list and memory delay. The compare `swic64-vs-pwsw6.txt` reads 72 identical
+and 20 differ. Two of the 20 are a functional defect, read here at the files:
+- `ldc`: exceptions 0 → 1, retired 292 → 25. The log shows the exception at the test's first LDC (pc 0x80000038), and
+  the run ends at `wfi` in the boot ROM;
+- `s06-query-route`: exceptions 0 → 1, retired 72 → 38.
+
+Both complete on P1. The rtl lane's mechanism, not verified here, is a false cause 25 after the lifetime verdict probe
+times out (524,287 replays, `RVC_PROBE_WAIT_PRE`). The root cause is open in that lane. The other 18 differences are
+timing-class by the rtl lane's account, with no value changed.
+
+**Per the pre-registered branch, the seal (d37f68ca…) is withdrawn:** it is never handed over and never flashed, and the
+runtime lane's board pair for it is void. The `.bit` stays in the store for identity only, marked in its SEAL.txt and in
+`WITHDRAWN.txt`. Its full build's routing and timing readings above stand as readings of an unusable tree.
+
+**What this says about this document's own source check.** "No capstone addition in the adapter reads the I-cache burst
+length" was a reading of where the line width is consumed. It did not predict a defect on the data side's lifetime-probe
+path, which the sweep found. The pre-registration sent function to the sweep for exactly this reason, and the sweep
+gated the hand-off as written. The I-cache lever is blocked until the rtl lane finds the cause.
