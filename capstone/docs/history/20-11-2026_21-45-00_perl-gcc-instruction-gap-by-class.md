@@ -89,3 +89,27 @@ What is already done for global bases: the `%pcrel_lo` fold (04ed898afc58), one 
 The programme names that as "bounded-global hoisting".
 
 Tools: `c4/gap.py` (`--paired`), `c4/coal.py` and its mnemonic-parameterised copy, all in the compiler lane's work tree.
+
+## The scc gp reuse census (go/no-go before any design)
+
+Gate, from the runtime lane: the reusable ceiling must reach 0.5 % of instructions on perlbench or gcc. The ceiling is
+repeats of the SAME global's base already formed in the function. No reuse may cross globals that share a pool base
+(a464d645f34c), so repeats are keyed by the global's resolved address. That address comes from the `scc`'s source
+register by a backward def-chain in the function, through `auipc`, `addi` with a constant and copies. An indexed or
+loaded address stays unresolved. Address order stands in for dominance, so the figure is a ceiling.
+
+| | scc gp | same-global repeats | unresolved | formed inside a loop body |
+|---|---:|---:|---:|---:|
+| perlbench test-sw | 2,277,692,920 (2.70 %) | 143,131,673 (0.17 %) | 154,235,897 (0.18 %) | 766,430,637 (0.91 %) |
+| gcc train01 | 221,479,525 (1.81 %) | 20,635,657 (0.17 %) | 10,877,409 (0.09 %) | 59,221,283 (0.48 %) |
+
+The ceiling is 0.17 % on both, and 0.35 % on perlbench even if every unresolved derivation were a repeat. Under the
+gate: no reuse pass is designed.
+
+The derivations inside loops are not a repeat-reuse case. A loop that reads one global array and conditionally writes
+another global, compiled with the measured flags, forms both bases once in the preheader and keeps them in registers.
+LLVM hoists a global base when it has a register for it. The in-loop ones (perlbench 0.91 %) are, as far as this
+shows, re-materialisations under register pressure: two instructions, the same as a spill and reload. A hoist would
+only move that cost, not remove it. This was not confirmed per site.
+
+Tool: `c4/sccrep.py`.
