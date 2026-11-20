@@ -3215,3 +3215,81 @@ Both commands together (the unit of the SPEC table's perlbench bar): in-context 
   the checks and cache effects is not separated by this pair.
 - This replaces suns.pl (+16.05 %) as the Perl cost with the widest coverage: suns.pl is one script on Perl 5.36,
   test.pl is SPEC's own test workload on SPEC's Perl 5.22.
+
+### Record-access traces for the record-cache model (QEMU twin, 2026-11-20)
+
+**Purpose.** The post-submission programme (spec-silicon `7b0e8cd4b52b`, brief 7.4 item 1) decides whether a record
+cache goes to RTL by replaying traces of record accesses through cache models (the rtl lane). This lane provides the
+traces. Instrument: `capstone/tests/record-trace/` (a patch to the twin QEMU a0501ebc39, a reader, the format).
+
+**Traces**, all on slot 28 of the twin with the 2^20-record table unless stated, each named by the sha256 of the image
+its stage holds (`nested/rectrace/traces/INDEX.md` on the capstone work volume, with a `.meta` and `.stats` per trace):
+
+| trace | image | input | words | protected instructions | validation |
+|---|---|---|---:|---:|---|
+| full-gcc-train01 | 58124bcc… (the paper's Full) | train01 | 1,072,847,462 | 12,221,817,514 | specdiff 1/1 |
+| full-mcf-test | fa650b98… (the paper's Full) | test | 3,161,718,784 | >= 26,637,508,524 | specdiff 2/2; tail cut, see below |
+| full-perl-test | c1744e87… (the paper's Full) | makerand.pl, test.pl | 9,432,356,686 | 84,333,526,628 | test.out: the twin's 3 known scripts |
+| pool-gcc-train01 | 54291a9f… (pool protected, two-operand) | train01 | 1,229,181,700 | 12,321,961,369 | specdiff 1/1 |
+| three-gcc-train01 | 5920b9f9… (pools, GC heap, obstacks; 2^22 records) | train01 | 1,383,034,105 | 12,409,649,724 | specdiff 1/1 |
+| heads-perl-test | f5449ace… (scalar heads protected) | makerand.pl, test.pl | 10,052,744,671 | 87,962,584,323 | as full-perl-test |
+
+- The mcf file ends at the writer's last full buffer: the runner killed QEMU before its exit handler ran, so at most
+  131,071 runs at the end are missing and its `.stats` is a snapshot 1,179,648 words short. The writer now also
+  flushes every 2 s (control: the gcc test trace repeated with the new writer equals the old one word for word except
+  the all-instruction markers, which include the kernel's wall-clock timer).
+- Corrections made on the way, all before any replay used them: a first gcc trace was taken on the nat-fair stage,
+  whose binary (a73396ab…) is not the paper's (kept, labelled for sizing only); two queued Full traces were refused by
+  the wrapper's own no-overwrite guard and were not running when reported so; the gcc test control runs two images
+  (U P P U), not one.
+- The rtl lane reports that its reader reproduces every code's events and runs of the `.stats` on the control, perl and gcc traces.
+  It reports that its model calibrates on mcf against B5a's silicon and did not on gcc (78.6 % against 62.26 % read hits); the board ran
+  FRCDKMS images, not FRCDKMSa3, so two more traces on those images (gcc 3ed5c0be…, mcf 3d7e6211…) are being taken,
+  with context-edge markers, which B5a needs to flush its caches.
+
+### gcc's three allocators with one-operand CREVOKE and CRENEW (QEMU, 2026-11-20): +0.78 % instructions in gcc's code
+
+**Question.** What does the collaborator's port of gcc's pools, GC heap and obstacks (one-operand CREVOKE and CRENEW,
+`origin/native-kernel-new-qemu:capstone/ports/spec-cpu2017/sublet/502.gcc_r`) cost on a real input, per allocator?
+
+**Environment.** No kit for the reference model c1985bb529 exists (the SPEC lane confirmed: no revision pins it).
+The environment of revision 71ce199d8fea, where the port was verified, was rebuilt on this host (QEMU 9e69171f1c,
+the native task route; record of the build and every deviation on the capstone work volume, `nested/oneop/STATUS.md`).
+Its control on SPEC's test input reproduces the recorded result in kind: 30 of 30 outputs match, the port costs
++0.63 % (recorded +0.58 %), and the port without the gcc fix faults with cause 25 at the recorded address; absolute
+counts are 1.8-1.9 % below the record's, whose executables were built by another compiler or flags.
+
+**Arms**, each rebuilt from the stock build directory with the gcc fix, differing only in which allocator is ported
+(sha256 of the executables): fix f9327fbd…, pool 79542acf…, ggc a2a748bd…, obst 92fff9aa…, all dda1118b… (= the port's
+own sublet executable), and stock 3ec35baa….
+
+**First reading, withdrawn before use.** Whole-job instruction counts read pool +15.3 %, ggc -6.4 %, obst +4.6 %,
+all -0.5 %: not additive, and about 590 instructions per lifetime instruction for the pools. They are kernel work:
+user-mode ticks are equal in every arm (1,402-1,413), and system ticks follow the pages the kit's collector sweeps
+(pool 3.1 times fix's, ggc 0.09 times). On this kit's table (paged, 30-bit ids) ids carry no generation, so a released
+record returns to the free list only after a full stale-tag sweep, and CRENEW cannot renew in place (QEMU 9e69171f1c
+cap_rev_table.c:9-12, cap_rev_tree.c:361-371). The GC arm's lower sweep count is consistent with node_ensure's policy
+at 71ce199d8fea (capstone_vm.c ~1355-1395: collect only once retired records reach a quarter of the capacity), and is
+not traced. A record with generations removes this kernel share; it belongs to the kit, not to the port.
+
+**Result.** Exact counts of gcc's own code (the native image's address window, user mode), by `zones.c`, one boot
+per arm, train01, -icount shift=0; every output matches SPEC's reference:
+
+| arm | gcc's code, instructions | against fix | lifetime instructions (counting build) |
+|---|---:|---:|---|
+| fix | 13,999,404,828 | | |
+| pool | 14,013,217,259 | +0.099 % | 2,488,995 CDERIVE, 1,832,637 CRENEW |
+| ggc | 14,003,801,664 | +0.031 % | 1,414,198 CDERIVE, 46,579 CREVOKE |
+| obst | 14,090,979,945 | +0.654 % | 1,289,643 CDERIVE, 105,684 CREVOKE |
+| all | 14,109,183,145 | **+0.784 %** | the sum |
+| stock | 14,003,000,543 | +0.026 % | none (no gcc fix) |
+
+- Additive: pool + ggc + obst = +109.8 M, exactly the full port's difference.
+- About 3 instructions per lifetime instruction for the pools and the GC heap, about 66 for the obstacks, whose port
+  keeps one reference per object and walks them on every free.
+- These are instructions on QEMU. The two-operand pool port alone cost +0.8 % instructions on the twin and +5.3 %
+  cycles on P1; the cycles of this port need a bitstream with one-operand CREVOKE and CRENEW.
+
+**Next.** The obstack port first (a lifetime per chunk or per free-to-mark region, so that a free ends a subtree in
+one CREVOKE), with a fixture that a freed object's reference still faults; then the typed free lists, objects of 4 KiB
+and more and growing obstack objects, each priced alone the same way.

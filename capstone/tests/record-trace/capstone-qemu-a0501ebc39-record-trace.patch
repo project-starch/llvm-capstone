@@ -1,0 +1,777 @@
+diff --git a/target/riscv/cap_rev_table.c b/target/riscv/cap_rev_table.c
+index 033fc93b92..892cf497be 100644
+--- a/target/riscv/cap_rev_table.c
++++ b/target/riscv/cap_rev_table.c
+@@ -1,3 +1,4 @@
++#include "cap_rev_trace.h"
+ #include "cap_rev_table.h"
+ #include <stddef.h>
+ 
+@@ -194,6 +195,7 @@ static bool table_get(void *opaque, cap_rev_node_id_t id, CapRevRecord *rec)
+         !cap_rev_table_record_pa(t, id, &pa)) {
+         return false;
+     }
++    cap_rev_trace_access(t->root, CAP_REV_TRACE_READ, id);
+     w0 = t->mem.read64(t->mem.ctx, pa);
+     w1 = t->mem.read64(t->mem.ctx, pa + 8);
+     flags = (uint32_t)(w1 >> CAP_REV_TABLE_FLAGS_SHIFT);
+@@ -241,8 +243,10 @@ static void table_put(void *opaque, cap_rev_node_id_t id,
+     if (t->paged && !rec->valid &&
+         (t->mem.read64(t->mem.ctx, pa + 8) >> CAP_REV_TABLE_FLAGS_SHIFT &
+          CAP_REV_TABLE_VALID)) {
++        cap_rev_trace_access(t->root, CAP_REV_TRACE_HWRITE, 40);
+         t->mem.write64(t->mem.ctx, t->root + 40, ++t->retired);
+     }
++    cap_rev_trace_access(t->root, CAP_REV_TRACE_WRITE, id);
+ 
+     /* A generation table keeps the record's generation (written by its allocation). */
+     uint64_t keep = cap_rev_table_generations(t) ? t->mem.read64(t->mem.ctx, pa + 8) & gen_field(t) : 0;
+@@ -276,6 +280,11 @@ static cap_rev_node_id_t table_alloc(void *opaque)
+     cap_rev_node_id_t id;
+     if (t->free_head) {
+         id = t->free_head;
++        cap_rev_trace_access(t->root, CAP_REV_TRACE_READ, id);
++        if (cap_rev_table_generations(t)) {
++            cap_rev_trace_access(t->root, CAP_REV_TRACE_WRITE, id);
++        }
++        cap_rev_trace_access(t->root, CAP_REV_TRACE_HWRITE, 16);
+         t->free_head = (uint32_t)t->mem.read64(t->mem.ctx, record_pa(t, id));
+         --t->free_count;
+         if (cap_rev_table_generations(t)) {
+@@ -289,13 +298,16 @@ static cap_rev_node_id_t table_alloc(void *opaque)
+                       t->free_head | ((uint64_t)t->free_count << 32));
+     } else {
+         id = (cap_rev_node_id_t)t->next++;
++        cap_rev_trace_access(t->root, CAP_REV_TRACE_HWRITE, 8);
+         if (cap_rev_table_generations(t)) {
++            cap_rev_trace_access(t->root, CAP_REV_TRACE_WRITE, id);
+             /* the fresh path hands out generation 0 */
+             t->mem.write64(t->mem.ctx, record_pa(t, id) + 8, 0);
+         }
+         t->mem.write64(t->mem.ctx, t->root + 8, t->next);
+     }
+     if (t->recycle) {
++        cap_rev_trace_access(t->root, CAP_REV_TRACE_HWRITE, 24);
+         t->mem.write64(t->mem.ctx, t->root + 24, ++t->allocations);
+     }
+     return id;
+@@ -332,6 +344,7 @@ static bool table_resolve(void *opaque, cap_rev_node_id_t id, cap_rev_node_id_t
+         !cap_rev_table_record_pa(t, *index, &pa)) {
+         return false;
+     }
++    cap_rev_trace_access(t->root, CAP_REV_TRACE_READ, *index);
+     return gen_of(t, t->mem.read64(t->mem.ctx, pa + 8)) == (id >> id_gen_shift(t));
+ }
+ 
+@@ -341,6 +354,7 @@ static cap_rev_node_id_t table_compose(void *opaque, cap_rev_node_id_t index)
+     if (!cap_rev_table_generations(t)) {
+         return index;
+     }
++    cap_rev_trace_access(t->root, CAP_REV_TRACE_READ, index);
+     uint64_t g = gen_of(t, t->mem.read64(t->mem.ctx, record_pa(t, index) + 8));
+     return (cap_rev_node_id_t)(g << id_gen_shift(t)) | index;
+ }
+@@ -356,10 +370,14 @@ static void table_release(void *opaque, cap_rev_node_id_t index)
+     if (!t->ok || !t->recycle || !cap_rev_table_generations(t) || !cap_rev_table_record_pa(t, index, &pa)) {
+         return;
+     }
++    cap_rev_trace_access(t->root, CAP_REV_TRACE_READ, index);
+     w1 = t->mem.read64(t->mem.ctx, pa + 8);
+     if (gen_of(t, w1) >= (t->wide ? CAP_REV_WIDE_GEN_MAX : CAP_REV_TABLE_GEN_MAX)) {
+         return;
+     }
++    cap_rev_trace_access(t->root, CAP_REV_TRACE_HREAD, 16);
++    cap_rev_trace_access(t->root, CAP_REV_TRACE_WRITE, index);
++    cap_rev_trace_access(t->root, CAP_REV_TRACE_HWRITE, 16);
+     head = t->mem.read64(t->mem.ctx, t->root + 16);
+     t->free_head = index;
+     t->free_count = (uint32_t)(head >> 32) + 1;
+@@ -371,6 +389,7 @@ static void table_release(void *opaque, cap_rev_node_id_t index)
+          * when it left VALID); the push makes it free. A record at the last generation stays
+          * counted: it is retired for good. */
+         t->retired -= t->retired != 0;   /* a corrupted count cannot wrap */
++        cap_rev_trace_access(t->root, CAP_REV_TRACE_HWRITE, 40);
+         t->mem.write64(t->mem.ctx, t->root + 40, t->retired);
+     }
+ }
+diff --git a/target/riscv/cap_rev_tree.c b/target/riscv/cap_rev_tree.c
+index eb5a022419..3d642efcd2 100644
+--- a/target/riscv/cap_rev_tree.c
++++ b/target/riscv/cap_rev_tree.c
+@@ -2,6 +2,7 @@
+ #include <stdlib.h>
+ #include <glib.h>
+ #include "cap_rev_tree.h"
++#include "cap_rev_trace.h"
+ 
+ /* ---------------------------------------------------------------------------
+  * The node list over a store. Each operation reads and checks every record it
+@@ -62,7 +63,7 @@ uint64_t cap_rev_free_ids(const CapRevStore *s)
+     return s->ops->free_ids(s->opaque);
+ }
+ 
+-CapRevStatus cap_rev_create(const CapRevStore *s, cap_rev_node_id_t *out)
++static CapRevStatus cap_rev_create_untraced(const CapRevStore *s, cap_rev_node_id_t *out)
+ {
+     CapRevRecord rec = {
+         .prev = s->null_id, .next = s->null_id, .parent = s->null_id,
+@@ -166,19 +167,19 @@ static CapRevStatus dup_before_id(const CapRevStore *s, cap_rev_node_id_t id,
+     return st;
+ }
+ 
+-CapRevStatus cap_rev_mrev(const CapRevStore *s, cap_rev_node_id_t id,
++static CapRevStatus cap_rev_mrev_untraced(const CapRevStore *s, cap_rev_node_id_t id,
+                           cap_rev_node_id_t *out)
+ {
+     return dup_before_id(s, id, true, out);
+ }
+ 
+-CapRevStatus cap_rev_split(const CapRevStore *s, cap_rev_node_id_t id,
++static CapRevStatus cap_rev_split_untraced(const CapRevStore *s, cap_rev_node_id_t id,
+                            cap_rev_node_id_t *out)
+ {
+     return dup_before_id(s, id, false, out);
+ }
+ 
+-CapRevStatus cap_rev_derive(const CapRevStore *s, cap_rev_node_id_t parent_id,
++static CapRevStatus cap_rev_derive_untraced(const CapRevStore *s, cap_rev_node_id_t parent_id,
+                            cap_rev_node_id_t *out)
+ {
+     CapRevRecord node, next, child;
+@@ -212,7 +213,7 @@ CapRevStatus cap_rev_derive(const CapRevStore *s, cap_rev_node_id_t parent_id,
+ static CapRevStatus retire(const CapRevStore *s, cap_rev_node_id_t id);
+ 
+ /* CREVOKE: retires a live direct child and its whole subtree, every record of which is pushed. */
+-CapRevStatus cap_rev_kill(const CapRevStore *s, cap_rev_node_id_t parent_id,
++static CapRevStatus cap_rev_kill_untraced(const CapRevStore *s, cap_rev_node_id_t parent_id,
+                          cap_rev_node_id_t child_id)
+ {
+     CapRevRecord rec;
+@@ -235,9 +236,22 @@ CapRevStatus cap_rev_kill(const CapRevStore *s, cap_rev_node_id_t parent_id,
+ /* Walk the junior run after id: every following record deeper than id. The
+  * first pass only reads, with a visit bound, so a cycle or a dangling link is
+  * reported before any record changes. */
++static CapRevStatus walk_run_untraced(const CapRevStore *s, cap_rev_node_id_t id,
++                             const CapRevRecord *node, bool commit,
++                             bool *retain_data, cap_rev_node_id_t *stop);
+ static CapRevStatus walk_run(const CapRevStore *s, cap_rev_node_id_t id,
+                              const CapRevRecord *node, bool commit,
+                              bool *retain_data, cap_rev_node_id_t *stop)
++{
++    int old = cap_rev_trace_enter(commit ? cap_rev_trace_kind : CAP_REV_TRACE_VERIFY);
++    CapRevStatus r = walk_run_untraced(s, id, node, commit, retain_data, stop);
++    cap_rev_trace_leave(old);
++    return r;
++}
++
++static CapRevStatus walk_run_untraced(const CapRevStore *s, cap_rev_node_id_t id,
++                             const CapRevRecord *node, bool commit,
++                             bool *retain_data, cap_rev_node_id_t *stop)
+ {
+     uint64_t limit = s->ops->walk_limit(s->opaque);
+     uint64_t visits = 0;
+@@ -271,7 +285,7 @@ static CapRevStatus walk_run(const CapRevStore *s, cap_rev_node_id_t id,
+ }
+ 
+ /* REVOKE: invalidates and pushes the operand's run; the operand stays valid. */
+-CapRevStatus cap_rev_revoke(const CapRevStore *s, cap_rev_node_id_t id_in,
++static CapRevStatus cap_rev_revoke_untraced(const CapRevStore *s, cap_rev_node_id_t id_in,
+                             bool *retain_data)
+ {
+     CapRevRecord node, after;
+@@ -301,7 +315,7 @@ CapRevStatus cap_rev_revoke(const CapRevStore *s, cap_rev_node_id_t id_in,
+ }
+ 
+ /* CSRETIRE: the retire walk on a capability's id; a stale {g, i} is dead and changes nothing. */
+-CapRevStatus cap_rev_retire(const CapRevStore *s, cap_rev_node_id_t id)
++static CapRevStatus cap_rev_retire_untraced(const CapRevStore *s, cap_rev_node_id_t id)
+ {
+     cap_rev_node_id_t index;
+     if (!resolve(s, id, &index)) {
+@@ -360,6 +374,68 @@ CapRevStatus cap_rev_delin(const CapRevStore *s, cap_rev_node_id_t id_in)
+     return CAP_REV_OK;
+ }
+ 
++/* The traced entry points (cap_rev_trace.h). */
++CapRevStatus cap_rev_create(const CapRevStore *s, cap_rev_node_id_t *out)
++{
++    int old = cap_rev_trace_enter(CAP_REV_TRACE_ALLOC);
++    CapRevStatus r = cap_rev_create_untraced(s, out);
++    cap_rev_trace_leave(old);
++    return r;
++}
++
++CapRevStatus cap_rev_mrev(const CapRevStore *s, cap_rev_node_id_t id,
++                          cap_rev_node_id_t *out)
++{
++    int old = cap_rev_trace_enter(CAP_REV_TRACE_ALLOC);
++    CapRevStatus r = cap_rev_mrev_untraced(s, id, out);
++    cap_rev_trace_leave(old);
++    return r;
++}
++
++CapRevStatus cap_rev_split(const CapRevStore *s, cap_rev_node_id_t id,
++                           cap_rev_node_id_t *out)
++{
++    int old = cap_rev_trace_enter(CAP_REV_TRACE_ALLOC);
++    CapRevStatus r = cap_rev_split_untraced(s, id, out);
++    cap_rev_trace_leave(old);
++    return r;
++}
++
++CapRevStatus cap_rev_derive(const CapRevStore *s, cap_rev_node_id_t parent_id,
++                           cap_rev_node_id_t *out)
++{
++    int old = cap_rev_trace_enter(CAP_REV_TRACE_ALLOC);
++    CapRevStatus r = cap_rev_derive_untraced(s, parent_id, out);
++    cap_rev_trace_leave(old);
++    return r;
++}
++
++CapRevStatus cap_rev_kill(const CapRevStore *s, cap_rev_node_id_t parent_id,
++                         cap_rev_node_id_t child_id)
++{
++    int old = cap_rev_trace_enter(CAP_REV_TRACE_RELEASE);
++    CapRevStatus r = cap_rev_kill_untraced(s, parent_id, child_id);
++    cap_rev_trace_leave(old);
++    return r;
++}
++
++CapRevStatus cap_rev_revoke(const CapRevStore *s, cap_rev_node_id_t id_in,
++                            bool *retain_data)
++{
++    int old = cap_rev_trace_enter(CAP_REV_TRACE_RELEASE);
++    CapRevStatus r = cap_rev_revoke_untraced(s, id_in, retain_data);
++    cap_rev_trace_leave(old);
++    return r;
++}
++
++CapRevStatus cap_rev_retire(const CapRevStore *s, cap_rev_node_id_t id)
++{
++    int old = cap_rev_trace_enter(CAP_REV_TRACE_RELEASE);
++    CapRevStatus r = cap_rev_retire_untraced(s, id);
++    cap_rev_trace_leave(old);
++    return r;
++}
++
+ /* ---------------------------------------------------------------------------
+  * Legacy host tree binding.
+  *
+diff --git a/target/riscv/capstone_table.c b/target/riscv/capstone_table.c
+index 307d565d54..dd109974b8 100644
+--- a/target/riscv/capstone_table.c
++++ b/target/riscv/capstone_table.c
+@@ -14,6 +14,7 @@
+ #include "cap_compress.h"
+ #include "cap_mem_map.h"
+ #include "capstone_table.h"
++#include "cap_rev_trace.h"
+ #include "capstone_helper.h"
+ 
+ /*
+@@ -275,7 +276,9 @@ static bool id_live_lookup(CPURISCVState *env, struct CapstoneLiveEntry *e,
+     capstone_store_open(env, &st, false);
+     e->flags_host = NULL;
+     e->watched = false;
++    cap_rev_trace_mute++;
+     live = cap_rev_live(&st.store, id);
++    cap_rev_trace_mute--;
+     if (!st.guest || !live) {
+         return live;
+     }
+@@ -308,6 +311,18 @@ static bool id_live_lookup(CPURISCVState *env, struct CapstoneLiveEntry *e,
+     return true;
+ }
+ 
++/* One CHECK event for a liveness check of id in the running code's table. */
++static void capstone_trace_check(CPURISCVState *env, cap_rev_node_id_t id, bool pcc)
++{
++    cap_rev_trace_event(env->srevroot,
++                        pcc ? CAP_REV_TRACE_CHECK_PC
++                            : (env->capstone_virtual_c ||
++                               (env->priv == PRV_U && env->capstone_u_active))
++                              ? CAP_REV_TRACE_CHECK_U : CAP_REV_TRACE_CHECK_S,
++                        CAP_REV_TRACE_READ,
++                        cap_ids_wide() ? id & CAP_REV_WIDE_INDEX_MASK : id);
++}
++
+ bool capstone_id_live(CPURISCVState *env, cap_rev_node_id_t id, bool pcc)
+ {
+     struct CapstoneLiveEntry *e = pcc ? &env->capstone_live_pcc
+@@ -315,6 +330,9 @@ bool capstone_id_live(CPURISCVState *env, cap_rev_node_id_t id, bool pcc)
+     uint64_t flags;
+     bool live;
+ 
++    if (cap_rev_trace_on) {
++        capstone_trace_check(env, id, pcc);
++    }
+     if (e->watched) {
+         if (live_entry_watched(env, e, id)) {
+             return true;
+@@ -339,6 +357,9 @@ bool capstone_reg_live(CPURISCVState *env, uint32_t rs1)
+     cap_rev_node_id_t id = v->val.cap.rev_node_id;
+ 
+     if (capstone_reg_proof_holds(env, v)) {
++        if (cap_rev_trace_on) {
++            capstone_trace_check(env, id, false);
++        }
+         return true;
+     }
+     if (!capstone_id_live(env, id, false)) {
+diff --git a/target/riscv/cpu_helper.c b/target/riscv/cpu_helper.c
+index f657fde79b..d4c93efddf 100644
+--- a/target/riscv/cpu_helper.c
++++ b/target/riscv/cpu_helper.c
+@@ -18,6 +18,7 @@
+  */
+ 
+ #include "qemu/osdep.h"
++#include "cap_rev_trace.h"
+ #include "qemu/log.h"
+ #include "qemu/main-loop.h"
+ #include "cpu.h"
+@@ -1763,6 +1764,11 @@ void riscv_cpu_do_interrupt(CPUState *cs)
+     target_ulong capstone_tval = env->capstone_tval_set ? env->capstone_tval : 0;
+     env->capstone_tval_set = false;
+ 
++    if (cap_rev_trace_on &&
++        (env->capstone_virtual_c || (env->priv == PRV_U && env->capstone_u_active))) {
++        cap_rev_trace_edge(env->srevroot, CAP_REV_TRACE_EDGE_TRAP, cause | (async ? 1ull << 31 : 0));
++    }
++
+     if (!async) {
+                 /* set tval to badaddr for traps with address information */
+         switch (cause) {
+diff --git a/target/riscv/meson.build b/target/riscv/meson.build
+index 51466870ce..e7337023bc 100644
+--- a/target/riscv/meson.build
++++ b/target/riscv/meson.build
+@@ -25,6 +25,7 @@ riscv_ss.add(files(
+   'cap_mem_map.c',
+   'cap_rev_tree.c',
+   'cap_rev_table.c',
++  'cap_rev_trace.c',
+   'capstone_table.c',
+   'cap_compress.c',
+   'capstone_helper.c',
+diff --git a/target/riscv/op_helper.c b/target/riscv/op_helper.c
+index 17e120dae5..59a1f46ac8 100644
+--- a/target/riscv/op_helper.c
++++ b/target/riscv/op_helper.c
+@@ -42,6 +42,16 @@
+ #endif
+ #include "qemu/rcu.h"
+ #include "trace.h"
++#include "cap_rev_trace.h"
++
++/* cap_rev_live as part of the table operation of the given kind (cap_rev_trace.h). */
++static inline bool cap_rev_live_as(int kind, const CapRevStore *s, cap_rev_node_id_t id)
++{
++    int old = cap_rev_trace_enter(kind);
++    bool live = cap_rev_live(s, id);
++    cap_rev_trace_leave(old);
++    return live;
++}
+ 
+ /* Exceptions processing helpers */
+ G_NORETURN void riscv_raise_exception(CPURISCVState *env,
+@@ -353,6 +363,10 @@ target_ulong helper_sret(CPURISCVState *env)
+     }
+ 
+     riscv_cpu_set_mode(env, prev_priv);
++    if (cap_rev_trace_on &&
++        (env->capstone_virtual_c || (env->priv == PRV_U && env->capstone_u_active))) {
++        cap_rev_trace_edge(env->srevroot, CAP_REV_TRACE_EDGE_SRET, 0);
++    }
+ 
+     return retpc;
+ }
+@@ -415,6 +429,10 @@ target_ulong helper_mret(CPURISCVState *env)
+     }
+     env->mstatus = mstatus;
+     riscv_cpu_set_mode(env, prev_priv);
++    if (cap_rev_trace_on &&
++        (env->capstone_virtual_c || (env->priv == PRV_U && env->capstone_u_active))) {
++        cap_rev_trace_edge(env->srevroot, CAP_REV_TRACE_EDGE_MRET, 0);
++    }
+ 
+     if (riscv_has_ext(env, RVH)) {
+         if (prev_virt) {
+@@ -1286,7 +1304,7 @@ void helper_csderive(CPURISCVState *env, uint32_t rd, uint32_t rs1,
+         riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, ra);
+     }
+     capstone_store_open(env, &st, false);
+-    if (!cap_rev_live(&st.store, parent.val.cap.rev_node_id)) {
++    if (!cap_rev_live_as(CAP_REV_TRACE_ALLOC, &st.store, parent.val.cap.rev_node_id)) {
+         riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, ra);
+     }
+     child = parent.val.cap;
+@@ -1336,8 +1354,8 @@ void helper_cskill(CPURISCVState *env, uint32_t rs1, uint32_t rs2)
+         riscv_raise_exception(env, RISCV_EXCP_UNEXP_CAP_TYPE, ra);
+     }
+     capstone_store_open(env, &st, false);
+-    if (!cap_rev_live(&st.store, parent->val.cap.rev_node_id) ||
+-        !cap_rev_live(&st.store, child->val.cap.rev_node_id)) {
++    if (!cap_rev_live_as(CAP_REV_TRACE_RELEASE, &st.store, parent->val.cap.rev_node_id) ||
++        !cap_rev_live_as(CAP_REV_TRACE_RELEASE, &st.store, child->val.cap.rev_node_id)) {
+         riscv_raise_exception(env, RISCV_EXCP_INVALID_CAP, ra);
+     }
+     if (!cap_perms_allow(parent->val.cap.perms, CAP_PERMS_MANAGE)) {
+diff --git a/target/riscv/translate.c b/target/riscv/translate.c
+index f0d90ce885..be63cc31f7 100644
+--- a/target/riscv/translate.c
++++ b/target/riscv/translate.c
+@@ -17,6 +17,7 @@
+  */
+ 
+ #include "qemu/osdep.h"
++#include "cap_rev_trace.h"
+ #include "qemu/log.h"
+ #include "cpu.h"
+ #include "tcg/tcg-op.h"
+@@ -189,7 +190,7 @@ static void gen_capstone_access_with_cap(DisasContext *ctx, TCGv addr,
+     TCGv imm_c = tcg_constant_tl(imm);
+     TCGv_i32 memop_c = tcg_constant_i32((int)memop);
+ 
+-    if (!disas_context_virtual_data(ctx) || rs1 == 0 || size == 0 || size > 8) {
++    if (cap_rev_trace_on || !disas_context_virtual_data(ctx) || rs1 == 0 || size == 0 || size > 8) {
+         if (is_store) {
+             gen_helper_store_with_cap(addr, cpu_env, rs1_c, imm_c, memop_c);
+         } else {
+@@ -1509,6 +1510,15 @@ static void riscv_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
+     DisasContext *ctx = container_of(dcbase, DisasContext, base);
+     CPURISCVState *env = cpu->env_ptr;
+     uint16_t opcode16;
++    if (cap_rev_trace_on) {
++        /* cap_rev_trace.h: the trace's clock. */
++        TCGv_i64 n = tcg_temp_new_i64();
++        for (int i = 0; i < (disas_context_virtual_data(ctx) ? 2 : 1); i++) {
++            tcg_gen_ld_i64(n, tcg_constant_ptr(&cap_rev_trace_icount[i]), 0);
++            tcg_gen_addi_i64(n, n, 1);
++            tcg_gen_st_i64(n, tcg_constant_ptr(&cap_rev_trace_icount[i]), 0);
++        }
++    }
+     if (ctx->capstone_virtual_c) {
+         /* The single-instruction virtual block may restore a caller and
+          * update interrupt state. Mark its I/O boundary under icount before
+diff --git a/target/riscv/cap_rev_trace.h b/target/riscv/cap_rev_trace.h
+new file mode 100644
+index 0000000000..196215cab6
+--- /dev/null
++++ b/target/riscv/cap_rev_trace.h
+@@ -0,0 +1,104 @@
++#ifndef CAP_REV_TRACE_H
++#define CAP_REV_TRACE_H
++
++/* NESTED-LANE MEASUREMENT ONLY (2026-11-20): the record-access trace.
++ *
++ * With $CAPSTONE_RECTRACE set to a path prefix, every access the model makes
++ * to a record of a guest lifetime table is appended to `<prefix>.<pid>`, in
++ * execution order, as one little-endian u64 per run of identical events:
++ *
++ *   bits 63:56  code = kind << 2 | op
++ *   bits 55:32  count, the number of consecutive identical events (1..2^24-1)
++ *   bits 31:0   slot (the record index), or for a header op the byte offset of
++ *               the header word from the table root
++ *
++ * A root marker (kind CAP_REV_TRACE_ROOT) carries root >> 4 in bits 55:0 and
++ * is written whenever the table an event belongs to is not the previous
++ * event's.
++ *
++ * kind: what the access is for.
++ *   CHECK_U  the liveness check of a data capability in protected code
++ *            (protected U, or a supervised virtual C context): every load,
++ *            store, LDC and STC through a capability, and the check of a
++ *            linear capability at the LDC that loads it. One event per
++ *            dereference: QEMU's own caches are bypassed for the count.
++ *   CHECK_S  the same check outside protected code (S on the process's table).
++ *   CHECK_PC a liveness check of the PCC, where the model makes one.
++ *   ALLOC    CDERIVE, CSMINT, and the legacy creating operations.
++ *   RELEASE  CREVOKE, CSRETIRE, REVOKE: the writing pass.
++ *   VERIFY   the read-only pass the model makes over a subtree before it
++ *            releases it. Hardware need not make it.
++ *   OTHER    every other table operation (DELIN, liveness tests inside the
++ *            supervisor paths).
++ * op: 0 record read, 1 record write, 2 header read, 3 header write.
++ *
++ * The header validation the model repeats when it opens a table is not an
++ * event. `<path>.stats` holds the event and run totals per code, rewritten at
++ * each flush. Completed runs are also flushed every 2 s of wall time (checked every
++ * 2^20 events), so a QEMU that is killed loses at most that interval and the open
++ * run; the flush never closes a run, so it does not change the trace's content. */
++
++#include <stdint.h>
++#include <stdbool.h>
++
++enum {
++    CAP_REV_TRACE_CHECK_U = 0,
++    CAP_REV_TRACE_CHECK_S = 1,
++    CAP_REV_TRACE_CHECK_PC = 2,
++    CAP_REV_TRACE_ALLOC = 3,
++    CAP_REV_TRACE_RELEASE = 4,
++    CAP_REV_TRACE_VERIFY = 5,
++    CAP_REV_TRACE_OTHER = 6,
++    CAP_REV_TRACE_ROOT = 7,
++    CAP_REV_TRACE_KINDS = 8,
++    /* Position in time: two marker words every CAP_REV_TRACE_MARK runs, and at
++     * the end. Bits 55:0 are the guest instructions executed so far, ICOUNT
++     * all of them (firmware, kernel, every process), ICOUNT_P those of
++     * protected code (the capability data mode of the translator). */
++    CAP_REV_TRACE_ICOUNT = 8,
++    CAP_REV_TRACE_ICOUNT_P = 9,
++    /* A context edge of protected code (protected U, or a supervised virtual C context):
++     * op 0 = a trap out of it (slot = cause, bit 31 set for an interrupt), op 2 = SRET into it,
++     * op 3 = MRET into it. One word each, never merged into a run with another edge. */
++    CAP_REV_TRACE_EDGE = 10,
++};
++enum { CAP_REV_TRACE_EDGE_TRAP = 0, CAP_REV_TRACE_EDGE_SRET = 2, CAP_REV_TRACE_EDGE_MRET = 3 };
++void cap_rev_trace_edge(uint64_t root, int op, uint64_t cause);
++#define CAP_REV_TRACE_MARK 1024
++
++extern uint64_t cap_rev_trace_icount[2];    /* all, protected: incremented by translated code */
++enum {
++    CAP_REV_TRACE_READ = 0,
++    CAP_REV_TRACE_WRITE = 1,
++    CAP_REV_TRACE_HREAD = 2,
++    CAP_REV_TRACE_HWRITE = 3,
++};
++
++extern bool cap_rev_trace_on;   /* fixed before the first instruction runs */
++extern int cap_rev_trace_kind;  /* the kind of the table operation in progress */
++extern int cap_rev_trace_mute;  /* > 0: table accesses are not events */
++
++void cap_rev_trace_event(uint64_t root, int kind, int op, uint64_t slot);
++
++/* A table access made by the operation in progress. */
++static inline void cap_rev_trace_access(uint64_t root, int op, uint64_t slot)
++{
++    if (cap_rev_trace_on && !cap_rev_trace_mute) {
++        cap_rev_trace_event(root, cap_rev_trace_kind, op, slot);
++    }
++}
++
++/* Scope of one table operation: sets the kind, returns the previous one. */
++static inline int cap_rev_trace_enter(int kind)
++{
++    int old = cap_rev_trace_kind;
++    cap_rev_trace_kind = kind;
++    return old;
++}
++
++static inline void cap_rev_trace_leave(int old)
++{
++    cap_rev_trace_kind = old;
++}
++
++#endif
+diff --git a/target/riscv/cap_rev_trace.c b/target/riscv/cap_rev_trace.c
+new file mode 100644
+index 0000000000..004c877b45
+--- /dev/null
++++ b/target/riscv/cap_rev_trace.c
+@@ -0,0 +1,205 @@
++/* NESTED-LANE MEASUREMENT ONLY (2026-11-20): the record-access trace. See cap_rev_trace.h. */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <fcntl.h>
++#include <unistd.h>
++#include <time.h>
++#include "cap_rev_trace.h"
++
++bool cap_rev_trace_on;
++uint64_t cap_rev_trace_icount[2];
++int cap_rev_trace_kind = CAP_REV_TRACE_OTHER;
++int cap_rev_trace_mute;
++
++#define RT_BUF (1u << 17)           /* runs per write: 1 MiB */
++#define RT_COUNT_MAX 0xffffffu
++
++static int rt_fd = -1;
++static char rt_stats_path[4096];
++static uint64_t rt_buf[RT_BUF];
++static unsigned rt_n;
++static uint64_t rt_key;             /* code << 32 | slot of the open run */
++static uint64_t rt_count;           /* its length; 0 = no open run */
++static uint64_t rt_root;            /* the table of the previous event */
++static bool rt_root_set;
++static uint64_t rt_events[CAP_REV_TRACE_KINDS * 4], rt_runs[CAP_REV_TRACE_KINDS * 4];
++static uint64_t rt_roots, rt_written, rt_flushes, rt_marks, rt_edges[4];
++static unsigned rt_since_mark;
++static uint64_t rt_events_since_clock;
++static struct timespec rt_last_flush;
++#define RT_FLUSH_SECONDS 2          /* a killed QEMU loses at most this much of the trace, plus the open run */
++
++static void rt_stats(void)
++{
++    static const char *const kind[CAP_REV_TRACE_KINDS] = {
++        "check_u", "check_s", "check_pc", "alloc", "release", "verify", "other", "root" };
++    static const char *const op[4] = { "read", "write", "hread", "hwrite" };
++    char tmp[4200];
++    FILE *f;
++
++    snprintf(tmp, sizeof(tmp), "%s.tmp", rt_stats_path);
++    f = fopen(tmp, "w");
++    if (!f) {
++        return;
++    }
++    fprintf(f, "words_written %llu\nroot_markers %llu\nicount_markers %llu\n"
++               "instructions_all %llu\ninstructions_protected %llu\n",
++            (unsigned long long)rt_written, (unsigned long long)rt_roots,
++            (unsigned long long)rt_marks,
++            (unsigned long long)cap_rev_trace_icount[0],
++            (unsigned long long)cap_rev_trace_icount[1]);
++    fprintf(f, "edges_trap %llu\nedges_sret %llu\nedges_mret %llu\n",
++            (unsigned long long)rt_edges[0], (unsigned long long)rt_edges[2],
++            (unsigned long long)rt_edges[3]);
++    for (int k = 0; k < CAP_REV_TRACE_ROOT; k++) {
++        for (int o = 0; o < 4; o++) {
++            if (rt_events[k * 4 + o]) {
++                fprintf(f, "%s_%s events %llu runs %llu\n", kind[k], op[o],
++                        (unsigned long long)rt_events[k * 4 + o],
++                        (unsigned long long)rt_runs[k * 4 + o]);
++            }
++        }
++    }
++    fprintf(f, "END\n");
++    fclose(f);
++    rename(tmp, rt_stats_path);
++}
++
++static void rt_write(void)
++{
++    const char *p = (const char *)rt_buf;
++    size_t left = (size_t)rt_n * sizeof(rt_buf[0]);
++
++    while (left) {
++        ssize_t w = write(rt_fd, p, left);
++        if (w <= 0) {
++            /* A trace with a hole is worse than none: stop the run. */
++            fprintf(stderr, "cap_rev_trace: write failed, aborting\n");
++            abort();
++        }
++        p += w;
++        left -= (size_t)w;
++    }
++    rt_written += rt_n;
++    rt_n = 0;
++    if ((rt_flushes++ & 15) == 0) {
++        rt_stats();
++    }
++}
++
++static inline void rt_put(uint64_t word)
++{
++    rt_buf[rt_n++] = word;
++    if (rt_n == RT_BUF) {
++        rt_write();
++    }
++}
++
++static void rt_mark(void)
++{
++    rt_put((uint64_t)(CAP_REV_TRACE_ICOUNT << 2) << 56 | (cap_rev_trace_icount[0] & 0xffffffffffffffull));
++    rt_put((uint64_t)(CAP_REV_TRACE_ICOUNT_P << 2) << 56 | (cap_rev_trace_icount[1] & 0xffffffffffffffull));
++    rt_marks++;
++    rt_since_mark = 0;
++}
++
++static void rt_close_run(void)
++{
++    if (rt_count) {
++        rt_put((rt_key >> 32) << 56 | rt_count << 32 | (rt_key & 0xffffffffu));
++        rt_runs[rt_key >> 32]++;
++        rt_count = 0;
++        if (++rt_since_mark >= CAP_REV_TRACE_MARK) {
++            /* The counts are read when the NEXT run opens: they place it. */
++            rt_mark();
++        }
++    }
++}
++
++static void rt_exit(void)
++{
++    if (rt_fd >= 0) {
++        rt_close_run();
++        rt_mark();
++        rt_write();
++        rt_stats();
++        close(rt_fd);
++        rt_fd = -1;
++    }
++}
++
++void cap_rev_trace_edge(uint64_t root, int op, uint64_t cause)
++{
++    if (!cap_rev_trace_on) {
++        return;
++    }
++    if (!rt_root_set || root != rt_root) {
++        rt_close_run();
++        rt_put((uint64_t)(CAP_REV_TRACE_ROOT << 2) << 56 | (root >> 4));
++        rt_root = root;
++        rt_root_set = true;
++        rt_roots++;
++    }
++    rt_close_run();
++    rt_put((uint64_t)(CAP_REV_TRACE_EDGE << 2 | op) << 56 | 1ull << 32 | (cause & 0xffffffffu));
++    rt_edges[op]++;
++}
++
++/* Before main: the translator reads cap_rev_trace_on from its first block on. */
++static void __attribute__((constructor)) cap_rev_trace_init(void)
++{
++    const char *prefix = getenv("CAPSTONE_RECTRACE");
++    char path[4096];
++
++    if (!prefix || !*prefix || strlen(prefix) > sizeof(path) - 40) {
++        return;
++    }
++    /* One file per QEMU process (a runner may start more than one), never over an existing trace. */
++    snprintf(path, sizeof(path), "%s.%ld", prefix, (long)getpid());
++    rt_fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0644);
++    if (rt_fd < 0) {
++        fprintf(stderr, "cap_rev_trace: cannot create %s\n", path);
++        exit(1);
++    }
++    snprintf(rt_stats_path, sizeof(rt_stats_path), "%s.stats", path);
++    cap_rev_trace_on = true;
++    atexit(rt_exit);
++    rt_stats();
++}
++
++void cap_rev_trace_event(uint64_t root, int kind, int op, uint64_t slot)
++{
++    uint64_t code = (uint64_t)kind << 2 | (uint64_t)op;
++    uint64_t key = code << 32 | (slot & 0xffffffffu);
++
++    if (!rt_root_set || root != rt_root) {
++        rt_close_run();
++        rt_put((uint64_t)(CAP_REV_TRACE_ROOT << 2) << 56 | (root >> 4));
++        rt_root = root;
++        rt_root_set = true;
++        rt_roots++;
++    }
++    rt_events[code]++;
++    if (++rt_events_since_clock >= (1u << 20)) {
++        /* Timer flush: write the completed runs and the totals. The open run stays open, so the
++         * trace's content is the same as without it. */
++        struct timespec now;
++        rt_events_since_clock = 0;
++        clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
++        if (now.tv_sec - rt_last_flush.tv_sec >= RT_FLUSH_SECONDS) {
++            rt_last_flush = now;
++            if (rt_n) {
++                rt_write();
++            }
++            rt_stats();
++        }
++    }
++    if (rt_count && key == rt_key && rt_count < RT_COUNT_MAX) {
++        rt_count++;
++        return;
++    }
++    rt_close_run();
++    rt_key = key;
++    rt_count = 1;
++}
