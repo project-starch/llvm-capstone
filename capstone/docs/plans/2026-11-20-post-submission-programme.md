@@ -71,7 +71,7 @@ Specification: `capstone/docs/design/sublet-reference-model.md` at 32dde56a6b42.
 
 | Item | State |
 |---|---|
-| the measured configuration (FRCDKMS, compiler build c9) | 11 commits are on side branches only, none on `origin/dev` (v): fold-global-lo, cap-base-rvc, memcpy alignment dispatch, memset null-capability, direct calls, C-69 fix, frame setup, node-table pool, drop-redundant-shrink, kfast, heap-excess patch |
+| the measured configuration (FRCDKMS, compiler build c9) | not buildable from `origin/dev`. In the measured images by content (v, corrected 20 Nov): fold-global-lo, cap-base-rvc, memcpy alignment dispatch, drop-redundant-shrink, direct calls, frame setup (compiler c9, built at 29027126f39b); memset null-capability (SDK source beb1bbabe26a); node-table pool code in the kernel. The runtime sits on the native route, 111 commits that `origin/dev` lacks. NOT in the measured images: the C-69 fix, kfast, the heap-excess patch |
 | compiler C2 (hoist `cincoffset`) and C3 (capabilities in registers) | not done: `canTrap` marks every `cincoffset` trapping; no rematerialisation, no hints |
 | compiler C4 (move round trips), C5 (redundant bounds) | C4 not counted per benchmark; C5 built, default off, not in the link driver |
 | open compiler issues | C-32, C-46, C-53, C-56, C-57, C-59, C-60, C-63 (C++ exceptions), C-68, C-70, C-74 |
@@ -130,8 +130,9 @@ model. The variant goes to RTL only if the model shows a gain on at least one of
 
 ### Software line (parallel to both hardware lines)
 
-1. Land the measured configuration on `dev`: the 11 commits, each as one squashed change after lit and the QEMU
-   suites, so that `dev` builds the paper's images.
+1. Land the measured configuration on `dev`: the compiler changes that are in the measured images, each as one
+   squashed change after lit and the QEMU suites, so that `dev` builds the paper's images. The C-69 fix, kfast
+   and the heap-excess patch are separate changes with their own measurements.
 2. Compiler: C2 (non-trapping `cincoffset` where bounds are proven, then hoisting), C3 (rematerialisation and
    allocation hints), C4 (count, then fix), C5 into the link driver, bounded-global hoisting, the open issues with
    C-63 and C-70 first.
@@ -269,11 +270,19 @@ In this order; items 1 to 3 are independent of each other and can overlap.
 
 ### 7.3 compiler lane
 
-1. **Put the measured configuration on `dev`.** The paper's images were built from eleven commits that are on side
-   branches only: 2f3ff76eba7b, 74080cce29e5, 29027126f39b, b68bbde23c79, 331d73414667, c77dd6e705ad,
-   e241065990d9, 7719bccb8ca4, 5069028a65b0, 3f7c8e19fecc, 76455aff7e7a. Land each as one squashed change after
-   lit and the QEMU suites. Acceptance: a compiler built from `dev` produces the paper's SPEC images byte for byte,
-   or the differences are listed and explained.
+1. **Put the measured configuration on `dev`.** Corrected on 20 Nov after the compiler lane's reading, re-checked
+   at the measured arm's `sdk.json`, the compiler's build file and the images. In the paper's images: 2f3ff76eba7b,
+   74080cce29e5, 29027126f39b, 331d73414667, 5069028a65b0 (ancestors of the compiler source 29027126f39b), the
+   frame setup e241065990d9 (there as f9d76538e477), the memset change b68bbde23c79 (in the SDK source
+   beb1bbabe26a as 7166a346d516) and the node-table pool 7719bccb8ca4 (its parameter is in the measured kernel
+   image). NOT in the paper's images: the C-69 fix c77dd6e705ad (the measured compiler's build file has no
+   `CapstoneMisalignedCapAccess.cpp`), kfast 3f7c8e19fecc (no `kfast` string in the measured kernel image) and the
+   heap-excess patch 76455aff7e7a (`__malloc_calloc_alloc` occurs 0 times in the measured libc and perlbench
+   image, 3 times in the control library). An earlier version of this section listed all eleven as measured; that
+   was wrong for those three. Land the measured ones each as one squashed change after lit and the QEMU suites.
+   Acceptance: a compiler built from `dev` produces the paper's SPEC images byte for byte, or the differences are
+   listed and explained. The three others land as changes of their own. The measured runtime is on the native
+   route (111 commits that `dev` lacks, two authors); who lands it is the lead's decision.
 2. **C2:** `cincoffset` is marked trapping everywhere (`CapstoneInstrInfo.cpp`, `canTrap`), so it is never hoisted.
    Make it non-trapping where the bounds are proven, then hoist. **C3:** rematerialisation and allocation hints, so
    capabilities stay in registers. **C4:** count the move round trips per benchmark, then fix. **C5:** the
@@ -289,13 +298,16 @@ In this order; items 1 to 3 are independent of each other and can overlap.
 
 1. **Record-access traces** from QEMU for gcc (train01), mcf and Perl, for the rtl lane's record-cache model: one
    line per record read or write with the slot and the kind (check, allocation, release).
-2. **gcc, all three allocators** on the reference model (c1985bb529): one-operand CREVOKE, CRENEW for the pools,
+2. **gcc, all three allocators** on the one-operand instructions. Corrected on 20 Nov: no revision of this
+   repository pins QEMU c1985bb529 and no kit exists for it; it is the semantic reference for the RTL only. The
+   working base is the environment of 71ce199d8fea (QEMU 9e69171f1c, native route), where the collaborator's port
+   was verified on the test input. One-operand CREVOKE, CRENEW for the pools,
    typed free lists, objects of 4 KiB and more, growing obstack objects. SPEC's `ggc_collect` returns at once, so
    release at collection is not available. Split the cost per allocator. The collaborator's port is the design
    reference; contact with the collaborator goes through the lead.
 3. **perlbench:** bodies, hash entries and op slabs; land patch 0002; a variant with CRENEW and the liveness test;
    attribute the 789 M extra instructions.
-4. **Applications:** the one-operand revisions of Fig. 10 on the reference model, ready for silicon when
+4. **Applications:** the one-operand revisions of Fig. 10 in the same environment, ready for silicon when
    bitstream 4 exists; PHP with a pristine second binary; SQLite speedtest1 at `--size 100`; the Wireshark
    non-return root-caused (it returned in 2 of 3 boots on P1; no mechanism is recorded).
 5. SQLite and PHP bug corpora on the board: prepare the images and the pre-registration; the runtime lane queues
