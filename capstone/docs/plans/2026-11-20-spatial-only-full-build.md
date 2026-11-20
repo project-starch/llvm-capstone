@@ -67,3 +67,59 @@ Slices are 50,422 (98.96 %), 378 fewer than P1.
 
 The seal goes to the runtime lane. Its board arm boots the `-DCSC_SPATIAL_ONLY` firmware variant, the stated second
 variable.
+
+## Reading: where P1's 13 ns sits (read-only on both routed checkpoints; rtl and runtime lanes' asks, 2026-11-20)
+
+Scripts: `<mnt-hdd>/synth/twc/lattr/lifetime-attr.tcl` and `modgroups.tcl`. Logs: `lattr/{P1,SPO,P1x,MG-P1,MG-SPO}.log` and
+`*.w20.rpt`. Each run was under a 16 GB guard and peaked at about 3.5 GB. The design-wide counts were taken first, so a
+zero on the paths means something.
+
+**(b) Lifetime names on the worst 500 paths.** A path matches if any of its cells OR nets carries the name.
+
+| Pattern | P1 design cells / nets | P1 worst-500 paths | Spatial worst-500 paths |
+|---|---|---|---|
+| `*/ex_stage_i/rev_node/*` | 8,291 / 10,855 | **500** | 0 (the stub: 260 / 357) |
+| `*pc_revnode*` | 260 / 349 | 39 | 0 |
+| `*revnode_*` | 4,137 / 10,907 | 39 | 0 |
+| `*pcc_*` | 224 / 681 | 39 | 0 |
+| `*rvc_*` | 4,253 / 12,255 | 0 | 0 |
+| `*cpmp_tracked_revnode*` | 1,141 / 6,201 | 0 | 0 |
+| `*i_rev_node*` | **0 / 0: no such name** | 0 | 0 |
+| POS `*fu_data_q*` | 19,758 / 23,769 | 389 | 5 |
+| NEG | 0 / 0 | 0 | 0 |
+
+P1's worst 500 span -13.173 to -11.136 ns. Spatial-only's span +0.170 to +0.990.
+
+**(a) The worst paths.**
+- P1's five worst have 109-111 logic levels, and **31 of those logic cells are inside `ex_stage_i/rev_node/`** (by the
+  cell lines of `P1.w20.rpt`). They start at `dom_switcher/cur_idx_q` and end at
+  `issue_read_operands/fu_data_q[cap_metadata_a]`.
+- Spatial-only's twenty worst are DDR controller paths at 0 levels.
+
+**(c) The same families on spatial-only**, the start and end stems of P1's worst 20:
+
+| Family | P1 slack / levels | Spatial-only slack / levels |
+|---|---|---|
+| `dom_switcher/cur_idx_q` → `fu_data_q[cap_metadata_a]` | -13.173 / 111 | +11.126 / 37 |
+| `csr_regfile_i/cpmp_q[bE]` → `fu_data_q[cap_metadata_a]` | -13.146 / 121 (from any cpmp_q) | +11.728 / 35 |
+| `dom_switcher/cur_idx_q` → `i_scoreboard/mem_q[rs1_metadata]` | | +7.373 / 46 |
+| from any `cpmp_q` / `cur_idx_q` / dom_switcher `_init_0` / `event` | -13.146 / 121, -13.173 / 111, -11.478 / 110, -12.021 / 110 | +3.993 / 49, +3.525 / 48, +3.477 / 46, +3.257 / 46 |
+
+**Module groups, worst 2,000 paths** (runtime lane's ask):
+- P1 has 14 groups. All of its top ten start at `dom_switcher/cur_idx_q` or `csr_regfile_i/cpmp_q`. Their worst slacks
+  run from -13.173 (42 paths, to issue_read_operands) and -12.695 (1,455 paths, to the scoreboard) down to -10.6. They
+  have 76-120 levels and end in issue_read_operands, the scoreboard, the LED stretch counter, the dom_switcher, lsu_i,
+  the frontend and id_stage.
+- Spatial-only has 5 groups. `i_ddr → i_ddr` holds 1,973 paths at +0.170 and 0 levels. The worst core-clock group is
+  `issue_read_operands → issue_read_operands`, at +0.523 over 98 levels.
+
+**Against the rtl lane's stated test** ("if P1's worst 500 are mostly through the lifetime names, the 13 ns is that cone;
+if not and the same families simply gained at equal depth, it is placement"):
+- all 500 cross the rev_node unit's hierarchy;
+- the families did not gain at equal depth: the two same-endpoint families lost 74 (111 → 37) and 86 (121 → 35)
+  logic levels, and from the same start registers to any endpoint the loss is 62-72.
+
+By that test the reading is the lifetime cone, not placement. This is N = 1 build per tree, and the share of the 74 lost
+levels that lies outside the 31 cells inside rev_node is not attributed here.
+
+The spatial core's own deepest path, issue_read_operands → itself at 98 levels, meets 40 ns by 0.523 ns.
