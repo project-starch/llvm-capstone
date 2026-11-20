@@ -47,12 +47,12 @@ Specification: `capstone/docs/design/sublet-reference-model.md` at 32dde56a6b42.
 | Id | What | State |
 |---|---|---|
 | R-76 | outside supervision, S/U `ccsrrw` reads and replaces the monitor's capabilities (security) | 7-line fix in `csr_regfile.sv` (7180a83b6, v); sealed only on top of the record cache; never flashed |
-| R-75 | after a CSRUNV service resume, the second escape and S's ecall, every instruction at the M trap handler's entry is declared illegal, in an endless loop (the earlier "S trap entered below M" / "CSR privilege check" mechanism was withdrawn on 20 Nov: an ADDI first at the handler faults the same way) | simulation only, cause unknown, no fix |
+| R-75 | a PC-capability id change while srevroot holds a table, then code under that id: the PC tracker's probe reads that id's slot in the context's table (a zero record), so every instruction of the M handler takes cause 25, forever. Same root as S-23 (ids carry no namespace), through the R-43 probe path. The earlier readings "S trap entered below M" and "declared illegal" are withdrawn: the second was the retirement tracer's stale cause label (fixed, capstone-ariane 0f59f7260) | sim only; option (a) prototype fixes it in sim; the spec choice (a)/(b)/(c) is the lead's |
 | M-16 | protected tshark did not return in 1 of 3 boots | no mechanism; Wireshark has no cost row |
 | R-73, R-74, R-44, R-28, S-21, S-22 | debug-module writes around tags; tag-cache fill race; CPMP tracker; audit items | open |
 | R-72, R-68, R-60, R-32 | registry says open, the fix commit is in P1 | silicon check and registry entry missing |
 | CREVOKE | not interruptible: 32-39 cycles a record, 39 ms on PostgreSQL's largest reset | never planned |
-| RTL assertions | reported: no assertion has ever run in simulation | to confirm, then enable |
+| RTL assertions | confirmed: none had ever run (no --assert on the Verilator rule). With a side Verilator 5.038 and --assert, 101 sites compiled in, 0 fired on P1's 95-test set (ISSUES R-78, 20 Nov) | done for P1; 5.008 cannot build them |
 | timing and area | WNS -13.173 ns; 91.9 % LUT, 99.7 % slices (v) | every addition needs room |
 
 ### 1.3 Hardware levers sized and not built, or built and not run
@@ -87,7 +87,7 @@ Specification: `capstone/docs/design/sublet-reference-model.md` at 32dde56a6b42.
 
 | Program | State |
 |---|---|
-| perlbench | only scalar heads protected (+5.3 %); bodies, hash entries, op slabs not; patch 0002 applied by no build; +789 M instructions unattributed; timer share 11 % unexplained |
+| perlbench | only scalar heads protected (+5.3 %); bodies, hash entries, op slabs not; patch 0002 applied by no build; +788.8 M in-context cycles of Perl 5.36 on suns.pl unattributed (cycles, not perlbench instructions: corrected 20 Nov); on SPEC's test.pl the protected image costs +15,591 M cycles (+5.84 %); timer share 11 % unexplained |
 | gcc | pools +5.1 %; all three allocators +15.4 % with a 2^22-record table, one boot. SPEC's `ggc_collect` returns at once (v), so "release at collection" cannot help; typed free lists, objects of 4 KiB and more, growing obstack objects unported; the collaborator's port needs one-operand CREVOKE and CRENEW |
 | mcf, lbm, x264, imagick, nab, xz | no allocator of their own (wrappers over `malloc`, or compiled out); the work here is code generation and memory: mcf's 112-byte arc and page-table walks, lbm's seven spills an iteration, imagick's filter loop |
 | applications | every P1 row but SQLite uses a two-operand patch, not Fig. 10's; memcached in-process; PHP one binary in two modes; SQLite `--size 100` deferred; most costs unattributed |
@@ -311,7 +311,7 @@ In this order; items 1 to 3 are independent of each other and can overlap.
    release at collection is not available. Split the cost per allocator. The collaborator's port is the design
    reference; contact with the collaborator goes through the lead.
 3. **perlbench:** bodies, hash entries and op slabs; land patch 0002; a variant with CRENEW and the liveness test;
-   attribute the 789 M extra instructions.
+   attribute the protected image's extra cycles on test.pl (+15,591 M) and Perl 5.36's on suns.pl (+788.8 M).
 4. **Applications:** the one-operand revisions of Fig. 10 in the same environment, ready for silicon when
    bitstream 4 exists; PHP with a pristine second binary; SQLite speedtest1 at `--size 100`; the Wireshark
    non-return root-caused (it returned in 2 of 3 boots on P1; no mechanism is recorded).
