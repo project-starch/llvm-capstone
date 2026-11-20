@@ -4485,6 +4485,56 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
+### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `OPEN 2026-11-20 — DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
+
+Siblings: R-43 (whose fix introduced the probe and chose fail-closed timeouts; its entry does not record the timeout path), R-35 (the verdict cache). R-75 and R-76 are on llvm-capstone `land/rtl-sublet-p2`, not yet on dev.
+
+**Two things, kept apart.**
+1. **The class, by design.** `load_store_unit.sv:324-331` (P1): before the rev-node unit accepts a probe the LSU waits
+   `RVC_PROBE_WAIT_PRE = 20'hFFFFE` cycles, after acceptance `RVC_PROBE_WAIT_POST = 20'd65535`; "Either bound expiring denies
+   (fail-closed), so a wedged rev-node still cannot become a core hang" (R-43, capstone-ariane bbd4d1478). The deny is the
+   timeout-DEAD arm, which raises cause 25 (`:1525-1528`, the DYN-bypass block; `CAPSTONE_DYN_BYPASS` is defined in the config
+   package). So anything that keeps the unit from serving a probe for a million cycles becomes a false memory-safety fault on
+   an access whose capability is live, rather than a slow access. Software cannot tell it from a revoked capability.
+2. **The instance, the variant only.** The sweep's `ldc` and `s06-query-route` fail on the variant and pass on P1
+   (`ic64-wt/.sup/swic64` against P1's `sim14-wt/.sup/pwsw6`, S12_MEM_DELAY 12). Traced in `ldc` (`ic64-wt/.sup/r43ic`, a
+   local sim-only trace of the unit's D$ traffic plus R43_TRACE; the P1 run with the same trace is `b1-scan/.sup/r43p1`):
+   - the variant's front end is faster (CAPCREATE commits at cycle 287, P1 390), so the first LDC (306) reaches the verdict
+     cache while the rev-node unit is still in its reset INIT_STAGE, writing and reading back dummy nodes 0-2
+     (`capstone_rev_node.anvil:858-868`); the capability's node is 2, so it MISSES and probes at 307;
+   - the probe is presented 1,048,575 cycles with ack = 0; `R43 probe-timeout pend=00000002 sent=0` (the PRE bound);
+     `R43 denial-latched id=00000002 arm=1000` (the timeout-DEAD arm); the core traps at 0x80000038 (mtvec unset, so it ends
+     in the boot ROM). The mcause value is in no log: "25" is read from the RTL arm;
+   - INIT's read of node 1 (0xBFF00000 + 0x010) is granted at 516 and returns at 1,048,937, after the timeout's flush (on P1:
+     granted 435, returned 619), so the unit never reaches IDLE_STAGE, the only stage that serves a probe.
+   - **Holder, by RTL reading, NOT traced:** the LDC's replay keeps load port 1 requesting every cycle
+     (`load_unit.sv:455`, `wt_dcache_ctrl.sv:276`, `:292`, killed in READ `:295-297`); that masks the write buffer's
+     lower-priority tag check (`wt_dcache.sv:322`, `wt_dcache_mem.sv:190-191`), so INIT's node-1 write never retires
+     (`wt_dcache_wbuffer.sv:358-370`) and the same-line read waits on `tx_rdwr_collision` (`wt_dcache_missunit.sv:238-244`). The
+     widened adapter (`wt_axi_adapter.sv:67-72`, AxiNumWords 2 -> 8) is consistent but rated unlikely by the audit: the held
+     write and read complete 47 cycles after a core-side flush the adapter never sees.
+   - **The ordering pair** (capstone-ariane `r77-probe-timeout` f12e12d25, `r77-early-ldc.S`, an LDC right after CAPCREATE at reset; `-DR77_DELAY=2000` puts ~4,000 cycles of
+     ALU work first; predictions in its header before the run): variant, no delay: the timeout, FAILED at the cycle limit;
+     variant, delay: no probe, SUCCESS at 6,510 cycles; P1, no delay: a probe presented 3,633 cycles, then ACCEPTED, SUCCESS at
+     4,237 cycles; P1, delay: no probe, SUCCESS at 6,757. So the early ordering is necessary on both trees, and only the
+     variant then starves the unit for good. The P1 wait of 3,633 cycles is a bounded reset-time hold (by reading the
+     adapter's page-bitmap clear, `wt_axi_adapter.sv:327-339`, TbmWords 4096; not traced).
+
+**RETRACTED the same day (surfaced to the runtime and board lanes):** a first chain said the stalled read CAUSED the miss
+("CAPCREATE's node never completes"). The LDC missed and probed at 306-307, before that read was granted (516), so the stall
+cannot be the cause; and P1's 3,632-cycle third read was called the same starvation in milder form, which it is not.
+
+**What P1's simulation can and cannot say.** `ldc` and `s06-query-route` on P1 at S12_MEM_DELAY 0, 2, 4, 6, 8, 10, 12, 14, 15
+(`sim14-wt/.sup/dly{0,2,4,6}`, `b1-scan/.sup/dly{8,10,14,15}`): no probe, no timeout, no exception (the knob is live: ldc's
+run length rises 6,300 -> 16,051 cycles). That knob scales memory latency uniformly; it cannot create the port contention
+the variant shows, so "P1 never times out in simulation" is NOT evidence that it cannot on silicon (the runtime lane's point).
+The delays 1, 3, 5, 7, 9, 11, 13 were not run; the sim14-wt runs carry no unit trace, only the absence of any R43 line.
+
+**Fix options (none chosen).** On the PRE bound, stall or retry instead of faulting, keeping fail-closed only for a unit shown
+wedged (a watchdog with its own cause); a distinct exception cause for a timeout, so software can tell it from revocation;
+remove the variant's starvation at its source once it is traced. Any I$-line or other cache-geometry variant needs the sweep
+before a seal: this one passed every gate the board lane ran before synthesis, and only the sweep's two tests caught it.
+
 ### R-74 — a page fill can start while a tag read of a word the page shares is in flight; the tag-word cache keeps no stale tag on the one instance measured `OPEN 2026-11-14 — MEASURED CLEAN ON ONE WINDOW INSTANCE in simulation, for the base TWC in service (fdk 3c6b9906c, the batch a47b588a1), the 16,384-entry TWC (capstone-ariane a948e4134) and the targeted variant, each with a forging control that forges. N = 1 window instance (1 of 24 fills), one test shape, the simulator built with the boards' crossbar setting: NOT a proof for every timing. A claim may cite this instance with that scope, never as "TWC fill safety is verified"`
 
 **The window.** Capability tags live in shadow DRAM behind `core/cache_subsystem/wt_axi_adapter.sv`, one tag byte per
