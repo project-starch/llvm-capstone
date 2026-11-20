@@ -10,8 +10,9 @@
 // i16 cmpxchg or atomicrmw into a loop on the aligned 32-bit word that holds
 // it. A global's capability is bounded to the global, so when the global's size
 // is not a multiple of 4, or it is not 4-aligned, the word can reach past the
-// bound and the lr.w faults (cause 5): a lone `static uint8_t` locked with
-// __atomic_compare_exchange_n, or CPython's standalone static PyMutex.
+// bound and the lr.w faults (cause 28 on QEMU): a lone `static uint8_t`
+// locked with __atomic_compare_exchange_n, or CPython's standalone static
+// PyMutex.
 //
 // This pass gives every defined global that is the target of a visible sub-word
 // cmpxchg or atomicrmw (the pointer operand, through constant offsets and casts)
