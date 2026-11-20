@@ -237,7 +237,10 @@ __attribute__((noinline)) static void frame_addresses(void)
  * range take the fill value (negative and wide values truncated), the bytes
  * outside keep theirs, it returns its destination, every 16-byte granule the
  * range touches loses its tag and every other keeps it; and exactly bounded
- * objects of 1-300 bytes are filled without a store outside them. */
+ * objects of 1-300 bytes are filled without a store outside them. Every range
+ * is filled twice, the second time with 0: a runtime built with
+ * CAPSTONE_MEMSET_CAP_ZERO writes a zero fill's whole granules as null
+ * capabilities, and the varied fill is 0 for only 13 of the 14,448 ranges. */
 static void *(*volatile memset_call)(void *, int, size_t) = memset;
 static int *slots[24];
 
@@ -249,9 +252,10 @@ static void memset_ranges(void)
 #ifdef __CAPSTONE_PURECAP__
     int tags = 1;
 #endif
+    for (int zero = 0; zero < 2; ++zero)
     for (size_t off = 0; off < 48; ++off)
         for (size_t len = 0; len <= 300 && off + len <= sizeof slots; ++len) {
-            int fill = (int)(off * 37 + len * 11) % 1024 - 512;
+            int fill = zero ? 0 : (int)(off * 37 + len * 11) % 1024 - 512;
             for (int i = 0; i < 24; ++i)
                 slots[i] = &cells[i];
             for (size_t i = 0; i < sizeof before; ++i)
