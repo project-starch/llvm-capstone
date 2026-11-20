@@ -156,10 +156,12 @@ fitting sites whose offset carries a relocation.
   the offset reads as 0, so the prediction counted it as fitting; the compiler cannot compress an offset that is
   unknown until link time.
 - The compiler compressed every compressible site. The prediction over-counted.
-- **The same applies to the census:** it reads linked images, where those offsets are resolved. Its c.ldc/c.stc
-  readings therefore include sites this compiler cannot compress unless the linker learns to.
-- The census's 9.77 % (perl) and 15.35 % (gcc) are upper bounds by more than register allocation. The measured
-  dynamic gain comes in step 4.
+- **RETRACTED the same day: "the same applies to the census".** The census reads linked images, where most folded
+  offsets resolve to values that do not fit (a nab example: -0x37c), so it never counted them.
+  - The folded sites that do fit on the images are 49 c.ldc and 17 c.stc on perl, and 244 and 51 on gcc (fold.py:
+    auipc, then scc gp, then the access, following copies and spills; on objects 91-100 % recall, over 99.5 %
+    precision).
+  - Without them the census set reads 9.77 % and 15.35 %, unchanged. The retraction is on dev at b33a7a87d6f6.
 
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
