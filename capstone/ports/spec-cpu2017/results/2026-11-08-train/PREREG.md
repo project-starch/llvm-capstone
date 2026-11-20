@@ -6367,3 +6367,35 @@ perlbench makerand 275.34 s, specdiff PASS. The probe printed:
 reproduced on silicon from plain Linux user mode. Bitstream 1 refuses it with cause 2, and costs no measurable time
 on perlbench, gcc or mcf. By Addendum 204's rule, the registry may say of R-76 "fixed on silicon (bitstream 1,
 sha256 01707b372e93…f83), defect reproduced on P1 from user mode (board 2, 21 Nov)".
+
+## Addendum 208 (2026-11-21 07:13 +08, outcome): Addendum 196, third runs on P1 and matched Plain; every row now has an interval
+
+Every third run of Addendum 196 is inside its pre-registered band: Full 7 of 7, +Spatial 6 of 6, Plain 8 of 8 (x264
+included, as its second run). Each boot reached a shell and ran the smoke steps, task 70 waived. No illegal-instruction line and no panic.
+specdiff PASS everywhere except Plain x264's known imagevalidate NO-OUTPUT shape, identical to its first run, with
+outputs hashed. The readings, with each boot's `board.txt` hash, are in `perf/natstage/RESULTS` (20-21 Nov).
+
+The table gives each row's mean over its runs (three, x264 two), the spread in brackets ((max - min) / mean), and the
+cost against matched Plain: the ratio of the means, with the extreme pairing of runs in brackets. Seconds follow the
+paper's convention: the benchmark's own timed commands. For imagick that is the convert command alone, and for x264
+the encode alone; their untimed checks (imagevalidate, the ldecod input generator) are left out.
+
+| Row | Full mean (spread) | +Spatial mean (spread) | Plain mean (spread) | Full vs Plain [min, max] | +Spatial vs Plain [min, max] |
+|---|---|---|---|---|---|
+| perlbench | 13,074.29 (0.015 %) | 12,834.43 (0.092 %) | 10,806.26 (0.034 %) | +20.99 % [+20.96, +21.01] | +18.77 % [+18.68, +18.83] |
+| gcc | 1,771.23 (0.043 %) | 1,752.23 (0.044 %) | 1,473.81 (0.094 %) | +20.18 % [+20.10, +20.27] | +18.89 % [+18.80, +18.97] |
+| mcf | 5,944.52 (0.022 %) | 5,658.92 (0.035 %) | 4,873.57 (0.096 %) | +21.97 % [+21.92, +22.06] | +16.11 % [+16.05, +16.20] |
+| lbm | 989.21 (0.013 %) | 989.32 (0.024 %) | 1,003.92 (0.024 %) | -1.47 % [-1.48, -1.45] | -1.45 % [-1.48, -1.43] |
+| nab | 694.02 (0.020 %) | 691.72 (0.017 %) | 659.22 (0.027 %) | +5.28 % [+5.26, +5.31] | +4.93 % [+4.91, +4.96] |
+| xz | 4,956.87 (0.009 %) | 4,956.80 (0.002 %) | 4,682.78 (0.018 %) | +5.85 % [+5.84, +5.87] | +5.85 % [+5.84, +5.86] |
+| imagick (convert only) | 11.40 (0.088 %) | 11.39 (0.088 %) | 10.61 (0.094 %) | +7.51 % [+7.45, +7.64] | +7.42 % [+7.35, +7.55] |
+| x264 (encode only) | 30,673.40 (0.004 %) | 30,670.31 (0.008 %) | 33,050.53 (0.059 %) | -7.19 % [-7.22, -7.16] | -7.20 % [-7.23, -7.17] |
+
+Eight-row geometric means: **Full +8.66 %, +Spatial +7.54 %**. The paper prints 8.7 % and 7.5 %. Every row's spread is at
+most 0.12 %, and every Full/+Spatial cost against Plain moves by at most 0.2 percentage points between the extreme
+pairings of runs. So the paper's SPEC numbers carry intervals of that size, and none of them changes at the paper's
+precision. Nothing changes in the paper; the intervals are for the lead, and any wording is the lead's call.
+
+A slip of this lane's, caught while writing this: a first computation summed every command of imagick and x264,
+validation included, which reads imagick at +4.38 % and x264 at -6.86 % and gives geomeans +8.31 / +7.19 %. That is not
+the paper's convention. The table above is.
