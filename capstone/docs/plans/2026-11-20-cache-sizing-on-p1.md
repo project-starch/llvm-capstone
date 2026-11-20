@@ -145,3 +145,28 @@ Against the predictions:
 lane's 95-test sweep on 3ce15b95741a, per the runtime lane's slot decision. Placed-LUT prediction: P1's 187,368 + about
 1,060 = about 188,400 ± 2,500. The slice prediction follows the LUT; P1's 99.71 % leaves about 150 slices, so the
 route-failure branch registered above still applies.
+
+## Reading: the I-cache full build routes and passes 4 of 4 (apollo, tag p1ic-3ce15b957, 2026-11-20)
+
+Launched 09:25:58Z, on the runtime lane's go after the gate. Sealed 10:59:28Z as
+`caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-ic64b_3ce15b957.bit`.
+- Bitstream sha256 d37f68ca86fe4a11cd9fa1a5134d03031ba1554e0371d7e6f88cffbf9c8299d8; the stored copy hashes equal.
+- Tarball sha256 fab8662ea75b…; PROVENANCE HEAD is 3ce15b95741a.
+- The guard exited 0 at a run peak of 25.02 GB, and the collector peaked at 14.29 GB. The in-flight loops-only gate
+  PASSed, and the LUTLP stop read 0.
+
+Graded with grade_full.py against P1's seal (`<mnt-hdd>/synth/p1ic-3ce15b957-full-out/grade-board/grade-full.txt`):
+
+| Key | Reading | Prediction | |
+|---|---|---|---|
+| placer congestion ≤ 5 | 4 (P1 4) | | PASS |
+| check_timing loops | 0 | 0 | PASS |
+| WNS in the ±3.74 null band | -12.136 ns (P1 -13.173, Δ +1.037) | inside the band | PASS |
+| routed clean | 0 errors, 245,110 / 245,110 | | PASS |
+| placed LUT (reported) | 188,412 (92.45 %, +1,044) | about 188,400 ± 2,500 | in |
+| placed FF (reported) | 77,006 (+463) | | |
+| slices (reported) | 50,748 (99.60 %, -52) | "follows the LUT" | lower than P1, not higher |
+
+The route-failure branch did not fire. **The seal is held, not handed over:** it goes to the runtime lane only after the
+rtl lane's 95-test sweep on 3ce15b95741a reads clean. A failed sweep discards it unflashed. The board pairing is the
+runtime lane's: this bitstream against P1 differs in the I-cache line width only.
