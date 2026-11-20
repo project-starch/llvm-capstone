@@ -37,7 +37,8 @@ only, checked with `git diff d83d3a633 <hash>`.
   UNOPTFLAT 39, BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 1480, CASEOVERLAP 2, SELRANGE 100, ANVIL_UNOPTFLAT 0. 9,562 lint lines,
   0 `%Error`. Anvil was regenerated first, and the negative control (an unwritable OUT) reads BLOCKED (rc 1). Run in
   cva6-build-rv with verilator 5.008 (`.run-lint-host.sh`).
-- **perf/p1-l1d64k 317b4fab118d:** pending; it is not needed before its deferred launch. A first run on both branches
+- **perf/p1-l1d64k 317b4fab118d: PASS, every counter at baseline** (the same eleven values; 9,574 lint lines, 0 `%Error`,
+  negative control BLOCKED). Read after the I-cache gate's launch; it is not needed until the L1D's deferred launch. A first run on both branches
   ERRORED and is void, not a reading: the worktree lacked core/cvfpu's nested submodule `fpu_div_sqrt_mvp`, so verilator
   stopped with 8 errors before analysis.
 
@@ -107,3 +108,40 @@ returned to the runtime lane.
 - Slots: the I-cache gate runs in one slot; the other is held for the rtl lane's bitstream 1. If that hash is not
   ready within about an hour of the gate finishing, the slot goes to the spatial-only core (runtime lane, 2026-11-20).
   A full build of the I-cache variant waits for both the gate's GO and the sweep.
+
+## Reading: the I-cache synthesis-only gate is GO, 3 of 3 keys (apollo, tag p1ic-3ce15b957, 2026-11-20)
+
+Record: `<mnt-hdd>/synth/p1ic-3ce15b957-gate-out/grade-ic.txt`; chain log `<mnt-hdd>/synth/twc/post-p1ic-3ce15b957.log`;
+kept checkpoint `twc/gate-synth-p1ic-3ce15b957.dcp` (sha256 0b8571a8cab6a589…). The guard stopped the job after
+synth_design, as designed (rc 143 from the gate copier), at a peak RSS of 27.54 GB (P1's gate: 27.35).
+
+| Key | Reading | |
+|---|---|---|
+| 1 memory | growth across Technology Mapping +11.9 MB (P1 +8.0); TM peak 5,109.5 MB (P1 5,041.7); whole-run peak 5,177.6 MB | PASS |
+| 2 loops | no "Found timing loop" in the `.vds` (P1 0); Synth 8-326 0; check_timing loops 0 (toy 1); LUTLP-1 0 (toy 1); in-flight loops-only PASS; source-list watch OK | PASS |
+| 3 fit | core LUT 163,458, +1,055 against P1 (limit +7,500); top RAMB36 161 of 445 | PASS |
+
+Per module, post-synth, against P1's gate (reported):
+
+| Instance | LUT | FF | RAMB36 |
+|---|---|---|---|
+| top | 190,750 (+1,057) | 78,580 (+447) | 161 (+48) |
+| i_cva6 | 163,458 (+1,055) | 54,509 (+414) | 146 (+48) |
+| i_cache_subsystem | 20,500 (+1,032) | 5,800 (+414) | 144 (+48) |
+| i_cva6_icache | 1,903 (+869) | 170 (+28) | 72 (+48) |
+| i_adapter | 5,694 (+163) | 1,320 (+386) | 48 (+0) |
+| i_wt_dcache | 12,903 (+0) | 4,310 (+0) | 24 (+0) |
+| i_frontend | 2,175 (+18) | 774 (+0) | 2 (+0) |
+
+Against the predictions:
+- Reading (a) held: BRAM was kept. 72 I-cache rows (8 tag and 64 data cuts, each 64 x 64) replace P1's 24 (256 x 64),
+  so +48 RAMB36 exactly. The Distributed RAM table is unchanged.
+- LUT: +1,055 at core, inside the combined prediction (+1,000 to +4,500 for reading (a) plus the fetch-side mux). TM
+  growth is within ±100 MB of P1's.
+- **FF +414 at core is a miss, below the predicted +500 to +1,500.** It is almost all the adapter's refill shift
+  register (+386).
+
+**Next:** the full build (tag p1ic-3ce15b957, name `caplifive_…-pagedtbl-ic64b_3ce15b957.bit`) waits only for the rtl
+lane's 95-test sweep on 3ce15b95741a, per the runtime lane's slot decision. Placed-LUT prediction: P1's 187,368 + about
+1,060 = about 188,400 ± 2,500. The slice prediction follows the LUT; P1's 99.71 % leaves about 150 slices, so the
+route-failure branch registered above still applies.
