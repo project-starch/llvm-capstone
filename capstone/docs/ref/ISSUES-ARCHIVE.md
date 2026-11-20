@@ -3380,6 +3380,15 @@ CAPENTER's encoding was wrong (0x44 byte) and CAPEXIT was a compiler-only mnemon
 > `reloc-names.s` (the 2026-09-04 XFAIL pin) reported XPASS and lost its marker. MC/Capstone + CodeGen/Capstone
 > lit 100/100. Evidence: the symptom object (`jt.o`, 23 "Unknown" names on 2026-09-05) now shows 0.
 
+> **Residual, found 2026-11-20 and fixed the same day.** `lld/test/ELF/emulation-capstone.s` failed from this fix
+> on: it checks the linked file's header with `Machine: 0x103`, which llvm-readobj printed while it had no name for
+> e_machine 259, and since f94eb41a900f it prints `Machine: EM_CAPSTONE (0x103)`. The linker was never at fault:
+> the test failed alike on a linker without and with dev's a3fae7063a56. The lit run above covered MC/Capstone and
+> CodeGen/Capstone only, so no lld test was re-read. The check now names the machine; all three of the test's links
+> pass on both linkers, and the same check fails on a riscv64 link (`EM_RISCV (0xF3)`). Any other test that pins a
+> raw e_machine for Capstone has the same shape; a grep of llvm/test, lld/test and clang/test for `0x103` finds no
+> other such check.
+
 ### C-39 — a variable-index vector element access zero-extended its index into the c128 pointer type `FIXED 2026-09-05 (c11b8fb6b162)`
 
 llvm-stress, every seed: `getVectorSubVecPointer` built the element pointer in address space 0. Fuzz finding F-01 (`tests/fuzz/findings/F01-vector-elt-pointer-zext/`). Pin: `fuzz-f01-vector-elt-pointer.ll`. The next thing on the same path was F-02/F-03 (fixed 2026-09-05, `fuzz-f02-f03-vector-elt-stack-temp.ll`).
