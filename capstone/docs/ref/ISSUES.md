@@ -4523,6 +4523,31 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
+### R-78 — no RTL assertion had ever run in simulation: the Verilator build never passed --assert, and Verilator 5.008 cannot build the model with it `RESOLVED AS AN INSTRUMENT 2026-11-20 — 101 assertion sites compiled in, 0 fired on P1's 95-test set, on a SIDE instrument (Verilator 5.038 with --assert); gating sweeps stay on 5.008`
+
+**The gap.** The simulation flow's Verilator command (`Makefile` verilate_command, :645-668) has no `--assert`, and
+Verilator compiles every assertion out without it (only the VCS rule in `verif/sim/Makefile:217` passes `-assert`). Of
+the 130 assertion statements in `core/` (vendored FPU and HPDcache excluded), 55 sit under `ifndef VERILATOR` and 64
+inside `translate_off` regions; none had run in any simulation this project recorded.
+
+**Switching them on.** capstone-ariane `sim-assert` e5f9af9a8: `SIM_ASSERT=1` adds `--assert`; `+define+SIM_ASSERT_PROBE`
+adds an assertion that must fail (the positive control; it fires as "Assertion failed ... SIM_ASSERT_PROBE fired").
+**Verilator 5.008 cannot build the model with --assert:** its generated C++ uses an undeclared loop variable (`__Vilp`)
+while sampling the scoreboard's wide `commit_instr_o` array for a concurrent assertion, a code-generation defect in the
+tool. So the assertion run uses Verilator 5.038 (tag v5.038, f037ac50b419) from its own install, with cva6.py's version
+gate opened only by `CVA6_ASSERT_SIDE_VERILATOR`. It is a side instrument: every gating sweep and cycle baseline stays
+on 5.008, because a tool change moves cycles.
+
+**Reading** (P1 d83d3a633, the 95-test sweep list, S12_MEM_DELAY 12): **101 distinct assertion sites compiled in**
+(immediate and concurrent assertions and the unique/priority-case checks `--assert` enables: decoder 14, config_pkg
+11, pmp_entry 10, csr_regfile 6, alu 6, ariane_pkg 5, wt_axi_adapter, store_buffer and ex_stage 4 each, the
+scoreboard's 2, and 30 more files); **0 fired** in the 92 tests that produce logs (the three random generators never
+do); no other `%Error`. The probe control fires under the same build and is matched by the same counter.
+
+**Caveats.** Whether Verilator 5.038 compiles the assertions inside `translate_off` regions was not established
+separately; the 101 sites are what the built model contains, read from its generated code. A zero on P1's 95 tests is
+a statement about those tests' coverage, not about the RTL in general.
+
 ### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `OPEN 2026-11-20 — DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
 
 Siblings: R-43 (whose fix introduced the probe and chose fail-closed timeouts; its entry does not record the timeout path), R-35 (the verdict cache). R-75 and R-76 are on llvm-capstone `land/rtl-sublet-p2`, not yet on dev.
