@@ -6137,3 +6137,46 @@ nab 41,890 s; Plain lbm 14,889 s, mcf 24,499 s, nab 39,921 s. The train-size cos
 read from its own `result.json`.
 
 **Dry runs** (stubbed): `perf/natstage/dry201/`.
+
+## Addendum 202 (2026-11-20 17:52 +08, before they run): SPEC train size of perlbench, imagick and x264 on all three arms; xz train does not fit the payload cap
+
+**Why.** The rest of the train set after Addenda 200 and 201, on the same footings: Full on board 2, +Spatial on
+board 1, matched Plain at 100 Hz on board 3. Each chain waits for that board's Addendum 200 or 201 chain.
+
+**Stages.**
+- *Full and +Spatial* (`perf/natstage/board-frcdkms{a3,spa3}-train/`). `perf/natstage/mk-native-train.py` applies
+  mk-native-stages.py's two pre-edits to the module-route train stage, then `make-native-stage.py` with the
+  executable of the paper's stage, then bkit91's `make-train-stage.sh`. The pre-edits are: imagevalidate runs as
+  riscv-base's plain build, as on the test stages, and perl's `$^X` points at the native image (train has no test.pl
+  line, so for perl nothing is rewritten). Executables are byte-identical to the paper's stages: perlbench from
+  `stages-frcdkms{a3,spa3}-full`, imagick and x264 from `stages-frcdkms{a3,spa3}`. Sources:
+  `spec/stages-train-fair/` 500.perlbench_r-…-unify-nd (5 commands), 538.imagick_r-…-devmk, 525.x264_r-…-devmk-c3f
+  (with ldecod and three imagevalidate checks).
+- *Plain* (`perf/fair/stages-train/`). The train-plain-rv64r stages with the rv-al3 executables: perlbench
+  9304130748a03c57, imagick 38b235f64538d58e, x264 9154b69b6104afb9, imagevalidate 08168aeee1e99aca. These are the
+  RVAL hashes of Addenda 139 and 155.
+- Order in every chain: perlbench, imagick, x264. x264 comes last because its board stage (gzip 7.6 MB) puts the
+  firmware closest to the kit's 26,000,000-byte cap. Timeouts are 172,800 s each.
+
+**xz train is not run.** On bkit91, firmware has been about 17.4 MB plus the gzip size of the stage, rounded up to
+2 MiB (mcf: 4.4 MB stage, 19,566,088 B; perlbench: 15.4 MB, 23,760,392 B). xz train's command 0 stage gzips to
+9.7 MB and command 1 to 17.1 MB, so about 27 MB and 34 MB: over the cap, and command 1 also over the console's
+32 MB upload limit. xz train waits for the firmware-cap work of the programme (step 0.4). It is listed as not
+fitting, not shrunk.
+
+**Prediction.** First readings, Tier 1 and specdiff as Addendum 200. Estimates from the native x86 train/test
+instruction ratio times the paper's test seconds (perlbench x2.22, imagick x3,639, x264 x0.81):
+
+| Arm | perlbench | imagick | x264 |
+|---|---|---|---|
+| Full | 29,026 | 62,773 | 26,556 |
+| +Spatial | 28,490 | 62,736 | 26,551 |
+| Plain | 23,988 | 60,116 | 28,520 |
+
+The V1f native train runs of 11 Nov, scaled by 0.397, give perlbench about 21,450 s and imagick about 15,200 s on
+Full, so the estimates for imagick disagree by four times.
+
+**Refutation and stops.** As Addendum 200. A firmware over the cap stops that chain at its bake, before any boot. It
+is recorded as not fitting.
+
+**Dry runs** (stubbed): `perf/natstage/dry202/`.
