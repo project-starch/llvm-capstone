@@ -92,3 +92,14 @@ on correct code.
 
 Measured as above: the whole port, with these lists, costs +0.750 % of gcc's code on train01 against the arm with
 both fixes; bitmap +0.236 %, lists.c +0.034 %, the five others +0.001 %.
+
+### Objects of 4 KiB and more; growing obstack objects
+
+`502.gcc_r/large-port.py` replaces the port's 4 KiB limit with `sublet_exact` (in sublet-port.h: whether CDERIVE holds
+the bounds exactly, following QEMU 9e69171f1c's encoder), at the GC heap's allocation and release, at the phi list and
+at the obstack's issue. On train01 the GC heap's 1,136 objects of 4 KiB or more are all exact and now have lifetimes of
+their own (`large-count.py` is the counting build that showed it); the obstacks finish none. Cost +0.33 M instructions;
+the whole port +0.752 % of gcc's code.
+
+**Limit: a growing obstack object has no lifetime of its own until obstack_finish.** gcc reads a growing object's base
+in pretty-print.c (three places) and reorg.c (one); none runs on train01.

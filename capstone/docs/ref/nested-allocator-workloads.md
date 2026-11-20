@@ -3363,3 +3363,8 @@ gcc reads released names through old references by design (`SSA_NAME_IN_FREE_LIS
   list ported, train01 faults there (cause 25, after 1.47 G instructions). The fix swaps the two calls; output unchanged,
   -543 instructions; it is in every arm, with a new baseline. Whether either gcc fix is mentioned anywhere outside this
   record is the lead's decision.
+- **Objects of 4 KiB and more** (2026-11-20): the GC heap's 1,136 large objects on train01 are all exactly
+  representable (powers of two on page boundaries), so they now get lifetimes too (`large-port.py`); obstacks finish
+  none on train01. +0.33 M instructions; **the whole gcc port +0.752 %** of gcc's code against the arm with both gcc
+  fixes. Growing obstack objects stay without a lifetime of their own until obstack_finish: gcc reads a growing
+  object's base in four places (pretty-print.c, reorg.c), none of which runs on train01.
