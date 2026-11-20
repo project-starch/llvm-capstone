@@ -129,6 +129,38 @@ The method's control: on the two probe programs, prediction and reading agree in
 the five 16-bit FP forms become 4-byte (1 + 5 = 6). A shortfall on SPEC is a compiler defect to find, not variance.
 The dynamic prediction for step 4 is registered separately, once CRVC0's profiles exist.
 
+## Step 3 reading (2026-11-21): six of the eight forms as predicted; c.ldc and c.stc fewer, by exactly the relocated sites
+
+CRVC1 was built with the same compiler (clang 518578ef40a76b19, lld b9f671e793ab869d) and read on its compiled
+objects.
+- **As predicted:** c.ldcsp, c.stcsp, c.cincoffset16sp, c.movc, c.scc and c.cincoffset match in every benchmark;
+  no 16-bit FP form remains; 4-byte fld/fsd rose by exactly CRVC0's 16-bit FP count in every benchmark.
+- **Images:** all eleven carry flags 0x101 (`EF_CAPSTONE_CRVC` with RVC) and the CRVC magic. Text shrank 9.4 % on
+  perl and 10.8 % on gcc (the census said 9.71 % and 10.67 %).
+- **Not as predicted:** c.ldc and c.stc came in below the prediction.
+
+| benchmark | c.ldc predicted / got | c.stc predicted / got | fitting sites with a relocation (ldc / stc) |
+|---|---:|---:|---:|
+| perl | 18,094 / 15,365 | 6,145 / 5,112 | 2,729 / 1,033 |
+| gcc | 77,962 / 67,757 | 28,118 / 27,730 | 10,205 / 388 |
+| x264 | 5,709 / 5,547 | — | 162 / 0 |
+| mcf | 82 / 80 | 94 / 93 | 2 / 1 |
+| imagick | 9,402 / 9,319 | 5,042 / 5,023 | 83 / 19 |
+| nab | 1,073 / 815 | 464 / 462 | 258 / 2 |
+| xz | 447 / 369 | — | 78 / 0 |
+| lbm | as predicted | as predicted | 0 / 0 |
+
+**CORRECTION of the pre-registered prediction.** The shortfall equals, in every benchmark and both columns, the
+fitting sites whose offset carries a relocation.
+- These are `-capstone-fold-global-lo` sites: a global's `%pcrel_lo` folded into the load or store. In an object
+  the offset reads as 0, so the prediction counted it as fitting; the compiler cannot compress an offset that is
+  unknown until link time.
+- The compiler compressed every compressible site. The prediction over-counted.
+- **The same applies to the census:** it reads linked images, where those offsets are resolved. Its c.ldc/c.stc
+  readings therefore include sites this compiler cannot compress unless the linker learns to.
+- The census's 9.77 % (perl) and 15.35 % (gcc) are upper bounds by more than register allocation. The measured
+  dynamic gain comes in step 4.
+
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
 `CVA6Cfg.RVZCB`), with `CVA6ConfigZcbExtEn = 1` in `capstone_cv64a6_imafdc_sv39_config_pkg.sv`.
