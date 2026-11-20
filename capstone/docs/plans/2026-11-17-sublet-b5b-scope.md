@@ -123,12 +123,21 @@ cannot be a must-pass for it.
 
 **Spec question for the lead (restated):**
 - (a) The 2026-10-20 ruling is revised: the PC verdict is re-resolved on a namespace change. A sim-only prototype,
-  capstone-ariane r75-reresolve 1a1a3f33a, passes `va-rc-trap` and costs nothing measurable on the 95-sweep; whether
-  that sweep exercises it is being counted.
+  capstone-ariane r75-reresolve 1a1a3f33a, passes `va-rc-trap`. With a firing print (ed0205197) it fires 4 times in
+  `va-rc-trap` and 5 in `-z`, and ZERO times in the 95-sweep. Its cost is therefore UNMEASURED outside the R-75 arms;
+  the only cost reading is +64 cycles on `va-rc-trap-z`.
 - (b) The reference is changed to cache. This is now moot, because the reference has no PC check to cache.
 - (c) Ids gain a namespace.
-- (d) (new, untested) The LSU's ALLOW/DEAD records are cleared in the cycle the table term changes, rather than one
-  registered cycle later.
+- (d) (new) The LSU's ALLOW/DEAD records give no PC verdict from the cycle the live namespace differs from the held
+  copy until the flush has cleared them, and no probe starts while the change is pending. This is a sim-only
+  prototype, capstone-ariane r75-earlyclr b7ea390a1, under `R75_EARLYCLR`; the ruling and the PC tracker are
+  unchanged.
+  - With the define, every R-75 arm passes: `va-rc-trap` 93,870 cycles, `-p` 93,933. The same tree without it fails as
+    P1 does.
+  - `-z`, `-zp` and `va-fetchsplit-s` read the same cycles with and without it.
+  - The 95-sweep is identical to P1 in values, RVFI and cycles, but carries no firing print, so its cost outside the
+    arms is unmeasured, as for (a).
+  - It adds a term to the LSU's verdict path and is not synthesised.
 The letters keep their earlier meanings. The reference cannot break the tie, because it has no PC-liveness check.
 
 ## The scope question for the lead
