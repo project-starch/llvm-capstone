@@ -2688,6 +2688,44 @@ Read at: capstone-ariane fe4810dd1 = the local stage-B batch on C.5a 1fc2cd5aa. 
 handshake trim, LDC rs1, R-32, R-68's NI rule, sim traces) leave ariane_pkg.sv, the DYN unit and the store path unchanged;
 capstone-qemu 0542c5556c2d (virtual-capstone) and d2bac4e08a21.
 
+## Q-36 — a scalar store through an UNINITIALISED capability: the specification and QEMU allow it, silicon raises 26 in M-mode and checks nothing in a domain `OPEN — filed 2026-11-20 by the compiler lane, from source (spec eadaf872705e, RTL 6d0e754d5 and 8522d72fe, QEMU 0542c5556c2d); no consumer found`
+
+**STC through UNINIT agrees everywhere.** The specification (`capstone-academic-spec/parts/mem-access-insn.adoc:85-104`)
+allows it. A nonzero immediate raises 29, the bounds are [base, end − 16], and the cursor advances by 16. The RTL
+decodes STC to `fu = CAPSTONE_DYN` and checks it in the DYN unit (`capstone_dyn_unit.anvil:712-767` at 6d0e754d5,
+`:704-757` at vp2c), with the same rules. QEMU's `capstone_check_access` and `helper_finish_cap_store` apply them
+too (`op_helper.c:1944-1946, :2105-2111, :2229-2243`).
+
+**Scalar stores (sb/sh/sw/sd, and fsw/fsd, which decode to `fu = STORE`) do not agree:**
+- Specification (`parts/existing-insn.adoc:252-270`): allowed. An immediate other than 0 raises 29, the access is
+  bounded by its size, and the cursor does not advance. fsw/fsd are not covered in this checkout.
+- QEMU: allowed (`op_helper.c:1944-1946`, `is_store && type == UNINIT`), bounded by `cap_in_bounds`, no cursor
+  advance. It differs from the specification twice: it does not raise 29 for a nonzero immediate (`:2105` tests
+  `size == 16` only), and it applies the write-permission check to UNINIT (`:1970`), which the specification limits
+  to linear and non-linear.
+- RTL in M-mode with capability mode on: cause 26 before any other check (`load_store_unit.sv:1416-1418`, gated at
+  `:1390-1393`; the same at vp2c `:1318-1321, :1344-1346`). Too strict against the specification.
+- RTL outside M, where domains run: the base's type is not consulted. Only the CPMP window check applies
+  (`pmp_data_if.sv:387-390`), so the store is neither bounded to the capability nor checked for its immediate. Too
+  permissive. This is the same gate R-30 and R-31 record as measured inert in domains (the 2026-08-04 probe: a
+  store through a base with no capability metadata did not trap), and the same gate governs scalar LOADS. So in a
+  domain on silicon, a plain load through a sealed or uninitialised capability is not refused either.
+
+**Consequences.**
+- A monitor, runtime or compiler output that stores through an UNINIT base with a scalar store works under QEMU and
+  traps with 26 on silicon in M-mode. capability-loop-addressing.md (lines 65-67) relies on exactly that ("ordinary
+  stores at immediate zero ... can use an UNINIT base"), which is right per the specification and QEMU, and wrong
+  for M-mode silicon.
+- In a domain on silicon, ordering is the only protection against a load through an invalid base. If an
+  instruction that would trap on the base (CIncOffset raises 26 on sealed and uninitialised) comes before the load,
+  the domain traps before reading; if it is moved after, the domain reads first. This is why the compiler lane's
+  -capstone-enable-sink-loop-increment (lane compiler/sink-loop-increment, not on dev) may move a trapping increment
+  only when its base is proven valid.
+
+**Not resolved:** the CAPSTONE_DYN_BYPASS and CAPSTONE_ITFC_EN define state of a given bitstream (the STC verdict is the
+same on both paths); the RTL at the superproject's pin 776d9d859 (6d0e754d5 and vp2c were read); and whether any
+shipped code executes a scalar store through UNINIT.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
@@ -11219,7 +11257,10 @@ unfixed compiler the run with debug information fails (an extra `mv a0, a0`) and
 
 **Residual, OPEN.** gcc's `calls.o`, function `emit_library_call_value_1`: Loop Strength Reduction (generic LLVM)
 reuses an existing `zext` for a loop's trip count under `-g` and forms `%wide.trip.count` without it, the first
-difference in the pass-by-pass comparison. Not Capstone code; not yet reduced.
+difference in the pass-by-pass comparison. Not Capstone code. Narrowed the same day: the loop enters LSR identical
+with debug stripped and leaves it different, so the divergence is inside LSR or the SCEV state it inherits; it
+reproduces under `llc` from the code-generation input of `calls.c` but not under `opt -passes=loop-reduce` alone on
+the module as LSR receives it.
 
 **Before this fix**, a `-g` build of any of these benchmarks did not run the measured code: perlbench 9, gcc 24 and
 imagick 2 objects had different instructions.
