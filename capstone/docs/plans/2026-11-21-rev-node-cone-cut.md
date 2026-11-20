@@ -59,6 +59,28 @@ UNOPTFLAT 39, BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 1480, CASEOVERLAP 2, SELRANGE 
 names are identical to the bitstream-1 tree's. Lint counts constructs and cannot see path depth, so this says the cut
 adds no hazard; it says nothing about what the cut buys.
 
+**Pairing gate (read 2026-11-21, S12_MEM_DELAY 12; P1 side = the bitstream-1 tree 9e801ab5e, whose ex_stage is P1's):**
+12 table-namespace arms (va-alloc-csret, va-alloc, va-runv, va-srevroot, va-flat, vp3-idx18-a1/a2/a3, va-runv-r59,
+r12-recl-stale, va-csmint-emu, va-fetchsplit-s):
+
+| tree | values against P1 | end |
+|---|---|---|
+| cut 5155e8e02 | 12 of 12 identical | all SUCCESS; cycles move by -77 to +12 per arm |
+| CUT_MUT_LIVE (b5c955856) | 12 of 12 identical, cycles equal to the cut's | unobservable, as predicted: the invariant held in every arm |
+| CUT_MUT_STALE (b5c955856) | 11 of 12 differ | those 11 end FAILED at the 2 M-cycle limit; r12-recl-stale keeps its values, 6,743 -> 72,015 cycles |
+
+So the arms catch a real mispairing, and the cut's pass is a reading.
+
+**95-sweep on 5155e8e02 against P1's pwsw6 (read 2026-11-21, dirty=no):**
+- RVFI traces identical on 92 of 92, with 26 parked (prefix only);
+- values and readings identical on 91;
+- cycles moved on 2 tests by +1 each (s07-ldc-overlap-displace 6,719 -> 6,720, s07-ldc-chain-forward 11,378 -> 11,379),
+  the cut's one cycle per record read;
+- the one "differ" is r30-fill-init's retired count, 997,110 -> 997,109. It is a loop parked at the 2 M-cycle limit, and
+  its RVFI prefix is identical.
+
+As pre-registered: only cycles move.
+
 ## Keys for the synthesis-only gate (P1's gate as reference: core 162,403 LUT, mapping 5,041.7 MB)
 
 | key | prediction | if missed |
