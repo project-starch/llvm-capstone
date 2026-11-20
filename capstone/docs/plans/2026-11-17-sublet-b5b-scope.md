@@ -87,39 +87,49 @@ Re-read at source here:
 So **the trap route is an addition, not a deletion**. Protected U, S rule 1 and the tagged sscratch give the
 processor a per-access check outside M that it has never had. And CPTAG is a new hardware structure.
 
-## R-75 IS live on the trap route (corrected 2026-11-20)
+## R-75 and the trap route (corrected twice on 2026-11-20)
 
-**WITHDRAWN:** this section said "R-75 does not block the trap route": a trap-route S, running with srevroot non-zero
-by design, would not meet it, because the defect needed a service resume and a second escape. That rested on R-75's
-first mechanism (an illegal instruction from the CSR privilege check), which was RETRACTED on 2026-11-20 (ISSUES R-75;
-the cause had come from the retirement tracer's stale label, fixed on capstone-ariane rvfi-tracer-cause 0f59f7260).
+**WITHDRAWN, twice the same day.** First: "R-75 does not block the trap route". It rested on R-75's first mechanism (an
+illegal instruction from the CSR privilege check), RETRACTED because the cause came from the retirement tracer's stale
+label (fixed on capstone-ariane rvfi-tracer-cause 0f59f7260). Second, the version that replaced it: "R-75 IS live on
+the trap route: S holds srevroot by design and changes its PC capability at every capability jump, so it meets the
+same shape". Its directed-test spec ("an M-minted PC capability, srevroot non-zero at S, an id change at S, then code
+at S and then at M") went with it, as did the framing "the ruling and the reference model's per-privilege store
+choice disagree for exactly this case". `va-fetchsplit-s` has exactly that shape and PASSES on P1 (ISSUES R-75).
 
-**What R-75 is** (ISSUES R-75, localised on P1 by matched readings): after an escape the PC tracker re-adopts the caller's
-PHYSICAL code capability, and the R-43 probe resolves it in the table at srevroot (DEAD), where under srevroot 0 the
-same id is ALLOW; code under that capability then takes cause 25 (here the M trap handler, for ever). The trigger is a
-PC-capability id change while srevroot holds a table, then code under that id. The resume only supplies the id change
-in the arm; a trap-route S, which holds srevroot by design and changes its PC capability at every capability jump,
-meets the same shape.
+**What R-75 is** (ISSUES R-75, localised on P1 by matched readings and the one-variable pair `va-rc-trap-p` /
+`va-rc-trap-zp`, claim-audited):
+- The PC check and its probe run only at M.
+- The caller's physical PC id, re-adopted unresolved after an escape, is probed during the switcher's RESUME transit,
+  at M with `sup_active`, which selects the table namespace. There ids 0 and 1 are header slots, so the probe reads DEAD.
+- That DEAD record is still matching in the one cycle between the M entry that drops the table term and the registered
+  namespace flush that clears it, so the M trap handler gets DEAD and takes cause 25 for ever.
+- The 2026-10-20 ruling keeps the stale verdict from being undone; it does not produce it.
 
-**The reference model chooses the store by the RUNNING privilege, per operation** (capstone-qemu 9289114e06,
-`target/riscv/capstone_table.c:171-177`): `if (env->priv == PRV_U) return env->capstone_u_active; return env->priv ==
-PRV_S && env->srevroot != 0;` -- protected U and S with srevroot use the table at srevroot, "M keeps the host tree"
-(`capstone_table.h`). Neither the id nor the probe carries a namespace; the namespace is the running code's. The RTL
-instead resolves a PC verdict once, in the namespace active when the unit serves the probe, and keeps it across a
-change of privilege, because the PC tracker ignores the namespace flush by the 2026-10-20 ruling (item 1, isa.md;
-`commit_stage.sv`'s pc_revnode_tracking). In R-75's arm the verdict made at S under srevroot = the context's table is
-still in force when the handler runs at M, where the reference would read the host tree and find it live.
+**On the trap route:** B5b deletes CSRUNV and the supervisor, so the switcher transit does not exist there and R-75 as
+read cannot occur. The general hazard remains open: a record made in one namespace can still match a verdict consumed in
+the cycle before the next namespace flush. B5b adds checks outside M (protected U, S rule 1), so whether such a record
+can meet a PC id at an M entry is a question for B5b's design. It is not answered here.
 
-**Must-pass for B5b-2 (the trap route):** the PC tracker's probe, and every check that resolves an id, resolves it in
-the namespace the REFERENCE assigns to the code that runs under it (the running privilege and srevroot, per
-`capstone_uses_guest_table`), and a verdict made under one namespace is not reused under another. **Directed test of
-R-75's shape, must pass on the B5b-2 RTL:** an M-minted PC capability, srevroot non-zero at S, a PC-capability id change
-at S, then code at S and then at M under that capability; each verdict must equal the reference model's for the same
-privilege and root. R-75's own arm (va-rc-trap) and its CS4_ZERO control carry over as regression arms.
+**The reference has no PC-liveness check** (capstone-qemu 9289114e06: INVALID_CAP only for lifetime operations and data
+accesses, `op_helper.c:1101`, `:1127`, `:1214`, `:1472`). The PC check is the RTL's own, so "match the reference's verdict"
+cannot be a must-pass for it.
 
-**Spec question for the lead, before RTL:** the 2026-10-20 ruling (the PC tracker ignores the namespace flush) and the
-reference model's per-operation, per-privilege choice of store disagree for exactly this case. Either the ruling is
-revised (re-resolve the PC verdict on a namespace change), or the reference is changed to cache, or ids gain a namespace.
+**Must-pass for B5b-2:**
+- `va-rc-trap` and `va-rc-trap-zp` as regression arms;
+- a record clear that takes effect no later than the namespace change it follows (no verdict from the previous
+  namespace consumed in the change's cycle);
+- every check B5b adds outside M resolving its id in the namespace of the code that runs under it.
+
+**Spec question for the lead (restated):**
+- (a) The 2026-10-20 ruling is revised: the PC verdict is re-resolved on a namespace change. A sim-only prototype,
+  capstone-ariane r75-reresolve 1a1a3f33a, passes `va-rc-trap` and costs nothing measurable on the 95-sweep; whether
+  that sweep exercises it is being counted.
+- (b) The reference is changed to cache. This is now moot, because the reference has no PC check to cache.
+- (c) Ids gain a namespace.
+- (d) (new, untested) The LSU's ALLOW/DEAD records are cleared in the cycle the table term changes, rather than one
+  registered cycle later.
+The letters keep their earlier meanings. The reference cannot break the tie, because it has no PC-liveness check.
 
 ## The scope question for the lead
 
