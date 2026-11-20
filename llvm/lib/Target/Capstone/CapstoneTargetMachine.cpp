@@ -140,6 +140,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstoneMakeCompressibleOptPass(*PR);
   initializeCapstoneGatherScatterLoweringPass(*PR);
   initializeCapstoneCodeGenPreparePass(*PR);
+  initializeCapstoneMemcpyAlignDispatchPass(*PR);
   initializeCapstoneMisalignedCapAccessPass(*PR);
   initializeCapstoneCapGlobalInitPass(*PR);
   initializeCapstonePostRAExpandPseudoPass(*PR);
@@ -571,6 +572,10 @@ void CapstonePassConfig::addCodeGenPrepare() {
   if (getOptLevel() != CodeGenOptLevel::None)
     addPass(createTypePromotionLegacyPass());
   TargetPassConfig::addCodeGenPrepare();
+  // After CodeGenPrepare, so no earlier IR pass re-forms or re-aligns the copy
+  // (off unless -capstone-memcpy-align-dispatch).
+  if (getOptLevel() != CodeGenOptLevel::None)
+    addPass(createCapstoneMemcpyAlignDispatchPass());
   // At every level: an under-aligned capability access is not an optimisation
   // artefact (a packed struct makes one at -O0), and its scalar expansion
   // drops the tag (C-69, on unless -capstone-misaligned-cap-dispatch=false).
