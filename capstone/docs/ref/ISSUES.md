@@ -10521,7 +10521,7 @@ dynamic linker.
 namespace), or rename it. That is a one-line change, but it is in the compiler lane's area.
 Verify it with a static build of `llvm-ar`, which is exactly what fails today.
 
-### C-60 — any `-fstack-protector*` asserts in "Insert stack protectors" on capstone64, because `llvm.stackprotector` is not address-space overloaded `OPEN — COMPILER, crash; found 2026-09-24 by the tshark port; root cause from source (mechanism corrected the same day: the SLOT mismatches, not the guard); reproduced with the tree's clang`
+### C-60 — any `-fstack-protector*` asserted in "Insert stack protectors" on capstone64, because `llvm.stackprotector` is not address-space overloaded `CLOSED 2026-11-20 by option (b): the driver refuses the flag — COMPILER, crash; found 2026-09-24 by the tshark port; the threat-model question is OPEN with the lead`
 
 **What happens.** `-fstack-protector`, `-fstack-protector-strong` and `-fstack-protector-all` abort
 with `Calling a function with a bad signature!` (`llvm/lib/IR/Instructions.cpp:761`) in the
@@ -10601,6 +10601,27 @@ TargetLoweringBase. The compiler lane probed each once, on dev:
 | SjLjEHPrepare | No hard case was constructed. |
 | ShadowStackGCLowering | Unused by this project: needs the shadow-stack GC strategy. |
 | JMCInstrumenter | Unused by this project: needs `-fjmc`. |
+
+**Closed 2026-11-20 by option (b): the driver refuses stack protection on Capstone.** Decision by the runtime lane
+(the capability-ABI owner).
+- `RenderSSPOptions` (clang/lib/Driver/ToolChains/Clang.cpp) reports `-fstack-protector`,
+  `-fstack-protector-strong` and `-fstack-protector-all` for a Capstone target as an error:
+  `unsupported option '<flag>' for target 'capstone64-...'`. The message is neutral and claims nothing about what
+  replaces the protection.
+- An error, not a warning, so a configure or CMake flag probe fails and drops the flag. A build never carries a
+  protection request the compiler did not honour. tshark's hand-written `-fno-stack-protector` is no longer needed
+  for the build to work.
+- `-fno-stack-protector`, the default and a later `-fno-stack-protector` all compile. Other targets are unaffected.
+- Lit `clang/test/Driver/capstone-stack-protector.c`. dev's clang accepts the flag there, so its error lines fail.
+- `-Xclang -stack-protector` straight to cc1 still reaches the asserting pass. The driver is the supported path.
+
+**Open question for the lead, unanswered:** do per-object bounds subsume the stack protector?
+- For a linear overflow out of a stack object, each object's capability bounds stop the write at its end. Is that
+  equivalent to the canary's detection?
+- What about overwrites the bounds cannot see, inside one object: for example, an array member overflowing into a
+  later member of the same struct, or a write through a capability whose bounds are wider than the variable?
+If the answer is that SSP is still wanted, option (a) stands: overload `llvm.stackprotector` and `llvm.stackguard`
+on address space, and decide the guard cookie's type.
 
 ### C-61 — any C++ with exceptions enabled crashes in "Exception handling preparation", because `_Unwind_Resume`'s type is built with an address-space-0 pointer `FIXED 2026-09-25, merged at 114f9678a670 (branch compiler/c61-eh-addrspace, 8fb7d4461eca): DwarfEHPrepare builds _Unwind_Resume's parameter and the exn.obj PHI in the exception object's own address space, guarded on isNonIntegralPointerType. C++ exceptions stay blocked behind C-63 and the absent unwind runtime`
 

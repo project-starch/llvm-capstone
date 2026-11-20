@@ -50,6 +50,7 @@ clang/lib/CodeGen/CodeGenModule.cpp | +11 -1 | case llvm::Triple::capstone32:
 clang/lib/CodeGen/CodeGenTypes.cpp | +8 -0 | // Capstone: an __intcap is a capability, the same LLVM type as a pointer
 clang/lib/CodeGen/ItaniumCXXABI.cpp | +2 -0 | case BuiltinType::IntCap:   // Capstone: no runtime typeinfo for these
 clang/lib/CodeGen/TargetInfo.h | +9 -0 | createCapstoneTargetCodeGenInfo(CodeGenModule &CGM, unsigned XLen,
+clang/lib/Driver/ToolChains/Clang.cpp | +11 -0 | // Capstone (C-60): the IR stack protector's intrinsics take address-space-0
 clang/lib/Driver/ToolChains/CommonArgs.cpp | +11 -0 | // Capstone keeps a frame in every function that calls (the launcher's fault
 clang/lib/Driver/ToolChains/Gnu.h | +12 -0 | // A bare Capstone target (no OS) is the Capstone application platform, whose
 clang/lib/Driver/ToolChains/Linux.cpp | +12 -0 | case llvm::Triple::capstone32:

@@ -3485,6 +3485,17 @@ static void RenderSSPOptions(const Driver &D, const ToolChain &TC,
           << A->getSpelling() << EffectiveTriple.getTriple();
       StackProtectorLevel = DefaultStackProtectorLevel;
     }
+    // Capstone (C-60): the IR stack protector's intrinsics take address-space-0
+    // pointers and the guard slot is an address-space-200 alloca, so the pass
+    // cannot be run. Refuse the option, as an error, so that a configure or
+    // CMake probe drops it rather than building without the protection it asked
+    // for.
+    if (EffectiveTriple.isCapstone() &&
+        StackProtectorLevel != LangOptions::SSPOff) {
+      D.Diag(diag::err_drv_unsupported_opt_for_target)
+          << A->getSpelling() << EffectiveTriple.getTriple();
+      StackProtectorLevel = LangOptions::SSPOff;
+    }
   } else {
     StackProtectorLevel = DefaultStackProtectorLevel;
   }
