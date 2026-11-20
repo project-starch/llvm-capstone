@@ -1408,6 +1408,16 @@ static int ensure_nodes(struct context *c, unsigned long required)
  * two board sessions on two hashes. Default off, so the production path keeps its current
  * behaviour and the only cost when off is a predictable load-and-branch in front of an entry
  * that already costs thousands of cycles. */
+/* Stage 2 option B (prototype): admit every context with CSRUNV options bit 2, the CRVC decode
+ * mode (llvm-capstone plans/2026-11-21-capability-rvc-stage2-prototype.md). Read-only, and read by
+ * the launcher, which accepts a CRVC image (CV_IMAGE_MAGIC_CRVC) only when this is set and refuses
+ * it otherwise. A platform without the mode refuses the admission (unknown option). The RTL's
+ * refusal writes no event record, and the context ends below with CV_CAUSE_REFUSED. QEMU raises
+ * illegal-instruction at the CSRUNV instead, which reaches the M-mode firmware and halts the machine
+ * (measured 2026-11-21): refused, but not gracefully. Off by default: options stay 3. */
+static bool crvc;
+module_param(crvc, bool, 0444);
+
 static bool fence_before_entry;
 /* 0644, not 0444: writable through
  * /sys/module/capstone_vm/parameters/fence_before_entry, because run() reads it on every
@@ -3294,7 +3304,7 @@ retry:
         t->frame[0] = csr_read(CSR_SATP);
         t->frame[1] = c->table_pa;
         t->frame[2] = t->frame[3] = t->frame[4] = t->frame[5] = t->frame[6] = 0;
-        t->frame[7] = 3;
+        t->frame[7] = 3 | (crvc ? 4 : 0);
         t->frame[80] = t->frame[81] = 0;
         /* S-21: MAKE THE CHILD'S FRAME UNREACHABLE BY THE DOMAIN BEFORE IT IS EVER ENTERED.
          *
@@ -3441,7 +3451,7 @@ thread_unwind:
             if (!t->started) {
                 t->frame[0] = csr_read(CSR_SATP);
                 t->frame[1] = c->table_pa;
-                t->frame[7] = 3;
+                t->frame[7] = 3 | (crvc ? 4 : 0);
             }
             if (t->sfence_pending) {
                 asm volatile("sfence.vma %0, zero" : : "r"(t->last_fault_addr) : "memory");

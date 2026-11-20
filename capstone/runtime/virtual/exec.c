@@ -849,6 +849,7 @@ static int section_named(const char *names, uint64_t len, uint64_t at, const cha
 struct image_layout {
     uint64_t low, text_offset, text_bytes, data_offset, data_file, data_bytes, entry;
     size_t stack;
+    int crvc; /* CV_IMAGE_MAGIC_CRVC: decoded in the stage-2 CRVC mode */
 };
 static int image_layout(const unsigned char *raw, size_t size, struct image_layout *l)
 {
@@ -892,6 +893,7 @@ static int image_layout(const unsigned char *raw, size_t size, struct image_layo
         d->p_offset > size || d->p_filesz > size - d->p_offset)
         return -1;
     l->stack = 1u << 20;
+    l->crvc = 0;
     for (unsigned i = 0; i < shnum; ++i) {
         uint64_t v[3];
         const Elf64_Shdr s = sh[i];
@@ -899,7 +901,8 @@ static int image_layout(const unsigned char *raw, size_t size, struct image_layo
         if (section_named(names, names_len, s.sh_name, ".capstone_virtual") && s.sh_size == 8 &&
             s.sh_offset <= size && 8 <= size - s.sh_offset) {
             memcpy(v, raw + s.sh_offset, 8);
-            virtual = v[0] == CV_IMAGE_MAGIC;
+            virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_CRVC;
+            l->crvc = v[0] == CV_IMAGE_MAGIC_CRVC;
         }
         if (section_named(names, names_len, s.sh_name, ".capstone_domreq") && s.sh_size == 24 &&
             s.sh_offset <= size && 24 <= size - s.sh_offset) {
@@ -952,11 +955,34 @@ static int no_huge_pages(void *p, size_t bytes)
 {
     return madvise(p, bytes, MADV_NOHUGEPAGE) && errno != EINVAL ? -1 : 0;
 }
+/* Stage 2 option B (prototype): whether the loaded module admits contexts in the CRVC decode mode
+ * (its read-only crvc parameter). A CRVC image runs only under such a module and a standard image
+ * only under one without it: decoded in the other mode, either would silently execute other
+ * instructions. A module without the parameter reads as not admitting. */
+static int module_admits_crvc(void)
+{
+    char c = 0;
+    int fd = open("/sys/module/capstone_vm/parameters/crvc", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return 0;
+    ssize_t n = read(fd, &c, 1);
+    close(fd);
+    return n == 1 && c == 'Y';
+}
 static int load(int fd, struct capstone_application_descriptor_v2 *desc, void **image,
                 size_t *bytes, size_t *rx_bytes, uintptr_t *entry, size_t *stack)
 {
     struct image_layout l;
     if (image_fd_layout(fd, desc, &l)) return -1;
+    /* The prototype module admits every context alike, so the image and the module must agree in
+     * both directions: a standard image under a CRVC module would be misdecoded too. */
+    if (l.crvc != module_admits_crvc()) {
+        fprintf(stderr, l.crvc ? "capstone-exec: the image is decoded in the CRVC mode (EF_CAPSTONE_CRVC), "
+                                 "which the loaded capstone_vm does not admit: refused\n"
+                               : "capstone-exec: the loaded capstone_vm admits contexts in the CRVC mode, "
+                                 "and the image is not built for it: refused\n");
+        errno = ENOEXEC;
+        return -1;
+    }
     /* The grant's size, rounded as every grant is. The tail past the data's own pages stays
      * anonymous and zero, like bss. */
     *bytes = rounded(l.text_bytes + l.data_bytes);

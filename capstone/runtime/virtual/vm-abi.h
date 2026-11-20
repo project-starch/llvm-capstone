@@ -8,6 +8,10 @@
  * version only; an image of any earlier version, whose layout or allocator
  * differs, must be rebuilt, not re-run. */
 #define CV_IMAGE_MAGIC 0x374d56564e4f5043
+/* A virtual image decoded in the stage-2 CRVC mode (EF_CAPSTONE_CRVC). A different magic, so a
+ * launcher that does not know the mode refuses the image instead of running it in standard
+ * decode, where c.ldcsp executes as c.fldsp. */
+#define CV_IMAGE_MAGIC_CRVC 0x374d56564e4f5243
 #define CV_SERVICE_DELEGATE 0
 #define CV_SERVICE_MAP 1
 #define CV_SERVICE_UNMAP 2
