@@ -31,3 +31,15 @@ the procedure.
 - VOID unless va-runv reads SR 15 and its 15 values.
 - R-68 is graded by its ratio keys, and each arm's paddr word must match.
 - Readings are cited by image hash.
+
+**Amendment 2, written before niss-superpage read (it was three loads away).** The rtl lane's R-68 words and its
+correction to the PREREG's VOID rule, both received during the run:
+- The word check applies to the DRAM arms only: 1 `0x80240000`, 2 `0x802c0000`, 3 `0x80340000`, 4 `0x803c0000`, 5-8 the
+  same four (4 KiB aliases), 9 `0x80240100`, 10 `0x80007000`, 11 `0x80240180`, 13 `0x80240200`, 14 `0x802c0200`, 15
+  `0x80240200`. These are from the simulation log `b1-wt/.sup/sc-b1-ni/niss-superpage.log`; arm 1's load from VA
+  0xc0240000 returning 0x80240000 was read there.
+- Arms 12 (bootrom), 16 and 17 (CLINT mtimecmp) read device contents. They are graded by cycles only, and their words
+  are reported as read. Arm 17's word must equal arm 16's on the same boot; a mismatch is a finding.
+- The witness is position 1, the trap count position 36, and it must be 0. The ratio keys are unchanged.
+- The words are in `<mnt-hdd>/capstone/silchk-b2/r68-paddrs.json`, and the grader is `grade-silchk.py` beside it. The
+  grader was negative-tested on fabricated fixed, pre-fix and void-control runs before any reading.
