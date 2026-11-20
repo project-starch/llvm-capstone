@@ -5970,3 +5970,94 @@ stage of a later boot. mcf has one run on this bitstream; P1's two runs on board
 reach a shell, board 2 is reflashed to P1 and bkit91's perlbench stage confirms the board.
 
 **Dry run** (stubbed, reached its last stage with rc 0): `perf/natstage/dry197/b5ar76-b2-dry.log`.
+
+## Addendum 198 (2026-11-20 17:35 +08, outcome): Addendum 197, the record cache with the `ccsrrw` privilege term (7180a83b6) on board 2
+
+All three boots reached the shell and ran nine smoke steps. None printed an illegal-instruction line, SIGILL, an
+Oops or a panic. Every row is valid in `read/result.json` with specdiff PASS. Hashes are of each boot's `board.txt`.
+
+| Row | Seconds | Prediction | Run cycles | Hash |
+|---|---|---|---|---|
+| perlbench | 275.27 | 273.48-276.22, met | 7,019,203,370 | 6817c0787a784bbb |
+| mcf | 5,914.79 | outcome *gain* (below 5,931.77) | 143,951,946,853 | 09e0afc26ff6f74f |
+| gcc train01 | 1,769.51 | 1,766.50-1,773.58, met; cycles in band | 42,038,861,933 | 89c48bd2942ef6b2 |
+
+**mcf.** Against P1 on this board (5,943.66 s, 144,685,962,914 cycles) it is 0.49 % faster in seconds and 0.51 %
+in cycles, outside the 0.2 % band of this board. Events 34, 35, 31, 37, 36 and 2 read 134,982,402 / 46,136,475 /
+184,042,891 / 137,491,705 / 408,449 / 3,755,627,157. **Both mechanism predictions missed.** The read hit rate is
+74.5 %, not above 95 %, and fill reads are 74.7 % of record accesses, not below 1 %. By this addendum's own
+refutation rule the few-records model is refuted, whatever the seconds say. The seconds fall inside the model's
+coarse range (5,828 to 5,929 s), and the saving per read hit is 5.44 cycles ((P1's cycles - these) / event 34).
+So the gain is a reading, and the model that predicted it is wrong about why. One run on this bitstream.
+
+**gcc** repeats B5a's reading: hit rate 62.26 %, event 31 - event 35 - event 37 = 7,178,119, the same value as B5a's.
+
+**Deviation from the stop rule.** The rule "a smoke line that differs from cs-b2's" fired on the perlbench boot:
+its task step PASSED outright instead of FAIL 70 with the two accounting checks waived. The chain was not stopped.
+The differing line is the waived accounting check passing, not a failure. Over the earlier native boots the task
+step failed (waived) in 219, passed in 3 (on other bitstreams) and was absent in 1. Board 1's P1 imagick boot of the
+same day also passed it, and this chain's mcf and gcc boots show the usual FAIL 70. So it is the known intermittent
+pass, not an effect of this bitstream. The rule was written too broadly. Later stop rules key on failures: a FAIL
+step other than task 70, a missing step, or an illegal-instruction line.
+
+**Use.** The registry may say of R-76's fix "flashed, boots, the measured path is unaffected", not "fixed on
+silicon". For line B the record-cache model must be refitted before it decides anything: on mcf a quarter of record
+reads miss and three quarters of record accesses issue a fill.
+
+## Addendum 199 (2026-11-20 17:35 +08, before it runs): the 64 KiB 16-way L1D against its base, on board 2
+
+**Why.** It decides the L1D lever of the performance batch. The pair is sealed and was never flashed:
+eeb654104 (F2) and b0f02bac7 (F2 with a 64 KiB 16-way L1D, 4 KiB per way). `git diff eeb654104 b0f02bac7` is the
+L1D configuration lines only. A gain means a 48 KiB 12-way variant on P1 is worth a synthesis gate. No gain means the
+lever is dropped.
+
+**Chains**, one after the other on board 2. Same board, same stages, same kit apart from the bitstream.
+
+| Chain | Bitstream | sha256 | Kit | Rows |
+|---|---|---|---|---|
+| f2-b2.conf (TAG f2-hpmtag-frcdkms) | `…-merge-f2-hpmtag_eeb654104` | 57f8b1e2…f8de | bkit85 | perlbench, mcf, gcc train01 |
+| f2l-b2.conf (TAG f2l1d64k-hpmtag-frcdkms) | `…-merge-f2-l1d64k-hpmtag_b0f02bac7` | 64d1c569…d2f3 | bkit98 | perlbench, mcf, gcc train01 |
+
+- **Kits.** bkit98 is bkit85 with only the two bitstream fields of `board.env` changed. Kernel, module, firmware
+  recipe, monitor and counters are bkit85's. The firmware selects events 24, 25, 26, 27, 28 and 2 into hpm3..hpm8.
+  hpm8 is event 2, the L1D miss.
+- **Stages:** `perf/natstage/board-frcdkms/` (perlbench 7200 60, mcf 28800 240, gcc train01 28800 240), the
+  directories of Addendum 197.
+- **Footing.** F2 has the flat record table and an older monitor and kernel. The pair is compared with itself, never
+  with P1's or B5a's rows.
+- **Grades.** eeb654104: full build PASS, 4 of 4 keys (WNS -12.229 ns, congestion level 4, routed clean, 188,095
+  LUT). b0f02bac7: full build FAIL, 3 of 4 keys. WNS is -17.714 ns (-5.485 ns against eeb654104), placer
+  congestion is level 5 against its own key of 4, routing is clean with 0 errors, 195,310 LUT, 50,905 of 50,950
+  slices. The core clock is 25 MHz (a 40 ns period), so every WNS here is negative slack at the signoff corner. The
+  batch (-18.529 ns) and vp2 (-19.019 ns) bitstreams ran clean on both boards. The Tier 1 boot and specdiff are the
+  functional check for a timing failure.
+- **Flash.** 7180a83b6 to eeb654104, then to b0f02bac7. The runner checks each sha256 against its seal before the
+  flash and reads the name back after it. P1 with bkit91 stays registered as the fallback.
+- **Time:** about 5 h for both chains, boots and flashes included.
+
+**Prediction.**
+1. *Tier 1, each bitstream.* Every boot reaches its shell. Smoke runs nine steps with no FAIL other than task 70,
+   whose accounting checks are waived and which passes outright in about 2 % of boots. No illegal-instruction line,
+   no SIGILL. Every row is valid in `read/result.json` with specdiff PASS.
+2. *eeb654104 against an independent reference.* F2's only earlier reading is mcf on board 1, 6,550.06 s. Here,
+   within the 0.5 % cross-board band: 6,517.31 to 6,582.81 s.
+3. *b0f02bac7 against eeb654104, on the registered reading of the build's plan.* L1D misses (hpm8, event 2) fall on
+   all three rows at equal instructions. The cycles fall only where the L1D miss was binding. Events 24 to 28 move
+   only through fewer marked-page misses. If event 2 does not fall on any row, the larger cache did not take effect
+   and the pair is void as a measurement of it.
+4. *Decision.* The within-board band is 0.2 %.
+   - *gain*: any row more than 0.5 % faster in seconds, with specdiff PASS. A 48 KiB 12-way L1D on P1 goes to a
+     synthesis-only gate.
+   - *no gain*: every row within 0.5 %. The L1D lever is dropped from the performance batch.
+   - *loss*: a row more than 0.5 % slower. Reported with event 2 and the cycles. The lever is dropped.
+
+**Refutation and stops.**
+- No shell, a smoke FAIL other than task 70, a missing smoke step, an illegal-instruction line, or a specdiff FAIL on
+  either bitstream: that chain stops, the trap lines are read, board 2 goes back to P1 and bkit91's perlbench stage
+  confirms the board. On b0f02bac7 that outcome is read as the timing failure the grade predicts, and the lever is
+  decided on the gate of a smaller variant instead.
+- eeb654104's mcf outside 6,517.31-6,582.81 s: the pair is still compared within itself, and the difference between
+  the boards is reported.
+- A failed smoke stage or a command with a non-zero status ends its chain, as the runner does.
+
+**Dry runs** (stubbed): `perf/natstage/dry199/`.
