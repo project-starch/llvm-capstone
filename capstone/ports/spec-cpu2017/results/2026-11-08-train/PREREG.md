@@ -6399,3 +6399,17 @@ precision. Nothing changes in the paper; the intervals are for the lead, and any
 A slip of this lane's, caught while writing this: a first computation summed every command of imagick and x264,
 validation included, which reads imagick at +4.38 % and x264 at -6.86 % and gives geomeans +8.31 / +7.19 %. That is not
 the paper's convention. The table above is.
+
+## Addendum 209 (2026-11-21 07:57 +08, before it runs): the nested lane's perlbench pair on board 1 (stock against the O(1)-lookup port), in the window behind the spatial-only chain
+
+This lane does not register the run's contents. They are pre-registered by the nested lane at llvm-capstone
+nested-workloads b50563709f73, on origin before the boot: one boot of stage nested/p1g/pair6 (SHA256SUMS
+2b981b31…), perlbench's makerand.pl and test.pl for stock (c1744e87…, the paper's Full image) and then for the
+page-indexed lookup port prot6 (37381b03…); kit bkit91-rec1m (2^20 records); P1 from its seal. The prediction there:
+prot6 against stock in context, +3.5 to +5.5 %.
+
+This addendum gives the chain its spec-silicon pre-registration hash, as nat-run3 requires, and fixes its place on
+board 1. It runs in the window opened by `perf/natstage/window-gate.sh` (pid 3282891) after the spatial-only chain of
+Addendum 206 ends. The chain touches `perf/natstage/perlpair-b1.DONE` when it exits, whatever the outcome, and the
++Spatial train chains of Addenda 201 and 202 follow. Its readings are the nested lane's to record. A board failure
+during the window follows bkit91's Tier 1 rules, and board 1 goes back to P1.
