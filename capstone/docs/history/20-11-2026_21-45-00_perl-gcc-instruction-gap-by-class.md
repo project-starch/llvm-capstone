@@ -149,6 +149,18 @@ Every class of the instruction gap has now been sized against its gate.
   `%pcrel_lo` fold, pool-base sharing, the memcpy alignment dispatch).
 - The loop-copy pass (the sink pass) measured at most -0.04 % and is not landed.
 
-Framing, from the runtime lane and not re-read here: on these rows the time gap exceeds the instruction gap. Most
-of the time cost is therefore cycles per instruction (verdict-cache misses, page walks, tag traffic), which is the
-hardware lines' territory rather than the compiler's.
+On these rows the time gap exceeds the instruction gap. From the board results (the SPEC lane's
+`perf/natstage/RESULTS`, Addendum 196 third runs):
+
+| row | Full | Plain | time gap | instruction gap (test-size image, above) |
+|---|---:|---:|---:|---:|
+| perlbench | 13,074.67 s | 10,808.21 s | +20.97 % | +12.45 % |
+| gcc train01 | 1,771.04 s | 1,473.75 s | +20.17 % | +12.66 % |
+| mcf | 5,943.85 s | 4,870.64 s | +22.03 % | -2.62 % (C4 note) |
+
+perlbench's Full reading is the P1 run of 16 Nov; no Addendum-196 Full perl line was in the file when this was
+written. The others are Addendum 196's third runs. The paper's Fig. 8 has +20.99, +20.15 and +21.94 % on the same
+rows, by the runtime lane's account.
+
+Even a full fix of every instruction class leaves most of the time cost in cycles per instruction (verdict-cache
+misses, page walks, tag traffic). That is the hardware lines' territory rather than the compiler's.
