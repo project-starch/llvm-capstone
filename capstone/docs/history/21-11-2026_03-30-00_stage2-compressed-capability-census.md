@@ -15,11 +15,19 @@ option A (`plans/2026-11-14-capability-rvc-stage2-decoder-sketch.md`), per bench
   `cincoffsetimm rd, rd, imm6`, for which option A has no slot.
 - A compiler-only addition, Zcb's byte and halfword forms with a capability base, would add 1.26 % on x264 and take
   it to 3.48 %. It was not built.
-- **The GO numbers are upper bounds by more than register allocation** (step 3 of the prototype, 2026-11-21). The
-  census reads linked images, where a `%pcrel_lo` folded into a load or store (`-capstone-fold-global-lo`) has a
-  resolved offset. The compiler cannot compress those sites, because their offset is a relocation. Statically that
-  is 2,729 c.ldc and 1,033 c.stc sites on perl, and 10,205 and 388 on gcc (`plans/2026-11-21-capability-rvc-stage2-
-  prototype.md`). The dynamic share comes from the twin runs.
+- **RETRACTED 2026-11-21, the same day: "the GO numbers are upper bounds by more than register allocation".** That
+  bullet (bfbd87ceed6e) said the census counts `%pcrel_lo` offsets folded into a load or store
+  (`-capstone-fold-global-lo`), which the compiler cannot compress, and quoted 2,729 c.ldc and 1,033 c.stc on perl,
+  10,205 and 388 on gcc.
+  - Those are OBJECT-level counts, where a folded offset reads as 0. On the linked images the census reads, most
+    folded offsets resolve to values that do not fit (a nab example resolved to -0x37c), so the census never
+    counted them.
+  - Measured on the images: the folded sites that fit are 49 c.ldc and 17 c.stc on perl, and 244 and 51 on gcc
+    (fold.py's shape, validated on objects at 91-100 % recall and over 99.5 % precision). Removing them leaves the
+    set at 9.77 % on perl and 15.35 % on gcc.
+  - The GO numbers stand as upper bounds in the sense already stated: today's register allocation, every fitting
+    site compressed. The object-level prediction of the prototype's step 3 did over-count by those sites; that
+    correction stands (`plans/2026-11-21-capability-rvc-stage2-prototype.md`).
 
 ## Instrument
 
