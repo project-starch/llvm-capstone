@@ -6061,3 +6061,46 @@ lever is dropped.
 - A failed smoke stage or a command with a non-zero status ends its chain, as the runner does.
 
 **Dry runs** (stubbed): `perf/natstage/dry199/`.
+
+## Addendum 200 (2026-11-20 17:55 +08, before it runs): SPEC train size on P1, Full build: lbm, mcf and nab on board 2 after the L1D pair
+
+**Why.** The paper's SPEC rows are SPEC's test input, plus gcc's train01 command. Train for every benchmark has not
+been run on the final configuration. This chain is the first piece: the three programs whose train stages convert
+without any edit. The Plain and +Spatial arms of the same three follow on boards 3 and 1, each pre-registered
+before it runs. perlbench, imagick, x264 and xz need stage edits (perl's `$^X`, imagevalidate, xz's linked inputs)
+and come later.
+
+**Chain** t200-b2.conf (TAG p1-frcdkmsa3-train): board 2, waits for the L1D pair's second chain (Addendum 199), then
+is flashed back to P1 (d83d3a633, sha256 dc411e36…1a40) with kit bkit91, the paper's Full footing.
+
+| Stage (perf/natstage/board-frcdkmsa3-train/) | Executable (sha256 prefix) | Timeout |
+|---|---|---|
+| 519.lbm_r-train-native | lbm_r 690e11ff1bd8c5bb | 86,400 s |
+| 505.mcf_r-train-native | mcf_r fa650b98b77a1ba1 | 86,400 s |
+| 544.nab_r-train-native | nab_r 8e07b37e3e1dfcf0 | 172,800 s |
+
+- **Stages.** `make-native-stage.py` on the module-route train stages of `spec/stages-train-fair/` (SPEC's train
+  commands and inputs, written by `make-stage.py` from runcpu's command files), with the executable of the paper's
+  Full stage (`board-frcdkmsa3/<bench>-native`, byte-identical by `cmp`), then bkit91's `make-train-stage.sh`. Against
+  the paper's test-size board stage each differs in `train/in/`, `train/plan.json` and the size word of `train/run.sh`
+  only. Its `native-smoke.sh` is bkit91's own, which also prints the `table_tree` parameter. Every output is under 64
+  KiB, so every output is checked by specdiff against SPEC's train reference.
+- **Reading.** Seconds per command from `read/result.json`, read with `--stage stages-frcdkmsa3-train/<bench>`.
+
+**Prediction.** There is no earlier train reading on P1, so these are first readings, not a test of a band.
+1. Every boot reaches its shell and passes smoke (no FAIL other than task 70). No illegal-instruction line, no SIGILL,
+   every command rc 0, specdiff PASS on every output.
+2. Two estimates, recorded so that the reading can be compared with them. The ratio of native x86 instructions
+   (train over test) times P1's test seconds gives lbm 14,670 s, mcf 29,898 s and nab 42,029 s. The native V1f train
+   runs of 11 Nov times P1's speed-up over V1f on gcc train01 (0.397) give lbm 8,256 s and mcf 19,069 s. The two
+   estimates disagree by about 1.6x, so neither is a band. A reading outside both is reported with the instruction
+   count, and nothing is concluded about the other arms from it.
+
+**Refutation and stops.** A boot without a shell, a smoke FAIL other than task 70, an illegal-instruction line, a
+non-zero status or a specdiff FAIL stops the chain. The trap lines and memory lines are read first. A train input
+that does not fit the board's memory is listed as not fitting. It is not shrunk.
+
+**Use.** With the Plain and +Spatial arms these give the train-size cost per row, three programs at a time. One run
+each for now. A second run is scheduled only once all three arms have one.
+
+**Dry run** (stubbed): `perf/natstage/dry200/`.
