@@ -27,6 +27,14 @@ Measured 2026-11-18 on silicon (bitstream P1). The record, with pre-registration
   arenas in an address-sorted array searched by bisection it costs +16.05 %. For 5.36.3 the same repair is
   `ports/perl/sublet/pending/5.36.3/0002-sv-arena-lookup-by-index.patch`, applied after 0001; no build in this tree
   applies it yet (`ports/perl/sublet/pending/README.md`).
+- **An O(1) arena lookup** (`500.perlbench_r/fix-lookup-pages.py`, run after `fix-lookup.py`): arenas keep upstream's
+  layout; a table indexed by the 4 KiB page of an address holds two verified arena pointers per slot (an arena's heads
+  span at most two pages, and a page meets at most two arenas' heads), misses fall back to the binary search. On
+  test.pl it takes the port's added instructions from +4.303 % to +2.894 % of perlbench's code, at +0.86 MB of peak
+  memory (the table). `fix-lookup2.py` to `fix-lookup4.py` are the aligned-arena line it replaces (+2.859 %, but
+  +8.56 MB: mallocng's aligned blocks). `heads-fixture-main.c` embeds the interpreter from a build's objects: a freed
+  head faults, live heads of the same and other arenas read, a second interpreter's heads read and the first one's
+  fault; with a 1-slot table too, and a build without the verify-on-hit fails it.
 - Result (protected image stripped `f5449ace…`): SPEC's test workload, `test.pl`, **+5.84 % in-context cycles,
   +5.41 % run time**, with `test.out` byte-equal to SPEC's reference. One run per arm, on a lifetime table of 2^20
   records: one test script needs more than 262,144.

@@ -3368,3 +3368,27 @@ gcc reads released names through old references by design (`SSA_NAME_IN_FREE_LIS
   none on train01. +0.33 M instructions; **the whole gcc port +0.752 %** of gcc's code against the arm with both gcc
   fixes. Growing obstack objects stay without a lifetime of their own until obstack_finish: gcc reads a growing
   object's base in four places (pretty-print.c, reorg.c), none of which runs on train01.
+
+### perlbench test.pl: where the scalar-heads port's instructions go, and an O(1) arena lookup (QEMU twin, 2026-11-21)
+
+**Correction to the post-submission brief, sent to the SPEC lane:** the "+789 M unattributed" were in-context cycles of
+Perl 5.36 on suns.pl on P1, not perlbench instructions. On SPEC's test.pl, the paper's footing, the port adds +3,629 M
+instructions to perlbench's own code (+4.303 %, every function counted exactly by `capstone/tests/record-trace/
+zones-twin.c` on the twin a0501ebc39; stock c1744e87…, protected f5449ace…, both with SPEC's output but the twin's three
+known scripts).
+
+- About three quarters is the arena lookup, not lifetime work: the lookup repair's binary search over an address-sorted
+  index runs about 15 halvings over test.pl's 26,678 arenas, inside sv_setsv_flags (upstream's two SvIS_FREED tests per
+  call, 106 instructions a call), the head release (72), Perl_sv_arena_head (80) and the head issue in the
+  constructors (66-80).
+- An O(1) lookup with the protection unchanged (`own-allocators/500.perlbench_r/fix-lookup-pages.py`): **+2.894 %**,
+  -1,188 M instructions, at +0.86 MB of peak memory on test.pl. A first line that aligned arenas to 4 KiB reached
+  +2.859 % but cost +8.56 MB (mallocng's aligned blocks), which the memory runs caught; it was replaced.
+- The fixture (`heads-fixture-main.c`, an interpreter embedded from the build's own objects): freed heads fault (cause
+  25), live heads read, a second interpreter's heads read while the first one's fault, with the normal table and with
+  a 1-slot table; a build without the verify-on-hit faults with cause 24 on live heads.
+- Not yet read: cycles. The board's +5.84 % on test.pl (prot2) is the paper's footing; the new image needs its own P1
+  pair before any cycle figure is attributed or quoted. The paper is unchanged.
+- An instrument defect found on the way: the twin runner's per-process memory sampler matched processes by their
+  15-character comm, so it read 0 for perlbench ("perlbench_r_bas"); a fixed copy matches argv[0] and prints NONE when
+  nothing matched. No reading in this document used that column.
