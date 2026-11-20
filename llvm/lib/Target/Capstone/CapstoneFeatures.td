@@ -1744,6 +1744,19 @@ def HasCapCRVC : Predicate<"Subtarget->hasCapCRVC()">,
 def NoCapCRVC : Predicate<"!Subtarget->hasCapCRVC()">,
                 AssemblerPredicate<(all_of (not FeatureCapCRVC))>;
 
+// Zcb byte and halfword loads and stores with a capability base (default off), the
+// stage-1 move for Zcb: c.lbu, c.lhu, c.lh, c.sb and c.sh with the base in c8-c15.
+// The hardware expands them to the same 32-bit encodings, which already access
+// memory through the base capability, so this changes code size, not semantics or
+// the ISA. Measured as its own arm (plans/2026-11-21-capability-rvc-stage2-prototype.md).
+def FeatureCapBaseZcb
+    : SubtargetFeature<"cap-base-zcb", "CapBaseZcb", "true",
+                       "Compress Zcb byte and halfword accesses whose base is a capability",
+                       [FeatureStdExtZcb]>;
+def HasCapBaseZcb : Predicate<"Subtarget->hasCapBaseZcb()">,
+                    AssemblerPredicate<(all_of FeatureCapBaseZcb),
+                                       "Capability-base Zcb">;
+
 def FeatureSaveRestore : SubtargetFeature<"save-restore", "EnableSaveRestore",
                                           "true", "Enable save/restore.">;
 

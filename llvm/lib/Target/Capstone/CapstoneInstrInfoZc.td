@@ -350,3 +350,60 @@ def : InstAlias<"c.lh $rd, (${rs1})", (C_LH GPRC:$rd, GPRC:$rs1, 0), 0>;
 def : InstAlias<"c.sb $rd, (${rs1})", (C_SB GPRC:$rd, GPRC:$rs1, 0), 0>;
 def : InstAlias<"c.sh $rd, (${rs1})", (C_SH GPRC:$rd, GPRC:$rs1, 0), 0>;
 }
+
+//===----------------------------------------------------------------------===//
+// Capability-base forms (cap-base-zcb)
+//===----------------------------------------------------------------------===//
+
+// The Zcb loads and stores above with a CAPABILITY base in c8-c15. Their
+// encodings are the standard ones, so they are codegen-only (the assembler and
+// disassembler keep the forms above), and only the CompressPats below emit them.
+let Predicates = [HasStdExtZcb, HasCapBaseZcb], isCodeGenOnly = 1 in {
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
+def C_LBU_CAP : RVInst16CLB<0b100000, 0b00, (outs GPRC:$rd),
+                            (ins GPCRCMem:$rs1, uimm2:$imm), "c.lbu", "$rd, ${imm}(${rs1})">,
+                Sched<[WriteLDB, ReadMemBase]> {
+  bits<2> imm;
+  let Inst{6-5} = imm{0,1};
+}
+def C_LHU_CAP : RVInst16CLH<0b100001, 0b0, 0b00, (outs GPRC:$rd),
+                            (ins GPCRCMem:$rs1, uimm2_lsb0:$imm), "c.lhu", "$rd, ${imm}(${rs1})">,
+                Sched<[WriteLDH, ReadMemBase]> {
+  bits<2> imm;
+  let Inst{5} = imm{1};
+}
+def C_LH_CAP : RVInst16CLH<0b100001, 0b1, 0b00, (outs GPRC:$rd),
+                           (ins GPCRCMem:$rs1, uimm2_lsb0:$imm), "c.lh", "$rd, ${imm}(${rs1})">,
+               Sched<[WriteLDH, ReadMemBase]> {
+  bits<2> imm;
+  let Inst{5} = imm{1};
+}
+}
+let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in {
+def C_SB_CAP : RVInst16CSB<0b100010, 0b00, (outs),
+                           (ins GPRC:$rs2, GPCRCMem:$rs1, uimm2:$imm), "c.sb", "$rs2, ${imm}(${rs1})">,
+               Sched<[WriteSTB, ReadStoreData, ReadMemBase]> {
+  bits<2> imm;
+  let Inst{6-5} = imm{0,1};
+}
+def C_SH_CAP : RVInst16CSH<0b100011, 0b0, 0b00, (outs),
+                           (ins GPRC:$rs2, GPCRCMem:$rs1, uimm2_lsb0:$imm), "c.sh", "$rs2, ${imm}(${rs1})">,
+               Sched<[WriteSTH, ReadStoreData, ReadMemBase]> {
+  bits<2> imm;
+  let Inst{5} = imm{1};
+}
+}
+} // Predicates = [HasStdExtZcb, HasCapBaseZcb], isCodeGenOnly = 1
+
+let isCompressOnly = true, Predicates = [HasStdExtZcb, HasCapBaseZcb] in {
+def : CompressPat<(LBU GPRC:$rd, GPCRCMem:$rs1, uimm2:$imm),
+                  (C_LBU_CAP GPRC:$rd, GPCRCMem:$rs1, uimm2:$imm)>;
+def : CompressPat<(LHU GPRC:$rd, GPCRCMem:$rs1, uimm2_lsb0:$imm),
+                  (C_LHU_CAP GPRC:$rd, GPCRCMem:$rs1, uimm2_lsb0:$imm)>;
+def : CompressPat<(LH GPRC:$rd, GPCRCMem:$rs1, uimm2_lsb0:$imm),
+                  (C_LH_CAP GPRC:$rd, GPCRCMem:$rs1, uimm2_lsb0:$imm)>;
+def : CompressPat<(SB GPRC:$rs2, GPCRCMem:$rs1, uimm2:$imm),
+                  (C_SB_CAP GPRC:$rs2, GPCRCMem:$rs1, uimm2:$imm)>;
+def : CompressPat<(SH GPRC:$rs2, GPCRCMem:$rs1, uimm2_lsb0:$imm),
+                  (C_SH_CAP GPRC:$rs2, GPCRCMem:$rs1, uimm2_lsb0:$imm)>;
+} // isCompressOnly = true, Predicates = [HasStdExtZcb, HasCapBaseZcb]
