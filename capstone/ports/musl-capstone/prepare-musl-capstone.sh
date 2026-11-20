@@ -35,6 +35,15 @@ for patch in "$SCRIPT_DIR"/musl-patches/*.patch; do
     exit 1
   }
 done
+# A patch counts as applied only while it reverse-applies on its own: the test above, and build-sdk.sh's. A later
+# patch that rewrites an earlier one's lines ends that for the earlier patch, so the next prepare would try to apply
+# it again and the next SDK build would refuse the tree. Say so here, at the prepare that applied the later patch.
+for patch in "$SCRIPT_DIR"/musl-patches/*.patch; do
+  patch --no-backup-if-mismatch -d "$MUSL_SRC_DIR" -p1 -R --dry-run -s -f < "$patch" > /dev/null 2>&1 || {
+    echo "prepare failed: $(basename "$patch") no longer reverse-applies to $MUSL_SRC_DIR: a later patch rewrites its lines" >&2
+    exit 1
+  }
+done
 
 python3 "$SCRIPT_DIR/check-mallocng-policy.py" "$MUSL_SRC_DIR" \
   "${MUSL_ARCHIVE:-${MUSL_CACHE_ROOT:-$CAPSTONE_TMP_ROOT/musl-src}/musl-${MUSL_VERSION:-1.2.5}.tar.gz}" >&2

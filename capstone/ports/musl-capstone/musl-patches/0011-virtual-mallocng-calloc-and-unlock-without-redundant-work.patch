@@ -14,6 +14,12 @@ backend builds its whole frame before that test (13 instructions per call agains
 Plain's ~3; 25.1 M calls in perlbench test). unlock() now makes the same test before
 the call. need_locks is not involved: wrlock() already tests it inline.
 
+Both additions to mallocng/malloc.c sit ahead of is_allzero and leave the lines of
+patch 0009 as they are: prepare-musl-capstone.sh and build-sdk.sh take a patch for
+applied only if it reverse-applies on its own, so a later patch that rewrites an
+earlier one's lines makes the tree unbuildable. slot_allzero therefore repeats
+is_allzero's three-line test instead of is_allzero being rewritten to call it.
+
 --- a/src/malloc/calloc.c
 +++ b/src/malloc/calloc.c
 @@ -4,6 +4,10 @@
@@ -61,34 +67,21 @@ the call. need_locks is not involved: wrlock() already tests it inline.
  {
 --- a/src/malloc/mallocng/malloc.c
 +++ b/src/malloc/mallocng/malloc.c
-@@ -370,14 +370,18 @@
+@@ -370,6 +370,36 @@
  	return enframe(g, idx, n, ctr);
  }
  
--int is_allzero(void *p)
++/* is_allzero's test on the allocator's own pointer, for a slot that has not
++ * been issued yet. */
 +static int slot_allzero(void *p)
- {
--	p = heap_access(p);
- 	struct meta *g = get_meta(p);
- 	return g->sizeclass >= 48 ||
- 		get_stride(g) < UNIT*size_classes[g->sizeclass];
- }
- 
-+int is_allzero(void *p)
 +{
-+	return slot_allzero(heap_access(p));
++	struct meta *g = get_meta(p);
++	return g->sizeclass >= 48 ||
++		get_stride(g) < UNIT*size_classes[g->sizeclass];
 +}
 +
- /* The common small path keeps mallocng's placement. Large requests need space
-  * and alignment for representable bounds; aligned_alloc uses the raw allocator
-  * above, so it does not create and immediately revoke an intermediate child. */
-@@ -387,4 +391,25 @@
- 	if (n >= 4096) return aligned_alloc(heap_granule(heap_round(n)), n);
- 	return heap_alloc_issue(__malloc_alloc(n), n);
- }
-+
 +/* calloc's allocation (src/malloc/calloc.c). A small request is malloc's small
-+ * path above, and the zero check reads the group header through the allocator's
++ * path below, and the zero check reads the group header through the allocator's
 + * own pointer before the child is issued. Asked of the issued child, is_allzero
 + * must first recover that pointer with heap_access: a liveness probe, a base
 + * check and the page-index walk, for a child that was issued a moment ago, is
@@ -107,4 +100,7 @@ the call. need_locks is not involved: wrlock() already tests it inline.
 +	*zero = slot_allzero(p);
 +	return heap_alloc_issue(p, n);
 +}
- void HEAP_POLICY_SYMBOL(void) {}
++
+ int is_allzero(void *p)
+ {
+ 	p = heap_access(p);

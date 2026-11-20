@@ -166,3 +166,16 @@ Predictions:
 
 A rise on either workload, a changed output, a check that newly fails, or a mutant that passes means the change does
 not land as measured.
+
+**Correction before any measurement (same day).** The first build of the pre-registered commit f680dc246792 by
+dev's own build-sdk.sh stopped with "musl source is not current (missing 0009)". Patch 0011 as measured on
+8 November rewrote `is_allzero`, whose lines patch 0009 adds, so on a tree carrying 0011 patch 0009 no longer
+reverse-applied on its own. That is the test by which prepare-musl-capstone.sh and build-sdk.sh take a patch for
+applied: the SDK builder refused the tree, and a second prepare would have tried to apply 0009 again. The
+8 November measurement never met this, because it compiled libc with its own scripts and not through build-sdk.sh.
+0011 now adds `slot_allzero` and `__malloc_calloc_alloc` ahead of `is_allzero` and leaves 0009's lines alone;
+calloc.c, glue.h and the body of `__malloc_calloc_alloc` are unchanged, `is_allzero` keeps its own copy of the
+three-line test. prepare-musl-capstone.sh now ends its patch loop by checking that every patch still
+reverse-applies, so the next overlapping patch fails at the prepare that applies it, with the reason. So the
+musl-capstone tree no longer equals b68bbde23c79's in this one patch, and the predictions above are read on the
+commit that carries this paragraph.
