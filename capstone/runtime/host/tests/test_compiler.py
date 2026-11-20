@@ -419,3 +419,93 @@ class LinkInputTests(unittest.TestCase):
                                          "--gc-sections", "--error-limit=0", "-rpath", "/usr/lib", "obj.o"])[0], [Path("obj.o")])
             with self.assertRaises(ValueError):
                 link_files(["-Map"])
+
+
+from capstone_vm.compiler import SizeAssumptionError, check_size_assumptions
+
+
+def linked_image(records: tuple[tuple[str, int], ...],
+                 symbols: tuple[tuple[str, int, int, int, int], ...] = (),
+                 symtab: bool = True) -> bytes:
+    """A minimal linked ELF64 image: .capstone.size_assume holding the given
+    (name, size) records and a symbol table of (name, bind, visibility,
+    section index, size) entries."""
+    names = b"\0.shstrtab\0.capstone.size_assume\0.symtab\0.strtab\0"
+    assume = b"".join(struct.pack("<Q", size) + name.encode() + b"\0" for name, size in records)
+    strtab, table = b"\0", bytes(24)
+    for name, bind, visibility, shndx, size in symbols:
+        table += struct.pack("<IBBHQQ", len(strtab), (bind << 4) | 1, visibility, shndx, 0, size)
+        strtab += name.encode() + b"\0"
+    blobs = [names, assume] + ([table, strtab] if symtab else [])
+    offsets, data = [], bytearray(64)
+    for blob in blobs:
+        offsets.append(len(data)); data += blob
+    shoff = len(data)
+    headers = [bytes(64),
+               struct.pack("<IIQQQQIIQQ", 1, 3, 0, 0, offsets[0], len(names), 0, 0, 1, 0),
+               struct.pack("<IIQQQQIIQQ", 11, 1, 0, 0, offsets[1], len(assume), 0, 0, 1, 0)]
+    if symtab:
+        headers.append(struct.pack("<IIQQQQIIQQ", 33, 2, 0, 0, offsets[2], len(table), 4, 1, 8, 24))
+        headers.append(struct.pack("<IIQQQQIIQQ", 41, 3, 0, 0, offsets[3], len(strtab), 0, 0, 1, 0))
+    data += b"".join(headers)
+    data[0:16] = b"\x7fELF\x02\x01\x01" + bytes(9)
+    struct.pack_into("<HHIQQQIHHHHHH", data, 16, 2, 259, 1, 0, 0, shoff, 0, 64, 0, 0, 64, len(headers), 1)
+    return bytes(data)
+
+
+GLOBAL, LOCAL, DEFAULT, HIDDEN = 1, 0, 0, 2
+
+
+class SizeAssumptionTests(unittest.TestCase):
+    def test_largest_record_against_the_one_definition(self):
+        image = linked_image((("g", 16), ("g", 24), ("h", 8)),
+                             (("g", GLOBAL, DEFAULT, 5, 24), ("h", GLOBAL, DEFAULT, 5, 8)))
+        self.assertEqual(check_size_assumptions(image, "img"), (2, 3))
+
+    def test_a_definition_smaller_than_a_record_fails(self):
+        image = linked_image((("g", 16), ("g", 25)), (("g", GLOBAL, DEFAULT, 5, 24),))
+        with self.assertRaisesRegex(SizeAssumptionError, "g: assumed >= 25 B, defined 24 B"):
+            check_size_assumptions(image, "img")
+
+    def test_missing_duplicate_and_zero_size_definitions_fail(self):
+        for symbols, reason in (((), "no definition"),
+                                ((("g", GLOBAL, DEFAULT, 0, 24),), "no definition"),
+                                ((("g", GLOBAL, DEFAULT, 5, 24), ("g", GLOBAL, DEFAULT, 6, 24)), "2 definitions"),
+                                ((("g", GLOBAL, DEFAULT, 5, 0),), "defined 0 B")):
+            with self.subTest(reason=reason):
+                with self.assertRaisesRegex(SizeAssumptionError, reason):
+                    check_size_assumptions(linked_image((("g", 8),), symbols), "img")
+
+    def test_a_demoted_hidden_global_is_a_definition_and_a_file_static_is_not(self):
+        hidden = linked_image((("g", 8),), (("g", LOCAL, HIDDEN, 5, 8),))
+        self.assertEqual(check_size_assumptions(hidden, "img"), (1, 1))
+        static = linked_image((("g", 8),), (("g", LOCAL, DEFAULT, 5, 64),))
+        with self.assertRaisesRegex(SizeAssumptionError, "no definition"):
+            check_size_assumptions(static, "img")
+
+    def test_no_records_passes_and_records_without_a_symbol_table_cannot_be_checked(self):
+        self.assertEqual(check_size_assumptions(linked_image(()), "img"), (0, 0))
+        with self.assertRaises(ValueError) as caught:
+            check_size_assumptions(linked_image((("g", 8),), symtab=False), "img")
+        self.assertNotIsInstance(caught.exception, SizeAssumptionError)
+
+    def test_the_driver_removes_an_image_that_fails_and_keeps_one_that_holds(self):
+        import json
+        from capstone_vm.compiler import main
+        with tempfile.TemporaryDirectory() as directory:
+            config = {**VIRTUAL, "version": 1, "application_abi": 2, "cc": "/bin/clang", "ld": "/bin/ld.lld",
+                      "musl": "/musl", "script": "link.ld", "runtime": "rt.a", "libc": "libc.a",
+                      "builtins": "builtins.a"}
+            (Path(directory) / "sdk.json").write_text(json.dumps(config))
+            output = Path(directory) / "app.dom"
+            for size, status in ((24, 0), (8, 1)):
+                image = linked_image((("g", 16),), (("g", GLOBAL, DEFAULT, 5, size),))
+                def link(command, image=image):
+                    Path(command[command.index("-o") + 1]).write_bytes(image)
+                    return 0
+                with self.subTest(size=size), \
+                     patch.dict(os.environ, {"CAPSTONE_SDK": directory}), \
+                     patch("capstone_vm.compiler.check_link_inputs"), \
+                     patch("capstone_vm.compiler.subprocess.call", side_effect=link):
+                    self.assertEqual(main(["main.o", "-o", str(output)]), status)
+                    self.assertEqual(output.exists(), status == 0)
