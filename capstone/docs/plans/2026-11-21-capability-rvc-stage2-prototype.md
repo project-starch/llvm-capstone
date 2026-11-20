@@ -233,6 +233,21 @@ not been read):
 
 perl and x264 are registered on this model when their CRVC0 profiles finish, before their CRVC1m runs start.
 
+## Step 4, perl registered on the corrected model (2026-11-21, before its CRVC1m run)
+
+| row | CRVC0 image insns | CRVC0 fetch bytes | program set | folded | program 16-bit FP | predicted CRVC1m fetch bytes | predicted saving |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 500.perlbench_r-test-sw | 84,271,470,274 | 295,259,424,034 | 12,492,267,768 | 816,087 | 29,957,153 | 270,336,434,978 | **8.441 %** |
+
+- CRVC0's perl validates 1 of 2. One of 317 sub-tests, base/term.t, cannot open
+  `/tmp/nt/b/perlbench_r_base.native`: a harness path of the newer stage maker (nat-fair e4631fa7ac3d) against the
+  run's file grants, not the compiler. FRCDKMSa3's older stage validated 2 of 2.
+- CRVC1m shares the stage, so it must fail exactly that sub-test and nothing else.
+- The recipe is perl's own: images-a0ed, `dom_grant_root=/tmp/nt/sr dom_null=1 dom_local_tmp=1`,
+  TWIN_CMDLINE_MAX=1024.
+- Expected from gcc: call relaxation (more calls in `jal` range) may add a small extra saving and remove a few
+  instructions.
+
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
 `CVA6Cfg.RVZCB`), with `CVA6ConfigZcbExtEn = 1` in `capstone_cv64a6_imafdc_sv39_config_pkg.sv`.
