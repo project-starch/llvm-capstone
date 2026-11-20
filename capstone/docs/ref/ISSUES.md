@@ -11804,7 +11804,7 @@ pre-AtomicExpand rewrite rather than a hook and costs lock-freedom. Not decided 
 implemented. Relevant for CPython: `PyMutex` is one byte; a standalone static one is exposed
 wherever it is bounded alone.
 
-### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `OPEN — COMPILER, observed 2026-09-29; port workaround qualified; not reduced`
+### C-70 — FFmpeg at configure's default optimization emits an unaligned capability store `FIXED 2026-10-21 by bfcb659f27b1 (PEI: a floated emergency spill slot moves by a multiple of its alignment; merged in #283, 2026-10-26); closed 2026-11-20 — COMPILER`
 
 FFmpeg 9.0.1 built by `compiler/sroa-keep-capability-whole` at `7d01722aab88`
 (clang SHA-256 `0a0f12b14f4447928853aa88c511e11696d48b6625c2585d719ec009e26d8ac1`)
@@ -11824,6 +11824,25 @@ now explicitly selects `-O1 -fno-omit-frame-pointer`; that combined setting
 passes all five stages and the 30-frame native oracle with the changed-input
 control, including the Sublet heap/pool arm. Neither flag has been qualified
 independently as the minimum workaround. No compiler fix is claimed.
+
+**Fixed by bfcb659f27b1 (2026-10-21, merged in #283 on 2026-10-26); this entry was not updated then.**
+- Cause, per that commit: with the frame pointer eliminated, calculateFrameObjectOffsets floats the register
+  scavenger's emergency slots down by the frame's rounding padding. When that padding was 8, the 16-byte
+  capability slot ended 8 bytes off alignment, and a capability spilled there faulted with cause 6. A frame pointer
+  keeps the slots out of the float, which is why `-fno-omit-frame-pointer` worked around it. The slot now moves by
+  the padding rounded down to its alignment.
+- Closure check (2026-11-20). ituh263dec.c and eight more FFmpeg 9.0.1 sources from the fix commit's list were
+  compiled with the domain build's flags (`-O3 -fomit-frame-pointer`), and every stc/ldc at an sp offset that is
+  not a multiple of 16 was counted.
+  - clang at 7d01722aab88 (this entry's compiler, rebuilt for the purpose) reproduces the fault: `stc s0, 0x38(sp)`
+    at `h263_decode_init_vlc+0xa8`. Over the eight files that compile, it gives 126 such accesses, matching the
+    fix commit's per-file counts (error_resilience 30, ituh263dec 4, mpeg4videodec 10, rl 2, vlc 2, demux 24,
+    imgutils 30, timecode 24).
+  - dev's compiler (4e3bae5d83fc) and dev at ae22b30e9802 give 0. utils.c does not compile with these flags under
+    any of the three compilers (an undeclared `ff_dlog`), so it is not counted.
+  - Lit: `emergency-slot-alignment.ll` (in bfcb659f27b1).
+- The port recipe's `-O1 -fno-omit-frame-pointer` is no longer needed for this defect. Changing the recipe and
+  re-qualifying it is the FFmpeg port's call; this entry does not do it.
 
 ### C-68 — `LowerCall` asserts on a split scalar integer argument wider than 128 bits: an integer `ADD` built over a capability stack slot `OPEN — COMPILER, crash, low priority: pre-existing, not reachable from C; found 2026-09-28 by the compiler lane's frame-index sweep; reproduced by the board lane`
 
