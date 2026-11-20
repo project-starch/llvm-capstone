@@ -3392,3 +3392,35 @@ known scripts).
 - An instrument defect found on the way: the twin runner's per-process memory sampler matched processes by their
   15-character comm, so it read 0 for perlbench ("perlbench_r_bas"); a fixed copy matches argv[0] and prints NONE when
   nothing matched. No reading in this document used that column.
+
+### Pre-registration: perlbench test.pl on P1, stock and the O(1)-lookup port in one boot (written 2026-11-21 08:10, before the boot)
+
+**Question.** What does the scalar-heads port with the page-indexed arena lookup (prot6) cost perlbench in cycles on
+SPEC's test.pl, and where do those cycles go? The twin prices its instructions at +2.894 % against +4.303 % for the
+paper's protected image (prot2), whose board cost was +5.84 % in-context (st2/pt2 above).
+
+**Boot.** Board 1 (granted by the SPEC lane after its spatial-only chain, pid 2687886), bitstream P1 (`…-pagedtbl_
+d83d3a633`, seal `dc411e36…`; the chain flashes it with the seal check if another bitstream is resident, and reads it
+back), kit `nested/kits/bkit91-rec1m` (2^20 records), one booking for the whole boot. Stage `nested/p1g/pair6`
+(`pair6.SHA256SUMS`, 574 files): the table's perlbench test stage with its arm section twice, **u** = stock
+(c1744e87…, the paper's Full image) then **p** = prot6 (37381b03…), each makerand.pl then test.pl. Both images xz-packed.
+Budget 86400 (`BAKED_TIMEOUT` 345600), booking 660 min. Expected about 7.5 h of commands.
+- Rule 8 (`nested/p1g/pair6-recheck`): real bake rc 0, `BOARD_STUB=2` on st2's transcript and on its cut rc 0 and 0,
+  real firmware 23,760,392 B (`d0ea5bf0…`), the relinked kernel at `node_flat_records=1048576`.
+- Twin check of the same stage (`census/out/twin-pair6`) must show both arms' makerand.out equal to SPEC's and test.out
+  as stock's (the twin's three known scripts) before the chain is armed.
+- When the boot ends, the chain touches `perf/natstage/perlpair-b1.DONE` (the SPEC lane's gate).
+
+**Outcomes.**
+- VOID as for every P1 boot. Answers: every command rc 0; makerand.out and test.out of both arms byte-equal to SPEC's
+  references, else no cost is read.
+- Stock check: u's test.pl in-context cycles against st2's 267,194.0 M, expected within 1 %. Outside it, the cost is
+  still read within this boot but the cross-boot comparisons are not.
+- **Cost of test.pl, p against u, in-context cycles. Predicted +3.5 % to +5.5 %**: the twin's 1,188 M fewer
+  instructions than prot2, at the stock arm's 3.17 cycles per twin instruction, are 3.8 G cycles, -1.4 points from
+  prot2's +5.84 %; the record traffic is unchanged.
+- Readings for the cycle attribution (step 2): hpm3 record-TLB misses, hpm4 walk cycles (taken as cycles directly),
+  hpm5 paged accesses, hpm7 event-23 replays, hpm8 L1D misses, each p minus u; the twin's instructions p minus u. The
+  per-event prices used will each name their source (a measured pair or a model), and the remainder is stated as a
+  number.
+- Limits stated in advance: one run per arm, the arms in a fixed order in one boot (u first), not interleaved.
