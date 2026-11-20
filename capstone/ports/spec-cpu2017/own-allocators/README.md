@@ -65,3 +65,30 @@ off):
 Measured on QEMU (the environment of revision 71ce199d8fea, train input 1, exact counts of gcc's own code): the
 obstack port costs +0.654 % as the collaborator wrote it and +0.348 % refined; all three allocators +0.784 % and
 +0.478 %. Record: `capstone/docs/ref/nested-allocator-workloads.md`.
+
+### gcc's own free lists, and a second fix in gcc
+
+On top of the three allocators (and only there: these objects must already have a lifetime of their own), each object
+that gcc puts on one of its private free lists is renewed (CRENEW), so the client's references die and the list keeps
+the renewed one. A list that upstream moves in one step is walked to renew and relink each object.
+
+| file | lists |
+|---|---|
+| `502.gcc_r/bitmap-port.py` | bitmap.c: elements (one, or a chain in bitmap_elt_clear_from) and bitmap heads |
+| `502.gcc_r/lists-port.py` | lists.c: EXPR_LIST and INSN_LIST nodes |
+| `502.gcc_r/tfl-port.py` | c-decl.c bindings and scopes, emit-rtl.c sequence stacks, gimple.c sequences, tree-phinodes.c phi nodes (below 4 KiB only) |
+| `502.gcc_r/bitmap-fixture.c` | links against an arm's bitmap.o and obstack.o: freed elements must fault, the bitmap must still work |
+| `502.gcc_r/fix-phi.py` | the fix below, for every arm |
+
+**A second use after free in gcc 4.5, fixed in every arm.** `remove_phi_node` (tree-phinodes.c) calls
+`release_phi_node (phi)`, which puts the node on gcc's free list, and then `release_ssa_name (gimple_phi_result (phi))`,
+which reads the node through the same reference. Stock gcc survives because nothing reuses the node in between; with
+the phi free list ported, train01 faults there (cause 25). `fix-phi.py` swaps the two calls. `release_ssa_name` does
+not touch the phi node, so the output is unchanged; on train01 the fix moves gcc's own code by -543 instructions.
+
+**Limit: SSA names are not ported.** tree-ssanames.c keeps released SSA names on a free list, and gcc reads released
+names through old references by design: passes test `SSA_NAME_IN_FREE_LIST` on stale names. Renewing them would fault
+on correct code.
+
+Measured as above: the whole port, with these lists, costs +0.750 % of gcc's code on train01 against the arm with
+both fixes; bitmap +0.236 %, lists.c +0.034 %, the five others +0.001 %.

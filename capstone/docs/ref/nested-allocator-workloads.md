@@ -3339,3 +3339,27 @@ must not make them illegal. REVOKE, TIGHTEN, DELIN, SPLIT, MREV, DROP, CALL, RET
 LCC with zimm 0 execute 0 times in every image (LDC, the positive control, 1.7-8.1 G). The twin's kernel and firmware
 are not the board's (Linux 6.1 against the board's 6.4.14, kit-unq's firmware against the board monitor), so their
 counts are a proxy only; the rtl lane reads the board's kernel and monitor statically.
+
+### gcc's own free lists as lifetimes, and a second use after free in gcc (QEMU, 2026-11-20): the port at +0.750 %
+
+On top of the three allocators, the objects gcc keeps on private free lists are renewed (CRENEW) when they go on the
+list: bitmap elements and heads, EXPR_LIST and INSN_LIST nodes, C front-end bindings and scopes, sequence stacks, gimple
+sequences and phi nodes (scripts in `capstone/ports/spec-cpu2017/own-allocators/502.gcc_r/`). SSA names are left out:
+gcc reads released names through old references by design (`SSA_NAME_IN_FREE_LIST`).
+
+| part (train01, gcc's code, against the arm with both gcc fixes) | cost | renewals |
+|---|---:|---:|
+| pools, GC heap, obstacks (refined) | +0.478 % | |
+| bitmap elements and heads | +0.236 % | 4,043,806 |
+| EXPR_LIST, INSN_LIST | +0.034 % | 686,221 |
+| bindings, scopes, sequence stacks, gimple sequences, phi nodes | +0.001 % | 97,371 |
+| **all** | **+0.750 %** | |
+
+- Every output matches. A bitmap fixture shows what the list port adds: an element freed by bitmap_clear_bit or
+  bitmap_clear faults with it and reads without it, also with the obstack port in place.
+- **A second use after free in gcc 4.5** (the first was df_insn_rescan): `remove_phi_node` calls
+  `release_phi_node (phi)`, which puts the node on gcc's free list, then `release_ssa_name (gimple_phi_result (phi))`,
+  which reads it through the same reference. Stock survives because nothing reuses the node in between; with the phi
+  list ported, train01 faults there (cause 25, after 1.47 G instructions). The fix swaps the two calls; output unchanged,
+  -543 instructions; it is in every arm, with a new baseline. Whether either gcc fix is mentioned anywhere outside this
+  record is the lead's decision.
