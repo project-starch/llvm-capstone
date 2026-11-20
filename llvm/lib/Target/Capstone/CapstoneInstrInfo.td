@@ -2540,9 +2540,10 @@ def SHRINKTO : RVInstI<0b000, OPC_CAP_OP, (outs GPCR:$rd),
 // runs after the last MCP and rewrites every MOVC whose source is still read as STC+LDC through a
 // stack slot, and a CheckOnly instance after MakeCompressible fails the build if one survives. The
 // outliner runs later still and only moves instructions, so the MOVCs it sees already have dead
-// sources. This model can stay a pure copy because nothing before that pass needs it not to be.
+// sources. Since 2026-11-20 MOVC is also hasSideEffects (C-46): nothing then deletes or moves the
+// MOVC itself. That does not order a later read of the source after it; the rewrite above does.
 // +movc-keeps-integer-source disables the rewrite for a bitstream whose MOVC keeps untagged sources.
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
 def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "movc", "$rd, $rs1"> {
   let rs2 = 0;
