@@ -4485,7 +4485,7 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
-### R-76 — outside supervision, S and U in capmode execute ccsrrw on CTVEC, CEPC, CSCRATCH and CPMP0-15: they read the monitor's capability out and install their own `OPEN 2026-11-17 (first observed 2026-11-13, unrecorded until now) — DEMONSTRATED IN SIMULATION on two trees; SILICON REACH NOT MEASURED; claim-audited (mechanism SUPPORTED; reach PLAUSIBLE, unproven); FIX IN RTL, simulation only (r76-ccsrrw-priv 7180a83b6), not synthesised`
+### R-76 — outside supervision, S and U in capmode execute ccsrrw on CTVEC, CEPC, CSCRATCH and CPMP0-15: they read the monitor's capability out and install their own `FIXED ON SILICON 2026-11-21 (bitstream 1, capstone-ariane 9e801ab5e, sha256 01707b372e93…f83, board 2); DEFECT REPRODUCED ON P1 FROM LINUX USER MODE (board 2, 21 Nov); first observed 2026-11-13, filed 2026-11-17; claim-audited (mechanism SUPPORTED)`
 
 Siblings:
 - F-A of `docs/history/16-10-2026_07-00-00_rtl-audit-sublet.md`: the five debug mints are refused only under supervision. It is the same boundary, and its fence is still the lead's decision.
@@ -4537,8 +4537,31 @@ So an unsupervised Linux process could, in decreasing order of support:
   - lint PASS, every counter at baseline;
   - the 95-sweep (`rcsw6`) is identical to B5a's (`rcsw5`) in values, retired traces and cycles (92/92);
   - sup-guards, sup-hostile and the six sup-mswap arms have identical retired traces on the fix and its base.
-- **NOT EXERCISED:** a supervised domain BELOW M issuing ccsrrw, which is the case the fix must keep legal. Every retired ccsrrw in those supervised arms is at privilege 3 (exact-mask count). Its correctness rests on the term's `!sup_active_q`, a source reading.
+- **NOT EXERCISED on this tree** (exercised since on bitstream 1's, below): a supervised domain BELOW M issuing ccsrrw, which is the case the fix must keep legal. Every retired ccsrrw in those supervised arms is at privilege 3 (exact-mask count). Its correctness rests on the term's `!sup_active_q`, a source reading.
 - `privilege_violation` and `ccsr_en` are on the standing UNOPTFLAT list. Every input of the new term is already an input of privilege_violation, but it is a loop-cone edit, so a synthesis-only gate comes before any bitstream.
+
+**Bitstream 1 (P1 d83d3a633 + this term, capstone-ariane p1-ccsrrw-priv fb2299b96 / 1c26498c1 / 9e801ab5e; control
+p1-ccsrrw-base f56263c24; sealed 01707b37…f83, every full-build key met; pre-registration llvm-capstone 4b9fe9f2c579).**
+The NOT EXERCISED case above is now exercised. `sup-ccsrrw-low.S` runs a supervised domain BELOW M that issues four
+ccsrrw (S and U, return and ecall-escape variants), and they read identically on the term and its control:
+- default `0 9 4 1 0 0x18 0x10`; ECALL `0 9 4 5 9 0x10 0x10`; the four stub ccsrrw retire at privilege 1 (U: 0) on both;
+- CTRL, the same ccsrrw unsupervised: the term `0x2, 0x0` (refused), the control `0x9, 0x4` (it retired at privilege 1).
+`u-ccsrrw -DUCCS_CIH` reads `0x2 0x0 0x0 0x0` on the term and `0x8 0x4 0x0 0x0` on P1.
+
+**Silicon** (the runtime lane, train PREREG Addendum 207, spec-silicon dd159df82226; board 2):
+- **On P1** (d83d3a633, kit bkit91, reflashed 02:18-02:20, readback ok; board.txt dad3564a0f5c79e9): a plain Linux
+  user-mode `ccsrrw t0, CIH, x0` RETIRED (`R76PROBE probe sigill=0 ... t0=0x0000000000000000`,
+  `verdict=RETIRED`). The monitor printed one illegal-instruction record, the control's. The defect is reproduced on
+  silicon from user mode.
+- **On bitstream 1** (9e801ab5e, kit bkit100, flash rc 0, readback ok; board.txt 57f324b82e6c5f56): the monitor recorded
+  exactly two illegal-instruction records, the control's (MEPC 0x1071C, MTVL 0) and the probe word's (MEPC 0x1075E,
+  MTVL 0x001072DB, the ccsrrw). REFUSED with cause 2.
+  - The probe's own verdict line was lost to a defect in the probe's SIGILL handler, the runtime lane's: a 4-byte read of
+    the faulting word at the 2-aligned PC 0x1075E, a misaligned load that raised cause 4 and SIGBUS (rc 135). So this
+    reading is the MONITOR's record, not the program's. A fixed probe (v2, sha256 811af0101c9ffc50) exists and did not
+    run.
+  - Rows on bitstream 1 inside P1's board-2 bands, specdiff PASS: perlbench makerand 274.95 s, gcc train01 1,763.23 s,
+    mcf 5,944.83 s. No measurable cost.
 
 **For B5b:** under the trap route, protected U is the defended boundary. So this gate and F-A's are required there, not optional.
 
