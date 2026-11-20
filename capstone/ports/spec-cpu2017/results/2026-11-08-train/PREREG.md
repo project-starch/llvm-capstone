@@ -6293,3 +6293,47 @@ illegal-instruction line, no SIGILL, no Oops, no panic. Every row is valid with 
   both runs blocks the lever from the performance batch.
 - **Footing:** F2 is the flat-table footing. These deltas are not transferable to P1 as numbers, only as the sign and
   the rough size of the lever.
+
+## Addendum 206 (2026-11-21 01:02 +08, before it runs): the spatial-only core with the paper's +Spatial images, board 1
+
+**Why.** The lead asked on 17 Nov for this core to be built and measured, instead of the estimate the paper prints.
+capstone-ariane 1f1ed11f9 is P1 with the rev_node unit replaced by a stub that answers in the next cycle and writes no
+record. Its verdict lookups read live, and REVOKE, MREV and DROP are illegal; nothing else is removed, since synthesis
+drops the dead logic itself. It is pre-registered at land/rtl-spatial-prereg 9dacb7d2658e and board/meas-pw
+baaa35ed3075, and sealed by the board lane: sha256 d16c2197…140e, LUT 179,661 (P1 -7,707), FF 72,847 (-3,696),
+congestion 4, no loop, routed clean, WNS +0.170 ns. All timing constraints are met at the 40 ns period, against P1's
+-13.173 ns; what carries P1's slack is not established yet.
+
+**Chain** spo-b1.conf (TAG spo-frcdkmsspa3), board 1, after Addendum 196's +Spatial third run. The +Spatial train
+chains of Addenda 201 and 202 are still waiting, so they are stopped and relaunched behind it unchanged.
+- *Kit bkit101* is bkit91 with three changes, each a variable of this arm: the bitstream; the monitor variant
+  `CSC_SPATIAL_ONLY` (caplifive-sbi spatial-only-cscheck 37ebb55), whose CSCHECK emulation skips the liveness step
+  because the table is never written (undefined, the file assembles byte-identically to 22a907f's); and that define
+  in `BOARD_FW_DEFINES`. Kernel, module and counters are bkit91's.
+- *Stages* `perf/natstage/board-frcdkmsspa3-spo/`: the paper's +Spatial stages (board-frcdkmsspa3, and -full for
+  perlbench), the same images, each differing in one line of `ctl.sh`: smoke 40 is also accepted, so that SPEC runs.
+- Rows: gcc train01, lbm, nab, imagick, mcf, xz, perlbench (full test input).
+
+**Smoke, by design.** probe.dom (smoke step 40) checks that a revoked capability is refused. On a core without
+lifetimes that cannot hold: CDERIVE returns the parent's id and CREVOKE does nothing. So step 40 FAILS with
+"revoked input refused", and possibly "replacement sentinel intact", because the read through the stale capability
+writes the replacement's bytes. Every other smoke check must pass. A smoke result other than 0 or 40, or a probe
+failure outside those two checks, stops the chain.
+
+**Three terms separate this core from +Spatial on P1, stated before the reading.**
+(1) The hardware: no table, walker or verdict traffic.
+(2) The lifetime operations the +Spatial images still execute through the SDK's heap mapping, which become no-ops
+here. On the twin's test inputs: perl CDERIVE 163,069 / CREVOKE 46,242, gcc 26,065 / 22,441, mcf 318 / 276.
+(3) The monitor's CSCHECK emulation without its liveness walk.
+This chain does not separate (1) to (3). It gives the measured spatial-only row.
+
+**Prediction.** Every row is at most +Spatial-on-P1's time, plus 0.2 % (board 1's third-run bands for +Spatial are
+the reference: gcc 1,748.96-1,755.96, lbm 987.28-991.24, nab 690.33-693.09, imagick 17.07-17.41, mcf 5,648.11-5,670.75,
+perlbench 12,807.57-12,858.91, xz about 4,956.8). The rows that P1's verdict cache and walker load hardest, mcf and
+perlbench, gain the most. A row that is slower than +Spatial on P1 by more than 0.2 % is reported and looked into
+before the row is used. The spatial-only row's cost against matched Plain (Addendum 196's Plain readings) is the
+number this arm exists for. It is reported beside the paper's estimate, and the paper changes only on the lead's word.
+
+**Stops** keyed to failures, as Addendum 199, with the smoke rule above. Fallback: P1 with bkit91.
+
+**Dry run** (stubbed): `perf/natstage/dry206/`.
