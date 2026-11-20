@@ -6104,3 +6104,36 @@ that does not fit the board's memory is listed as not fitting. It is not shrunk.
 each for now. A second run is scheduled only once all three arms have one.
 
 **Dry run** (stubbed): `perf/natstage/dry200/`.
+
+## Addendum 201 (2026-11-20 18:10 +08, before they run): SPEC train size of lbm, mcf and nab on +Spatial (board 1) and matched Plain (board 3)
+
+**Why.** These are the other two arms of Addendum 200, so that lbm, mcf and nab each get a train-size cost against
+Plain and against +Spatial.
+
+**Chains.**
+
+| Chain | Board | Waits for | Bitstream, kit | Stages |
+|---|---|---|---|---|
+| t201s-b1.conf (TAG p1-frcdkmsspa3-train) | 1 | the +Spatial third run (Addendum 196) | P1, bkit91 | `perf/natstage/board-frcdkmsspa3-train/`: lbm, mcf, nab |
+| t201p-b3.conf (TAG t201rvm) | 3 | the Plain x264 second run (Addendum 196) | matched Plain 8db8f9cda, bkit95 (100 Hz), as Addendum 196's Plain rows | `perf/fair/stages-train/`: lbm, mcf, nab `-train-rv-al3` |
+
+- **+Spatial stages:** Addendum 200's recipe with the executables of the paper's +Spatial stages
+  (`board-frcdkmsspa3/<bench>-native`, byte-identical): lbm 2766576923f2bbff, mcf 17b2fa0b796e806e,
+  nab eeefe127e6e586dc. Against Addendum 200's Full train stages they differ only in the executable and `plan.json`.
+- **Plain stages:** copies of `spec/stages-train-fair/<bench>-train-plain-rv64r` (SPEC's train commands) with the
+  executable of the paper's Plain stage `perf/fair/stages/<bench>-rv-al3`: lbm fa9deda413e452b5,
+  mcf 2d48ad97ae6009c7, nab 2f334fe1e63e8dbd, the compiler lane's RVAL hashes. mcf's run.sh gains the same hooks as
+  its rv-al3 stage (the rusage wrapper `ru`, `gtsnap`, `times`), each anchor asserted once. Against the rv-al3 test
+  stage, run.sh differs in the size word and in SPEC's train commands only. That was checked by diff:
+  lbm 8 lines, mcf 6, nab 24, where nab's train has two commands to test's one.
+- Timeouts as Addendum 200: lbm and mcf 86,400 s, nab 172,800 s.
+
+**Prediction.** First readings, as in Addendum 200, with the same Tier 1 and specdiff requirements. Estimates from
+the native x86 train/test instruction ratio times the paper's test seconds: +Spatial lbm 14,671 s, mcf 28,467 s,
+nab 41,890 s; Plain lbm 14,889 s, mcf 24,499 s, nab 39,921 s. The train-size cost of each row is
+(Full or +Spatial seconds) / (Plain seconds) - 1, reported beside the test-size cost of the paper's rows, one run each.
+
+**Refutation and stops.** As Addendum 200. A train input that does not fit is listed, not shrunk. The Plain chain is
+read from its own `result.json`.
+
+**Dry runs** (stubbed): `perf/natstage/dry201/`.
