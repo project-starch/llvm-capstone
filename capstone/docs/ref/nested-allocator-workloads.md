@@ -3425,6 +3425,52 @@ Budget 86400 (`BAKED_TIMEOUT` 345600), booking 660 min. Expected about 7.5 h of 
   number.
 - Limits stated in advance: one run per arm, the arms in a fixed order in one boot (u first), not interleaved.
 
+### perlbench test.pl: SV bodies as lifetimes on top of the heads port (QEMU twin, 2026-11-22): +0.733 % of perlbench's code
+
+The second of the three perlbench allocators (heads, then bodies, then hash entries and op slabs; each one priced on
+its own). `500.perlbench_r/port-sv-bodies.py` runs after the heads port and both lookup fixes, under
+`PERL_CAPSTONE_SUBLET_BODIES`:
+- Every body that an SV type keeps in an arena becomes a child lifetime bounded to the body (CDERIVE when
+  `new_body_inline` pops it), and it is revoked when the body is freed (CREVOKE in `del_body`, from `sv_clear` and
+  `sv_upgrade`).
+- The arenas are carved from 32 MiB segments, each one Newx block with an aligned interior as the segment's lifetime.
+  A body's parent is found by comparing its address with the few segments, so there is no arena lookup.
+- The free lists hold the segment's own pointers, and SvANY keeps upstream's offset. For the PV types it points 32 B
+  below the body, inside the representable window.
+- Hash entries keep upstream's arenas, so this arm prices bodies alone.
+
+Checks:
+- **Control.** `sv.c` compiled without the new define is byte-identical to prot6's `sv.o`. The script, run on prot6's
+  `sv.c`, reproduces the built file, and `sv.c` is the only source that differs.
+- **Fixture** (`make-bodies-fixture.py`, generated from the build's own perlmain.c, which stays outside the
+  repository), run on the twin (`census/out/perlfxb-2d7a7d4b`):
+  - in the protected build a live PV body reads (mode 0). A freed body (1), a body freed by an upgrade to PVMG (2) and
+    a freed body among 5,000 PVs and 500 AVs (3) fault with cause 25, after the 4,999 other PVs read their own lengths
+    and the 500 AVs their sizes. A body of a destroyed interpreter faults after a second interpreter's 3,000 bodies read (4);
+  - every fault is at the fixture's own `ld a0, 0x20(a0)` through the kept pointer, which is the read of `xpv_cur`;
+  - the control built with `PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE` reads in modes 0-3, returning whatever the freed
+    body holds.
+    It faults in mode 4 too: freeing a segment ends every lifetime carved from it, so mode 4 has no control that
+    separates the per-body revocation. The fixture's docstring first said the control reads in every mode. That was
+    corrected before this commit.
+- **test.pl** (`census/out/zperl-bodies-279647af`, image `279647af…`): makerand.out and test.out are byte-equal to the
+  stock twin run's.
+  - Image zone: 87,410,533,001 instructions against prot6's 86,774,090,874, **+636,442,127 (+0.733 %)**. Against stock's
+    84,333,527,702 that makes +3.649 % for heads and bodies together, against +2.894 % for heads alone.
+  - Where it goes: `Perl_sv_upgrade` +286.5 M and `Perl_sv_clear` +227.4 M, the inlined issue and retire. Then
+    `__heap_mapping` +90.5 M, which is one 32 MiB segment per process with an index leaf provisioned for each of its
+    pages, about 33 instructions a page over 318 processes. Then `memset` +12.4 M, `Perl_more_bodies` +11.2 M,
+    `nontrivial_free` +10.0 M and `__heap_unmapping` +7.2 M.
+- **Calls to `Perl_more_bodies`: 44,019, against prot6's 5,077.** A diagnostic build counted them per type
+  (`census/out/zperl-bodcnt-3a458858`, not committed). All 5,077 are hash-entry arenas (type 0) in both images, and
+  the other 38,942 are SV body arenas. Most likely clang inlined prot6's 246-byte `Perl_more_bodies` into its callers
+  in `sv.c`, and the carve, at 524 bytes, stopped that; this is inferred from the sizes and was not read from the
+  disassembly. The same build saw one segment per process and no body issued or retired outside a segment.
+- **Memory** (`census/out/rss-bodies-279647af`): peak used 102,464 kB: -156 kB against prot6's 102,620 kB, and
+  +4.6 % against stock's 97,968 kB. With the peak unchanged, the segments' untouched pages are evidently not
+  resident; that is inferred, not counted.
+- Not yet read: cycles. A board pair is needed first, as for prot6.
+
 ## mcf train on the twin: what separates the Full image's OOM from V1f's pass (2026-11-22)
 
 Asked by the SPEC lane. On bkit91 the Full image of 505.mcf_r train was killed by the OOM killer, while V1f's image

@@ -35,6 +35,13 @@ Measured 2026-11-18 on silicon (bitstream P1). The record, with pre-registration
   +8.56 MB: mallocng's aligned blocks). `make-heads-fixture.py` writes a fixture that embeds the interpreter from a build's objects: a freed
   head faults, live heads of the same and other arenas read, a second interpreter's heads read and the first one's
   fault; with a 1-slot table too, and a build without the verify-on-hit fails it.
+- **SV bodies** (`500.perlbench_r/port-sv-bodies.py`, `3933328d…`, after the heads port and both lookup fixes, under
+  `PERL_CAPSTONE_SUBLET_BODIES` as well): every arena body is a child lifetime of a 32 MiB segment, issued when it is
+  popped and revoked when it is freed. Hash entries keep upstream's arenas. Without the define `sv.c` compiles to the
+  heads build's `sv.o`. `make-bodies-fixture.py` (`1fc7613b…`) writes its fixture: freed and upgraded bodies fault,
+  live bodies read, and a build with `PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE` reads in modes 0-3. On test.pl it adds
+  +0.733 % of perlbench's code to the heads port (+3.649 % against stock together), at the same peak memory. Cycles
+  are not read yet.
 - Result (protected image stripped `f5449ace…`): SPEC's test workload, `test.pl`, **+5.84 % in-context cycles,
   +5.41 % run time**, with `test.out` byte-equal to SPEC's reference. One run per arm, on a lifetime table of 2^20
   records: one test script needs more than 262,144.
