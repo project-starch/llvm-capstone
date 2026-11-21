@@ -3564,7 +3564,7 @@ smallest heap that completed on the host.
 - Control: the same host build at `--heap 8388608 64 --size 1` reproduces the native phases of
   `2026-10-11-same-answers/phases.json`, 32/32.
 
-### Pre-registration: QEMU twin, speedtest1 `--size 100` (written 2026-11-22 06:30, before the run)
+### Pre-registration: QEMU twin, speedtest1 `--size 100` (written 2026-11-22 06:05, before the run; the time first read 06:30, which was wrong)
 
 - **Run.** One twin boot on slot 28 (`nested/st1/stages/s100`, made by `make-stage.py`), the file-database commands u,
   p, p, u, each `--heap 33554432 64 --size 100 st.db`. It is run under `capmixn` (PROF=1), on the kernel and module flags of
@@ -3593,3 +3593,34 @@ Failure branches:
     next run raises `node_flat_records`, and the live-record peak becomes the reading;
   - any other fault in the protected arm alone is a finding, to localise before anything else.
 - No line from a command for the whole run: a stall, classified from the serial log.
+
+## PHP against a pristine second binary (2026-11-22)
+
+Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
+(2026-11-18) compared two run-time modes of one image instead, mode 4 against mode 6.
+
+### Pre-registration: QEMU twin, PHP pristine vs protected (written 2026-11-22 06:10, before the run)
+
+- **Images.** Both come from the same `perf/appd/php/build.sh` build (FRCDKMS SDK, the F/P1 flags at -O2):
+  - not protected: `php-stock.strip.dom` `13d187b0…`, pristine `zend_alloc.c` over mallocng (`PHP_REALPHP_ALLOC=stock`).
+    It carries no `PHP_CAP_MODE` or `ZEND_CAP_MODE` string;
+  - protected: `php-nested.strip.dom` `d63abbc5…` in mode 6, the P1 row's protected arm.
+- **Stage.** `nested/appd/php10s`, made with `make-abba-stage.py`: u1 p1 p2 u2, the P1 row's input and workload
+  (`bench10-check.php` `655fd6d4…`, `-n`), the same normalisation and output capture. Its `run.sh` differs from
+  `nested/appd/php10`'s only in the stage name and in the stock arm's `PHP_CAP_MODE=4`, which the pristine binary does not
+  read.
+- **Run.** One twin boot on slot 28, the flags of `nphp10-1`, no plugin. Read with `parse-abba.py`, as `nphp10-1` was.
+
+Predictions:
+- **Answers.** Every command's normalised output equals the native reference `8f692e64…`. The protected commands print
+  `ZEND_CAP_MODE 6 exact=0 revoke=1`, and the stock commands print no ZEND_CAP_MODE line.
+- **Repeats.** Within 0.1 % per arm on in-context cycles.
+- **Cost, protected vs pristine, in-context.** UNCERTAIN in size. On the twin the lifetime alone (mode 6 vs mode 4) was
+  +0.16 %. Mode 4 also gives every block back to mallocng, where pristine zend_alloc keeps its own caches, so this
+  pairing adds the geometry difference. I predict +0.5 % to +15 %. A result below mode 6 vs mode 4's +0.16 % would mean
+  that pristine zend_alloc costs more than mode 4's geometry; that is to be explained, not absorbed.
+- **The geometry alone.** This boot gives protected vs pristine. Pristine vs mode 4 then comes from comparing this
+  boot's stock arm with `nphp10-1`'s mode-4 arm, which are two boots. It is labelled as such, not read as a paired
+  result.
+
+VOID if any command's answer differs, or if the protected commands do not print mode 6.
