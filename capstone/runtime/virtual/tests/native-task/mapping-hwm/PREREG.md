@@ -83,7 +83,7 @@ Readings:
 
 These are twin readings, N=1, and diagnostics. The paper's Full row does not change.
 
-## Amendment 1 (2026-11-22 07:25, during run 8, before run 9 and before any rerun)
+## Amendment 1 (2026-11-22 07:19, during run 8, before run 9 and before any rerun)
 
 Runs 3, 6 and 7 (the logged images HL and FL) stopped within 16 s with SIGSEGV. The cause is the instrument. The
 image's first `@@HM` write came before musl had set up the thread pointer: a cause 24 SHRINK fault in
