@@ -3548,3 +3548,48 @@ This is the first outcome: on this input, the mapping cache is the variable that
 Limits: one run per image, and R0's margin is about 7 MB in a 921,488 kB guest. The readings come from the twin, not the
 board. The paper's Full row does not change. Bounding the cache, or giving its mappings back under memory pressure, is
 a runtime change and goes to the runtime side on its own.
+
+## speedtest1 `--size 100` on the twin (2026-11-22)
+
+The programme's item 4 asks for speedtest1 at `--size 100`, which the SPEC lane deferred on 14 Nov at about 6.5 h per
+command on silicon. The twin comes first: it gives the answers, the lifetime counts and the instructions.
+
+**The heap.** At `--size 100` the `--size 1` configuration's 8 MiB memsys5 heap is too small. A host build of the same
+sources (`7fc92e19…` sqlite3.c, `16750ede…` speedtest1.c, gcc 13.3.0, the oracle build) stops at phase 150 with
+`SQL error: out of memory` after 7 phases. It exits 0 with 32 phases at 16, 32, 64, 128 and 256 MiB, and the phase
+lines are identical at all five sizes. Capstone's pointers are twice the host's, so the run uses 32 MiB, twice the
+smallest heap that completed on the host.
+- Reference: `capstone/ports/sqlite/app/results/2026-11-22-size100-host/phases.json`, the 32 phases of the host run at
+  `--heap 33554432 64 --size 100`.
+- Control: the same host build at `--heap 8388608 64 --size 1` reproduces the native phases of
+  `2026-10-11-same-answers/phases.json`, 32/32.
+
+### Pre-registration: QEMU twin, speedtest1 `--size 100` (written 2026-11-22 06:30, before the run)
+
+- **Run.** One twin boot on slot 28 (`nested/st1/stages/s100`, made by `make-stage.py`), the file-database commands u,
+  p, p, u, each `--heap 33554432 64 --size 100 st.db`. It is run under `capmixn` (PROF=1), on the kernel and module flags of
+  `nst1-q2`, the `--size 1` pair. The stage's `run.sh` differs from `nst1-q2`'s only in the arguments.
+- **Images.** The `--size 1` images, unchanged: not protected `817b1652…`, protected `945fb69f…`.
+- **Readings.** Per command:
+  - rc and the 32 oracle lines against the reference;
+  - CDERIVE and CREVOKE in the program window;
+  - program instructions (capmix3-read.py's rule, as at `--size 1`);
+  - kernel instructions in the window.
+
+Predictions:
+- **Answers.** 32/32 equal to the reference in all four commands.
+- **Lifetimes.** At `--size 1` the protected arm minus the unprotected one was 28,216 CREVOKEs. The work scales with
+  the size, so I predict 1 M to 6 M at `--size 100`, with the unprotected arm below 100.
+- **Program instructions, protected vs not.** +0.3 % to +3 % (`--size 1`: +0.63 %). Repeats of an arm agree within
+  0.01 %.
+- **Control.** The protected arm must show at least 1,000 times the unprotected arm's CREVOKEs, or the patch did not take
+  effect and the run says nothing about protection.
+
+Failure branches:
+- Both arms out of memory: the heap is too small for Capstone at 32 MiB. That is a configuration result, and the next
+  run doubles it.
+- Only the protected arm fails:
+  - with QEMU cause 30, the flat table's 262,144 records per context are exhausted. That is a table-size result: the
+    next run raises `node_flat_records`, and the live-record peak becomes the reading;
+  - any other fault in the protected arm alone is a finding, to localise before anything else.
+- No line from a command for the whole run: a stall, classified from the serial log.
