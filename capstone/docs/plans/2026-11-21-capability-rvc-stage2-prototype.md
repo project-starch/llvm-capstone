@@ -96,6 +96,240 @@ by default, byte-identical when off.
 4. **Twin runs** on perl and gcc (specdiff), then the rest. Reported in instructions and fetch bytes; the cycle
    question waits for the RTL step.
 
+## Step 3 pre-registration (2026-11-21, before the feature-on arm is built)
+
+**Arms.** CRVC0 is FRCDKMSa3's SDK, runtime, libc and flags with the current compiler, the feature off: clang
+518578ef40a76b19, lld b9f671e793ab869d, built from dev f94bb28f768b with step 1 compiled in. CRVC1 is the same
+plus `+cap-crvc` and a link script that writes `CV_IMAGE_MAGIC_CRVC`. The feature-off arm is the baseline, not
+FRCDKMSa3, because the compiler has moved since 29027126f39b.
+
+**The prediction, static, per benchmark.** Counted on CRVC0's compiled objects: the 4-byte instructions that fit each
+form, and the 16-bit FP forms. The prebuilt libc and runtime are outside the count, and the feature does not touch
+them.
+
+| benchmark | objects | c.ldcsp | c.stcsp | c.ldc | c.stc | c.cincoffset16sp | c.movc | c.scc | c.cincoffset | set | c.fldsp | c.fsdsp | c.fld | c.fsd | 4-byte fld/fsd |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 500.perlbench_r | 69 | 19,105 | 13,153 | 18,094 | 6,145 | 4,349 | 13,448 | 15,814 | 1,398 | 91,506 | 196 | 150 | 235 | 18 | 93 |
+| 502.gcc_r | 387 | 89,085 | 59,775 | 77,962 | 28,118 | 22,653 | 94,218 | 67,036 | 7,496 | 446,343 | 54 | 37 | 67 | 17 | 54 |
+| 505.mcf_r | 12 | 213 | 194 | 82 | 94 | 46 | 118 | 35 | 3 | 785 | 2 | 2 | 0 | 0 | 1 |
+| 519.lbm_r | 2 | 91 | 95 | 24 | 6 | 28 | 31 | 23 | 4 | 302 | 31 | 32 | 32 | 5 | 355 |
+| 525.x264_r | 96 | 10,391 | 7,108 | 5,709 | 1,686 | 1,695 | 3,881 | 3,802 | 2,475 | 36,747 | 444 | 340 | 208 | 65 | 469 |
+| 538.imagick_r | 98 | 18,484 | 10,422 | 9,402 | 5,042 | 3,595 | 11,988 | 12,989 | 857 | 72,779 | 2,888 | 1,885 | 2,627 | 806 | 5,560 |
+| 544.nab_r | 20 | 1,422 | 1,276 | 1,073 | 464 | 344 | 1,116 | 1,191 | 120 | 7,006 | 246 | 198 | 360 | 195 | 886 |
+| 557.xz_r | 90 | 1,508 | 1,342 | 447 | 216 | 497 | 836 | 671 | 41 | 5,558 | 3 | 3 | 4 | 0 | 7 |
+
+**What the reading must show on CRVC1's objects:**
+- each form's count equals the row above exactly (the compression runs after register allocation, which the
+  feature does not change);
+- no 16-bit FP form;
+- 4-byte fld/fsd equal to CRVC0's 4-byte count plus its four 16-bit FP columns;
+- every image's e_flags carry `EF_CAPSTONE_CRVC`, and its magic is the CRVC one.
+
+The method's control: on the two probe programs, prediction and reading agree in all eight classes (55 = 55), and
+the five 16-bit FP forms become 4-byte (1 + 5 = 6). A shortfall on SPEC is a compiler defect to find, not variance.
+The dynamic prediction for step 4 is registered separately, once CRVC0's profiles exist.
+
+## Step 3 reading (2026-11-21): six of the eight forms as predicted; c.ldc and c.stc fewer, by exactly the relocated sites
+
+CRVC1 was built with the same compiler (clang 518578ef40a76b19, lld b9f671e793ab869d) and read on its compiled
+objects.
+- **As predicted:** c.ldcsp, c.stcsp, c.cincoffset16sp, c.movc, c.scc and c.cincoffset match in every benchmark;
+  no 16-bit FP form remains; 4-byte fld/fsd rose by exactly CRVC0's 16-bit FP count in every benchmark.
+- **Images:** all eleven carry flags 0x101 (`EF_CAPSTONE_CRVC` with RVC) and the CRVC magic. Text shrank 9.4 % on
+  perl and 10.8 % on gcc (the census said 9.71 % and 10.67 %).
+- **Not as predicted:** c.ldc and c.stc came in below the prediction.
+
+| benchmark | c.ldc predicted / got | c.stc predicted / got | fitting sites with a relocation (ldc / stc) |
+|---|---:|---:|---:|
+| perl | 18,094 / 15,365 | 6,145 / 5,112 | 2,729 / 1,033 |
+| gcc | 77,962 / 67,757 | 28,118 / 27,730 | 10,205 / 388 |
+| x264 | 5,709 / 5,547 | — | 162 / 0 |
+| mcf | 82 / 80 | 94 / 93 | 2 / 1 |
+| imagick | 9,402 / 9,319 | 5,042 / 5,023 | 83 / 19 |
+| nab | 1,073 / 815 | 464 / 462 | 258 / 2 |
+| xz | 447 / 369 | — | 78 / 0 |
+| lbm | as predicted | as predicted | 0 / 0 |
+
+**CORRECTION of the pre-registered prediction.** The shortfall equals, in every benchmark and both columns, the
+fitting sites whose offset carries a relocation.
+- These are `-capstone-fold-global-lo` sites: a global's `%pcrel_lo` folded into the load or store. In an object
+  the offset reads as 0, so the prediction counted it as fitting; the compiler cannot compress an offset that is
+  unknown until link time.
+- The compiler compressed every compressible site. The prediction over-counted.
+- **RETRACTED the same day: "the same applies to the census".** The census reads linked images, where most folded
+  offsets resolve to values that do not fit (a nab example: -0x37c), so it never counted them.
+  - The folded sites that do fit on the images are 49 c.ldc and 17 c.stc on perl, and 244 and 51 on gcc (fold.py:
+    auipc, then scc gp, then the access, following copies and spills; on objects 91-100 % recall, over 99.5 %
+    precision).
+  - Without them the census set reads 9.77 % and 15.35 %, unchanged. The retraction is on dev at b33a7a87d6f6.
+
+## Step 4 pre-registration, part 1 (2026-11-21, before any CRVC1m run)
+
+**Arms.** CRVC1m is CRVC1 with the standard link script: the same code, with only `.capstone_virtual` differing, in
+all 11 images. The twin's native-route loader (binfmt-dom, another lane's code) accepts only `CV_IMAGE_MAGIC`, and
+`x-capstone-crvc-force` puts every context in the mode.
+- Both arms run on the same prototype QEMU binary (41debeb7d1382427), CRVC0 without the mode and CRVC1m with
+  `x-capstone-crvc=on,x-capstone-crvc-force=on`.
+- natio images, 524,288 flat records, shift-1 capmix3, every command window.
+
+**Prediction from CRVC0's profiles** (the census over CRVC0's own profile and binary). "Saving" is the fetch bytes the
+compiler can remove: every fitting site except the folded %pcrel_lo ones (fold.py). The census column adds the folded
+sites back, which is what link-time compression would add.
+
+| row | CRVC0 image insns | CRVC0 fetch bytes | set executions (census) | folded executions | predicted CRVC1m fetch bytes | predicted saving | census (with folded) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 502.gcc_r-train01 | 12,221,841,750 | 41,953,281,372 | 3,219,826,413 | 479,839 | 35,514,588,224 | **15.347 %** | 15.350 % |
+| 505.mcf_r-test | 26,643,806,738 | 87,376,393,242 | 2,933,711,398 | 0 | 81,508,970,446 | **6.715 %** | 6.715 % |
+| 519.lbm_r-test | 6,092,487,936 | 23,242,892,232 | 8,561,719 | 0 | 23,225,768,794 | **0.074 %** | 0.074 % |
+| 538.imagick_r-test-ref | 95,383,602 | 354,828,474 | 2,622,612 | 0 | 349,583,250 | **1.478 %** | 1.478 % |
+| 544.nab_r-test | 7,154,822,856 | 25,574,753,800 | 307,550,465 | 0 | 24,959,652,870 | **2.405 %** | 2.405 % |
+| 557.xz_r-test | 49,630,300,219 | 173,387,788,550 | 1,870,626,057 | 0 | 169,646,536,436 | **2.158 %** | 2.158 % |
+
+**Further predictions:**
+- CRVC1m's image instructions equal CRVC0's within 0.05 %, since compression changes only encoding (branch-range
+  choices may differ by a few instructions);
+- every row's output validates as CRVC0's does;
+- a context the mode does not reach would execute the CRVC words as FP and fail validation, which is the check
+  that the native route's contexts reach the mode.
+
+perl and x264 are registered when their CRVC0 profiles finish. perl's first CRVC0 attempt was VOID: the gcc recipe
+lacked perl's module flags (`dom_grant_root`, `dom_null`, `dom_local_tmp`) and images (`images-a0ed`). A second was
+void too, on the command-line limit. Both are kept as void-*.
+
+## Step 4, part 1 FAILED on its first three readings; the corrected model, registered for the other rows (2026-11-21)
+
+**What part 1 got wrong.** Its "predicted saving" took the census set over the whole image, less the folded
+sites. That omits two terms.
+1. **The FP forms a CRVC image gives up.** Under option B the whole image is decoded in the mode, so a CRVC image
+   cannot use C.FLD, C.FSD, C.FLDSP or C.FSDSP anywhere. The census called that option A's cost, but it is the
+   cost of every image that sets the mode. Option B's real difference is per-image choice: an FP-heavy image can
+   stay out of the mode, losing nothing and gaining nothing.
+2. **The prebuilt libc and runtime.** The feature does not compile them, so their fitting sites stay 4-byte.
+
+Measured against part 1's prediction for those rows (the deviation is far outside any noise):
+- imagick saved 0.375 % against 1.478 % predicted;
+- nab GREW by 3.53 % against 2.405 % predicted saved;
+- lbm GREW by 2.98 % against 0.074 % predicted saved.
+
+**The corrected model.** Saving = 2 × (program-function set − folded − program-function 16-bit FP) / fetch bytes.
+Program functions are those not defined in the linked runtime, libc and builtins archives. Census by enclosing
+function on CRVC0's `.full` image, with the same text as the stage binary. Checked post hoc on the three readings it
+was built to explain (so these do not test it):
+
+| row | CRVC0 fetch bytes | corrected model | measured CRVC1m |
+|---|---:|---:|---:|
+| 538.imagick_r-test-ref | 354,828,474 | 353,510,490 (0.371 %) | 353,498,934 (0.375 %) |
+| 544.nab_r-test | 25,574,753,800 | 26,478,158,384 (-3.532 %) | 26,478,142,612 (-3.532 %) |
+| 519.lbm_r-test | 23,242,892,232 | 23,935,961,556 (-2.982 %) | 23,935,966,956 (-2.982 %) |
+
+**Registered now, before any of their CRVC1m readings is opened** (those runs were launched under part 1 and have
+not been read):
+
+| row | CRVC0 fetch bytes | program set executions | folded | program 16-bit FP | predicted CRVC1m fetch bytes | predicted saving |
+|---|---:|---:|---:|---:|---:|---:|
+| 502.gcc_r-train01 | 41,953,281,372 | 3,103,226,080 | 155,266 | 12,523 | 35,747,164,790 | **14.793 %** |
+| 505.mcf_r-test | 87,376,393,242 | 2,889,054,374 | 0 | 0 | 81,598,284,494 | **6.613 %** |
+| 557.xz_r-test | 173,387,788,550 | 1,611,151,616 | 0 | 0 | 170,165,485,318 | **1.858 %** |
+
+perl and x264 are registered on this model when their CRVC0 profiles finish, before their CRVC1m runs start.
+
+## Step 4, perl registered on the corrected model (2026-11-21, before its CRVC1m run)
+
+| row | CRVC0 image insns | CRVC0 fetch bytes | program set | folded | program 16-bit FP | predicted CRVC1m fetch bytes | predicted saving |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 500.perlbench_r-test-sw | 84,271,470,274 | 295,259,424,034 | 12,492,267,768 | 816,087 | 29,957,153 | 270,336,434,978 | **8.441 %** |
+
+- CRVC0's perl validates 1 of 2. One of 317 sub-tests, base/term.t, cannot open
+  `/tmp/nt/b/perlbench_r_base.native`: a harness path of the newer stage maker (nat-fair e4631fa7ac3d) against the
+  run's file grants, not the compiler. FRCDKMSa3's older stage validated 2 of 2.
+- CRVC1m shares the stage, so it must fail exactly that sub-test and nothing else.
+- The recipe is perl's own: images-a0ed, `dom_grant_root=/tmp/nt/sr dom_null=1 dom_local_tmp=1`,
+  TWIN_CMDLINE_MAX=1024.
+- Expected from gcc: call relaxation (more calls in `jal` range) may add a small extra saving and remove a few
+  instructions.
+
+## Step 4, x264 registered on the corrected model (2026-11-21, before its CRVC1m run)
+
+| row | CRVC0 image insns | CRVC0 fetch bytes | program set | folded | program 16-bit FP | predicted CRVC1m fetch bytes | predicted saving |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 525.x264_r-test | 508,109,995,900 | 1,863,354,369,930 | 20,055,998,138 | 0 | 5,566 | 1,823,242,384,786 | **2.153 %** |
+
+- Both commands returned 0. specdiff reads 0/3 as on every x264 twin run, because the twin plan does not run
+  imagevalidate. CRVC1m must read the same.
+- The x264 binary maps 95.48 % of the profile; the rest is ldecod's input generation at its link address.
+
+## Zcb arm ZCB1, pre-registration (2026-11-21, before any ZCB1 run)
+
+**CORRECTION to the identities above.** This LLVM build has `BUILD_SHARED_LIBS=ON`, so `clang-22` and `lld` are thin
+drivers, and "clang 518578ef40a76b19, lld b9f671e793ab869d" do not identify the compiler; the target code lives in
+`libLLVMCapstone*.so` and `liblldELF.so`.
+- What does hold: CRVC0, CRVC1 and CRVC1m were all built from one build, of step 1's source 76061a895cb3, before the
+  next rebuild.
+- From here on the libraries are hashed. ZCB1 was built from f89f633f3d50: libLLVMCapstoneCodeGen bc5683c1913660e5,
+  libLLVMCapstoneDesc f072cc59d71f7c02, liblldELF 904e381cad71c6cc.
+
+**Arm.** ZCB1 is CRVC0 plus `+zcb` and `+cap-base-zcb`, with no CRVC.
+- It measures Zcb as a whole: the five capability-base byte and halfword forms, plus Zcb's own c.zext.b, c.not and
+  c.mul, which `+zcb` turns on.
+- It runs on the same prototype QEMU, with `zcb=true` and no CRVC mode.
+
+**Static check, already read on the objects (the instrument's control):**
+- The five capability-base forms match the prediction exactly in all eight benchmarks, relocated offsets excluded.
+- c.zext.b, c.not and c.mul come in higher than predicted, in every benchmark (gcc's c.not 837 against 568). The
+  extra sites come from the feature-on build; the pass responsible was not identified. These three are therefore
+  predicted as a lower bound.
+
+**Dynamic prediction from CRVC0's profiles:** program functions only, folded offsets excluded, 2 bytes per
+execution.
+
+| row | CRVC0 fetch bytes | predicted compressible executions | predicted ZCB1 fetch bytes | predicted saving |
+|---|---:|---:|---:|---:|
+| 500.perlbench_r-test-sw | 295,259,424,034 | 1,308,910,170 | 292,641,603,694 | **0.887 %** |
+| 502.gcc_r-train01 | 41,953,281,372 | 123,290,647 | 41,706,700,078 | **0.588 %** |
+| 525.x264_r-test | 1,863,354,369,930 | 11,920,434,717 | 1,839,513,500,496 | **1.279 %** |
+| 505.mcf_r-test | 87,376,393,242 | 22,703,758 | 87,330,985,726 | **0.052 %** |
+| 519.lbm_r-test | 23,242,892,232 | 0 | 23,242,892,232 | **0.000 %** |
+| 538.imagick_r-test-ref | 354,828,474 | 1,742,476 | 351,343,522 | **0.982 %** |
+| 544.nab_r-test | 25,574,753,800 | 20,513,814 | 25,533,726,172 | **0.160 %** |
+| 557.xz_r-test | 173,387,788,550 | 1,091,468,515 | 171,204,851,520 | **1.259 %** |
+
+The reading must show at least that saving: exact for the capability-base forms, above it by the extra Zcb forms.
+Every row must validate as CRVC0's does.
+
+## Step 4 readings, complete (2026-11-21)
+
+Fetch bytes saved against CRVC0, on the twin (shift-1 capmix3, every command window, the benchmark's own binary).
+"registered" names the commit that registered the corrected model before the reading. The three post-hoc rows
+are the ones the model was built from, after part 1 of the prediction failed on them.
+
+| row | CRVC1m measured | corrected model | registered | ZCB1 measured | ZCB1 lower bound | validation (both arms) |
+|---|---:|---:|---|---:|---:|---|
+| 500.perlbench_r-test-sw | 8.467 % | 8.441 % | e146b0bd8d96 | 0.889 % | 0.887 % | 1/2 (same sub-test as CRVC0) |
+| 502.gcc_r-train01 | 14.879 % | 14.793 % | 4c9e5fb2168a | 0.593 % | 0.588 % | 1/1 |
+| 525.x264_r-test | 2.155 % | 2.153 % | 81755ffdf7ff | 1.289 % | 1.279 % | commands 0, 0 (twin 0/3) |
+| 505.mcf_r-test | 6.613 % | 6.613 % | 4c9e5fb2168a | 0.081 % | 0.052 % | 2/2 |
+| 519.lbm_r-test | -2.982 % | -2.982 % | post hoc | 0.000 % | 0.000 % | 1/1 |
+| 538.imagick_r-test-ref | 0.375 % | 0.371 % | post hoc | 0.982 % | 0.982 % | 1/1 |
+| 544.nab_r-test | -3.532 % | -3.532 % | post hoc | 0.220 % | 0.160 % | 1/1 |
+| 557.xz_r-test | 1.859 % | 1.858 % | 4c9e5fb2168a | 1.259 % | 1.259 % | 12/12 |
+
+**Reading.**
+- **The corrected model predicts the CRVC rows to within 0.09 points** on the five rows registered before their
+  readings. gcc and perl came in above the model by link-time call relaxation, measured on gcc: 7,102,579 calls
+  moved from auipc+jalr to jal, since smaller code brings more calls into jal range.
+- **The go/no-go measured, not as upper bounds:** perl 8.47 % and gcc 14.88 % of executed fetch bytes for program
+  code built with the feature. x264 reads 2.16 %.
+  - The prebuilt libc and runtime are not compressed. On perl the census attributes about 1.3 points to them.
+- **In the mode, FP-heavy rows get worse:** nab −3.53 %, lbm −2.98 %, and imagick only 0.37 %. Under option B they
+  would be built without the mode.
+- **Zcb with a capability base (ZCB1, without CRVC) meets its lower bound in every row.** x264 1.29 % and xz 1.26 %
+  gain the most; perl 0.89 %, gcc 0.59 %. It needs no ISA change, and P1's RTL decodes Zcb.
+  - CRVC and Zcb compress disjoint instruction classes, so their sum is the natural estimate for both: x264 about
+    3.4 %. That sum is NOT measured; no combined arm was built.
+- **The native route reaches the mode.** Every CRVC1m row validates as its CRVC0 baseline does; a context outside
+  the mode would run the CRVC words as FP and fail.
+- Not measured: I$ misses and cycles (the RTL step), and a libc/runtime rebuilt with the features.
+
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
 `CVA6Cfg.RVZCB`), with `CVA6ConfigZcbExtEn = 1` in `capstone_cv64a6_imafdc_sv39_config_pkg.sv`.
