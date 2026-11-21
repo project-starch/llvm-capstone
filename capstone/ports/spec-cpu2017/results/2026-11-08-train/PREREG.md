@@ -6440,3 +6440,58 @@ band. *Loss*: a row above it, which is reported with the row and looked into bef
 further. Since the instruction count is unchanged, a reading outside the band in either direction is a fetch-side effect.
 
 **Stops** as Addendum 199. Fallback: P1 with bkit91, as it already is. **Dry run:** `perf/natstage/dry210/`.
+
+## Addendum 211 (2026-11-22 02:43 +08): Addendum 206 is VOID (first domain entry wedged); the spatial-only core step C, before it runs
+
+**Outcome of Addendum 206: VOID, no row.** Board 1 flashed 1f1ed11f9 at 04:33-04:36 on 21 Nov (rc 0, name read back).
+The boot reached the shell and rung b0-stats passed. Rung b0-hello, the control's first domain, printed `DBAS:AC080000`
+and `DENT:00000000` and then nothing for 72,100 s. The watchdog printed only STALE: it kills at an entry stall, not at
+idle. The driver's cap was 117,000 s, because the first stage was gcc (28,800 s x 4). The chain was stopped at 00:44 on
+22 Nov: about 20 hours of board 1 lost.
+- **Mechanism (the rtl lane, checked at source).** sbi_capstone.c's create_domain prints DBAS and DENT, then, under
+  `CAPSTONE_SUPERVISED_CALL`, runs `__revoke` and `__mrev`. Step B decodes both as illegal, so the core traps at M inside
+  the monitor's ecall handler, which is not re-entrant.
+- **RETRACTION of Addendum 206's footing.** Step B's claim, "REVOKE, MREV and DROP are zero in every binary the +Spatial
+  stage runs", was a census by name. A census by encoding (capstone/tools/lineb-monitor/lifetime-op-scan.py, with a
+  positive control) finds 6 REVOKE and 8 MREV in the monitor, 2 MREV in task-driver, and 1 REVOKE in each of four smoke
+  domains. DROP is in no image. Recorded at land/rtl-spatial-c d7e54e999403.
+- **DEVIATION, latent.** Addendum 206 said a smoke result of 40 is accepted. Only the stage's `ctl.sh` accepted it. The
+  chain's own smoke gate (the kit's classify.py, called by nat-run3) reads step 40's FAIL as a failed smoke and stops the
+  chain. So the chain would have stopped after its first row even without the wedge. The stubbed dry run did not classify,
+  so it could not show this.
+
+**The new core: step C** (capstone-ariane spatial-only-c 321af31a3 = ace0ae890 plus the sp-monshape arm). It is step B with
+the decoder keeping only DROP illegal. REVOKE and MREV go to the stub. Pre-registered at land/rtl-spatial-c ed7565cfd5c0:
+- lint identical to steps A and B (UNOPTFLAT 39, UNUSEDSIGNAL 1,351, the rest at baseline);
+- the 95-test sweep identical to step A's in values, RVFI traces and cycles (92 of 92);
+- sp-monshape: both monitor create branches (managed and cached) enter the domain and return, on step C and on P1's tree.
+  Step B reproduces the board's wedge.
+
+The synthesis-only gate, the full build and the seal are the board lane's, keyed against step B's routed seal (LUT 179,661,
+FF 72,847, WNS +0.170). No flash before the seal.
+
+**Stated semantic difference.** On the stub, REVOKE returns a LINEAR block. So on this core a block the monitor reclaims is
+never scrubbed. On P1 it is scrubbed only when REVOKE returns UNINIT. `managed_reinit` (capstone-sbi sbi_capstone.c:855-880)
+already skips the fill when REVOKE returns LINEAR, and its own comment records that P1 does so for a block whose descendants
+were DELINed. The firmware adds no scrub. Domain reclaims are a handful per boot, so this is a stated semantic term, not a
+cost term.
+
+**Chain** spoc-b1.conf (TAG spoc-frcdkmsspa3), board 1, kit bkit102. bkit102 is bkit101 with two changes:
+- the bitstream fields, left PLACEHOLDER until the seal, so a real run refuses before it;
+- classify.py with a `WAIVE_SPATIAL` rule. Step 40 may FAIL only if its failing checks are "revoked input refused" and, at
+  most, "replacement sentinel intact", with the matching failure count. Every other failure, in step 40 or any other step,
+  still fails the smoke. Controls on two real P1 transcripts (nab and lbm train): pass 0, the two waivable shapes 0;
+  another probe check 1, the sentinel alone 1, a probe failure plus a task failure 1, no waiver file 1. Seven of seven
+  read as intended.
+
+Stages, images, rows and prediction are Addendum 206's unchanged, with one change of order: **the shortest stage runs
+first**. That is imagick, with a 900 s stage timeout, so a 3,600 s driver cap; a whole imagick boot took about 9 minutes
+on 20 Nov. Then lbm, nab, gcc train01, mcf, xz, perlbench (full test input). The runtime lane reads the board within an
+hour of the first boot's start. A first boot that does not return a row stops the chain, and the next step is in
+simulation, not on the board.
+
+**Prediction.** As Addendum 206: every row at most +Spatial-on-P1's time plus 0.2 %, against board 1's third-run bands for
++Spatial. The reclaim term above cannot move a SPEC row measurably. The chain does not separate the hardware term from the
+no-op lifetime operations or from the monitor's CSCHECK emulation without its liveness walk.
+
+**Stops** as Addendum 199, with the waiver above. Fallback: P1 with bkit91. **Dry run:** `perf/natstage/dry211/`.
