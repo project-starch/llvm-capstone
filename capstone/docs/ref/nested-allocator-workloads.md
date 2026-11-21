@@ -3528,3 +3528,23 @@ Outcomes:
 
 This is a diagnostic, not a measured arm. The paper's Full row does not change. Any board run goes through the SPEC
 lane, under a new addendum.
+
+### Results: R0 completes and W0 is killed, as predicted (QEMU twin, 2026-11-22 03:14-05:47)
+
+Both runs used the configuration above, one each, R0 then W0.
+
+| image | run | result | memory |
+|---|---|---|---|
+| R0 `24a4cc5e…` (no mapping cache) | `census/out/mem2-mcftrain-r0-24a4cc5e` | rc 0, specdiff 2/2 | VmHWM 885,680 kB |
+| W0 `8b782488…` (V1f's realloc) | `census/out/mem2-mcftrain-w0-8b782488` | OOM-killed at 100 s guest, specdiff 0/2 | anon-rss 892,728 kB, total-vm 1,065,808 kB at the kill (kernel line) |
+
+This is the first outcome: on this input, the mapping cache is the variable that separates Full from V1f.
+- **R0.** Without the cache, Full's image peaks 1,508 kB below V1f's (885,680 against 887,188 kB). It also peaks about 7 MB
+  below the anon-rss of both killed runs (892,748 and 892,728 kB).
+- **W0.** V1f's realloc alone leaves anon-rss at the kill where Full's was, 20 kB lower. Total-vm at the kill is
+  42,816 kB lower (1,065,808 against 1,108,624 kB). So, at the kill, (b)'s room shows in address space and not in
+  resident memory.
+
+Limits: one run per image, and R0's margin is about 7 MB in a 921,488 kB guest. The readings come from the twin, not the
+board. The paper's Full row does not change. Bounding the cache, or giving its mappings back under memory pressure, is
+a runtime change and goes to the runtime side on its own.
