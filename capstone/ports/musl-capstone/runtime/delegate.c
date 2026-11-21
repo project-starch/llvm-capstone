@@ -122,10 +122,16 @@ struct dl_transport {
 };
 static struct dl_transport default_transport;
 static __thread struct dl_transport *private_transport;
+/* The TLS read sits in a call of its own. llvm.threadlocal.address is speculatable, so with the read inline the
+   compiler hoists its cincoffset tp / shrink / ldc above the tp test, and a call made before musl has set up tp
+   traps at the shrink (cause 24; the mapping-hwm TEST_LOG images, 2026-11-22). A call is never speculated. */
+__attribute__((noinline)) static struct dl_transport *dl_private(void) { return private_transport; }
 static struct dl_transport *dl_transport(void) {
   void *tp;
   __asm__ volatile("movc %0, tp" : "=r"(tp));
-  return tp && private_transport ? private_transport : &default_transport;
+  if (!tp) return &default_transport;
+  struct dl_transport *p = dl_private();
+  return p ? p : &default_transport;
 }
 int __capstone_delegate_has_private_transport(void *target_tp) {
   if (!target_tp) return 0;
