@@ -296,6 +296,40 @@ execution.
 The reading must show at least that saving: exact for the capability-base forms, above it by the extra Zcb forms.
 Every row must validate as CRVC0's does.
 
+## Step 4 readings, complete (2026-11-21)
+
+Fetch bytes saved against CRVC0, on the twin (shift-1 capmix3, every command window, the benchmark's own binary).
+"registered" names the commit that registered the corrected model before the reading. The three post-hoc rows
+are the ones the model was built from, after part 1 of the prediction failed on them.
+
+| row | CRVC1m measured | corrected model | registered | ZCB1 measured | ZCB1 lower bound | validation (both arms) |
+|---|---:|---:|---|---:|---:|---|
+| 500.perlbench_r-test-sw | 8.467 % | 8.441 % | e146b0bd8d96 | 0.889 % | 0.887 % | 1/2 (same sub-test as CRVC0) |
+| 502.gcc_r-train01 | 14.879 % | 14.793 % | 4c9e5fb2168a | 0.593 % | 0.588 % | 1/1 |
+| 525.x264_r-test | 2.155 % | 2.153 % | 81755ffdf7ff | 1.289 % | 1.279 % | commands 0, 0 (twin 0/3) |
+| 505.mcf_r-test | 6.613 % | 6.613 % | 4c9e5fb2168a | 0.081 % | 0.052 % | 2/2 |
+| 519.lbm_r-test | -2.982 % | -2.982 % | post hoc | 0.000 % | 0.000 % | 1/1 |
+| 538.imagick_r-test-ref | 0.375 % | 0.371 % | post hoc | 0.982 % | 0.982 % | 1/1 |
+| 544.nab_r-test | -3.532 % | -3.532 % | post hoc | 0.220 % | 0.160 % | 1/1 |
+| 557.xz_r-test | 1.859 % | 1.858 % | 4c9e5fb2168a | 1.259 % | 1.259 % | 12/12 |
+
+**Reading.**
+- **The corrected model predicts the CRVC rows to within 0.09 points** on the five rows registered before their
+  readings. gcc and perl came in above the model by link-time call relaxation, measured on gcc: 7,102,579 calls
+  moved from auipc+jalr to jal, since smaller code brings more calls into jal range.
+- **The go/no-go measured, not as upper bounds:** perl 8.47 % and gcc 14.88 % of executed fetch bytes for program
+  code built with the feature. x264 reads 2.16 %.
+  - The prebuilt libc and runtime are not compressed. On perl the census attributes about 1.3 points to them.
+- **In the mode, FP-heavy rows get worse:** nab −3.53 %, lbm −2.98 %, and imagick only 0.37 %. Under option B they
+  would be built without the mode.
+- **Zcb with a capability base (ZCB1, without CRVC) meets its lower bound in every row.** x264 1.29 % and xz 1.26 %
+  gain the most; perl 0.89 %, gcc 0.59 %. It needs no ISA change, and P1's RTL decodes Zcb.
+  - CRVC and Zcb compress disjoint instruction classes, so their sum is the natural estimate for both: x264 about
+    3.4 %. That sum is NOT measured; no combined arm was built.
+- **The native route reaches the mode.** Every CRVC1m row validates as its CRVC0 baseline does; a context outside
+  the mode would run the CRVC words as FP and fail.
+- Not measured: I$ misses and cycles (the RTL step), and a libc/runtime rebuilt with the features.
+
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
 `CVA6Cfg.RVZCB`), with `CVA6ConfigZcbExtEn = 1` in `capstone_cv64a6_imafdc_sv39_config_pkg.sv`.
