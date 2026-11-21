@@ -385,3 +385,21 @@ folded offsets excluded, 2 bytes per execution):
 - The risk to the direction is more 4-byte instructions crossing a fetch boundary once their neighbours shrink; on
   this footing RVC already mixes widths, so that risk is second-order.
 - These images run on P1 silicon: `compressed_decoder.sv` decodes Zcb under `CVA6Cfg.RVZCB`.
+
+### ZCB9 twin readings (2026-11-21, after the pre-registration at 2433c1df977d)
+
+Each row validates as every arm does in this driver: perl 1/2 on and off, x264 0/3, imagick 1/1, xz 12/12.
+
+| row | baseline fetch bytes | ZCB9 fetch bytes | measured saving | registered (lower bound) |
+|---|---:|---:|---:|---:|
+| perl (vs ZCB9off, this driver) | 295,259,388,408 | 292,634,400,138 | **0.889 %** | 0.886 % |
+| x264 (vs FRCDKMSa3) | 1,863,354,368,786 | 1,839,332,598,084 | **1.289 %** | 1.279 % |
+| xz (vs FRCDKMSa3) | 173,387,785,674 | 171,204,885,696 | **1.2590 %** | 1.2590 % |
+| imagick (vs FRCDKMSa3) | 354,828,226 | 351,343,914 | **0.9820 %** | 0.9822 % |
+
+- perl and x264 exceed their bounds, as ZCB1 did, by the extra c.zext.b, c.not and c.mul.
+- xz and imagick read their bounds to the fourth digit. Both fall a hair short: xz by 37,052 bytes, imagick by 640.
+  That gap matches their instruction counts, which ran 9,275 and 160 instructions above the FRCDKMSa3 profiles from
+  the other driver. That is run-to-run noise at 2×10⁻⁷, not a missing site.
+- These are fetch bytes, not cycles. The board pair (xz, imagick, perl full) belongs to the runtime lane; x264 is
+  left at its twin reading.
