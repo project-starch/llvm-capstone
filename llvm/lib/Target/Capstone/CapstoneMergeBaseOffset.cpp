@@ -826,8 +826,8 @@ bool CapstoneMergeBaseOffsetOpt::formAUIPCGP(MachineInstr &Hi) {
     return false;
   const MachineOperand &HiOp = Hi.getOperand(1);
   if (HiOp.getTargetFlags() != CapstoneII::MO_PCREL_HI ||
-      (!HiOp.isGlobal() && !HiOp.isCPI() && !HiOp.isBlockAddress() &&
-       !HiOp.isSymbol()))
+      (!HiOp.isGlobal() && !HiOp.isCPI() && !HiOp.isJTI() &&
+       !HiOp.isBlockAddress() && !HiOp.isSymbol()))
     return false;
   if (HiOp.isGlobal() && HiOp.getGlobal()->hasExternalWeakLinkage())
     return false;

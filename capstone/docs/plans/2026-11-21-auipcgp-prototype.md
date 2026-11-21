@@ -81,3 +81,49 @@ removes one 4-byte instruction.
   identical, so this tests the QEMU change.
 - AGP1 mcf without the property must stop on an illegal instruction: the feature-on image uses the opcode, and the
   check can fail.
+
+## Readings (2026-11-21, after the pre-registration at d9fa11a409d2)
+
+**Controls.**
+- **AGP1 mcf without the property: fired.** The domain stopped with cause 2 (illegal instruction) at pc
+  0x3ff7e0f242. Load base 0x3ff7e00000 plus link base 0x10000 maps that to 0x1f242, `auipcgp a0, 0x15`. The program
+  exited 139.
+- **AGP0 xz on the auipcgp QEMU, property off: FAILED its criterion as written ("exactly").** It reads
+  49,630,299,499 instructions against CRVC0's 49,630,300,219, a difference of 720 (1.5×10⁻⁸), on identical images.
+  - The criterion was wrong for this instrument. The same stage reads 49,630,299,500 on FRCDKMSa3 and
+    49,630,308,775 on ZCB9 (`plans/2026-11-21-capability-rvc-stage2-prototype.md`), so twin instruction counts move
+    by up to ~10⁴ from run to run.
+  - The reading is consistent with the QEMU change having no effect off. It does not prove it to better than ~10⁴
+    instructions.
+
+**Rows.** Every row validates as CRVC0's does: perl 1/2, gcc 1/1, mcf 2/2, lbm 1/1, nab 1/1, imagick 1/1, xz 12/12.
+
+| row | insns removed | registered band | fetch bytes removed | registered band |
+|---|---:|---:|---:|---:|
+| perl | **1.850 %** | 1.707..2.096 % | **2.129 %** | 1.949..2.393 % |
+| gcc | **1.131 %** | 0.955..1.284 % | **1.326 %** | 1.113..1.496 % |
+| nab | 0.028 % | 0.022..0.039 % | 0.032 % | 0.025..0.044 % |
+| mcf | 0.001 % | 0.001 % | 0.000 % | 0.001 % |
+| lbm | 0.000 % | 0.000 % | 0.000 % | 0.000 % |
+| imagick | 0.009 % | 0.005..0.008 % | 0.017 % | 0.005..0.008 % |
+| xz | 0.101 % | 0.049..0.050 % | 0.015 % | 0.056..0.057 % |
+
+- perl and gcc, the two rows the census put through the gate, land inside their bands on both counts.
+- **xz exposed a gap in the transform: jump tables.**
+  - The derive formed on 14.9 M executions against the 24.5 M the census counted. rc_encode's
+    `auipc; addi; scc gp` (9.26 M) and a second lzma_decode site (0.77 M) stayed, because both bases are jump
+    tables (`AUIPC %jump-table.0`), and formAUIPCGP accepted globals, constant-pool entries, block addresses and
+    symbols, but not jump tables.
+  - A jump table lies in .rodata inside gp's bounds like a global, so this was an omission, not a safety condition.
+    It is fixed on the lane branch, with a lit case; AGP2 below is built with the fix.
+- **xz's remaining difference is register allocation in one function**, lzma_lzma_optimum_normal, which itself
+  barely uses the derive (0.29 M):
+  - 30.0 M fewer 2-byte `ld` and 14.5 M fewer `mv`;
+  - but 27.2 M `and` moved from 2 to 4 bytes and 25.3 M more `movc`;
+  - net −35.6 M instructions and +32.2 M bytes.
+- Every converted site changed exactly as predicted: in lzma_decode, sha_compress, process and the rest,
+  `auipc` + `scc` became `auipcgp` and `addi` became `cincoffsetimm`, one for one.
+- Summed over every function: −50.3 M instructions and −26.6 M bytes, which closes the totals exactly.
+- imagick is above its band by a few thousand instructions in 95 M; it was not localised.
+- These are the readings of the FIRST build, AGP1 (libLLVMCapstoneCodeGen f91cc0ce806c64ba). x264 is still running on it.
+- Tool: `s2fn.py` (per-function executions and bytes, two runs matched by name).

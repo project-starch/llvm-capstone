@@ -65,3 +65,58 @@ define void @weak_addr() addrspace(200) {
   call void @use(ptr addrspace(200) @w)
   ret void
 }
+
+; A jump table's base is a gp-derived capability like a global's (xz's
+; rc_encode: 9.3 M executions of `auipc; addi; scc` were missed without this).
+; CHECK-LABEL: jump_table:
+; FOLD:      auipcgp {{[a-z0-9]+}}, %pcrel_hi(.LJTI3_0)
+; KEEP:      auipcgp {{[a-z0-9]+}}, %pcrel_hi(.LJTI3_0)
+; OFF-NOT:   auipcgp
+; CHECK:     ret
+declare void @f0() addrspace(200)
+declare void @f1() addrspace(200)
+declare void @f2() addrspace(200)
+declare void @f3() addrspace(200)
+declare void @f4() addrspace(200)
+declare void @f5() addrspace(200)
+declare void @f6() addrspace(200)
+declare void @f7() addrspace(200)
+define void @jump_table(i32 %k) addrspace(200) {
+entry:
+  switch i32 %k, label %d [
+    i32 0, label %c0
+    i32 1, label %c1
+    i32 2, label %c2
+    i32 3, label %c3
+    i32 4, label %c4
+    i32 5, label %c5
+    i32 6, label %c6
+    i32 7, label %c7
+  ]
+c0:
+  call void @f0()
+  br label %d
+c1:
+  call void @f1()
+  br label %d
+c2:
+  call void @f2()
+  br label %d
+c3:
+  call void @f3()
+  br label %d
+c4:
+  call void @f4()
+  br label %d
+c5:
+  call void @f5()
+  br label %d
+c6:
+  call void @f6()
+  br label %d
+c7:
+  call void @f7()
+  br label %d
+d:
+  ret void
+}
