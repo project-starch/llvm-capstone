@@ -3594,6 +3594,31 @@ Failure branches:
   - any other fault in the protected arm alone is a finding, to localise before anything else.
 - No line from a command for the whole run: a stall, classified from the serial log.
 
+### Result: every command stops at phase 142 with a disk I/O error, unprotected ones too (`nested/out/nst1-s100`, 06:11-06:40)
+
+Not one of the pre-registered branches.
+- All four commands (u1, p1, p2, u2) print the five phases 100-140 and stop at phase 142 ("10 SELECTS w/ORDER BY,
+  unindexed") with `step error: disk I/O error`, rc 1. The five phases equal the reference in every command: rows and
+  hash, 5/5.
+- No fault and no OOM in the serial log. Each command ran about 6.5 s.
+- The unprotected arms fail identically, so this is the environment, not the protection. No answer, lifetime count or
+  instruction count of this run is read against the predictions.
+- **Cause, inferred.** In the reference, phase 142 returns 153,747 rows, enough for SQLite's sorter to spill to a
+  temporary file. The images search `SQLITE_TMPDIR`, `TMPDIR`, `/var/tmp`, `/usr/tmp`, `/tmp` and `.` for one. Without
+  `capstone_vm.dom_local_tmp` the native exec's grants refuse `/tmp` (`runtime/virtual/module/resource-dom.h`: the
+  flag aliases `/tmp` to the cwd's `.capstone-tmp`, which the stage's `run.sh` already creates with mode 0700).
+  `nst1-q2`'s flags, which this run copied, have no `dom_local_tmp`; at `--size 1` phase 142 returns 1,050 rows, and
+  that run completed (that its sort stayed in memory is inferred from its completion). The boards'
+  module flags have it, and so did the twin's mcf train runs. Which call returns the I/O error was not read.
+
+### Amendment 1 (written 2026-11-22 07:30, before the rerun)
+
+- **One change.** The rerun `nst1-s100b` adds `capstone_vm.dom_local_tmp=1` to the module flags. Everything else
+  stays as pre-registered above: the stage `nested/st1/stages/s100` unchanged, the same images, kernel, records
+  (262,144), slot and plugin. The predictions and failure branches above apply unchanged.
+- **What it tests.** If phase 142 now completes in both arms, the temporary file was the cause. If both arms stop at
+  phase 142 again, the cause is something else, and the next step reads the failing call before any further run.
+
 ## PHP against a pristine second binary (2026-11-22)
 
 Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
