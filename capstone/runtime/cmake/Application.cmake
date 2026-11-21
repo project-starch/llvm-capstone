@@ -133,6 +133,12 @@ function(capstone_configure_application target)
     if(CAPSTONE_HEAP_MAPPING_REUSE)
       target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_MAPPING_REUSE=1)
     endif()
+    if(CAPSTONE_HEAP_MAPPING_REUSE_HWM)   # the cache never raises the heap above its live high-water mark
+      target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_MAPPING_REUSE_HWM=1)
+    endif()
+    if(CAPSTONE_HEAP_MAPPING_REUSE_TEST_LOG)   # diagnostic images only: an @@HM line a mapping event on fd 2
+      target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_MAPPING_REUSE_TEST_LOG=1)
+    endif()
     if(CAPSTONE_HEAP_MAPPING_REUSE_TEST_NO_REVOKE)   # the safety probe's positive control only
       target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_MAPPING_REUSE_TEST_NO_REVOKE=1)
     endif()

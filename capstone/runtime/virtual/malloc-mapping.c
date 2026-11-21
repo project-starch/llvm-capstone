@@ -75,6 +75,52 @@ static struct mr_rec mr_live[MR_LIVE], mr_free[MR_FREE];
 static unsigned mr_nfree; static size_t mr_free_bytes;
 unsigned long __heap_reuse_hits, __heap_reuse_puts, __heap_reuse_spills, __heap_reuse_untracked,
               __heap_reuse_protected, __heap_reuse_evicted;
+/* CAPSTONE_HEAP_MAPPING_REUSE_HWM (default off): the cache never raises the heap's footprint above the high-water
+ * mark of its live mappings. mr_live_bytes counts the bytes of every heap mapping this file has made and not yet
+ * released or cached; mr_peak_bytes is the largest value it has reached. A mapping that is cached, reused or
+ * evicted leaves live + cached unchanged or lower, so only a fresh mapping can raise it; before one, cached
+ * mappings are given back until live + cached + the new mapping fit under max(peak, live + new). A build without
+ * the cache would have released every cached mapping and holds its live ones, so it reaches the same peak: on
+ * 505.mcf_r train the unbounded cache held enough resident bytes for the OOM killer to end Full at 100 s on the
+ * twin, while the same image without the cache completed (nested-allocator-workloads.md, 2026-11-22).
+ * The bound is exact for one thread. index_mutex is released before the kernel acquire, so concurrent fresh
+ * mappings can each pass the check before either is counted, and exceed the peak by up to their own sizes. */
+#ifndef CAPSTONE_HEAP_MAPPING_REUSE_HWM
+#define CAPSTONE_HEAP_MAPPING_REUSE_HWM 0
+#endif
+#if CAPSTONE_HEAP_MAPPING_REUSE_HWM || defined(CAPSTONE_HEAP_MAPPING_REUSE_TEST_LOG)
+/* Off, the object is byte-identical to the one without the rule (no counting at all). */
+unsigned long __heap_reuse_hwm_evicted;
+static size_t mr_live_bytes, mr_peak_bytes;
+static void mr_live_add(size_t bytes)
+{
+    mr_live_bytes += bytes;
+    if (mr_live_bytes > mr_peak_bytes) mr_peak_bytes = mr_live_bytes;
+}
+#define mr_live_sub(bytes) (mr_live_bytes -= (bytes))
+#else
+#define mr_live_add(bytes) ((void)0)
+#define mr_live_sub(bytes) ((void)0)
+#endif
+#ifdef CAPSTONE_HEAP_MAPPING_REUSE_TEST_LOG   /* diagnostic images only: one line a mapping event, on fd 2 */
+#include <unistd.h>
+static void mr_log(char op, size_t bytes)
+{   /* No stdio: it may allocate, and index_mutex is held. */
+    char b[96]; unsigned n = 0;
+    size_t v[4] = {bytes, mr_live_bytes, mr_free_bytes, mr_peak_bytes};
+    b[n++] = '@'; b[n++] = '@'; b[n++] = 'H'; b[n++] = 'M'; b[n++] = ' '; b[n++] = op;
+    for (unsigned k = 0; k < 4; ++k) {
+        char d[24]; unsigned m = 0; size_t x = v[k];
+        do d[m++] = (char)('0' + x % 10); while ((x /= 10) && m < sizeof d);
+        b[n++] = ' ';
+        while (m) b[n++] = d[--m];
+    }
+    b[n++] = '\n';
+    (void)!write(2, b, n);
+}
+#else
+#define mr_log(op, bytes) ((void)0)
+#endif
 static unsigned mr_slot(size_t base) { return (unsigned)((base >> 12) * 2654435761UL) & (MR_LIVE - 1); }
 static struct mr_rec *mr_find(size_t base)
 {
@@ -111,6 +157,7 @@ static void mr_evict_all(void)
         mr_free_bytes -= e.bytes;
         munmap(e.holder, e.bytes);
         ++__heap_reuse_evicted;
+        mr_log('E', e.bytes);
     }
 }
 /* Give cached mappings back, from the front of the table, until one of `bytes` fits both bounds. Called with
@@ -128,8 +175,34 @@ static void mr_make_room(size_t bytes)
         mr_free_bytes -= e.bytes;
         munmap(e.holder, e.bytes);
         ++__heap_reuse_evicted;
+        mr_log('R', e.bytes);
     }
 }
+/* The high-water rule, before a fresh mapping of `bytes`. Called with index_mutex held. Each step gives back the
+ * smallest cached mapping that alone covers the excess, or else the largest one, so that a large mapping kept for
+ * reuse (mcf's 64,094,208-byte arcs_pointer_sorted, see mr_make_room) is not given back for a small excess. */
+#if CAPSTONE_HEAP_MAPPING_REUSE_HWM
+static void mr_fit_peak(size_t bytes)
+{
+    size_t cap = mr_live_bytes + bytes > mr_peak_bytes ? mr_live_bytes + bytes : mr_peak_bytes;
+    while (mr_nfree && mr_live_bytes + mr_free_bytes + bytes > cap) {
+        size_t need = mr_live_bytes + mr_free_bytes + bytes - cap;
+        unsigned pick = 0;
+        for (unsigned i = 1; i < mr_nfree; ++i) {
+            size_t a = mr_free[i].bytes, c = mr_free[pick].bytes;
+            if (a >= need ? (c < need || a < c) : (c < need && a > c)) pick = i;
+        }
+        struct mr_rec e = mr_free[pick];
+        memmove(mr_free + pick, mr_free + pick + 1, (--mr_nfree - pick) * sizeof *mr_free);
+        mr_free_bytes -= e.bytes;
+        munmap(e.holder, e.bytes);
+        ++__heap_reuse_hwm_evicted;
+        mr_log('H', e.bytes);
+    }
+}
+#else
+#define mr_fit_peak(bytes) ((void)0)
+#endif
 #endif
 #if CAPSTONE_HEAP_MAPPING_REUSE
 /* The cursor of the owner published for page a, or 0 for a page of no live mapping. */
@@ -165,6 +238,7 @@ void __heap_protected(size_t address, size_t bytes)
             mr_free[i] = mr_free[--mr_nfree]; mr_free_bytes -= e.bytes;
             munmap(e.holder, e.bytes);
             ++__heap_reuse_protected;
+            mr_log('P', e.bytes);
         }
     index_unlock();
 #else
@@ -197,9 +271,12 @@ void *__heap_mapping(size_t n)
             leaf->owner[(a >> 12) & 511] = owner;
         }
         ++__heap_reuse_hits;
+        mr_live_add(bytes);
+        mr_log('U', bytes);
         index_unlock();
         return owner;
     }
+    mr_fit_peak(bytes);
     index_unlock();
 #endif
     if (cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP)) {
@@ -239,6 +316,10 @@ void *__heap_mapping(size_t n)
         if (leaf->owner[(a>>12)&511]) __builtin_trap();
         leaf->owner[(a>>12)&511]=owner;
     }
+#if CAPSTONE_HEAP_MAPPING_REUSE
+    mr_live_add(bytes);
+    mr_log('M', bytes);
+#endif
     index_unlock();
     return owner;
 }
@@ -263,6 +344,8 @@ int __heap_unmapping(void *owner,size_t n)
             }
             mr_free[mr_nfree++] = *r; mr_free_bytes += bytes; mr_remove(r);
             ++__heap_reuse_puts;
+            mr_live_sub(bytes);
+            mr_log('C', bytes);
             index_unlock();
             return 0;
         }
@@ -276,6 +359,10 @@ int __heap_unmapping(void *owner,size_t n)
             if (!leaf) __builtin_trap();
             leaf->owner[(a>>12)&511]=0;
         }
+#if CAPSTONE_HEAP_MAPPING_REUSE
+        mr_live_sub(bytes);
+        mr_log('F', bytes);
+#endif
     }
     index_unlock();
     return rc;
