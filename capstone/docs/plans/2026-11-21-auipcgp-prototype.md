@@ -158,3 +158,39 @@ d9fa11a409d2). libLLVMCapstoneCodeGen c22656ec9c0c2dba; Desc and liblldELF are u
   rc_encode's 9.26 M must now appear.
 - Totals may still leave the band through register allocation, as xz's lzma_lzma_optimum_normal did on AGP1.
 - Validation as CRVC0, every row.
+
+### AGP2 readings (after the pre-registration at edc230de8c05)
+
+Every row validates as CRVC0's does: perl 1/2, gcc 1/1, mcf 2/2, lbm 1/1, nab 1/1, imagick 1/1, xz 12/12, x264 0/3.
+
+| row | insns removed | registered band | fetch bytes removed | registered band |
+|---|---:|---:|---:|---:|
+| perl | **2.138 %** | 1.707..2.096 % | **2.458 %** | 1.949..2.393 % |
+| gcc | **1.356 %** | 0.955..1.284 % | **1.587 %** | 1.113..1.496 % |
+| x264 | 0.072 % (AGP1 0.071 %) | 0.036..0.054 % | 0.080 % (AGP1 0.079 %) | 0.039..0.059 % |
+| nab | 0.039 % | 0.022..0.039 % | 0.044 % | 0.025..0.044 % |
+| xz | 0.122 % | 0.049..0.050 % | 0.039 % | 0.056..0.057 % |
+| imagick | 0.011 % | 0.005..0.008 % | 0.019 % | 0.005..0.008 % |
+| mcf | 0.001 % | 0.001 % | 0.000 % | 0.001 % |
+| lbm | 0.000 % | 0.000 % | 0.000 % | 0.000 % |
+
+**The derive-level check passes on xz:** 25.12 M auipcgp executions in program functions against the registered
+24.47 M, including rc_encode's 9.26 M. AGP1 had 14.99 M, with none in rc_encode.
+
+**perl and gcc land above their bands' upper edges**, perl by 0.04 points and gcc by 0.07.
+- On perl, AGP2 executes 242.5 M fewer instructions than AGP1, and 241.9 M more auipcgp, one for one, in
+  switch-heavy functions: S_regmatch 123.7 M, Perl_yylex 16.3 M, Perl_yyparse 14.8 M, then Perl_leave_scope,
+  Perl_sv_setsv_flags and Perl_sv_upgrade at about 11 M each.
+- The derive executions, 1.804 G, exceed the band's upper 1.766 G by 2 %. The band's classes are a census
+  heuristic over the off image's register allocation, and the transform reaches further than its upper edge assumed.
+
+**Read against the gate:** perl and gcc pass the 0.5 % gate by a factor of 4 and 2.7. The other six rows remove
+0.12 % or less.
+- These are instructions and fetch bytes on the twin, not cycles.
+- The encoding exists only in QEMU: P1 traps on custom-1.
+
+**What lands, and what does not.**
+- The compiler side lands on dev, default off, gated by the image identity above. That is the MC layer, the
+  transform, lld's refusal, the three tests, the ISA entry and this plan.
+- The QEMU side stays on its lane branch compiler/auipcgp-qemu (72241b6ec6), as the stage-2 CRVC QEMU prototype
+  does, until there is a decision to carry either one on the shared QEMU branch.
