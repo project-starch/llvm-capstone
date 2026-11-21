@@ -17,11 +17,11 @@ auipcgp a0, 0
 auipcgp s1, 0xfffff
 
 # DIS:      auipcgp a2, 0x0
-# DIS-NEXT: R_RISCV_PCREL_HI20 sym
+# DIS-NEXT: R_Capstone_PCREL_HI20 sym
 # DIS:      cincoffsetimm a2, a2, 0x0
-# DIS-NEXT: R_RISCV_PCREL_LO12_I .Lpcrel_hi0
+# DIS-NEXT: R_Capstone_PCREL_LO12_I .Lpcrel_hi0
 # DIS:      lw a3, 0x0(a2)
-# DIS-NEXT: R_RISCV_PCREL_LO12_I .Lpcrel_hi1
+# DIS-NEXT: R_Capstone_PCREL_LO12_I .Lpcrel_hi1
 # STD:      2b 05 00 00 <unknown>
 .Lpcrel_hi0:
 auipcgp a2, %pcrel_hi(sym)

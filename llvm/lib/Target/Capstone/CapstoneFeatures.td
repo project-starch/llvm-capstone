@@ -1762,7 +1762,7 @@ def HasCapBaseZcb : Predicate<"Subtarget->hasCapBaseZcb()">,
 // gp's, never the PCC's: the PCC contributes only its address. Default off; a
 // prototype in custom-1 (docs/history/21-11-2026_09-30-00_pcrel-capability-derive-census.md).
 def FeatureCapAUIPCGP
-    : SubtargetFeature<"cap-auipcgp", "CapAUIPCGP", "true",
+    : SubtargetFeature<"cap-auipcgp", "HasCapAUIPCGP", "true",
                        "PC-relative capability derive from gp (auipcgp)">;
 def HasCapAUIPCGP : Predicate<"Subtarget->hasCapAUIPCGP()">,
                     AssemblerPredicate<(all_of FeatureCapAUIPCGP),

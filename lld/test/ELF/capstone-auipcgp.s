@@ -10,8 +10,12 @@
 # RUN: not ld.lld %t/undef.o -o /dev/null 2>&1 | FileCheck %s --check-prefix=ERR
 
 # CHECK-LABEL: <_start>:
-# CHECK-NEXT:    auipcgp a0, 0x{{[0-9a-f]+}}
-# CHECK-NEXT:    cincoffsetimm a0, a0, 0x{{[0-9a-f]+}}
+## _start at 0x11158, x at 0x13010 (the page-aligned .data plus 16):
+## 0x11158 + (0x2 << 12) - 0x148 = 0x13010.
+# CHECK-NEXT:    11158: auipcgp a0, 0x2
+# CHECK-NEXT:           cincoffsetimm a0, a0, -0x148
+# RUN: llvm-nm %t/def | FileCheck %s --check-prefix=SYM
+# SYM: 0000000000013010 d x
 # ERR: error: {{.*}}auipcgp against undefined symbol undef
 
 #--- def.s

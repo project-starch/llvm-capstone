@@ -68,6 +68,28 @@ C/M retains the legacy host-tree backend; the virtual context uses its guest
 table. There are no implemented `CSCHECKR`/`CSCHECKW` instructions at this
 revision. Linux syscall and VM service numbers belong to software ABIs.
 
+### Prototype: `auipcgp`, a PC-relative derive from gp (QEMU only)
+
+`auipcgp rd, imm20` is defined as `scc rd, x3, (pc + (imm20 << 12))`, with `pc` read as `auipc` reads it.
+- **Encoding:** a U-type in custom-1, opcode `0x2b`: imm[31:12], rd[11:7], opcode[6:0]. It takes the whole major
+  opcode, and custom-1 is the only one P1's decoder leaves free.
+- **Implementations:** QEMU decodes it under the property `x-capstone-auipcgp` (default off) and raises an illegal
+  instruction otherwise. The compiler emits it under `+cap-auipcgp` (default off), only under the image-gp ABI.
+- **Silicon:** `decoder.sv` (d83d3a633) has no custom-1 arm, so P1 traps on it, and no board image may carry it.
+- Census and rationale: `history/21-11-2026_09-30-00_pcrel-capability-derive-census.md`.
+
+**Authority rule.** The result's authority is gp's and only gp's.
+- Type, permissions, bounds and lifetime node come from x3, exactly as `scc` takes them from rs1.
+- The PCC contributes its address, an integer, and nothing else. An encoding that derived from the PCC would hand
+  out a data capability over the code region with the PCC's rights, which the image does not hold, and would mint
+  authority.
+- Every `scc` rule applies unchanged:
+  - an UNINIT or sealed gp raises cause 26;
+  - an untagged gp yields the untagged integer in the virtual profile and raises cause 24 in the physical one;
+  - a LINEAR gp is moved, leaving x3 null, as `scc` moves rs1;
+  - a cursor outside gp's bounds is an out-of-window cursor, checked at the access (R-60).
+- Under `-capstone-gp-captable` gp covers only the capability table, so the compiler never emits it there.
+
 ### Minting and retiring an arena
 
 `CSMINT` reads an 8-byte-aligned descriptor of six little-endian u64 values (**descriptor v7, ruled
