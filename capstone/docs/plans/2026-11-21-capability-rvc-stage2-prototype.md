@@ -333,3 +333,73 @@ are the ones the model was built from, after part 1 of the prediction failed on 
 Zcb byte and halfword forms with a capability base (c.lbu, c.lh, c.lhu, c.sb, c.sh) are a separate flag and a
 separate arm, measured alone. P1's RTL decodes Zcb: `compressed_decoder.sv` at d83d3a633 (`OpcodeC0Zcb` under
 `CVA6Cfg.RVZCB`), with `CVA6ConfigZcbExtEn = 1` in `capstone_cv64a6_imafdc_sv39_config_pkg.sv`.
+
+## Zcb board images on the FRCDKMSa3 footing, ZCB9: pre-registration (2026-11-21, before any ZCB9 run)
+
+**Arm.** ZCB9 is FRCDKMSa3 (its SDK, flags and libraries) plus `+zcb` and `+cap-base-zcb`. The compiler is
+llvm-c9z, built from 3d91210c6390: 29027126f39b (FRCDKMSa3's compiler) plus the cap-base-zcb hunk of 5e128c99acad,
+with nothing else.
+- libLLVMCapstoneCodeGen c48c299e100fae2b, libLLVMCapstoneDesc 9974f38584b78a76, liblldELF 20015a53fcc08f51.
+- ZCB9off is the same arm with the features off.
+
+**Gates, already read:**
+- ZCB9off's seven images (perlbench_r, x264_r, ldecod_r, imagevalidate_525, imagick_r, imagevalidate_538, xz_r) are
+  section-identical to FRCDKMSa3's, `.comment` excluded.
+- ZCB9's images differ from FRCDKMSa3's in every one, which is the comparison's positive control.
+- xz's feature-on image holds 262 more 16-bit instructions than the off image, every one a Zcb form (lbu 157, sb 38,
+  not 19, sh 17, lhu 15, mul 12, zext.b 4), exactly ZCB1's count.
+
+**Board images (`.strip.dom`, sha256):**
+- perlbench_r 7b9f097ca7583b2a
+- x264_r 4399e5b52a924029
+- ldecod_r fc773238bface260
+- imagevalidate_525 and imagevalidate_538 f6c80e50d04be3be
+- imagick_r dc1ff60c475f8dc3
+- xz_r 8266cf53d0017ab1
+
+The stage dirs are `perf/cclever/camp/p-ZCB9-<stage>`. Each one's `run.sh` equals nat-fair's, and its plan names
+ZCB9's executables.
+
+**Dynamic prediction.** From FRCDKMSa3's own shift-1 profiles, with `s2zcb.py dyn`'s rule (program functions,
+folded offsets excluded, 2 bytes per execution):
+
+| row | predicted saving | predicted ZCB9 fetch bytes |
+|---|---:|---:|
+| 500.perlbench_r-test-sw | **0.886 %** | 292,878,122,300 |
+| 525.x264_r-test | **1.279 %** | 1,839,513,499,352 |
+| 538.imagick_r-test-ref | **0.982 %** | 351,343,274 |
+| 557.xz_r-test | **1.259 %** | 171,204,848,644 |
+
+- The reading must show at least that saving: exactly for the capability-base forms, and above it by the extra
+  c.zext.b, c.not and c.mul, as ZCB1 did.
+- The twin is the CRVC prototype QEMU (41debeb7d1382427) with `zcb=true`, ZCB1's driver and recipes.
+- Validation as every arm reads in this driver: perl 1/2 (the base/term.t harness path), x264 0/3, imagick 1/1, xz
+  12/12.
+- perl's FRCDKMSa3 profile came from a different driver, where perl reads 2/2, so perl's workload differs.
+  ZCB9off perl therefore runs in this driver too, and perl's saving is read against that row. The other three
+  rows validate alike in both drivers and are read against FRCDKMSa3's profiles.
+
+**Cycle direction on the board: down or flat, never up by more than noise.**
+- The instruction count is unchanged; only the encoding size drops.
+- The effect goes through I$ footprint and fetch bandwidth, so |Δcycles| should stay well under the fetch-byte saving.
+- The risk to the direction is more 4-byte instructions crossing a fetch boundary once their neighbours shrink; on
+  this footing RVC already mixes widths, so that risk is second-order.
+- These images run on P1 silicon: `compressed_decoder.sv` decodes Zcb under `CVA6Cfg.RVZCB`.
+
+### ZCB9 twin readings (2026-11-21, after the pre-registration at 2433c1df977d)
+
+Each row validates as every arm does in this driver: perl 1/2 on and off, x264 0/3, imagick 1/1, xz 12/12.
+
+| row | baseline fetch bytes | ZCB9 fetch bytes | measured saving | registered (lower bound) |
+|---|---:|---:|---:|---:|
+| perl (vs ZCB9off, this driver) | 295,259,388,408 | 292,634,400,138 | **0.889 %** | 0.886 % |
+| x264 (vs FRCDKMSa3) | 1,863,354,368,786 | 1,839,332,598,084 | **1.289 %** | 1.279 % |
+| xz (vs FRCDKMSa3) | 173,387,785,674 | 171,204,885,696 | **1.2590 %** | 1.2590 % |
+| imagick (vs FRCDKMSa3) | 354,828,226 | 351,343,914 | **0.9820 %** | 0.9822 % |
+
+- perl and x264 exceed their bounds, as ZCB1 did, by the extra c.zext.b, c.not and c.mul.
+- xz and imagick read their bounds to the fourth digit. Both fall a hair short: xz by 37,052 bytes, imagick by 640.
+  That gap matches their instruction counts, which ran 9,275 and 160 instructions above the FRCDKMSa3 profiles from
+  the other driver. That is run-to-run noise at 2×10⁻⁷, not a missing site.
+- These are fetch bytes, not cycles. The board pair (xz, imagick, perl full) belongs to the runtime lane; x264 is
+  left at its twin reading.
