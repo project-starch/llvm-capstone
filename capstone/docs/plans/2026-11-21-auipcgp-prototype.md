@@ -127,3 +127,34 @@ removes one 4-byte instruction.
 - imagick is above its band by a few thousand instructions in 95 M; it was not localised.
 - These are the readings of the FIRST build, AGP1 (libLLVMCapstoneCodeGen f91cc0ce806c64ba). x264 is still running on it.
 - Tool: `s2fn.py` (per-function executions and bytes, two runs matched by name).
+
+## AGP2, the jump-table fix: pre-registration (before any AGP2 run)
+
+**Arm.** AGP2 is AGP1 on the compiler with jump-table bases (1598e6900c7c's code; the embedded string reads
+d9fa11a409d2). libLLVMCapstoneCodeGen c22656ec9c0c2dba; Desc and liblldELF are unchanged.
+
+**Gate 1, re-read on this binary.**
+- AGP0b (off) is section-identical to AGP0 on ten of eleven images.
+- gcc again differs only in toplev.o. With CRVC0's toplev.o in its place, gcc is section-identical to CRVC0, and
+  every other object matches.
+
+**Static reading.** auipcgp sites in program code, cap_init included, AGP1 → AGP2:
+
+| row | AGP1 | AGP2 | jump-table sites |
+|---|---:|---:|---:|
+| perl | 17,262 | 17,478 | +216 |
+| gcc | 74,933 | 75,788 | +855 |
+| x264 | 2,036 | 2,045 | +9 |
+| mcf | 51 | 51 | 0 |
+| lbm | 30 | 30 | 0 |
+| imagick | 16,076 | 16,220 | +144 |
+| nab | 1,184 | 1,200 | +16 |
+| xz | 545 | 570 | +25 |
+
+**Prediction.**
+- The bands registered above stand: the census rule always counted jump-table sites.
+- The derive-level check, which the totals cannot give: auipcgp executions in program functions must reach at
+  least the census lower bound on every row where AGP1 fell short. For xz that is 24.47 M; AGP1 had 14.9 M, and
+  rc_encode's 9.26 M must now appear.
+- Totals may still leave the band through register allocation, as xz's lzma_lzma_optimum_normal did on AGP1.
+- Validation as CRVC0, every row.
