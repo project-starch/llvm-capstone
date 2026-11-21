@@ -6413,3 +6413,30 @@ board 1. It runs in the window opened by `perf/natstage/window-gate.sh` (pid 328
 Addendum 206 ends. The chain touches `perf/natstage/perlpair-b1.DONE` when it exits, whatever the outcome, and the
 +Spatial train chains of Addenda 201 and 202 follow. Its readings are the nested lane's to record. A board failure
 during the window follows bkit91's Tier 1 rules, and board 1 goes back to P1.
+
+## Addendum 210 (2026-11-21 11:15 +08, before it runs): Zcb with a capability base (ZCB9) on P1 Full, board 1, against the three Full readings
+
+**Why.** It is the first silicon reading of an instruction-set lever in the programme, and the one that needs no RTL change.
+P1 decodes Zcb (`compressed_decoder.sv` OpcodeC0Zcb under CVA6ConfigZcbExtEn = 1). The compiler lane's cap-base-zcb lets
+c.lbu, c.sb, c.lh, c.lhu and c.sh take a capability base. Arm ZCB9 is FRCDKMSa3 (the paper's Full arm) rebuilt with
+llvm-c9z: FRCDKMSa3's compiler 29027126f39b plus that hunk alone (lane compiler/c9-cap-base-zcb 3d91210c6390). With the
+feature off, its images are section-identical to FRCDKMSa3's, `.comment` aside. Recorded on dev at 9a43c4f2e7b4,
+pre-registered on the lane before any run (2433c1df977d).
+
+**Chain** zcb9-b1.conf (TAG p1-zcb9), board 1, P1, kit bkit91. It runs after the nested lane's perlbench pair (Addendum 209),
+and the +Spatial train chains of Addenda 201 and 202 are relaunched behind it unchanged.
+- *Stages* `perf/natstage/board-zcb9/`: the paper's Full stages (board-frcdkmsa3 for xz and imagick, board-frcdkmsa3-full
+  for perlbench), each with only its native image swapped for ZCB9's `.strip.dom` and `plan.json`'s source path. The paper's
+  stage images are byte-identical to FRCDKMSa3's `.strip.dom`, which is the method mk-native-stages uses. Images:
+  xz 8266cf53d0017ab1, imagick dc1ff60c475f8dc3, perlbench 7b9f097ca7583b2a.
+- *Twin* (compiler lane): every row validates as its arm. Fetch bytes saved: perl 0.889 %, xz 1.259 %, imagick 0.982 %.
+  The instruction count is unchanged.
+
+**Prediction.** Seconds go down or stay flat, never up beyond noise. The reference is board 1's three Full readings (mean, with the 0.2 %
+within-board band): xz 4,956.87 (4,946.96 to 4,966.79), imagick convert 11.40 (11.38 to 11.43), perlbench 13,074.29
+(13,048.14 to 13,100.44). The cycle change is far below the byte saving, because the gain can come only through I-cache
+footprint and fetch. So the most likely reading is inside the band, which is the outcome *flat*. *Gain*: a row below its
+band. *Loss*: a row above it, which is reported with the row and looked into before any compressed-instruction lever goes
+further. Since the instruction count is unchanged, a reading outside the band in either direction is a fetch-side effect.
+
+**Stops** as Addendum 199. Fallback: P1 with bkit91, as it already is. **Dry run:** `perf/natstage/dry210/`.
