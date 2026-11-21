@@ -6496,7 +6496,7 @@ no-op lifetime operations or from the monitor's CSCHECK emulation without its li
 
 **Stops** as Addendum 199, with the waiver above. Fallback: P1 with bkit91. **Dry run:** `perf/natstage/dry211/`.
 
-## Addendum 212 (2026-11-22 07:45 +08, outcome): Addendum 200 (Full train on P1) and the Plain half of Addendum 201
+## Addendum 212 (2026-11-22 07:23 +08, outcome): Addendum 200 (Full train on P1) and the Plain half of Addendum 201
 
 Both chains ended: Full on board 2 (t200-b2) and matched Plain on board 3 (t201p-b3, END rc=0 at 07:12:39).
 - Full: each of its three boots reached its shell and passed smoke (`SMOKE rc=0 PASS: all 9 steps`).
