@@ -56,9 +56,31 @@ Checks:
 | mcf test | 0.01 % | 86 | 1,031,975 | 0.00 % | 0.00 % | 14 % | 0.00 % |
 | lbm test | 0.00 % | 68 | 432 | 0.00 % | 0.00 % | 2 % | 0.00 % |
 
-- (a) reaches about half of the `scc gp` executions: 1.44 G of perl's 2.28 G, and 117 M of gcc's 221 M.
-- The rest re-derive from an integer address that is still live, mostly reloaded from the stack, so no fusion
-  removes anything. Keeping the capability live instead of the integer is a different, compiler-side lever.
+- (a) as counted reaches 1.44 G of perl's 2.28 G `scc gp` executions, and 117 M of gcc's 221 M.
+- **RETRACTED (2026-11-21, the same day):** this bullet said the rest "re-derive from an integer address that is
+  still live, mostly reloaded from the stack, so no fusion removes anything". That generalised from perl's 2nd and
+  3rd hottest sites. Measured over every site, the integer operand of 2.09 G of perl's 2.28 G (208 M of gcc's
+  221 M) comes from an auipc chain, so most of the gap is sites this census's own rule excluded:
+
+  | perl, of the 832 M not counted | executions |
+  |---|---:|
+  | auipc more than 6 instructions before the scc | 168 M |
+  | a branch or call between them | 135 M |
+  | the integer also read by another instruction between them (add 116 M, addi 42 M, a second scc 38 M, ...) | ~232 M |
+  | the integer's death not provable before control flow (the conservative liveness test) | 102 M |
+  | a reload of a spilled global address (`ld rX, off(sp)`) | 124 M |
+  | other producers, or none found in a 64-instruction window | ~70 M |
+
+  - So the (a) column is a lower bound on a compiler transform. Keyed on single-use values, not on adjacency, it
+    reaches the first two rows as well: up to about 0.3 % more of perl's instructions.
+  - The multi-use rows need one derive per use.
+  - **The reload row, costed per site:**
+    - Keeping the capability live replaces `ld` + `scc` with one `ldc` and moves 16 bytes instead of 8, on the
+      reload and on the spill: at most 124 M instructions on perl (0.147 %) and 7.5 M on gcc (0.061 %).
+    - Rematerialising the base with auipcgp removes the spill store instead: 158 M stores on perl (0.187 %), 5.7 M
+      on gcc (0.047 %).
+    - Both are under the 0.5 % gate, so neither is proposed.
+  - Tools: `s2reload.py` and `s2gap.py`, beside `s2pcrel.py`.
 - **Overlap with stage 2:** in the CRVC mode many of these scc are already 2-byte c.scc. For those sites (a)
   replaces 6 bytes with 4, so in a CRVC image its fetch saving is about half the column above; the instruction
   saving is unchanged.
