@@ -46,7 +46,17 @@ illegal. REVOKE and MREV go to the stub.
   - The one difference: REVOKE returns LINEAR on the stub (UNINIT on P1), so a reclaimed block is not scrubbed on
     the spatial core.
   - Step B fails as above.
-- **Lint and the 95-sweep:** running; their readings are added here before the gate request.
+- **Stated semantic difference (the runtime lane's ruling, 2026-11-21):** on the spatial core a reclaimed block is
+  NEVER scrubbed. On P1 it is scrubbed only when REVOKE returns UNINIT. The spatial firmware adds no explicit scrub:
+  `managed_reinit` (capstone-sbi sbi_capstone.c:855-880) already skips the fill whenever REVOKE returns LINEAR, which
+  its own comment records as silicon's behaviour on P1 for a block whose descendants were DELINed. So the stub moves
+  every reclaim onto a path P1 already takes. Domain reclaims are a handful per SPEC boot, not a cost term.
+- **Lint on 321af31a3:** PASS, every counter identical to steps A and B: LATCH 44, MULTIDRIVEN 3, ALWCOMBORDER 0,
+  COMBDLY 0, UNOPTFLAT 39, BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 1351, CASEOVERLAP 2, SELRANGE 100, ANVIL_UNOPTFLAT 0.
+- **95-sweep on 321af31a3 against step A's sweep (cf7a00ce6, swspA):** 92 identical in values, RVFI traces (27 parked)
+  and cycles, with 0 differing. The five tests that differed under step B (revocation, data-sharing, excode-base-audit,
+  s07-wbuf-stall-corners, r31-revoke-cursor, all REVOKE or MREV) are back to step A's readings; no sweep test issues
+  DROP.
 
 ## Keys
 
