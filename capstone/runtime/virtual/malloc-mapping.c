@@ -104,6 +104,27 @@ static void mr_live_add(size_t bytes)
 #endif
 #ifdef CAPSTONE_HEAP_MAPPING_REUSE_TEST_LOG   /* diagnostic images only: one line a mapping event, on fd 2 */
 #include <unistd.h>
+/* Lines wait here until they can be written. Before musl has set up the thread pointer, write() faults: the
+ * delegate path's TLS load of its transport is scheduled ahead of its `tp &&` check, so an untagged tp is
+ * dereferenced (cause 24 in __capstone_delegate_call, HL/FL images on the twin, 2026-11-22). A write that does not
+ * take every byte (the delegate not yet ready) leaves the lines queued. A full queue drops the line and counts it;
+ * the count is printed as @@HM-LOST, which hmcheck.py treats as an error. */
+static char mr_logq[65536]; static unsigned mr_logq_n; static unsigned long mr_log_lost;
+static void mr_log_flush(void)
+{
+    void *tp;
+    __asm__ volatile("movc %0, tp" : "=r"(tp));
+    if (!__builtin_capstone_cap_get_tag(tp)) return;
+    if (mr_log_lost) {
+        char b[48] = "@@HM-LOST "; unsigned n = 10, m = 0; char d[24]; unsigned long x = mr_log_lost;
+        do d[m++] = (char)('0' + x % 10); while ((x /= 10) && m < sizeof d);
+        while (m) b[n++] = d[--m];
+        b[n++] = '\n';
+        if (write(2, b, n) != (long)n) return;
+        mr_log_lost = 0;
+    }
+    if (mr_logq_n && write(2, mr_logq, mr_logq_n) == (long)mr_logq_n) mr_logq_n = 0;
+}
 static void mr_log(char op, size_t bytes)
 {   /* No stdio: it may allocate, and index_mutex is held. */
     char b[96]; unsigned n = 0;
@@ -116,7 +137,9 @@ static void mr_log(char op, size_t bytes)
         while (m) b[n++] = d[--m];
     }
     b[n++] = '\n';
-    (void)!write(2, b, n);
+    if (mr_logq_n + n > sizeof mr_logq) ++mr_log_lost;
+    else for (unsigned k = 0; k < n; ++k) mr_logq[mr_logq_n++] = b[k];
+    mr_log_flush();
 }
 #else
 #define mr_log(op, bytes) ((void)0)

@@ -82,3 +82,34 @@ Readings:
 | hmcheck reports a model mismatch | The instrument is wrong. The logged runs carry no reading. |
 
 These are twin readings, N=1, and diagnostics. The paper's Full row does not change.
+
+## Amendment 1 (2026-11-22 07:25, during run 8, before run 9 and before any rerun)
+
+Runs 3, 6 and 7 (the logged images HL and FL) stopped within 16 s with SIGSEGV. The cause is the instrument. The
+image's first `@@HM` write came before musl had set up the thread pointer: a cause 24 SHRINK fault in
+`__capstone_delegate_call` at the inlined `dl_transport()`, whose TLS load is scheduled ahead of its `tp &&` check. The
+ctl and H images never write before that point. These three runs carry no reading. Their HMCHECK lines read NO DATA
+(rc 2), as the check is built to.
+
+The fix is in `mr_log` only, under `CAPSTONE_HEAP_MAPPING_REUSE_TEST_LOG`:
+- lines are queued in a 64 KiB static buffer and written once `tp` is tagged;
+- a write that does not take every byte leaves them queued;
+- a full queue counts the dropped lines and prints `@@HM-LOST <n>`. `hmcheck.py` exits 3 on that line; its positive
+  control is `t-lost`.
+
+The objects are unchanged without TEST_LOG. A rebuild of the switch-off object is byte-identical to the SDK's, the H
+object to the measured H object, and the H relink gives `60fc49da70ccf265` again. The logged images carry 64 KiB more
+bss, which is negligible against FL's predicted 7 MB gap.
+
+| arm | mcf | gcc |
+|---|---|---|
+| HL (fixed) | `90096bb08f1827b7` | `f6efc0b2a91a4ef9` |
+| FL (fixed) | `4fa4f0a37aa732bd` | - |
+
+Deviation: run 9 (mcftrain-hl) has not started. Its stage image is replaced by the fixed HL image before it does. After
+the chain ends, `tools/chain2.sh` reruns mcftest-hl, gcctrain01-hl and mcftrain-fl with the fixed images, in that order.
+Their predictions are unchanged (1, 2 and 3 for the logged arms).
+
+Already read before this amendment, so it changes none of their predictions:
+- runs 1, 2, 4 and 5;
+- run 8 up to 123 s.

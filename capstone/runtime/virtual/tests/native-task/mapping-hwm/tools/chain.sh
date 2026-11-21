@@ -4,6 +4,8 @@
 : "${CAPSTONE_WORK:=/mnt/hdd/$USER/capstone}" "${CAPSTONE_LLVM:=$HOME/dev/llvm-capstone}"
 main() {
   local R=${CAPSTONE_WORK}/perf/mrhwm S=${CAPSTONE_WORK}/perf/mrhwm/stages
+  # The tree kernel's COMMAND_LINE_SIZE is 1024 (run-stage-twin-x3.py:69); the recorded flags are 587 bytes.
+  export TWIN_CMDLINE_MAX=1024
   export OUTROOT=$R EXTRA=" capstone_vm.node_table_pool=4 capstone_vm.dom_grant_root=/tmp/nt/sr capstone_vm.dom_null=1 capstone_vm.dom_local_tmp=1"
   [ -n "${PREREG:-}" ] || { echo "no PREREG commit given"; exit 1; }
   git -C ${CAPSTONE_WORK}/wt-mrhwm fetch -q origin mapping-cache-hwm || exit 1

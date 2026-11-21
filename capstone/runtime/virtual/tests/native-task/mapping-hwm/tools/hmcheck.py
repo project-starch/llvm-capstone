@@ -4,12 +4,17 @@ Line: @@HM <op> <bytes> <live> <cached> <peak>, values after the event. op: M fr
 release, F released by munmap, E/R/H/P cached mapping given back (evict-all, make-room, high-water, mprotect).
 Recomputes live and cached from the ops alone and checks them against the printed values (the instrument checks
 itself), then prints the peak of live + cached against the peak of live. With --hwm, exits 1 if live + cached ever
-exceeded the printed peak. Exits 2 on no lines (no data is an error)."""
+exceeded the printed peak. Exits 2 on no lines (no data is an error), 3 on a @@HM-LOST line (the image dropped lines)."""
 import re
 import sys
 
+text = open(sys.argv[1], errors="replace").read()
+lost = [int(x) for x in re.findall(r"^@@HM-LOST (\d+)$", text, re.M)]
+if lost:
+    print("LOST: the image's queue dropped", sum(lost), "lines; the event model cannot be checked")
+    sys.exit(3)
 ev = [(m.group(1), *map(int, m.groups()[1:]))
-      for m in re.finditer(r"^@@HM ([MUCFERHP]) (\d+) (\d+) (\d+) (\d+)$", open(sys.argv[1], errors="replace").read(), re.M)]
+      for m in re.finditer(r"^@@HM ([MUCFERHP]) (\d+) (\d+) (\d+) (\d+)$", text, re.M)]
 if not ev:
     print("NO DATA: no @@HM lines in", sys.argv[1])
     sys.exit(2)
