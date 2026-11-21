@@ -720,6 +720,8 @@ static constexpr FeatureBitset XAndesGroup = {
 static constexpr FeatureBitset XSMTGroup = {Capstone::FeatureVendorXSMTVDot};
 
 static constexpr DecoderListEntry DecoderList32[]{
+    // cap-auipcgp: custom-1, only under the feature.
+    {DecoderTableCapAUIPCGP32, {Capstone::FeatureCapAUIPCGP}, "PC-relative capability derive"},
     // Vendor Extensions
     {DecoderTableXCV32, XCVFeatureGroup, "CORE-V extensions"},
     {DecoderTableXRivos32, XRivosFeatureGroup, "Rivos"},

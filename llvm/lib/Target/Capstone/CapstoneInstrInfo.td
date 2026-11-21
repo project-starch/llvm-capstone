@@ -2707,6 +2707,14 @@ def SCC : RVInstR<0b0000101, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
                   (ins GPCR:$rs1, GPR:$rs2),
                   "scc", "$rd, $rs1, $rs2">;
 
+// auipcgp rd, imm20 (cap-auipcgp): scc rd, gp, (pc + (imm20 << 12)). U-type in
+// custom-1 (0x2b), free in P1's decoder. gp is an implicit source: the result
+// carries gp's type, permissions, bounds and node, so no authority is minted.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Uses = [C3],
+    Predicates = [HasCapAUIPCGP], DecoderNamespace = "CapAUIPCGP" in
+def AUIPCGP : RVInstU<OPC_CUSTOM_1, (outs GPCR:$rd), (ins uimm20_auipc:$imm20),
+                      "auipcgp", "$rd, $imm20">, Sched<[WriteIALU]>;
+
 // INIT: Initialization (R-Type)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def INIT : RVInstR<0b0001001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),

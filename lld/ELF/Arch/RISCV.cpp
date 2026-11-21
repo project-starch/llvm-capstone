@@ -466,6 +466,15 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     if (ctx.arg.emachine == EM_CAPSTONE && rel.sym && rel.sym->isUndefined() &&
         (read32le(loc) & 0x7f) == 0x17)
       write32le(loc, (read32le(loc) & ~0x7fu) | 0x37);
+    // cap-auipcgp: auipcgp (custom-1) derives from gp. There is no form of it
+    // that yields a null base, so an undefined symbol is an error rather than
+    // a capability with a wrong cursor.
+    if (ctx.arg.emachine == EM_CAPSTONE && rel.sym && rel.sym->isUndefined() &&
+        (read32le(loc) & 0x7f) == 0x2b) {
+      Err(ctx) << getErrorLoc(ctx, loc) << "auipcgp against undefined symbol "
+               << rel.sym;
+      return;
+    }
     [[fallthrough]];
   case R_RISCV_GOT_HI20:
   case R_RISCV_TLSDESC_HI20:
