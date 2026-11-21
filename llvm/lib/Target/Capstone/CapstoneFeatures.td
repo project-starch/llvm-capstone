@@ -1757,6 +1757,17 @@ def HasCapBaseZcb : Predicate<"Subtarget->hasCapBaseZcb()">,
                     AssemblerPredicate<(all_of FeatureCapBaseZcb),
                                        "Capability-base Zcb">;
 
+// A PC-relative capability derive, auipcgp rd, imm20: rd = gp with its cursor
+// set to pc + (imm20 << 12), as auipc followed by scc rd, gp. The authority is
+// gp's, never the PCC's: the PCC contributes only its address. Default off; a
+// prototype in custom-1 (docs/history/21-11-2026_09-30-00_pcrel-capability-derive-census.md).
+def FeatureCapAUIPCGP
+    : SubtargetFeature<"cap-auipcgp", "HasCapAUIPCGP", "true",
+                       "PC-relative capability derive from gp (auipcgp)">;
+def HasCapAUIPCGP : Predicate<"Subtarget->hasCapAUIPCGP()">,
+                    AssemblerPredicate<(all_of FeatureCapAUIPCGP),
+                                       "PC-relative capability derive (auipcgp)">;
+
 def FeatureSaveRestore : SubtargetFeature<"save-restore", "EnableSaveRestore",
                                           "true", "Enable save/restore.">;
 

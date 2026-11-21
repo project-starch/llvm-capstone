@@ -27,6 +27,7 @@ using namespace llvm;
 #define Capstone_MERGE_BASE_OFFSET_NAME "Capstone Merge Base Offset"
 bool capstoneImageGpAbiActive(); // CapstoneISelDAGToDAG.cpp
 
+STATISTIC(NumAUIPCGP, "Global bases formed as one auipcgp (cap-auipcgp)");
 STATISTIC(NumPoolBasesMerged, "Pool addresses whose several bases were merged");
 STATISTIC(NumGlobalLoFolded,
           "gp-derived global bases whose %pcrel_lo was folded into their accesses");
@@ -73,6 +74,7 @@ public:
   bool foldIntoCapGlobalMemoryOps(MachineInstr &Hi, MachineInstr &Lo);
   bool mergePoolBases(MachineInstr &Hi, MachineInstr &Lo);
   bool mergeGlobalBaseUses(MachineInstr &Lo, Register LoReg);
+  bool formAUIPCGP(MachineInstr &Hi);
 
   // Whether any instruction of the function writes gp (c3 or a part of it):
   // then two PseudoCapGlobalBase of one address may derive from different gp
@@ -800,6 +802,87 @@ bool CapstoneMergeBaseOffsetOpt::foldIntoCapGlobalMemoryOps(MachineInstr &Hi,
   return true;
 }
 
+// cap-auipcgp (default off), only under the image-gp ABI, where
+// PseudoCapGlobalBase is a plain `scc rd, gp, rs`:
+//
+// Hi:   1:auipc vreg1, %pcrel_hi(s)            1:auipcgp vcap, %pcrel_hi(s)
+// Base: vcap = PseudoCapGlobalBase vreg1   -->   (deleted)
+//
+// and, when the low part was not folded into the accesses,
+//
+// Hi:   1:auipc vreg1, %pcrel_hi(s)            1:auipcgp vtmp, %pcrel_hi(s)
+// Lo:   addi  vreg2, vreg1, %pcrel_lo(1b)  -->   vcap = cincoffsetimm vtmp, %pcrel_lo(1b)
+// Base: vcap = PseudoCapGlobalBase vreg2
+//
+// auipcgp rd, imm20 is scc rd, gp, (pc + (imm20 << 12)): the same authority
+// (gp's), the same cursor, one instruction fewer. It is placed where the scc
+// was, so it reads the gp the scc would have read; the label moves with it,
+// and every %pcrel_lo of the label resolves against its new address. Only
+// when vreg1 (and vreg2) have no other use. Never for an extern-weak symbol:
+// lld rewrites an undefined weak auipc to lui (C-56), and the C-56 null base
+// is PseudoCapWeakGlobal, which this does not match anyway.
+bool CapstoneMergeBaseOffsetOpt::formAUIPCGP(MachineInstr &Hi) {
+  if (Hi.getOpcode() != Capstone::AUIPC || !Hi.getPreInstrSymbol())
+    return false;
+  const MachineOperand &HiOp = Hi.getOperand(1);
+  if (HiOp.getTargetFlags() != CapstoneII::MO_PCREL_HI ||
+      (!HiOp.isGlobal() && !HiOp.isCPI() && !HiOp.isJTI() &&
+       !HiOp.isBlockAddress() && !HiOp.isSymbol()))
+    return false;
+  if (HiOp.isGlobal() && HiOp.getGlobal()->hasExternalWeakLinkage())
+    return false;
+  Register HiReg = Hi.getOperand(0).getReg();
+  if (!HiReg.isVirtual() || !MRI->hasOneNonDBGUse(HiReg))
+    return false;
+  MachineInstr *Use = &*MRI->use_instr_nodbg_begin(HiReg);
+  MachineInstr *Lo = nullptr;
+  if (Use->getOpcode() == Capstone::ADDI) {
+    const MachineOperand &LoOp = Use->getOperand(2);
+    if (Use->getOperand(1).getReg() != HiReg || !LoOp.isMCSymbol() ||
+        LoOp.getMCSymbol() != Hi.getPreInstrSymbol() ||
+        LoOp.getTargetFlags() != CapstoneII::MO_PCREL_LO)
+      return false;
+    Lo = Use;
+    Register LoReg = Lo->getOperand(0).getReg();
+    if (!LoReg.isVirtual() || !MRI->hasOneNonDBGUse(LoReg))
+      return false;
+    Use = &*MRI->use_instr_nodbg_begin(LoReg);
+  }
+  if (Use->getOpcode() != Capstone::PseudoCapGlobalBase ||
+      Use->getOperand(1).getReg() != (Lo ? Lo->getOperand(0).getReg() : HiReg))
+    return false;
+  MachineInstr &Base = *Use;
+  MachineBasicBlock &MBB = *Base.getParent();
+  MachineFunction &MF = *MBB.getParent();
+  const TargetInstrInfo *TII = ST->getInstrInfo();
+  Register CapReg = Base.getOperand(0).getReg();
+  Register Dst = Lo ? MRI->createVirtualRegister(MRI->getRegClass(CapReg))
+                    : CapReg;
+  MachineInstr *New =
+      BuildMI(MBB, Base, Base.getDebugLoc(), TII->get(Capstone::AUIPCGP), Dst)
+          .add(HiOp);
+  New->setPreInstrSymbol(MF, Hi.getPreInstrSymbol());
+  if (Lo)
+    BuildMI(MBB, Base, Base.getDebugLoc(), TII->get(Capstone::CIncOffsetImm),
+            CapReg)
+        .addReg(Dst)
+        .add(Lo->getOperand(2));
+  // vreg1 and vreg2 are gone: their DBG_VALUEs become undefined.
+  for (MachineInstr *MI : {&Hi, Lo})
+    if (MI)
+      for (MachineInstr &DbgMI : llvm::make_early_inc_range(
+               MRI->use_instructions(MI->getOperand(0).getReg())))
+        if (DbgMI.isDebugValue())
+          DbgMI.setDebugValueUndef();
+  LLVM_DEBUG(dbgs() << "formed " << *New << "  from " << Hi);
+  Base.eraseFromParent();
+  if (Lo)
+    Lo->eraseFromParent();
+  Hi.eraseFromParent();
+  ++NumAUIPCGP;
+  return true;
+}
+
 bool CapstoneMergeBaseOffsetOpt::mergePoolBases(MachineInstr &Hi,
                                                 MachineInstr &Lo) {
   // Only under the image-gp ABI, where PseudoCapGlobalBase is a plain scc of
@@ -862,6 +945,17 @@ bool CapstoneMergeBaseOffsetOpt::runOnMachineFunction(MachineFunction &Fn) {
       else
         MadeChange |= mergePoolBases(Hi, *Lo);
     }
+  }
+
+  // After every fold above has settled the shape of each global's base.
+  if (ST->hasCapAUIPCGP() && capstoneImageGpAbiActive()) {
+    SmallVector<MachineInstr *, 32> His;
+    for (MachineBasicBlock &MBB : Fn)
+      for (MachineInstr &MI : MBB)
+        if (MI.getOpcode() == Capstone::AUIPC)
+          His.push_back(&MI);
+    for (MachineInstr *Hi : His)
+      MadeChange |= formAUIPCGP(*Hi);
   }
 
   return MadeChange;
