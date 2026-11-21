@@ -6495,3 +6495,33 @@ simulation, not on the board.
 no-op lifetime operations or from the monitor's CSCHECK emulation without its liveness walk.
 
 **Stops** as Addendum 199, with the waiver above. Fallback: P1 with bkit91. **Dry run:** `perf/natstage/dry211/`.
+
+## Addendum 212 (2026-11-22 07:45 +08, outcome): Addendum 200 (Full train on P1) and the Plain half of Addendum 201
+
+Both chains ended: Full on board 2 (t200-b2) and matched Plain on board 3 (t201p-b3, END rc=0 at 07:12:39).
+- Full: each of its three boots reached its shell and passed smoke (`SMOKE rc=0 PASS: all 9 steps`).
+- Plain: each run ended `completed=True`. The Plain kit runs no capability smoke.
+
+Readings come from each stage's `result.json`. The executables are the pre-registered ones by sha256.
+
+| Row | Full s (P1, bkit91) | Plain s (8db8f9cda, bkit95) | Full vs Plain | Estimates (Full; Plain) |
+|---|---|---|---|---|
+| lbm | 12,958.04, specdiff PASS | 13,541.61, PASS | -4.31 % | 14,670 / 8,256; 14,889 |
+| nab (2 commands) | 49,980.50 (4,024.14 + 45,956.36), PASS 2/2 | 48,158.68 (3,874.36 + 44,284.32), PASS 2/2 | +3.78 % | 42,029; 39,921 |
+| mcf | **killed**: rc 137 after 13,777.32 s, specdiff FAIL + NO-OUTPUT | 23,841.61, PASS 2/2 | - | 29,898 / 19,069; 24,499 |
+
+**Prediction 1 is refuted for mcf.** The Full mcf train command was SIGKILLed. The board console carries no KERN_INFO
+lines, so the board itself does not name the killer. On the QEMU twin, the same image is OOM-killed at 100 s guest time,
+and the same image without the heap-mapping reuse cache (`CAPSTONE_HEAP_MAPPING_REUSE=0`, 24a4cc5e) completes with
+specdiff 2/2 at VmHWM 885,680 kB in a 936M guest. These are the nested lane's arms, pre-registered at 8e01dc646c0c and
+re-read in their run directories. So the cache's resident mappings are the variable that separates them on this input.
+A runtime bound for the cache is pre-registered separately (llvm-capstone `mapping-cache-hwm`, d5fba4a174c9, twin only).
+The board row stays "killed".
+
+**Deviation.** Addendum 200 said that a non-zero status stops the chain. nat-run3 stops only on a failed boot or smoke, so
+the chain went on to nab, which is a valid reading. Neither stop rule is changed here.
+
+**Estimates.** These were recorded, not banded. lbm and the Plain mcf fall between or near them. nab reads about 1.2x
+above the instruction-ratio estimate on both arms alike, so its cost against Plain is not affected.
+
+The +Spatial half of Addendum 201 (board 1) waits behind ZCB9. Nothing in the paper changes.
