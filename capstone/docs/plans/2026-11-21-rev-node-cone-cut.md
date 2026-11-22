@@ -128,3 +128,41 @@ gate reading and BEFORE any full launch, and say so:
 | full build placed FF (replaces "+0 to +1,000") | P1 +- 2,000 | census |
 
 Every other key above stands unchanged.
+
+**Re-key 1, read (board lane, board/meas-pw 217ea9bb4da4): 154, PASS.** rv_rsp_q_reg* 129 (rdata 64, ruser 64, rvalid
+1), rv_rsp_idx_q_reg* 25, rv_rsp_vctx_q_reg* 0, every one FDCE; P1's gate dcp reads 0 on every pattern (the control).
+The missing bit is merged, not lost: `rv_rsp_vctx_q <= vctx_rev_q` (ex_stage.sv:2008) and `vctx_rev_qq <= vctx_rev_q`
+(:1712) share clock, reset, D and reset value, so the default equivalent-register removal keeps one flop under
+vctx_rev_qq's name. Read on both gate dcps (board lane, twc/cut/vctx.tcl): on the cut vctx_rev_qq_reg* is 4 FDCE (the register and three fanout replicas), Q fanout 351, one load named vp_hdr0_q[63]_i_1; on P1 1 FDCE, fanout 14. So the merged flop took the cut's namespace loads and was then replicated; my prediction of 1 FDCE on both missed the replication. The cut adds 154 named flops plus 3 replicas. The vctx_rev_q row was not read (the script stopped on an empty-list property read). The full build follows on the keys above.
+
+## The full build, read: KILL by the WNS key (board lane, board/meas-pw cone-cut gate doc, 2026-11-22)
+
+Sealed (`…-pagedtbl-revrdcut_5155e8e02.bit`, a1981c3c…), NOT handed over. Against the keys above (319c1f5b9d25):
+
+| key | reading | grade |
+|---|---|---|
+| placed LUT / FF | 187,801 (+433) / 76,644 (+101) | pass |
+| routed | 242,960 / 242,960 | pass |
+| congestion | placer 5 | pass |
+| loops | 0 | pass |
+| worst-500 through the old crossing | 0 paths through rev_node/rd_data* or rv_rd_res* | pass: the cut did its own job |
+| **WNS** | **-10.130 (P1 -13.173, +3.043): inside P1's null band [-16.913, -9.433]** | **KILL** |
+
+**The prediction is refuted.** "About -4.6" came from disabling all 8,291 cells under rev_node on P1's placement, which
+measures the unit gone, not the response registered; it was a bound, used as a prediction (the board lane, which supplied
+it, says the same). By the pre-registered branch: the cut bought nothing measurable, and the critical cone is elsewhere
+in the unit. The wording stands: "P1's critical paths run through the rev_node cone".
+
+What limits it now (board lane, routed checkpoint, net names, retiming makes hierarchy approximate):
+- worst 20: csr_regfile_i cpmp_q[8][bE][1] -> issue_read_operands fu_data_q[0][cap_data] (rd_metadata / cap_metadata_a /
+  _b), 99-108 levels;
+- all 500 still cross rev_node, by a SECOND entry: 12 rev_node cells per path (31 on P1), entering at a net named
+  `_thread_3_event_counter_531_1_q_reg_1`; 448 leave into dyn_unit EVENTS3[1084], 52 into the scoreboard's
+  pc_revnode_unk (P1's 39-path family);
+- the replicated namespace flop (vctx_rev_qq, fanout 351 over four copies) and rv_rsp_* are on 0 of the worst 500.
+
+Mapping, so far: in the generated unit that name is a 1-bit delay in the record-write sequence (event 531 -> 532 =
+(531 || hold) && the write grant, capstone_rev_node.anvil.sv:5194), whose only consumer is the next delay register, so
+it cannot launch a path that starts at cpmp_q; it is most likely a retiming label. The inputs the cut left combinational
+by design are the two grants (rv_wr_gnt, rv_rd_res.data_gnt). The cell-level read that names the entry is requested; a
+second cut is designed only after a disable-timing predictor on this checkpoint says what it would buy.
