@@ -42,19 +42,31 @@ The probe's launcher stats count one `service3_thread_create` service. The chain
 So on this kit "pthread never worked" is the expected reading. The cause is not the native-route refusal: it is a
 one-slot configuration that admits no second live context. The landed `delegate.c` is not involved.
 
-## Arm 2, pre-registered: the same boot with 32 slots on both sides
+## Arm 2: the same boot with 32 slots on both sides
 
-One variable changes: `--cpu-prop x-capstone-supervisor-slots=32 --module-param supervisor_slots=32`. The images,
-kit and run order are the same. `slot-match-gate.py --applied-log` runs after the boot.
+One variable changed: `--cpu-prop x-capstone-supervisor-slots=32 --module-param supervisor_slots=32`. The images, kit
+and run order were the same. The prediction was pushed before the boot, in lane commit f13293001250. It held on
+every item:
+- the module's load line reads `supervisor_slots=32`, and the slot gate printed `SLOT-GATE OK: module
+  supervisor_slots=32 (set), platform 32` on the -cpu string the kit wrapper actually applied;
+- the guest dmesg gained 250 lines across the run and none of them is a refusal;
+- the same dmesg filter found the four refusal lines in arm 1, so it can fire;
+- pt-probe printed `PT create rc=0 ... t=0x3f84322ea0`, `PT thread ran arg=7` and `PT join rc=0 ret=42`, and exited 0;
+- lt-tls_local_exec, lt-pthread_tsd and lt-pthread_cond each exited 0.
 
-Predicted reading if the slot count is the whole cause:
-- the module's load line reads `supervisor_slots=32`, and the slot gate passes;
-- no "thread create refused" line appears;
-- pt-probe prints `PT create rc=0`, `PT thread ran arg=7` and `PT join rc=0 ret=42`, and exits 0;
-- lt-tls_local_exec, lt-pthread_tsd and lt-pthread_cond exit 0.
+The launcher stats show the thread services ran. pthread_cond made 7 `service3_thread_create` calls and 7
+`service9_pthread_exit` calls; each of the other three images made one of each.
 
-Any of the three tests failing past `pthread_create` is a second defect, and it would be reported as one.
-The positive control for the refusal line is arm 1, where it fired four times.
+The kit's slot count is therefore the whole cause for these three tests. The kit is configured as vp2 (one slot),
+where a second live context does not exist, so on this kit the tests measure the configuration, not the runtime.
+A suite that runs pthread tests needs a kit booted with matched slots above 1 (Q-32).
+
+## Arm 3, pre-registered: the other two failing tests at 32 slots
+
+`pthread_robust` (3e19fa94112e4d06) faulted at `pthread_timedjoin_np+0x188` with cause 28, which was not explained.
+`cancel-points` (46fa1dd4d615351c) faulted at `pthread_cancel+0xe4`, address 0x44. Arm 2 did not include them. The
+same 32-slot boot runs them after pt-probe. Predicted reading if they share the cause: both exit 0 with no refusal
+line. A failure in either is a separate defect.
 
 Not run: the same tests on the physical or delegated SDK. This kit boots the virtual profile, and the physical
 route refuses threads by design (the inventory above), so that arm cannot tell the hypotheses apart.
