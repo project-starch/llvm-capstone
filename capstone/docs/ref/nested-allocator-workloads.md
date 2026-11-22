@@ -3425,6 +3425,72 @@ Budget 86400 (`BAKED_TIMEOUT` 345600), booking 660 min. Expected about 7.5 h of 
   number.
 - Limits stated in advance: one run per arm, the arms in a fixed order in one boot (u first), not interleaved.
 
+### Results: perlbench test.pl on P1, stock and the O(1)-lookup port in one boot (board 1, 2026-11-22 00:47-08:32): +5.08 % in-context, output correct
+
+**Configuration.** As pre-registered (b50563709f73). Chain `nested/p1g/b1-pair6.*` on board 1; the chain flashed P1
+with the seal check and read it back resident (`…-pagedtbl_d83d3a633.bit`). Kit `nested/kits/bkit91-rec1m`; the
+transcript reads `node_flat_records=1048576`. Transcript `spec/board/out-nat-p1-pair6-b1/pair6/board.txt`, sha256
+`79b7b65f49e46d694b35f8655bbb8b2a063e3b5897f4a7450aef3d13e4300e87`, firmware `0edfee07…`, kernel build #280.
+`b0-stats` returned 0. The smoke reads PASS with `task` waived, as in every P1 boot. The watchdog sampled throughout
+(1,449 lines).
+- The kit's `spec-classify.py` printed "NO RESULT: no @@SPEC-DONE" for this boot, as for st2 and pt2. It expects
+  `@@SPEC-DONE <count>`, and the table's stage prints `@@SPEC-DONE 500.perlbench_r test`. All four commands began and
+  ended. The readings below come from the transcript itself (`read-pair.py`, a scratch reader). It reproduces st2's
+  267,194,043,894 and pt2's 282,785,227,858 to the cycle.
+
+| test.pl (command 1) | u = stock c1744e87 | p = prot6 37381b03 | p vs u |
+|---|---:|---:|---|
+| in-context cycles | 267,219,156,375 | 280,802,971,216 | **+5.08 %** (+13,583.8 M) |
+| kernel + other | 44,339,795,047 | 45,829,237,769 | +3.36 % (+1,489.4 M) |
+| uptime span, s | 12,798.09 | 13,410.64 | **+4.79 %** |
+| record-TLB misses (hpm3) | 24,091,058 | 45,536,269 | +21.4 M (+89 %) |
+| walk cycles (hpm4) | 508.8 M | 817.9 M | +309.1 M |
+| paged record accesses (hpm5) | 361.3 M | 608.6 M | +247.3 M |
+| event-23 replays (hpm7) | 52,729,351 | 96,018,225 | +43.3 M (+82 %) |
+| L1D misses (hpm8) | 1,305.7 M | 1,416.2 M | +110.5 M (+8.5 %) |
+
+makerand.pl (command 0): in-context 6,820,045,701 against 6,598,343,477, −3.25 %; span 275.29 s against 266.40 s.
+Both commands together: in-context +4.88 %, span +4.62 %.
+
+**Against the pre-registration.**
+- Answers: **met.** All four commands return 0. Both arms' `makerand.out` (43,841 bytes) and `test.out` (15,555
+  bytes), decoded from the transcript, are byte-equal to SPEC's `data/test/output` files; all four `.err` files are
+  empty. The console shows no fault line.
+- Stock check: **met.** u's test.pl reads +0.009 % against st2's 267,194.0 M, so the cross-boot comparisons stand.
+- Cost of test.pl, p against u: **+5.08 % in-context. Predicted +3.5 % to +5.5 %: met**, in the upper half.
+- Against prot2 (pt2, board 1, 2026-11-18): pt2 reads +5.83 % against this boot's u. The O(1) lookup therefore saves
+  1,982.3 M cycles. The prediction priced its 1,188,489,807 fewer twin instructions at 3.8 G. The pair measures
+  **1.67 cycles per removed instruction** (cross-boot; both stock checks met), not the stock arm's average of 3.17.
+  The removed instructions are the arena index's binary search; that they cost about half the program's mean is read,
+  why is not (cache hits and a predictable loop would explain it, and this boot does not show either).
+- The record counters are unchanged from prot2, as predicted: hpm3 +21.4 M against +21.7 M, hpm5 +247.3 M against
+  +247.7 M, hpm7 +43.3 M against +43.7 M.
+
+**Cycle attribution (step 2), p minus u, +13,583.8 M in-context cycles.**
+
+| part | cycles | share | price and its source |
+|---|---:|---:|---|
+| the port's instructions | 7,733.2 M | 56.9 % | +2,440,563,172 twin instructions (zone, prot6 minus stock) at 3.169 cycles each, the u arm's own cycles per twin instruction (a model: the mean) |
+| record-table walks | 309.1 M | 2.3 % | hpm4, read as cycles (measured) |
+| event-23 replays | 735.9-865.8 M | 5.4-6.4 % | +43.3 M at 17-20 cycles each (Addendum 1's RTL estimate, from source) |
+| **not attributed** | **4,675.8-4,805.6 M** | **34.4-35.4 %** | |
+
+- The L1D misses (+110.5 M) are not priced: no measured price exists. If they carried the whole remainder, each
+  would cost 42-43 cycles.
+- **The instruction price decides the remainder, and it is the softest number here.** At the mean (3.17) the
+  instructions take 57 %. At the price this boot's pair measured for the lookup's instructions (1.67), they take
+  4,070.6 M (30.0 %), and the remainder grows to 8,338-8,468 M (61.4-62.3 %). Neither price is measured for the
+  instructions that stay: the CDERIVE/CREVOKE pairs and the head checks. No board run has priced those
+  instructions by themselves.
+- The paged table's cost beyond its walks is not separated by this boot. That cost is its effect on the program's L1D
+  and on the record TLB's reach. A run that would separate it is the same image on a bitstream with a larger record
+  TLB, or the same image with the checks compiled out and the lifetimes kept.
+- Limits, as registered: one run per arm, u first, not interleaved. makerand reads −3.25 % (p faster), as earlier
+  protected images read −1.08 % and −2.54 %; it is not explained, and an order effect on a 270 s command is not
+  excluded.
+- The paper is unchanged. The paper's perlbench figure is prot2's +5.84 %; a change to prot6's +5.08 % is the lead's
+  decision.
+
 ### perlbench test.pl: SV bodies as lifetimes on top of the heads port (QEMU twin, 2026-11-22): +0.733 % of perlbench's code
 
 The second of the three perlbench allocators (heads, then bodies, then hash entries and op slabs; each one priced on
@@ -3470,6 +3536,74 @@ Checks:
   +4.6 % against stock's 97,968 kB. With the peak unchanged, the segments' untouched pages are evidently not
   resident; that is inferred, not counted.
 - Not yet read: cycles. A board pair is needed first, as for prot6.
+
+### perlbench test.pl: hash entries as lifetimes on top of the heads port (QEMU twin, 2026-11-22): +0.112 % of perlbench's code
+
+The third perlbench allocator, priced alone like the bodies. `500.perlbench_r/port-he.py` runs after the bodies port
+and is built with `PERL_CAPSTONE_SUBLET_HE` and without `PERL_CAPSTONE_SUBLET_BODIES`:
+- The hash-entry arenas (`PL_body_roots[HE_SVSLOT]`) are carved from the bodies port's 32 MiB segments; SV bodies keep
+  upstream's arenas.
+- `hv.c`'s `new_he` hands each entry out as a child lifetime bounded to the `HE` (CDERIVE), and `del_HE` revokes it
+  (CREVOKE) before it links the entry through the segment's own pointer. Shared string table entries are `HE`s too and
+  are covered the same way.
+- `hv.c` reaches `sv.c`'s segment table through `capstone_sv_segs.h`, which the script writes.
+
+Checks:
+- **Control.** In the HE tree, `hv.c` and `sv.c` compiled without the new define are byte-identical to prot6's `hv.o`
+  and `sv.o`.
+- **Fixture** (`make-he-fixture.py`, from the build's own perlmain.c; `census/out/perlfxh-b7bb6577`):
+  - in the protected build a live entry reads its value (mode 0). The old entry faults with cause 25 after its key is
+    deleted (1), after the hash grew from 11 to 5,000 keys and the key was deleted (2: every key fetched its own value
+    first and the kept entry still read), after `hv_clear` (3), and after the hash itself was freed (4);
+  - every fault is at the fixture's own `ldc a0, 0x20(a0)` in `main`, the read of `he_valu` through the kept pointer;
+  - the control built with `PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE` reads in all five modes, mode 4 included: freeing a
+    hash frees its entries one by one, while the segment stays, so here every mode has a control.
+- **test.pl** (`census/out/zperl-he-e9994b2e`, image `e9994b2e…`): makerand.out and test.out are byte-equal to the
+  stock twin run's.
+  - Image zone: 86,871,309,097 instructions against prot6's 86,774,090,874, **+97,218,223 (+0.112 %)**. Against stock's
+    84,333,527,702 that makes +3.009 % for heads and hash entries together.
+  - Where it goes: `__heap_mapping` +86.2 M, one segment per process as in the bodies arm. Then the issue and retire:
+    `Perl_hv_common` +33.5 M, `S_hv_free_ent_ret` +22.4 M, `Perl_refcounted_he_chain_2hv` +7.3 M. Then
+    `Perl_more_bodies` +10.0 M, `Perl_sv_force_normal_flags` +8.4 M.
+  - Against those, `Perl_sv_upgrade` -53.5 M, `Perl_sv_setsv_flags` -12.4 M and `Perl_sv_arena_head` -5.6 M. As in the
+    bodies arm, `Perl_more_bodies` is now called 43,701 times instead of 5,077, and `Perl_sv_upgrade` shrank from
+    1,604 to 1,306 bytes, so the arena code most likely left it; that explains about 10 M of the 53.5 M (inferred from
+    the sizes and the calls, not read from the disassembly). The rest of these decreases is not attributed.
+  - The other functions add +0.9 M (858,740), and 15,681 instructions fall outside every named function.
+- Not read: memory (`census/out/rss-he-e9994b2e`) and cycles.
+
+### perlbench test.pl: ops as lifetimes of their op slabs, on top of the heads port (QEMU twin, 2026-11-22)
+
+The last of the perlbench allocators, priced alone. `500.perlbench_r/port-op-slabs.py` runs after the heads port and
+both lookup fixes, under `PERL_CAPSTONE_SUBLET_OPS`:
+- Each op slab carries a lifetime of its own memory (`opslab_life`, a new field after `opslab_refcnt`, so no other
+  field moves and no slot grows).
+- `Perl_Slab_Alloc` hands each op out as a child of the slab that holds it (CDERIVE), bounded to its whole slot,
+  header included, up to the next slot: Perl reads the slot header through the op, and grows a LISTOP into a LOOP in
+  place when the slot has room.
+- `Perl_Slab_Free` revokes the child (CREVOKE) and links the slot through the slab's own pointer, so the free chain
+  holds only own pointers and a reused slot is handed out as a new child.
+- The holding slab is found by walking the CV's slab chain and comparing the op's address with each slab's lifetime.
+- `opslab_force_free` frees the live ops of an unfinished CV through the slabs' own pointers. Those are recognised by
+  their bounds (the whole slab) and not revoked: their lifetimes end when the slab is freed.
+
+Checks:
+- **Control.** Of the build's 69 objects, 68 are byte-identical to prot6's, and `op.c` compiled without the new
+  define is byte-identical to prot6's `op.o`.
+- **Fixture** (`make-ops-fixture.py`, from the build's own perlmain.c; `census/out/perlfxo-a3d4f121`). The ops are
+  made with `newOP` while `PL_compcv` is a fresh CV, so they come from that CV's slabs, and are read through a kept
+  `OP*`:
+  - in the protected build a live op reads its pp function (mode 0). A freed op faults with cause 25 (1), as does a
+    freed op whose slot was reused at the same address, after the new op and a neighbour read (2), and a freed op
+    among 3,000 over the slabs' growth, after the other 2,999 read (3). An op of a CV freed with its ops still live
+    faults too (4);
+  - every fault is at the fixture's own `ldc a0, 0x20(a0)` in `main`, the read of `op_ppaddr` through the kept
+    pointer. None is in `Perl_Slab_Free`, so in mode 4 the own-pointer path took the slabs' own pointers and not a
+    child;
+  - the control built with `PERL_CAPSTONE_SUBLET_OPS_NOREVOKE` reads in modes 0-3 and faults in mode 4: freeing a
+    slab ends every op lifetime carved from it, revoked or not, so mode 4 has no control that separates the per-op
+    revocation, as in the bodies arm.
+- Not read: test.pl (`census/out/zperl-ops-b296436b`, image `b296436b…`), memory and cycles.
 
 ## mcf train on the twin: what separates the Full image's OOM from V1f's pass (2026-11-22)
 
@@ -3611,7 +3745,7 @@ Not one of the pre-registered branches.
   that run completed (that its sort stayed in memory is inferred from its completion). The boards'
   module flags have it, and so did the twin's mcf train runs. Which call returns the I/O error was not read.
 
-### Amendment 1 (written 2026-11-22 07:30, before the rerun)
+### Amendment 1 (written 2026-11-22 07:27, before the rerun; committed 07:27:45, and the time first read 07:30, which was wrong)
 
 - **One change.** The rerun `nst1-s100b` adds `capstone_vm.dom_local_tmp=1` to the module flags. Everything else
   stays as pre-registered above: the stage `nested/st1/stages/s100` unchanged, the same images, kernel, records

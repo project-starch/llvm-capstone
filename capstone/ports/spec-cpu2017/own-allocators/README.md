@@ -42,6 +42,18 @@ Measured 2026-11-18 on silicon (bitstream P1). The record, with pre-registration
   live bodies read, and a build with `PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE` reads in modes 0-3. On test.pl it adds
   +0.733 % of perlbench's code to the heads port (+3.649 % against stock together), at the same peak memory. Cycles
   are not read yet.
+- **Hash entries** (`500.perlbench_r/port-he.py`, `1fef93a2…`, after the bodies port, under `PERL_CAPSTONE_SUBLET_HE`,
+  with or without the bodies define): the entry arenas are carved from the bodies port's segments, each HE is a child
+  lifetime bounded to the entry, and `del_HE` revokes it; shared-string-table entries are HEs and covered too. Without
+  the define `hv.o` and `sv.o` are the heads build's. `make-he-fixture.py` (`d0145b73…`): a deleted, cleared or
+  freed-hash entry faults, an entry kept across 5,000 inserts' splits reads, and the NOREVOKE control reads in every
+  mode. On test.pl it adds +0.112 % of perlbench's code to the heads port (+3.009 % against stock together).
+- **Ops** (`500.perlbench_r/port-op-slabs.py`, `67feeb70…`, after the heads port and both lookup fixes, under
+  `PERL_CAPSTONE_SUBLET_OPS`): each op slab carries a lifetime of its memory, each slab op is a child bounded to its
+  slot, and `Perl_Slab_Free` revokes it; ops of an unfinished CV freed by `opslab_force_free` end with their slab.
+  Without the define `op.o` is the heads build's. `make-ops-fixture.py` (`d17b8af0…`): a freed op faults, also after
+  its slot is reused and among 3,000 ops; the NOREVOKE control reads in modes 0-3 (mode 4, a freed CV, faults in both
+  builds, since freeing a slab ends its ops' lifetimes).
 - Result (protected image stripped `f5449ace…`): SPEC's test workload, `test.pl`, **+5.84 % in-context cycles,
   +5.41 % run time**, with `test.out` byte-equal to SPEC's reference. One run per arm, on a lifetime table of 2^20
   records: one test script needs more than 262,144.
