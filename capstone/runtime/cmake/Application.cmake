@@ -135,6 +135,9 @@ function(capstone_configure_application target)
     endif()
     if(CAPSTONE_HEAP_MAPPING_REUSE_HWM)   # the cache never raises the heap above its live high-water mark
       target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_MAPPING_REUSE_HWM=1)
+      if(CAPSTONE_HEAP_MAPPING_REUSE_HWM_SLACK)   # bytes the cache may hold above that mark
+        target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_MAPPING_REUSE_HWM_SLACK=${CAPSTONE_HEAP_MAPPING_REUSE_HWM_SLACK}UL)
+      endif()
     endif()
     if(CAPSTONE_HEAP_MAPPING_REUSE_TEST_LOG)   # diagnostic images only: an @@HM line a mapping event on fd 2
       target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_MAPPING_REUSE_TEST_LOG=1)

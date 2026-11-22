@@ -88,6 +88,13 @@ unsigned long __heap_reuse_hits, __heap_reuse_puts, __heap_reuse_spills, __heap_
 #ifndef CAPSTONE_HEAP_MAPPING_REUSE_HWM
 #define CAPSTONE_HEAP_MAPPING_REUSE_HWM 0
 #endif
+/* Slack, in bytes, that the cache may hold above that mark. With none the rule empties the cache whenever the heap
+ * grows (live + new is then the cap), which cost 502.gcc_r train01 5.95x its service calls on the twin; replaying the
+ * logged request streams through the rule puts 16 MiB inside the window where gcc keeps its reuse and 505.mcf_r
+ * train stays 0.2 MiB above the mark (mapping-hwm/PREREG.md, pre-registration 2). */
+#ifndef CAPSTONE_HEAP_MAPPING_REUSE_HWM_SLACK
+#define CAPSTONE_HEAP_MAPPING_REUSE_HWM_SLACK 0UL
+#endif
 #if CAPSTONE_HEAP_MAPPING_REUSE_HWM || defined(CAPSTONE_HEAP_MAPPING_REUSE_TEST_LOG)
 /* Off, the object is byte-identical to the one without the rule (no counting at all). */
 unsigned long __heap_reuse_hwm_evicted;
@@ -207,7 +214,8 @@ static void mr_make_room(size_t bytes)
 #if CAPSTONE_HEAP_MAPPING_REUSE_HWM
 static void mr_fit_peak(size_t bytes)
 {
-    size_t cap = mr_live_bytes + bytes > mr_peak_bytes ? mr_live_bytes + bytes : mr_peak_bytes;
+    size_t cap = (mr_live_bytes + bytes > mr_peak_bytes ? mr_live_bytes + bytes : mr_peak_bytes)
+                 + (size_t)CAPSTONE_HEAP_MAPPING_REUSE_HWM_SLACK;
     while (mr_nfree && mr_live_bytes + mr_free_bytes + bytes > cap) {
         size_t need = mr_live_bytes + mr_free_bytes + bytes - cap;
         unsigned pick = 0;
