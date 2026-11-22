@@ -155,3 +155,22 @@ Reading:
 - Per this lane's own lesson (memory: a hierarchy disable over-predicts a single cut), these are arcs removed on today's
   placement: -5.606 is a bound for a grant buffer, not its prediction. A buffer also moves the request side and
   re-places the design.
+
+**The 18 "grant" pins, by their drivers** (read-only, `twc/lattr/grant-fanin.tcl` → `GF.log`; the rtl lane's question
+was whether all 18 are in the port-2 read grant's cone):
+
+| Driver | Pins | Side |
+|---|---|---|
+| `gen_rd_ports[2].i_wt_dcache_ctrl/gnt_rd_q_i_1`, `_i_5`, `_i_6`, `_thread_3_event_syncstate_546_q_i_3` | 7 | port 2's read grant |
+| `i_wt_dcache_mem/i_rr_arb_tree/rd_ack_q_i_1` | 2 | the read arbiter's ack |
+| the moved LUT6 in `gen_tag_srams[4]` (`syncstate_546_q_i_4`, the `n_1913` net) | 1 | read grant |
+| `gen_rd_ports[2].i_wt_dcache_ctrl/mem_wait_flag_q[0]_i_104` (LUT6) | 5 | port 2's controller logic |
+| `i_wt_dcache_wbuffer/_thread_3_event_counter_555_1_q_i_4` (LUT2) | 2 | **write side** (wbuffer) |
+| `gen_rd_ports[2].i_wt_dcache_ctrl/address_off_q_reg[3]` (**FDCE**) | 1 | a register, not a grant |
+
+- `mem_wait_flag` is a unit output in source. The pins named for it are driven by a LUT that sits in port 2's controller,
+  so by location they are that controller's logic; the name comes from cross-boundary optimization.
+- So 15 of the 18 are read-side (port-2 grant, arbiter ack and controller), 2 are write-side and 1 is a flop.
+- **Instrument note:** the script's "from gen_rd_ports[2]" fan-in counter read 0 on every pin. Its Tcl bracket escape
+  failed silently, so that counter is void, and the grouping strips the port index. The driver names above are the
+  reading.
