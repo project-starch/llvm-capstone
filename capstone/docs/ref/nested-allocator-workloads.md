@@ -3762,6 +3762,32 @@ Not one of the pre-registered branches.
 - **What it tests.** If phase 142 now completes in both arms, the temporary file was the cause. If both arms stop at
   phase 142 again, the cause is something else, and the next step reads the failing call before any further run.
 
+### Result of the rerun: every command stops at phase 142 again; the inferred cause is withdrawn (`nested/out/nst1-s100b`, 07:28-10:20)
+
+- The flag reached the module: the guest's command line carries `capstone_vm.dom_local_tmp=1`, and the stage
+  creates `.capstone-tmp` with mode 0700 before each command, as the module requires.
+- All four commands print phases 100-140 equal to the reference, 5/5, and stop at phase 142 with
+  `step error: disk I/O error`, rc 1, as in `nst1-s100`. There is no fault, OOM or module line in the serial log.
+- **Withdrawn: "the temporary file was refused /tmp" as the cause** (the Result section above, "Cause, inferred").
+  Amendment 1's second branch holds: the cause is something else. The inference was weak on its own terms. SQLite
+  (`unixTempFileDir`, sqlite3.c `7fc92e19…`) falls back to `.`, the grant root, so a refused `/tmp` alone would
+  not have stopped it.
+- **Candidate, from source, not shown on the twin.** SQLite accepts a temporary directory only if `access(dir, 3)`
+  succeeds. musl on riscv64 makes that `faccessat` (48), and the native boundary's `native_supported`
+  (`runtime/virtual/module/native-syscall-dom.h` in the natio tree) does not list it. A refused call returns
+  -ENOSYS (`native_refused`). Every directory, `.` included, would then be rejected. The sorter's first temporary
+  file then fails with `SQLITE_IOERR_GETTEMPPATH`, which reads "disk I/O error".
+- **The candidate does not predict the phase.** A host build of the same sources with `access` and `faccessat` made
+  to fail with ENOSYS (an LD_PRELOAD shim) also stops with "disk I/O error", but at phase 150 (`CREATE INDEX`),
+  after passing 142. This holds at the 32, 16 and 12 MiB heaps; without the shim the host completes 32/32, and at
+  `--size 1` with the shim it completes too. On the host, phase 142's sort needs no temporary file. Why the twin's
+  does, or whether its error has another source, is not known.
+- **Next, before any further measured run:** one diagnostic twin boot (`nested/out/nst1-s100diag`, the flags of
+  `nst1-s100b`) running command u1 alone. Stage `nested/st1/stages/s100diag` is the s100 stage cut after u1. It
+  turns `native_route_trace` on through sysfs for the command only, since the kernel command line has no room for a
+  further flag, and at the end prints `native_refused_calls`, the routes by call and result, and the last failing
+  routes. No reading of it enters the predictions.
+
 ## PHP against a pristine second binary (2026-11-22)
 
 Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
