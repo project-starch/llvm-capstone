@@ -44,3 +44,78 @@ warnings) read 5.
 
 The .vds cannot be used for the module check. Vivado keeps only the first 100 messages of each id, so the 1b gate's
 .vds has no "synthesizing module 'capstone_rev_node'" line at all, although the module was synthesised.
+
+## Reading (2026-11-23): B5B2A-GATE PASS (3/3 keys)
+
+Tag b5b2a-a5b2a0d1f, launched 17:53:55Z, gate.done 18:48:29Z. The run's exit 143 after gate.done is the gate's normal
+end. The guard peak was 32.81 GB under the 40 GB ceiling (the 1b gate: 31.44); the host's MemAvailable never fell
+below 79 GB. Synthesis checkpoint sha256 a387e7ab04492fea…; srcwatch OK (vendored 0, fix 1).
+
+| key | reading | verdict |
+|---|---|---|
+| 1 mapping | technology-mapping peak 5,025.4 MB (-27.6 against 5,053.0; limit ±505) | PASS |
+| 2 loops | "Found timing loop" 0, Synth 8-326 0, check_timing loops 0 (toy 1), LUTLP-1 0 (toy 1), in-flight gate PASS | PASS |
+| 3 core LUT | 141,732 (-20,308; limit 164,540) | PASS |
+| 4 the unit | rev_node is module capstone_sublet_life: LUT 3,054, FF 1,390, beside capstone_rev_node's 5,884 / 1,642 (-2,830) | reported: smaller, as predicted |
+
+Core FF 52,931 (-1,056). RAMB36 113 and LUTRAM 2,480 are unchanged.
+
+**The -20,308 is not the unit's, and is attributed.**
+- csr_regfile_i reads 6,910 LUTs against 28,245, a fall of 21,335. Its FFs are unchanged (6,341 against 6,337).
+- Every one of the 38 earlier capstone builds read on this host (gate and full) reads csr_regfile at 26,825-28,997, so this reading is the
+  only outlier.
+- csr_regfile.sv itself is unchanged by the tree. The change is in pmp_data_if.sv. Under `CAPSTONE_SUBLET_FMT` it
+  ties `cpmp_revnode_valid_q` to 0, the runtime lane's ruling of 2026-11-22: "fail closed: no CPMP entry allows".
+  - Both CPMP allows AND that bit per entry: the data check, `pmp_data_if.sv:233-241`, and the fetch check's fast and
+    slow paths, `:258-280`.
+  - So `cpmp_allow` and `cpmp_if_allow` are constant 0. The 16 `decompress_cap_metadata` calls (`cpmp_fat`, `:228`)
+    and their bound compares become dead logic.
+- The netlist shows it, from the boundary pin census of both kept checkpoints (`twc/csrprune/ports.tcl`). Vivado had
+  moved that decompressor cone across the boundary into csr_regfile:
+  - csr_regfile_i's output pins go from 10,373 to 8,584;
+  - its `cpmp_fat` pins go from 54 to 0;
+  - each CPMP entry's cursor pins go from 56 to 0, and its `revnode_id` pins from 30 to 0;
+  - pmp_data_if's 16 `cpmp_tracked_revnode_id_q` registers leave (-910 FF).
+- So the area and timing of any bitstream from this tree are not like-for-like with bitstream 1 or the 1b gate:
+  about 21k LUTs of CPMP checking are absent by construction. An access that a CPMP entry used to allow now faults,
+  which is the ruling's stated intent.
+
+**The unit's registers** (`twc/csrprune/unitregs.tcl` on the trial checkpoint):
+- 1,390 sequential cells, against about 1,512 declared bits plus the state and pend registers.
+- Three registers are absent entirely: `vctx_q`, `from_free_q` and `fail_q`. In capstone_sublet_life.sv all three are
+  written and never read; `fail_q`'s only reader is the simulation `$display` at `:609`. They are dead in the source,
+  not lost in synthesis.
+- Trimmed: cap_q 31/64, h0w0_q 31/64, aw1_q 33/64, pw0_q 31/64, pw1_q 63/64, nw0_q 61/64, link0_q 31/32,
+  rd_idx_q 26/30 and wr_q 155/167. Not attributed bit by bit.
+
+**rtl's open risk** (automatic tasks with non-blocking assignments in `always_ff`; `unique case` with a default):
+- Vivado accepted the unit with ERROR 0 and CRITICAL WARNING 0 naming it. FSM st_q was inferred and encoded
+  (8-802 and 8-3354).
+- "WARNING 0" is complete only for message ids under the .vds's cap of 100. Five warning ids reach that cap, and so do
+  the INFO ids for merged and constant registers (8-3886, 8-3333):
+  - 8-7137;
+  - 8-7129, port with no load;
+  - 8-6014, unused sequential element removed;
+  - 8-3917, port driven by a constant;
+  - 8-3332, sequential element removed.
+
+  So for those ids the count is blind, not zero. The register census above is the substitute.
+- Whether Vivado gives those tasks' assignments the simulated semantics is not something a synthesis-only gate can see.
+  That needs a run of the netlist or the board.
+
+**Reported rows** (against the 1b gate):
+- ex_stage_i -4,684;
+- dyn_unit -712;
+- id_stage_i -464;
+- i_pmp_data_if LUT -46 and FF -910;
+- lsu_i -868;
+- dom_switcher -2,424.
+
+**Not attributed: issue_stage_i +8,791 (42,758 to 51,549).**
+- Its parts: i_issue_read_operands +7,225, of which +4,145 is its own logic. The capability-metadata register file
+  rises +2,784, from 2,430 to 5,214, against 2,430-2,475 in every earlier gate. The scoreboard rises +1,566.
+- The tree's issue_read_operands.sv change is an op list and a simulation-only `ifdef`.
+- Across seven earlier gates, issue_stage_i read 42,586-49,204, so this reading is about 2.3k above the highest. The
+  1b gate had moved it -5,885.
+- It is beyond the ±2,500 floor and left unattributed. The metadata register file's doubling is the row that stands
+  outside its own history.
