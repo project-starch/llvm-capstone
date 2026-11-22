@@ -3648,10 +3648,96 @@ stock's, so it is not priced.**
   fault in mode 5, which is the positive control.
 - Revision 2's image is `b75cbd06…` (unstripped `06ab5518…`). Its op.h equals revision 1's, and its op.c differs from
   revision 1's only in the hunks above (46 diff lines). The other 68 objects are revision 1's own files.
-- Not read: revision 2's fixture (`census/out/perlfxo2-5a1b1473`: revision 1, revision 2 and the no-revoke control,
-  each in modes 0-5), test.pl (`zperl-ops2-b75cbd06`), memory (`rss-ops2-b75cbd06`) and cycles. Revision 1's zone is
-  not used, because three of test.pl's tests ended early. Its memory run was stopped while it waited for the slot
-  (`rss-ops-b296436b-void-stopped`).
+- Revision 1's zone is not used, because three of test.pl's tests ended early. Its memory run was stopped while it
+  waited for the slot (`rss-ops-b296436b-void-stopped`).
+
+**Result, revision 2's fixture (`census/out/perlfxo2-5a1b1473`; revision 1, revision 2 and revision 2's no-revoke
+control, each in modes 0-5): revision 2 is not a fix, and mode 5 had no working control.**
+- Modes 0-4 read as in revision 1's fixture in all three builds: mode 0 reads; modes 1-4 fault with cause 25 at
+  `main`+0x206, +0x370, +0x406 and +0x74e, the fixture's own `ldc a0, 0x20(a0)`. The control reads in modes 1-3, with
+  `read_after_free` printed, and faults in mode 4 at `main`+0x74e.
+- Mode 5, revision 1: cause 25 at `Perl_op_free`+0x60 (`lhu a0, 0x38(s1)`). That is test.pl's fault, so the positive
+  control fires.
+- Mode 5, revision 2: cause 25 at `Perl_op_free`+0x98 (`lhu a0, 0x38(a1)`). This is op_free's type test, reached with
+  a1 equal to the op's own child. Either no `opslab_force_free` was running, or the chain it was freeing did not hold
+  the op. Perl frees ops after a failed compilation outside that window too: op_free's comment also says "ops may be
+  freed twice". So the guard had the wrong scope.
+- Mode 5, no-revoke control: cause 24 at `Perl_sv_setsv_flags`+0xc2 (`lw a0, 0x14(a1)`). That is the heads port's head
+  read when the destination SV is in no arena, on an untagged pointer. None of the three builds printed mode 5's
+  `returned` line. A control that faults is not a control, so until mode 5 returns in a build without the ops port, the
+  two mode-5 faults above are evidence about op_free's pc and nothing more.
+- The memory run of revision 2 was refused before it started (`census/out/rss-ops2-b75cbd06` holds a placeholder).
+  Its test.pl run, `zperl-ops2-b75cbd06`, was already running and is kept as data for revision 3.
+
+**Revision 3 (`port-op-slabs.py`, this commit) and its fixture (`perlfxo3-3d40f11b`, queued).**
+- Every op slab enters an index sorted by address: in `S_new_slab`, with the slab's own address range (not its
+  lifetime's bounds, which may be rounded outward); in `opslab_free`, it leaves before the free.
+- op_free's two reads of a possibly freed op, the type test and a kid's type and sibling, find the slab by binary
+  search. The search reads no slab and not the op. The two reads then go through the slab's own pointer, in every
+  context. Revision 2's `opslab_force_free` window is gone.
+- Every other read of an op still goes through its child:
+  - a stale op whose slot was reused passes the type test, then faults at op_free's next read. That is the protection
+    firing;
+  - a slab already freed is not in the index, so the read goes through the child and faults.
+- Image `aba18d33…` (unstripped `74d8c86a…`). op.h equals revision 1's. op.c differs from revision 1's by 89 diff
+  lines, and its warnings equal revision 2's (24).
+- The fixture gains mode 6: three string evals that compile and run, after the same steps as mode 5. Every build must
+  return in mode 6, which shows the fixture can run an eval at all.
+- A fifth build links the fixture against prot6's objects, with no ops port and a main compiled without the ops
+  define. It is mode 5's reference: it must return in modes 5 and 6. A fault there means mode 5 itself is broken.
+- The fixture's commands: prot6 in modes 1, 5 and 6; revisions 1 and 2 in modes 5 and 6; revision 3 and its no-revoke
+  control in modes 0-6.
+- Then test.pl priced (`zperl-ops3-aba18d33`). The memory run (`rss-ops3-aba18d33`) runs only if test.out and
+  makerand.out equal the twin stock arm's (`census/chain-ops3.sh`). Before launch, that gate was run on recorded
+  pairs: prot6 reads equal, revision 1 differs, a missing run differs.
+
+## perlbench train on the twin: the image zone per allocator (2026-11-22)
+
+The same twin configuration as test.pl (slot 28, `perf/natio/images`, `dom_grant_root=/tmp/nt/sr`, zones4 plugin at
+shift 2, 2^20 flat records), on the FRCDKMSa3 train stage (`stages-frcdkmsa3-train/500.perlbench_r-train-native`,
+the protected arms' images replaced). Each zone is the image zone (`ZONE image`) summed over the five commands.
+
+| arm | run | specdiff | image zone | against stock | against prot6 |
+|---|---|---|---:|---:|---:|
+| stock | `ztrain-stock-c1744e87` | 6/6 | 205,262,327,464 | | |
+| prot6 (heads) | `ztrain-prot6-37381b03` | 6/6 | 216,796,670,174 | +5.619 % | |
+| hash entries | `ztrain-he-e9994b2e` | 6/6 | 216,596,614,164 | +5.522 % | -200,056,010 (-0.092 %) |
+| bodies | `ztrain-bodies-279647af` | **5/6** | not priced | | |
+
+- **Hash entries cost less than prot6 on train**, where they cost +0.112 % on test.pl. Per function (fndelta, the
+  named functions sum to -200,055,869):
+  - decreases: `Perl_sv_upgrade` -191.2 M at the same 46,036,356 entries; `Perl_sv_setsv_flags` -37.7 M; then
+    `Perl_sv_free2` -11.9 M and `Perl_sv_arena_head` -11.3 M;
+  - the port's own costs: `Perl_hv_common` +28.9 M, `Perl_sv_force_normal_flags` +24.6 M, `S_hv_free_ent_ret`
+    +15.7 M, `Perl_more_bodies` +8.7 M (3,133 to 46,002 calls), `__heap_mapping` +1.1 M.
+  - These are test.pl's shapes: `Perl_sv_upgrade` and `Perl_sv_setsv_flags` fell there too (-53.5 M, -12.4 M) and are
+    mostly not attributed. On train, the segment costs `__heap_mapping` only +1.1 M against test.pl's +86.2 M, because
+    train runs 5 processes and test.pl 318. So the unattributed decrease outweighs the port's costs. The size of that
+    decrease is still not explained: it is a code-layout change in `sv.c`, read from per-function counts, not from the
+    disassembly.
+- **Bodies: splitmail (command 3) died with SIGSEGV, rc 139.** The console line is `capstone_task: fault rc=-14
+  kind=2 cause=30 pc=0x3ff7c0f2fc`. With the image at 0x3ff7c00000 = vaddr 0x10000, that pc is 0x1f2fc in
+  `__heap_mapping`. The word there is 0xa30c15db: opcode 0x5b, funct3 1, funct7 0x51. That is CDERIVE (capability.h's
+  `capstone_cap_derive`: `.insn r 0x5b, 0x1, 0x51`), which the debug objdump prints as `<unknown>`. Commands 0-2 and 4
+  returned rc 0.
+  - Cause 30 is INSUF_RESOURCES. In the twin's own QEMU (`native01/qemu55`, a0501ebc39) it is raised only when the
+    lifetime table has too few free records:
+    - `capstone_require_node` (op_helper.c:1240-1253);
+    - `CAP_REV_EXHAUSTED` (:1265);
+    - fewer than 2 free ids (capstone_table.c:476-477);
+    - the supervisor's node-pressure paths (capstone_supervisor.c:707, :920).
+  - So the table of 2^20 records filled with live lifetimes. The ids55 table recycles records: in a perlbench train arm
+    (T3), scrabbl created 14.1 times the table's records and completed (`tests/rtl-smoke/ids55-flat-module/RESULTS-twin.md`).
+    What filled it is therefore the live count: heads plus bodies at once, on the largest command. That is inferred
+    from the raise sites and the arms that passed. No live count was read.
+  - A twin kit at 2^20 records cannot run the bodies port on splitmail train. The board's ids55 default is also 2^20
+    (`paper-nested-allocators/notes/section5-rtl-encoding-evidence.txt`, from capstone_vm.c's `node_flat_records`).
+  - Queued: the same stage at 2^22 records (`ztrain-bodies-r22-279647af`, 64 MiB of the 256 MiB CMA). It differs from
+    the failed run only in the table size. In the same RESULTS-twin.md, T3's instret on the flat 2^20 table (F0) and
+    on the module without one (W) agreed within 0.001 % per command. That is the evidence that the table's geometry
+    does not move the image's instruction count, and it is what makes a zone at 2^22 comparable with the other arms'
+    at 2^20. It is evidence, not a proof: 2^22 itself was not paired. If it faults
+    again with cause 30, the next step is 2^23, not another doubling.
 
 ## mcf train on the twin: what separates the Full image's OOM from V1f's pass (2026-11-22)
 

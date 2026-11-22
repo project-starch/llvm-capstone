@@ -17,7 +17,11 @@ is of the op's pp function pointer. Modes:
   5  three string evals whose compilation fails (the shapes of test.pl's comp/package_block and uni/opcroak), so
      opslab_force_free frees ops whose kids op_free may already have freed: each must return with $@ set, no fault.
      Revision 1 of the port must fault here (it read a freed kid through its revoked child)
-A build with PERL_CAPSTONE_SUBLET_OPS_NOREVOKE (the control) must read in modes 0-3 and return in mode 5. In mode 4 it must fault as well:
+  6  three string evals that compile and run, after the same steps as mode 5: each must return with $@ empty in
+     every build. It checks that the fixture can run an eval at all, so that a fault in mode 5 is about the failing
+     compilation
+A build without the ops port (prot6's objects) must read in modes 0-3, return in modes 5 and 6, and is the reference
+for mode 5. A build with PERL_CAPSTONE_SUBLET_OPS_NOREVOKE (the control) must read in modes 0-3 and return in mode 5. In mode 4 it must fault as well:
 freeing a slab ends every op lifetime carved from it, revoked or not, so mode 4 checks the own-pointer path (a fault
 in Perl_Slab_Free instead of main would mean an own pointer was taken for a child) and the slab's end, with no control
 that separates the per-op revocation."""
@@ -45,7 +49,7 @@ int main(int argc, char **argv, char **env)
 {
     int mode = argc > 1 ? atoi(argv[1]) : -1;
     void *volatile got;
-    if (mode < 0 || mode > 5) return 2;
+    if (mode < 0 || mode > 6) return 2;
     PERL_SYS_INIT3(&argc, &argv, &env);
     fixture_boot();
     {
@@ -95,6 +99,20 @@ int main(int argc, char **argv, char **env)
                 errs += SvTRUE(ERRSV) ? 1 : 0;
             }
             SAY("FIXTURE mode=5 returned errors=%d\n", errs);
+        } else if (mode == 6) {
+            static const char *const src[] = {
+                "1 + 1",
+                "sub fxb ($) { $_[0] + 1 } fxb(2)",
+                "package Bar { our @fy = map { $_ * 2 } 1 .. 3; }",
+            };
+            int i, errs = 0;
+            PL_compcv = NULL;
+            SvREFCNT_dec(cv);
+            for (i = 0; i < 3; i++) {
+                (void)eval_pv(src[i], FALSE);
+                errs += SvTRUE(ERRSV) ? 1 : 0;
+            }
+            SAY("FIXTURE mode=6 returned errors=%d\n", errs);
         } else {
             int i;
             for (i = 0; i < 100; i++) (void)mk();

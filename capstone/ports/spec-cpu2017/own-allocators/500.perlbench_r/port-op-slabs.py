@@ -19,10 +19,16 @@ Under the new define:
   lifetime (no slot header grows);
 - opslab_force_free frees the live ops of an unfinished CV through the slab's own pointers. Those are recognised by
   their bounds (the whole slab) and not revoked: their lifetimes end when the slab is freed, as every op's does.
-- While opslab_force_free runs (a compilation failed), op_free reads the type and the sibling of ops it may already have
-  freed: its own comment says kids may be freed before their parents. Those two reads, and only while the chain being
-  freed holds the op, go through the slab's own pointer. Revision 1 read them through the revoked child and faulted in
-  three of test.pl's tests (comp/package_block, uni/opcroak, uni/package: `census/out/zperl-ops-b296436b`).
+- op_free reads the type and the sibling of ops it may already have freed: its own comments say ops may be freed
+  twice and kids before their parents. Those two reads find the op's slab in an index of every slab, sorted by
+  address (entered in S_new_slab, removed in opslab_free before the free; a lookup reads no slab and not the op), and
+  go through the slab's own pointer. Every other read of an op goes through its child, so a stale op whose slot was
+  reused passes the type test and faults at op_free's next read. A slab already freed is not in the index, and the
+  read faults through the child.
+  Revision 1 read those two fields through the revoked child and faulted in three of test.pl's tests
+  (comp/package_block, uni/opcroak, uni/package: `census/out/zperl-ops-b296436b`). Revision 2 took the slab's pointer
+  only while opslab_force_free ran, and still faulted at op_free's type test in the fixture's mode 5
+  (`census/out/perlfxo2-5a1b1473`): ops are freed after a failed compilation outside that window too.
 Ops allocated outside a slab (no CV being compiled) are untouched."""
 import sys
 from pathlib import Path
@@ -103,20 +109,73 @@ S_op_retire(OP *o, OPSLAB *head)
 				  - __builtin_capstone_cap_get_cursor(home)));
 }
 
-/* the slab chain opslab_force_free is freeing, or NULL. While it runs, op_free
-   reads the type and the sibling of ops it may already have freed (its own
-   comment: kids may be freed before their parents); those two reads go
-   through the slab's own pointer, every other read through the op's own */
-static OPSLAB *S_op_forcing;
+/* Every op slab, sorted by address: [lo, hi) is the slab's memory and slab its
+   own pointer. op_free reads the type and the sibling of an op it may already
+   have freed (its own comments: ops may be freed twice, and kids may be freed
+   before their parents). Those two reads find the op's slab here, reading no
+   slab and not the op, and go through the slab's own pointer; every other read
+   goes through the op's own. */
+typedef struct { UV lo, hi; OPSLAB *slab; } capstone_opslab_ent;
+static capstone_opslab_ent *S_op_slabs;
+static size_t S_op_nslabs, S_op_capslabs;
 
+/* the number of slabs that start at or below a */
+static size_t
+S_op_slab_pos(UV a)
+{
+    size_t lo = 0, hi = S_op_nslabs;
+    while (lo < hi) {
+	const size_t mid = lo + (hi - lo) / 2;
+	if (S_op_slabs[mid].lo <= a)
+	    lo = mid + 1;
+	else
+	    hi = mid;
+    }
+    return lo;
+}
+
+/* S_new_slab, the only place a slab is made, sz pointers long. The bounds are
+   the slab's addresses, not its lifetime's, which may be rounded outward. */
+static void
+S_op_slab_register(OPSLAB *slab, size_t sz)
+{
+    const UV lo = __builtin_capstone_cap_get_cursor(slab);
+    size_t i;
+    if (S_op_nslabs == S_op_capslabs) {
+	S_op_capslabs = S_op_capslabs ? S_op_capslabs * 2 : 64;
+	Renew(S_op_slabs, S_op_capslabs, capstone_opslab_ent);
+    }
+    i = S_op_slab_pos(lo);
+    Move(S_op_slabs + i, S_op_slabs + i + 1, S_op_nslabs - i, capstone_opslab_ent);
+    S_op_slabs[i].lo = lo;
+    S_op_slabs[i].hi = lo + sz * sizeof(I32 *);
+    S_op_slabs[i].slab = slab;
+    S_op_nslabs++;
+}
+
+/* opslab_free, the only place a slab is freed, before the free */
+static void
+S_op_slab_unregister(OPSLAB *slab)
+{
+    const UV lo = __builtin_capstone_cap_get_cursor(slab);
+    const size_t i = S_op_slab_pos(lo);
+    if (i == 0 || S_op_slabs[i - 1].lo != lo)
+	return;
+    Move(S_op_slabs + i, S_op_slabs + i - 1, S_op_nslabs - i, capstone_opslab_ent);
+    S_op_nslabs--;
+}
+
+/* the op at o's address through its slab's own pointer, or o if no slab holds it */
 static OP *
 S_op_view(OP *o)
 {
-    OPSLAB *home;
-    if (!S_op_forcing || !(home = S_op_home(S_op_forcing, o)))
+    const UV a = __builtin_capstone_cap_get_cursor(o);
+    const size_t i = S_op_slab_pos(a);
+    OPSLAB *slab;
+    if (i == 0 || a >= S_op_slabs[i - 1].hi)
 	return o;
-    return (OP *)((char *)home + (__builtin_capstone_cap_get_cursor(o)
-				  - __builtin_capstone_cap_get_cursor(home)));
+    slab = S_op_slabs[i - 1].slab;
+    return (OP *)((char *)slab + (a - __builtin_capstone_cap_get_cursor(slab)));
 }
 #endif
 """)
@@ -129,9 +188,24 @@ edit('op.c', """    slab->opslab_first = (OPSLOT *)((I32 **)slab + sz - 1);
     slab->opslab_life = (char *)capstone_cap_derive(slab,
 	__builtin_capstone_cap_get_cursor(slab)
 	    - __builtin_capstone_cap_get_base(slab), sz * sizeof(I32 *));
+    S_op_slab_register(slab, sz);
 #endif
     return slab;
 }""")
+
+# opslab_free: the slab leaves the index before it is freed
+edit('op.c', """#else
+	PerlMemShared_free(slab);
+#endif
+        slab = slab2;
+    } while (slab);""", """#else
+#  ifdef PERL_CAPSTONE_SUBLET_OPS
+	S_op_slab_unregister(slab);
+#  endif
+	PerlMemShared_free(slab);
+#endif
+        slab = slab2;
+    } while (slab);""")
 
 # Perl_Slab_Alloc: a reused slot and a new slot are handed out as children
 edit('op.c', """	    Zero(o, opsz, I32 *);
@@ -167,44 +241,6 @@ edit('op.c', """    slab = OpSLAB(o);
     o = S_op_retire(o, slab);
 #endif
     /* If this op is already freed, our refcount will get screwy. */""")
-
-# opslab_force_free: name the chain being freed while it runs (nested calls restore the outer one)
-edit('op.c', """    OPSLOT *slot;
-#ifdef DEBUGGING
-    size_t savestack_count = 0;
-#endif
-    PERL_ARGS_ASSERT_OPSLAB_FORCE_FREE;
-    slab2 = slab;
-""", """    OPSLOT *slot;
-#ifdef PERL_CAPSTONE_SUBLET_OPS
-    OPSLAB *const capstone_was = S_op_forcing;
-#endif
-#ifdef DEBUGGING
-    size_t savestack_count = 0;
-#endif
-    PERL_ARGS_ASSERT_OPSLAB_FORCE_FREE;
-    slab2 = slab;
-#ifdef PERL_CAPSTONE_SUBLET_OPS
-    S_op_forcing = slab;
-#endif
-""")
-edit('op.c', """	slab->opslab_refcnt--;
-	return;
-    }
-   free:
-    opslab_free(slab);
-}""", """	slab->opslab_refcnt--;
-#ifdef PERL_CAPSTONE_SUBLET_OPS
-	S_op_forcing = capstone_was;
-#endif
-	return;
-    }
-   free:
-#ifdef PERL_CAPSTONE_SUBLET_OPS
-    S_op_forcing = capstone_was;
-#endif
-    opslab_free(slab);
-}""")
 
 # op_free: the two reads of a possibly freed op (the op itself, and a kid with its sibling)
 edit('op.c', """        if (!o || o->op_type == OP_FREED)
