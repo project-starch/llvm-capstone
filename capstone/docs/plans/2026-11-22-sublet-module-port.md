@@ -20,6 +20,17 @@ CSCHECK exists in the reference decoder.
    than ports it. The places are region_nend[2] (wrap sbi_capstone_dom.c:35), cap_above (:124-125) and the boot
    SPLITs to cpmp(2) (sbi_capstone_init.S:47-48). The genesis end, if one is ever needed, is 2^38 (ruling Q2).
 3. CSMINT is emulated today; under Sublet it is in hardware (B5b-1 step 3), and the emulation goes.
+   Precondition (the rtl lane's 2b audit, finding F3, land/rtl-b5b1 5ac2be9540d1): CSNODE's and CSRETIRE's ids55-integer
+   conversions are compiled into the Sublet build and would truncate a Sublet id. They are unreachable while create
+   and retire are fail-closed dead channels, and must be redone in step 3 before CSMINT makes create live.
+   **Twin profile (ruling S4, 2026-11-23):** c1985bb529 with x-capstone-ids=63 and x-capstone-exact-bounds=false, the
+   default (cpu.c:2152), which the reference calls the compact profile (op_helper.c:1376). So CSMINT refuses a descriptor
+   whose base, end or cursor does not survive the codec (capstone_table.c:522), and the hardware implements it as a
+   closed-form representability test proved against bounds-model.py, never as a compress-decompress round trip on a
+   result path. scapctl (0x5c0), where QEMU reports exact bounds as bit 0x100 (csr.c:4181), does not exist on the
+   silicon: a csrr of it is an illegal instruction (the rtl lane: no CSR at 0x5c0 in riscv_pkg.sv, csr_regfile.sv:1089's
+   default arm). QEMU agrees only with x-capstone-test-csrs=false, the default (cpu.c:2160). The table-tree module
+   already states that no reader may use it (capstone_vm.c:349).
 3a. **No capability-CSR access.** Under Sublet capmode is never set: its only setter is a committed CAPENTER, which is
    illegal there. A capability-CSR write requires capmode (csr_regfile.sv:2212: capmode_q && ccsr_en && ccsr_we_i &&
    !privilege_violation), so in integer M a CCSRRW writes nothing. Today's trap entry swaps S's sp through CSCRATCH

@@ -6889,3 +6889,63 @@ spoc2-b1: board 1, step C (sha256 7faf2a5fa513…, read back by name), kit bkit1
   imagick gains are each several spreads wide. The other five are within about two.
 - The paper is unchanged. The measurement goes to docs/ref/fpga-silicon-measurements-for-paper.md; any wording is
   the lead's.
+
+## Addendum 224 (2026-11-23 07:41 +08, outcome): Addendum 213, the 48 KiB 12-way L1D (0039e34f4) against P1 on board 2; and the Plain half of Addendum 202
+
+### Addendum 213
+
+Every boot's Tier 1 smoke read 9/9 and every row specdiff PASS (prediction 5 held). Each row's reference is the one
+Addendum 213 named.
+
+| Row | L1D48 (board.txt) | Reference | Δ seconds | Δ hpm8 (L1D misses) | Prediction |
+|---|---|---|---|---|---|
+| mcf | 5,804.04 s (eec9337aae898358) | Full mean 5,944.52 | -2.36 % | -3.86 % | 2: -1.9 to -4.3 %, held |
+| gcc train01 | 1,744.19 (a07aeae057028010) | board 2 P1 control 1,771.72 (36ea25adc2b1662c) | -1.55 % | -7.70 % | 2: -1.2 to -2.6 %, held |
+| lbm | 987.99 (931069523a23ec32) | Full mean 989.21 | -0.12 % | not read | 3: ±0.3 %, held |
+| nab | 688.52 (247d1b85124a38ce) | Full mean 694.02 | -0.79 % | -18.9 % | 3: ±0.3 %, **failed** (faster) |
+| xz (sum of 12) | 4,912.65 (9574a760d3dfa7f4) | Full mean 4,956.87 | -0.89 % | -13.3 % | 4: direction not predicted |
+| imagick (convert) | 10.68 (6926a91dbac7bb05) | Full mean 11.40 | -6.3 % | -27.1 % | 4: direction not predicted |
+| full perlbench | 276.89 + 12,470.76 = 12,747.65 (a73aa78e90979031) | Full mean 13,074.29 | -2.50 % | -26.5 % (test.pl) | 4: direction not predicted |
+| makerand, run 1 / run 2 | 275.68 (ce24e13b2647e70c) / 275.66 (3e9c7f4ee9b4b5b6) | mean of the two board 2 P1 controls, 274.92 (e5e380143cc92245) and 276.23 (19cce211cc14623d): 275.575 | +0.04 / +0.03 % | -3.8 % | blocking clause |
+
+- Prediction 1 held: hpm8 fell on every row with a P1 reading of it.
+- Prediction 3 failed on nab, in the gain direction: -0.79 % against ±0.3 %. Its L1D misses fell 18.9 %, so nab
+  is sensitive to the L1D, which the prediction of no change did not expect. lbm held.
+- The two P1 makerand controls differ by 0.48 %, which is close to the 0.5 % in the decision rule. The L1D48 runs sit
+  inside that spread, so the makerand reading is "no change", not a measured gain or loss.
+- Full perlbench's test.pl command reads -2.68 % in run_cycles beside its -2.50 % in seconds. On the 64 KiB pair
+  (Addendum 205) perlbench's cycles had risen while its misses fell; on 48 KiB 12-way both fall.
+- Cross-board offsets on the other references have read 0.035 % and 0.26 % (mcf). Every row except lbm, makerand and
+  nab moves by more than that.
+- N = 1 per row except makerand (2).
+
+**Decision.** By Addendum 213's rule:
+- mcf (-2.36 %) and gcc train01 (-1.55 %) are faster by more than 0.5 %;
+- no row is slower by more than 0.5 %;
+- makerand is not slower on either run.
+
+So **the 48 KiB 12-way L1D goes into the performance batch** (programme, bitstream 3). The held bitstream 1 + L1D48
+seal (6438348ec, f40a5af5b12a) is released for its own pair against bitstream 1, pre-registered separately.
+
+### Addendum 202, the Plain half
+
+Chain t202rvm, board 3, matched Plain 8db8f9cda, bkit95 at 100 Hz; DONE 2026-11-23 06:24. Every command rc 0.
+
+| Row | Plain (board.txt) | Commands | specdiff | Estimate | Full (Addendum 220) | Full / Plain - 1 |
+|---|---|---|---|---|---|---|
+| perlbench | 21,848.37 s in all (be66485c8bf3f0ff) | 5 | 6/6 | 23,988 | not complete: 2 commands rc 139 | waits for t202fp (2^20 records) |
+| imagick | 30,437.72 s main + 13.48 (2644c7e35549e959) | 2 | 1/1 | 60,116 | 28,601.98 | -6.03 % |
+| x264 | 26,829.05 s main (b0915761a7f15bc2) | 5 (ldecod 1,740.03, checks 3 × 18.1) | 3/3 | 28,520 | 24,858.03 | -7.35 % |
+
+- The ratios are raw seconds on the main command. They include Plain's 100 Hz timer share, which the paper's test
+  rows correct for. These transcripts carry no heartbeat lines (HB lines 0 on all three), so no correction is
+  computed here, and the ratios are not costs.
+- Two estimates were far off. The x86 instruction ratio gave imagick 60,116 s; Addendum 202 had already recorded that
+  this estimate disagreed four times with the V1f scaling.
+
+### Addendum 201's +Spatial half, so far
+
+lbm train on +Spatial (t201s2-b1, board 1, P1, bkit91): 12,959.25 s, specdiff 1/1 PASS, smoke 9/9 (1e05ce7680f55d3d),
+against Full 12,958.04 s and Plain 13,541.61 s. The kit's own spec-verdict printed "NO RESULT": bkit91's
+spec-classify.py:29 matches only `@@SPEC-DONE <digits>`, and the native harness prints `@@SPEC-DONE 519.lbm_r train`.
+The row is read by run-stage.py read, as every native train row has been. nab train on +Spatial is running.
