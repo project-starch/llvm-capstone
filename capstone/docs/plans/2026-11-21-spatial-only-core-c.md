@@ -76,3 +76,14 @@ loops, WNS +0.170). Step C removes two of step B's three decode terms, so the pr
 
 The monitor's first domain create and enter returns, with the same firmware variant as step B's boot (37ebb55,
 CSC_SPATIAL_ONLY). Then the +Spatial rungs under the runtime lane's pre-registration.
+
+**Synthesis-only gate, read (board lane, synth/spc-321af31a3-gate-out/grade-spc.txt): PASS on every key.**
+Against step A's gate: mapping peak 4,925.0 MB (A 4,914.4), loops 0 by every probe, core LUT 154,652 (+23), FF 50,398 (-1);
+ex_stage, rev_node (stub, 14 LUT), lsu_i and dyn_unit +0, issue_stage +1; guard peak 32.01 GB. As expected of a
+decode-only change. Full build launched 04:46:02Z on the keys above.
+
+**Full build, read (board lane, synth/spc-321af31a3-full-out/SEAL.txt; record board/meas-pw
+2026-11-21-stepc-demandonly-builds.md): SEALED, PASS on every key.** `caplifive_…-pagedtbl-spatialonly-c_321af31a3.bit`,
+sha256 7faf2a5f…. Against step B's seal: placed LUT 179,707 (+46), FF 72,847 (+0); routed 232,743 / 232,743 with 0
+errors; placer congestion 4; loops 0; WNS +0.160 (step B +0.170), TNS 0, 0 of 214,985 endpoints failing, inside
+[-3.57, +3.91]. Handed to the runtime lane for board 1 with the CSC_SPATIAL_ONLY firmware; the silicon keys are theirs.
