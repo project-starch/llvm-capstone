@@ -4208,6 +4208,65 @@ Every prediction held, so the first branch applies.
   a lane build, not on dev) runs 262,144 records too. So the board pre-registration waits for this run's answers,
   lifetime counts and the table branch.
 
+### Result of amendment 2: every prediction held (`nested/out/nst1-s100c`, 00:17-04:47)
+
+- **Answers:** all four commands rc 0, and 32/32 phases equal the host reference in each by `cmp-s100` (none differ,
+  none missing, none extra). Guest seconds per command: 658.3, 660.1, 660.1, 658.3.
+- **Lifetimes** (`capmixn-read.py`):
+  - each protected command executes 2,112,363 CDERIVE and 2,112,353 CREVOKE, inside the band of 1 M to 6 M;
+  - each unprotected command executes 9 and 2, under 100.
+- **No cause 30:** no command faulted. A refused derive would have stopped the program, and every command ran all
+  32 phases to rc 0. So 262,144 records are enough for `--size 100`. The runtime lane asked to hear before the board
+  pre-registration only if cause 30 appeared, so the 2^20 cut is not needed.
+- **Program instructions:**
+  - unprotected: 32,294,252,503;
+  - protected: 32,441,745,777;
+  - **+0.457 %** (+147,493,274), inside the band of +0.3 % to +3 %. That is 69.8 program instructions per CREVOKE.
+  - Repeats are equal to the instruction (u1 = u2, p1 = p2).
+- **Kernel instructions:** +0.265 % (+1,658,030,557, about 785 per CREVOKE). Repeats agree within 0.0002 %. Not
+  priced here; the band was written for the program only.
+- **Branch:** the board pre-registration, u1 + p1 on bkit107, with the known-good control first.
+
+### Pre-registration: speedtest1 `--size 100` on P1, u1 + p1 on bkit107 (written 2026-11-23, before the boot)
+
+- **Kit:** `t3-smoke/bkit107-k2n-native-p1-tree-facc`. It is bkit91 with the native kernel tree changed alone, to
+  `perf/k2n/linux-board-k2n-native-hpm2tree-facc`: hpm2tree plus the three files of the runtime lane's
+  `native-faccessat` 80bfe800dfc9.
+  - **The kernel is a lane build.** That route is on the runtime lane's branch, not on dev.
+  - It has not booted on a board before, so this boot is also its Tier 1.
+  - Bitstream P1 `…-tagoverlap6c-pagedtbl_d83d3a633` (sha256 `dc411e36…`).
+  - The module flags include `node_flat_records=262144`, `dom_local_tmp=1`, `dom_grant_root=/tmp/nt/sr` and
+    `dom_null=1`. That is the record table, and the flags, the twin ran with in `nst1-s100c`.
+- **Stage:** `nested/p1s100/s100` (`s100.SHA256SUMS` `358cf568…`). It is bkit107's `make-train-stage.sh` around
+  `make-stage.py`'s stage, with three commands in this order:
+  1. **c0, the known-good control:** unprotected, `--heap 8388608 64 --size 1 st.db`, the command whose 32/32
+     answers P1 gave on bkit91 (board 2, 2026-11-17);
+  2. **u1:** unprotected, `--heap 33554432 64 --size 100 st.db`;
+  3. **p1:** protected, the same arguments.
+  - Images: the `--size 1` ones, unchanged: `817b1652…` and `945fb69f…`.
+  - The kit's own controls come first, as in every boot: `b0-stats`, `b0-hello` and the native smoke.
+- **Before the boot:**
+  - the rule-8 recheck: a real bake, BOARD_STUB=2 on a transcript cut that does not return, and the firmware under
+    the 26 MB cap;
+  - a dry run of the chain that prints the effective idle limit and the runner's timeout.
+  - Each command is silent for hours: the SPEC lane put `--size 100` at about 6.5 h per command on silicon. So the
+    idle limit must exceed 8 h, and the stage timeout must exceed 16 h.
+- **Predictions:**
+  - **VOID** if `b0-stats` or `b0-hello` fails, the smoke fails, or c0 is not 32/32. A c0 failure is a finding about
+    the kernel, not about protection.
+  - u1 and p1: 32/32 answers equal to the host reference (`2026-11-22-size100-host/phases.json`). Any command that
+    does not return, or that differs, gives no cost.
+  - Protected vs not, in-context: +0.3 % to +5 %. The twin read +0.457 % in program instructions. On P1 at
+    `--size 1`, the in-context cost was +2.21 %.
+  - Record-TLB misses (hpm3): more in p1 than in u1.
+  - QEMU's cause 30 did not appear on the twin. A refused derive on the board, in p1 alone, is read as a table
+    result: the record limit, or the paged table's grow (event 33, hpm6).
+- **ABBA, conditional, from the runtime lane's design:** a second boot of p1 then u1 follows only if p1 − u1 lies
+  within three times the noise band. The noise band is the repeat rule on F (1 % `run_cycles`). Otherwise the pair
+  is the reading.
+- **Board time:** about 13 h for u1 + p1, plus about 10 min for c0 and the controls. The board slot is asked of the
+  runtime lane. Nothing runs before this text is pushed.
+
 ## PHP against a pristine second binary (2026-11-22)
 
 Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
@@ -4569,3 +4628,15 @@ phases equal to the native reference (`cmp-sq.py`: none differ, none missing, no
 - The native build's stdout run the same way equals its script-mode stdout byte for byte (`58211793…`). That is
   still the reference.
 - Predictions and branches as pre-registered. The stubbed chain reached all six rungs.
+
+### Result of amendment 2: CPython stops again, at `os.uname()`; Fig. 10's CPython workload does not run in this environment (01:34-01:37)
+
+- Every boot now starts the driver and fails in pyperf, at `platform.machine()` → `os.uname()`: `OSError: [Errno 38]
+  Function not implemented`, status 1. The images ran 439 M (stock) and 446 M (prot) instructions, so nothing is
+  read from them.
+- So this environment's native route refuses at least two calls Fig. 10's CPython workload needs:
+  `ioctl(FIOCLEX)` and `uname`. Both were found only by running, one at a time, so the list is not known to be
+  complete. Removing either from the workload would make it a different workload from Fig. 10's, so that is not
+  done.
+- **Stopped here for CPython.** Its Fig. 10 revision needs an environment that routes these calls, or the trap
+  route Fig. 10 used (35de150cef). The image pair and the stage stay built (`fig10/cpython`, `stage2`).
