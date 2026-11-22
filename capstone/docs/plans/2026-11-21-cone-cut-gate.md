@@ -70,3 +70,14 @@ mis-sized key, is the rtl lane's to read.
 
 That is 154 FDCE in all, against the rtl lane's 155: no flop carries the namespace flag's name. **Key 1 reads 154 ≥ 150:
 PASS.** By the rtl lane's written rule the full build may launch. It waits for a free guarded slot.
+
+**The 155th bit (the rtl lane's reading, then a read-only check).**
+- The rtl lane reads `rv_rsp_vctx_q` (ex_stage.sv:2008) as an equivalent register of `vctx_rev_qq` (:1712): same D,
+  clock, async reset and reset value. Vivado's equivalent-register removal keeps one flop, under `vctx_rev_qq`'s name.
+- Checked on both gate checkpoints (`twc/cut/vctx.tcl`, logs `VX-{CUT,P1}.log`). The script errored after its first
+  pattern (exit 1, on an empty-list property read), so only the `vctx_rev_qq_reg*` rows below were read.
+  - Cut: 4 FDCE, `vctx_rev_qq_reg` plus three fanout replicas `_rep`, `_rep__0`, `_rep__1`, with a total Q fanout of
+    351 (68 + 92 + 99 + 92). One load is named for the cut's consumers (`vp_hdr0_q[63]_i_1`).
+  - P1: 1 FDCE, Q fanout 14.
+- So the merge reading fits: the register gained about 25 times its fanout and was replicated. The rtl lane's "1 FDCE in
+  both" does not hold for the cut, which carries 4.
