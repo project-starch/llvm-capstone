@@ -6712,3 +6712,18 @@ every other failure in any step still fails. Controls of the new classifier:
 boot's imagick reading stays recorded. t201s, which had begun its bake behind the stopped chain, is stopped again
 before its boot. It is relaunched behind spoc2, and t202s behind t201s. Predictions and stops are Addendum 211's. **Dry
 run:** `perf/natstage/dry217/`.
+
+## Addendum 218 (2026-11-22 14:52 +08, reading): spoc2's first boot, and a correction to Addendum 217
+
+**spoc2-b1, first boot** (board 1, step C, bkit105, 14:43-14:51).
+- The flash checked the sha256 and the readback matched the name.
+- The boot reached the shell, and the smoke passed all 9 steps:
+  - probe 40: its 3 failures are waived, the same three as in the first boot;
+  - task 70: the accounting checks are waived, as on every native kit.
+- imagick: 11.34 s, specdiff 1/1 PASS (board.txt eee007bcc8934a25), equal to the first boot's.
+- Both boots of step C fail the same three probe checks and nothing else. lbm runs next.
+
+**Correction to Addendum 217.** "No other check reads stdin after the stale read" is wrong as worded. Later checks do
+read stdin, but each content read after the chunked read is a pread (syscall 67) at an explicit offset, and the later
+read calls are refused or have length 0. So no later check depends on the file offset. The rtl lane reached the same
+reading independently (22 Nov). The cascade explanation and the waiver condition are unchanged.
