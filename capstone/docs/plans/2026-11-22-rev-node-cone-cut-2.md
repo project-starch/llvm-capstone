@@ -62,3 +62,29 @@ Full build against cut 1's seal (LUT 187,801, FF 76,644, WNS -10.130):
 | placed LUT / FF | cut 1 +- 2,500 / +- 2,000 | census |
 | routed | 0 errors (ROUTING-FAILURE BRANCH: placed area and congestion only, no WNS, not flashable) | |
 | congestion / loops | <= 5 / 0 | |
+
+## The predictor for cut 2 as built (board lane, read-only on cut-5155e8e02-full, logs PRED4 / PRED5)
+
+The first predictor's 18 "grant" pins included 2 write-side pins and 1 flop input (the board lane's correction). With
+only the 15 read-side pins disabled, and the 2 write pins and the flop live, which is cut 2 as built: worst -5.606,
+worst through rev_node +0.019 (entering at the unit's result selector, from issue_read_operands fu_data_q, not at a D$
+input), 0 of the worst 500 crossing rev_node. With 10 read-grant pins disabled and the 5 mem_wait_flag-named pins live as
+well: the same. Neither the write grant nor those 5 pins is needed. Still a bound on one placement; the WNS key above
+stands as written.
+
+## STOPPED before any simulation or synthesis (the runtime lane's answer on the cost, 2026-11-22)
+
+The runtime lane's answer to the cost question: the cone programme on P1 stops here, and cut 1 stands as the
+measurement.
+- The board clock stays at 40 ns and no clock change is planned. At about -10 -> -6 ns timing still fails, so the slack
+  buys nothing that would be used.
+- +0.25 % on mcf (an upper bound) is above the 0.2 % the lsu_bypass cut was held to.
+- Line B rebuilds this path, so the timing work goes into B5b's design.
+The design stays parked on capstone-ariane p1-revrd-cut2 830c0d479: never simulated, never synthesised. Its gates were
+stopped before they produced a reading (lint-cut2 killed mid-run, no output kept).
+
+**Carried into B5b-1's design** (the finding, not the fix): after the response is registered, P1's worst paths enter
+the lifetime unit at the D$ read grant, combinational into its event logic, and from there reach the DYN result
+selector and the PC tracker. A design whose unit sees the memory port only through flops on both the request and the
+response side removes it. With both, the next limit on this placement is issue_read_operands' own operand path (bound
+-5.606).
