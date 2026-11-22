@@ -7983,3 +7983,33 @@ under vivado-guard with a 40 GB cap, and the checkpoint probes under 12 GB.
   - Synth 8-7128 (×22, "2 input Mux optimized to 1 input Mux") and 8-7156 (×18, "Variable shifter node is
     optimized using Range optimization") are real. They sit inside elaboration on both runs, at scoreboard.sv,
     capstone_rev_node.anvil.sv and ariane_pkg.sv, none of which the change touches, and P1 has none.
+
+## The spatial-only core on silicon: step C against +Spatial on P1, seven SPEC rows (caplifive_…-pagedtbl-spatialonly-c_321af31a3, board 1, 2026-11-22)
+
+The paper prints an estimate for a core without the lifetime hardware. This is the measurement.
+
+- **The core:** step C (capstone-ariane spatial-only-c 321af31a3) is P1 with the lifetime table, walker and verdict
+  cache removed. REVOKE and MREV become stubs and DROP is illegal.
+  - Sealed by the board lane: sha256 7faf2a5fa513e783b64cd8448e924e7b7bbcabc84e81c30ac92e3b7ee79248e3, WNS +0.160 ns,
+    routed clean, 179,707 LUT.
+- **The images:** the paper's +Spatial images (FRCDKMSspa3). The monitor is 37ebb55 (CSC_SPATIAL_ONLY).
+- **The kit:** bkit105. Its smoke waives probe 40's three revocation checks, which a core without lifetimes cannot
+  pass by design (spec-silicon Addenda 211, 216-218).
+- **Outcome:** spec-silicon ea546343f549, Addendum 223.
+- **The boots:** each is clean, with smoke 9/9 and specdiff PASS.
+
+| Row | Step C | +Spatial on P1 (3-run mean) | Δ | Step C against matched Plain |
+|---|---|---|---|---|
+| perlbench | 12,785.31 s | 12,834.43 | -0.38 % | +18.31 % |
+| gcc train01 | 1,750.19 | 1,752.23 | -0.12 % | +18.75 % |
+| mcf | 5,656.84 | 5,658.92 | -0.04 % | +16.07 % |
+| lbm | 989.07 | 989.32 | -0.03 % | -1.48 % |
+| nab | 691.68 | 691.72 | -0.01 % | +4.92 % |
+| xz | 4,955.04 | 4,956.80 | -0.04 % | +5.81 % |
+| imagick (convert) | 11.34 | 11.39 | -0.44 % | +6.88 % |
+
+- Seven-row geometric mean against Plain: step C +9.66 %, against +Spatial on P1's +9.82 % on the same rows.
+- x264 was not run, so there is no eight-row figure comparable to the paper's.
+- Unused, the lifetime hardware costs at most 0.44 % on any of these rows, and 0.15 % in their geometric mean.
+- N = 1 per row. The chain does not separate the hardware term from the no-op lifetime operations or from the
+  monitor's CSCHECK emulation without its liveness walk.
