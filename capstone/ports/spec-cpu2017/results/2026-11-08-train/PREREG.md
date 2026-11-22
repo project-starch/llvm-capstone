@@ -6949,3 +6949,47 @@ lbm train on +Spatial (t201s2-b1, board 1, P1, bkit91): 12,959.25 s, specdiff 1/
 against Full 12,958.04 s and Plain 13,541.61 s. The kit's own spec-verdict printed "NO RESULT": bkit91's
 spec-classify.py:29 matches only `@@SPEC-DONE <digits>`, and the native harness prints `@@SPEC-DONE 519.lbm_r train`.
 The row is read by run-stage.py read, as every native train row has been. nab train on +Spatial is running.
+
+## Addendum 225 (2026-11-23 07:44 +08, before it runs): bitstream 1 + L1D48 (6438348ec) against bitstream 1 (9e801ab5e), board 3
+
+**Why.** Addendum 224 put the 48 KiB 12-way L1D into the performance batch, and released the bitstream 1 + L1D48
+seal: `caplifive_…-pagedtbl-r76-l1d48k_6438348ec.bit`, sha256 f40a5af5b12a92eba03770db5059c9de057e3685e19aae2ee2e0c454214a1944,
+re-hashed here from `bitstreams/`. Its grade is PASS against 0039e34f4: WNS -14.029 ns, 50,926 slices, about 24
+free. Bitstream 1 is the default board bitstream (P1 + the R-76 ccsrrw privilege term). If the L1D gain survives on
+it with the R-76 refusal intact, this one becomes the default.
+
+**Kit** bkit108-k2n-native-b1-l1d48 is bkit100 with only the two bitstream fields of `board.env` changed. `diff -r`
+shows board.env, its SHA256SUMS line and one comment line.
+
+**Chains on board 3**, behind the nested lane's s100 chain (pid 3241270), which leaves P1 resident. The makerand
+repeats run in ABBA order, so a slow drift cannot read as the lever:
+
+| Chain (TAG) | Bitstream | Kit | Rows |
+|---|---|---|---|
+| b1c-b3 (b1c-frcdkms) | bitstream 1: flash, sha256 checked against the seal, name read back | bkit100 | perlbench makerand + the R-76 probe (last in its boot), gcc train01, mcf (Addendum 204's list, b1-b2.list) |
+| b1l-b3 (b1l48-frcdkms) | 6438348ec: flash, checked, read back | bkit108 | the same list |
+| b1l2-b3 (b1l48r-frcdkms) | 6438348ec | bkit108 | perlbench makerand (board-frcdkms, the r76p stage without the probe) |
+| b1c2-b3 (b1c2-frcdkms) | bitstream 1: flash, checked, read back | bkit100 | perlbench makerand |
+
+- The images are Addendum 204's FRCDKMS stages. `diff -rq` between board-frcdkms and board-frcdkms-r76p shows only
+  the probe and spec.sh.
+- The board is left on bitstream 1. Fallback: P1 with bkit91. About 7 h with three flashes.
+
+**Predictions** (arm B = 6438348ec against arm A = bitstream 1, same board):
+1. The R-76 probe is refused on both arms. The monitor prints ILLX at the probe word after `@@R76PROBE-BEGIN`, as in
+   Addendum 204.
+2. mcf and gcc train01 seconds fall inside Addendum 213's model ranges: mcf -1.9 to -4.3 %, gcc -1.2 to -2.6 %.
+   Addendum 213 read -2.36 % and -1.55 % on P1.
+3. hpm8 (L1D misses) falls on every row.
+4. makerand: neither B run is slower by more than 0.5 % than the mean of the two A runs.
+5. Tier 1 smoke 9/9 on every boot, with task 70 waived; specdiff PASS on every row.
+
+**Decision.**
+- If predictions 1, 4 and 5 hold, and mcf or gcc train01 is faster by more than 0.5 % with no row slower by more than
+  0.5 %, then 6438348ec replaces bitstream 1 as the default board bitstream, with bitstream 1 as the fallback. Paper
+  chains stay on P1.
+- If prediction 1 fails on arm B, the bitstream is not used, whatever its speed, and the cause goes to the rtl lane.
+- A single makerand run above 0.5 % with the other inside is reported, and resolved by a third run on each.
+
+**Dry runs** (stubbed, against a pushed commit as the pre-registration stand-in): `perf/natstage/dry225/`. Each of
+the four chains reached DONE.
