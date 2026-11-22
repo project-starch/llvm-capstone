@@ -249,3 +249,34 @@ dry run. These are far-side leaf pins, 2a -> 2b:
 - Routing is not measured by this gate.
 
 No full build was requested for 2b.
+
+**The unit's cell census, 2a -> 2b** (`twc/b5b2b/ul/unitluts.tcl` 438d040c4ca5a9d7). It ran on both gate checkpoints
+under an 8 GB guard, peak 2.29 GB. The rtl lane asked for it, and wrote its prediction before the reading: the unit's
+own logic grows by at most ~1,000 LUT, and at least ~3,800 of the +4,828 sits in cones rooted outside the unit's
+registers.
+
+The counts are LUT CELLS, not the utilization report's Total LUTs, which combines LUT pairs: 2a reads 3,956 cells
+against 3,054 LUTs, and 2b 9,701 against 7,882.
+
+| rev_node LUT cells | 2a | 2b |
+|---|---|---|
+| total | 3,956 | 9,701 |
+| in the fan-in of the unit's own 1,390 / 1,410 sequential cells | 3,722 | 3,609 |
+| in no own cone | 234 | 6,092 |
+| with a leaf load in i_scoreboard | 2 | 5,328 |
+| named for the scoreboard's `mem_q[][sbe]` (scoreboard.sv:111) | 5 | 5,726 |
+
+- **The control.** On 2a the unit is self-contained: 94 % of its cells are in its own cones, and only 270 have any
+  load outside it.
+- **The unit's own logic did not grow; it fell by 113 cells.** Its state machine's stem fell by 485. The widened
+  stems rose by tens each: aw0_q +127, visits_q +99, status_q +90, pw1_q +33, rd_idx_q +32.
+- **The growth is the scoreboard's write-back logic, placed inside the unit's hierarchy.** About 5,700 cells compute
+  `mem_q[][sbe]` fields of the scoreboard, and almost all of them drive leaf pins in i_scoreboard. The largest are
+  cap_result.dom_switch_req.ra_data 1,335, pc_next_metadata 847, rs1_metadata 694, result 606, pc_next 594,
+  rs1_cursor 576, base_addr 520 and ex.tval 357. Two independent readings agree on this: the cells' names, and where
+  their loads sit.
+- So the rtl lane's prediction holds, in cells: the own cones are -113 against the ≤ ~1,000 predicted, and +5,858
+  cells sit outside them against the ≥ ~3,800 predicted. The unit's +4,828 row is a boundary move, not the
+  widening's cost.
+- **Step 3 is graded against this census,** not against the utilization row alone. The row can move by thousands
+  with the unit unchanged.
