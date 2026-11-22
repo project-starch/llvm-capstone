@@ -4128,6 +4128,25 @@ files replaced, as that lane states. This lane has not read that change.
     says nothing about `faccessat`, and this is written down as such.
   - Either boot ends without a phase line or rc: that boot is void and is rerun once.
 
+### Result of the pair: the routed `faccessat` is enough for `--size 100` on the twin (17:49-00:09)
+
+Every prediction held, so the first branch applies.
+- **facc** (`nst1-s100facc`, images-facc): rc 0 after 790.3 s of guest time. All 32 phases equal the host
+  reference by `cmp-s100` (none differ, none missing, none extra), and the route trace is on (`@@DIAG
+  route_trace=Y`). Its 14 `faccessat` (48) routes return 0 (7) and -2 (7), and none returns -38.
+  `native_refused_calls` reads 1. The only route returning -38 is an exchange query, `nr=3235774468`
+  (0xc0de0004, count 16), at 0.33 s; it is the first failing route of the boot and is not attributed here.
+- **tree** (`nst1-s100tree`, images-tree): phases 100-140 are equal to the reference (5 of 5). The boot then stops
+  at phase 142 with `step error: disk I/O error`, rc 1. Both of its `faccessat` routes return -38, at 8.96 s.
+  `native_refused_calls` reads 3: those two plus the same exchange query. So the control fires. The check of the
+  failing routes names `faccessat` when the kernel refuses it, and the -38 count in facc is a reading, not a blind
+  zero.
+- The two boots differ only in the kernel image. The runtime lane's `faccessat` route is therefore what
+  `--size 100` needs on the twin. As the branch says, the runtime lane builds the board kernel and kit with it, and
+  the measured run is pre-registered separately.
+- Not settled by this pair: why phase 142 is the first to need a temporary directory on the twin. The earlier note
+  (a sort that spills) still stands unchecked. This lane has not read the route's change (80bfe800dfc9).
+
 ## PHP against a pristine second binary (2026-11-22)
 
 Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
