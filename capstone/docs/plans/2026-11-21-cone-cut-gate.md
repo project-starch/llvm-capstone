@@ -174,3 +174,21 @@ was whether all 18 are in the port-2 read grant's cone):
 - **Instrument note:** the script's "from gen_rd_ports[2]" fan-in counter read 0 on every pin. Its Tcl bracket escape
   failed silently, so that counter is void, and the grouping strips the port index. The driver names above are the
   reading.
+
+**Correction, and the read-side-only readings** (`grant15.txt` → `PRED4.log`, `grant10.txt` → `PRED5.log`):
+- The "18 grant pins" row above includes the 2 write-side pins and the flop pin.
+- The board lane's message to the rtl lane called the 18 "read side" and said adding the write pins "adds nothing". That
+  was not shown by the 18-pin run, because the 18 already contained them. It was shown only for the 115-pin read-class
+  run, which excludes the write pins but adds 97 non-grant pins.
+- The clean readings, write pins and flop live:
+
+| Disabled (write pins and the flop left live) | Worst | Worst through rev_node (entry) | Worst-500 crossing |
+|---|---|---|---|
+| the 15 read-side pins | -5.606 (the same issue_read_operands path) | +0.019 (`rev_node/_ep_res_valid_selector_q[5]_i_8__0/I3`) | 0 |
+| the 10 read-grant pins (the 5 `mem_wait_flag`-named ones also live) | -5.606 | +0.019 (the same entry) | 0 |
+
+- So a buffer on the port-2 read grant alone reaches the -5.606 bound on this placement. The write grant and the
+  `mem_wait_flag`-named pins are not needed for it.
+- The path still crossing at +0.019 enters through the unit's result selector, from issue_read_operands, not through a
+  D$ input.
+- The bound caveat stands: these are arcs removed on today's placement.
