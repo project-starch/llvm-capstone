@@ -4640,3 +4640,58 @@ phases equal to the native reference (`cmp-sq.py`: none differ, none missing, no
   done.
 - **Stopped here for CPython.** Its Fig. 10 revision needs an environment that routes these calls, or the trap
   route Fig. 10 used (35de150cef). The image pair and the stage stay built (`fig10/cpython`, `stage2`).
+
+### Pre-registration: Fig. 10's Wireshark revision in oneop (written 2026-11-23 06:15, before the protected arm has run)
+
+- **Revision:** `wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch` of 5060011844e (`ca4ba97e22407f4a…`, the copy in
+  `fig10/wt` equal to it). It changes `wmem_allocator.h`, `wmem_allocator_block.c` and `wmem_allocator_block_fast.c`.
+  - Built by `fig10/build-tshark.sh`: tshark 4.6.8 with the port's patches in both arms; the dependencies come from
+    a local copy of the cached source tarballs, because their URLs return 404.
+  - Image `xbuild/run/tshark`: stock `352e193c849f6a16…`, prot `d026193831257cf6…`.
+- **Static census, by encoding** (`fig10/tools/census-lifetime.py`, llvm-objdump words, opcode 0x5B funct3 1):
+  - stock: none of the 16 wmem objects holds a lifetime instruction;
+  - prot: `wmem_allocator_block.c.o` holds CDERIVE 10, one-operand CREVOKE 2 and CRENEW 1; `wmem_allocator_block_fast.c.o`
+    holds 10, 1 and 1. The other 14 objects hold the same counts in both arms.
+  - So Fig. 10's wmem revision uses CRENEW, and the "no CRENEW" prediction of the other apps is not made here.
+- **Workload:** the one 5060011844e's plan `2026-11-15-wireshark-established-workload.md` defines.
+  - `tshark -r C -V -n` with `TZ=UTC` and an empty `HOME` and `WIRESHARK_CONFIG_DIR`, one process per capture.
+  - The 169 captures of `test-captures-4.6.8.txt` (`c8d1114f…`), in that order, all in one boot. They are copied
+    from the build's `xsrc/test/captures`, including the 13 in `mysql/` and `zabbix/`.
+- **Runner:** `fig10/run-app-zones4.sh`.
+  - It is `run-app-zones3.sh` with a loop: every process runs inside one `icount`, and each capture's stdout is
+    appended under a `=== C rc=N` header. A nonzero exit is therefore part of the answer.
+  - `APP_SET` prints the inputs and the nonzero count; an `APP_PROG` line goes to the console per capture.
+  - The zones3 window is `IMG_LO`/`IMG_HI`.
+- **Where the image is mapped.** The image is 32 MiB (`roundup_pow_of_two` of text plus data, `binfmt-dom.h:156`) and
+  is aligned to its size, so it is mapped at 0x3ff6000000, not at 0x3ff7000000. Its `.text` runs from 0x3ff6000000 to
+  0x3ff71a941c.
+  - The chain's zones3 window is 0x3ff0000000-0x3ff8000000, opcount's image range.
+  - Per-function lines use symbols at that base (`fig10/syms/tshark-{stock,prot}.syms`, `tools/mksyms-base.py`).
+  - Checked on the stock probe below: the FN lines sum to 99.985 % of the image zone, and `__set_thread_area` is
+    entered 169 times, once per process.
+- **Stock probes (they establish the answer; seen before this text):**
+  - `fig10-ts-probe1`/`probe2`: two captures. The output is tshark's `-V` dissection in UTC.
+  - `fig10-ts-probe3` (opcount, timeout 3,600 s): the boot did not complete within the timeout. It is void.
+  - `fig10-ts-probe4` (zones3, timeout 21,600 s), 05:06-06:14:
+    - 169 inputs, 0 nonzero;
+    - stdout 34,055,148 bytes, sha256 `b190069b62f6265ebfb63e5991443886028440a22f5df364c244330734690347`;
+    - 13,357,016,045 instructions in the icount, image zone 6,312,779,721.
+- **Runs:** `fig10/chain-tshark.sh`, six boots (opcount stock, prot; zones3 u1 p1 p2 u2), timeout 21,600 s each.
+  - The stubbed chain reached all six rungs with the right image, plugin, window and symbols
+    (`fig10/tshark/chain-dry.txt`).
+  - About 70 min per boot.
+  - It starts only after the kit-devq corpus runs (perl0002, SQLite, PHP) have had the QEMU lock. Those wait for an
+    exclusive lock, and this lane's own oneop and twin runs kept them out for 5-10 h.
+- **Predictions:**
+  - every boot: 169 inputs, 0 nonzero, stdout sha256 `b190069b…`;
+  - **control:** prot beyond stock executes at least 100,000 CDERIVE and at least 1,000 CREVOKE. Stock runs musl
+    mallocng's lifetimes too (`fig10-ts-probe3`'s partial count: 1.66 M CDERIVE), so the control is the difference.
+    CRENEW: stock 0; prot is recorded, not predicted;
+  - **image instructions, prot vs stock: +0.3 % to +6 %.** The twin's tshark on 9,000 frames, at dev's revision, was
+    +2.69 % in-context. Here every process also pays tshark's start-up, which wmem touches less.
+  - repeats within 0.01 %.
+- **Branches:**
+  - a prot boot that differs from `b190069b…`, or has a nonzero capture: no cost is read, and the capture is named
+    from the answer's headers;
+  - control not met: the patch did not take effect, and the run says nothing about protection;
+  - cost outside the band: attributed per function from the FN lines before anything else is said.
