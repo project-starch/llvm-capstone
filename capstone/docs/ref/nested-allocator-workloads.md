@@ -4633,6 +4633,44 @@ phases equal to the native reference (`cmp-sq.py`: none differ, none missing, no
   the walk too. The variant worth pricing is 0001 plus 0002. Its landing is under way (`perl0002`, queued on the
   twin).
 
+### Pre-registration: Perl, Fig. 10's revision plus 0002, the variant worth pricing (written 2026-11-23 06:37, before the runs)
+
+- **The variant.**
+  - Patch: `fig10/patches/fig10-perl-0002-on-5060-0001.patch` (`d93308435dd5d4f6…`).
+  - Pending 0002 (`sublet/pending/5.36.3/0002-sv-arena-lookup-by-index.patch` of the perl0002 worktree) was written
+    on dev's 0001, not on Fig. 10's. Two of its three hunks apply to Fig. 10's 0001 unchanged.
+  - The third registers each new arena in `Perl_more_sv`. Its context differs, so the one line
+    `S_sv_arena_register((SV *)chunk);` is placed after `sv_add_arena` under `#ifdef PERL_CAPSTONE_SUBLET`.
+    `Perl_more_sv` is the only place either revision adds an arena.
+  - Built in a second scratch worktree (`fig10/wt2`, 71ce with the same swapped-in files as `fig10/wt`, plus this
+    patch as `sublet/patches/5.36.3/0002`), by `fig10/build-perl0002.sh`.
+  - Image `528d7f1e35a1cd74…`. Against prot's tree, only `sv.c` differs, apart from generated files that differ by
+    their miniperl path.
+  - By encoding, `sv.o` holds CDERIVE 2 and one-operand CREVOKE 3; prot's holds 28 and 3. The derive sites likely
+    fell because `S_sv_arena_of` grew and stopped being inlined. That was not read from the disassembly; the dynamic
+    counts below are the check.
+  - 16 MiB, so it maps at 0x3ff7000000 like prot (symbols `fig10/syms/perl-p0002.syms`).
+- **Runs:** `fig10/chain-perl0002.sh`, four boots:
+  - opcount p0002;
+  - zones3 p0002 twice, with FN lines;
+  - a zones3 stock control, against `fig10-perl-r2`'s stock readings.
+  - Same workload and answer as the Perl chain. The stubbed chain reached all four (`fig10/perl/chain02-dry.txt`).
+  - The chain queues behind the kit-devq corpus runs, as the tshark chain does.
+- **Predictions:**
+  - SPEC's `suns.out` in every boot, status 0;
+  - the stock control within 0.001 % of 2,082,932,016-2,082,932,020;
+  - **lifetimes unchanged:** p0002's CDERIVE and CREVOKE counts equal prot's (2,064,268 and 1,684,005) within 1 %,
+    and no CRENEW. The index changes how an arena is found, not which heads get lifetimes. This stands in for a
+    fixture here; the protection fixture for 0002 is the perl0002 corpus;
+  - **image instructions: +2 % to +12 % against stock**, and at least 400 M fewer than prot's 2,809,488,676;
+  - `Perl_sv_arena_head`: under 200 instructions per call (prot: 5,421);
+  - repeats within 0.01 %.
+- **Branches:**
+  - lifetime counts that differ from prot's by more than 1 %: the variant changed what is protected. It is not priced,
+    and the difference is localised first;
+  - above +12 %: attributed per function before anything else is said;
+  - below +2 %: it is reported as it stands, with the per-function deltas.
+
 ### Result: the CPython chain is void: the environment refuses `ioctl(FIOCLEX)`, so no script can be run by path (01:26-01:28)
 
 - Every boot exited with status 2 in 0.8 s and printed only `./app: can't open file
