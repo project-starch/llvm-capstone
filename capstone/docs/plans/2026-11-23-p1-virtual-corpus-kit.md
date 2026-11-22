@@ -45,3 +45,14 @@ the SQLite and PHP bug corpora on the board).
 Q1 and Q2 are read at source and checked on the twin first. Only then is a kit cut (t3-smoke/bkit1xx-p1-virtual), and
 its first boot is a Tier 1 with the corpus's own positive control (contract.dom's stale access denied with 25).
 Nothing here touches dev's module.
+
+## Q2, read at source (2026-11-23)
+
+- vm-abi.h is identical on table-tree 722416c35e77 and on dev: version 7, two load segments, mallocng inside
+  Capstone. So corpus images built by dev's virtual SDK carry the ABI the boards' module serves.
+- wire.h differs. table-tree's cv_map drops the `linear` field ("copyable-only grant ABI: smaller payload gives CV_ADD a
+  new ioctl number; old linear-grant launchers are rejected, not silently converted"). So dev's capstone-vexec is
+  refused by the table-tree module.
+- The kit's launcher must therefore be built from table-tree's sources (capstone/runtime/virtual, the same tree as
+  the module). The images stay dev-built.
+- Q1 is next: one corpus case, a dev-built image under a table-tree-built capstone-vexec, on the twin images-tree.
