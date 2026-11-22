@@ -6727,3 +6727,43 @@ run:** `perf/natstage/dry217/`.
 read stdin, but each content read after the chunked read is a pread (syscall 67) at an explicit offset, and the later
 read calls are refused or have length 0. So no later check depends on the file offset. The rtl lane reached the same
 reading independently (22 Nov). The cascade explanation and the waiver condition are unchanged.
+
+## Addendum 219 (2026-11-22 19:42 +08, before it runs): R-75 (d) on silicon, board 2. The rtl lane's reproducer kit, then a perf null
+
+**Why.** The lead chose option (d) for R-75 on 22 Nov (programme doc). The fix is capstone-ariane b1-r75d 1c5d31474:
+bitstream 1 plus one term in the LSU verdict path. It is sealed as `caplifive_…-pagedtbl-r76-r75d_1c5d31474.bit`,
+sha256 2d2ba92c2e193dc4fcf368b9159ee454d2281c40d20a63ef9a57e6a7418eaf16, re-hashed here.
+- It passes every rtl key against bitstream 1: WNS -13.598 ns, routed clean, congestion 5, 187,912 LUT (-682).
+- None of the worst-500 paths passes through the term.
+- Record: board/meas-pw c817561a7c2a. The registry status is FIX IN RTL, SEALED, NOT YET MEASURED ON SILICON (dev
+  0e9a276eb23c).
+
+**Part 1, the reproducer** (the board lane runs it; its graded record is the rtl lane's PREREG, llvm-capstone
+land/rtl-r75-kit 515d5bc97c7b, capstone/tests/rtl-smoke/r75-bare-2026-11-22). It uses silchk-b2's harness, one image
+per load, the control first, and ≤150 s per load.
+- Bitstream 1: va-runv (f0ed3fac351b60f3), r75-trapz (311e56388094b2ad), then r75-trap (73ce33d96fac8e91) LAST.
+- Then a va-runv load to re-confirm the board after the expected wedge.
+- Flash r75d: va-runv, r75-trapz, r75-trap, and r75-trap again in a separate load.
+- Grading, as pre-registered by rtl:
+  - VOID unless va-runv reads SR 15 and trapz reads SR 3 `0x2 0x80004000 0x5` on both bitstreams;
+  - REPRODUCED: r75-trap gives no SR line on bitstream 1 while trapz returns;
+  - FIXED: both r75d loads of r75-trap read SR 3;
+  - bitstream 1's arm returning is NOT REPRODUCED, a finding about the race, not a pass.
+- Stated limit: the kit records M-mode prints only. It grades R-75's own point (the handler loops or passes), not
+  the in-tree arm's 30-value vector.
+
+**Part 2, the perf null** (this lane). Chain r75n-b2 (TAG r75d-frcdkms), kit bkit106. bkit106 is bkit100 (bitstream
+1's) with only the two bitstream fields changed. Its stages are board-frcdkms's perlbench makerand, gcc train01 and mcf.
+It waits for part 1's marker (perf/natstage/r75kit-b2.DONE, through wait-marker.sh), then for a free board.
+- Prediction: every row inside bitstream 1's Addendum 204 band on the same board. The term acts only around a
+  namespace change, and its sweep moved 0 cycles in 92 tests.
+  - perlbench makerand 273.74-276.50 s. Bitstream 1's 274.95 s was taken on the r76p stage, whose probe runs after
+    the timed command.
+  - gcc train01 1,759.78-1,766.84 s.
+  - mcf 5,931.77-5,955.55 s.
+- A row outside its band is reported with both readings, and r75d does not become a default candidate until it is
+  explained.
+
+**What follows.** If part 1 reads FIXED and part 2 is in band, r75d is a candidate for the board default, with
+bitstream 1 as the registered fallback. That choice is settled between the lanes (the lead's delegation, 22 Nov), and
+the paper chains stay on P1. **Stops** as Addendum 199. **Dry run:** `perf/natstage/dry219/`.
