@@ -6594,3 +6594,42 @@ third runs, out-nat-p1-r3a3-b1); the low end takes half the reduction at 21.4 cy
 non-zero status, a specdiff FAIL.
 
 **Dry runs** (stubbed, every chain): `perf/natstage/dry213/`.
+
+## Addendum 214 (2026-11-22 13:32 +08, before it runs): the demand-only record cache (2ca17ad2a) against 7180a83b6, board 2
+
+**Why.** Addendum 197 read the record cache with the R-76 term (7180a83b6) on board 2 against P1:
+- mcf -0.49 %;
+- gcc train01 inside its band;
+- fills (event 37) at 74.7 % of record accesses, where the model predicted under 1 %.
+capstone-ariane b5a-demand-only 2ca17ad2a removes the background fill. It changes one line of `core/ex_stage.sv`:
+RC_RWAIT goes to RC_IDLE. It was pre-registered in its commit message before lint, sweep and synthesis, from the
+record-cache lever model.
+
+The board lane's full grade reads 4 of 4 against 7180a83b6's seal: WNS -12.349 ns, routed clean, congestion 3,
+190,172 LUT (+252). Seal sha256 b716f9cd913351907a8213dd3fbbea5c8ccecbd0a09e25637f0e8f0e310ebd6b, re-hashed here.
+Record: synth/b5adem-2ca17ad2a-full-out/SEAL.txt and board/meas-pw (2026-11-21-stepc-demandonly-builds.md).
+
+**Chain** dem-b2 (TAG b5adem-hpmrc-frcdkms), board 2. It runs behind Addendum 213's last chain.
+- Kit: bkit104, which is bkit97 (Addendum 197's) with only the two bitstream fields changed.
+- Stages: Addendum 197's, board-frcdkms perlbench makerand, mcf and gcc train01.
+- The flash checks the sha256 against the seal and reads the name back. Fallback: P1 with bkit91.
+
+**Predictions** (2ca17ad2a's own, against 7180a83b6's Addendum 197 readings on the same board, stages and kit footing):
+1. gcc train01: about -705 M in-context cycles (-1.68 %) against 42,038,861,933 (1,769.51 s), about 41.33 G.
+2. mcf: about +574 M (+0.40 %) against 143,951,946,853 (5,914.79 s): slower than B5a, faster than P1.
+3. HPM: gcc ev34 about 9.61 M, ev35 about 6.84 M, ev37 about 0; mcf ev34 about 2.98 M, ev35 about 178.3 M, ev37
+   about 0.
+4. perlbench makerand within ±0.5 % of 275.27 s. It is the Tier 1 row; the model makes no claim on it.
+
+**Readings.**
+- *The change is present* only if ev37 reads near 0 on mcf and gcc. ev37 at 7180a83b6's level (137.5 M on mcf) means
+  the bitstream does not carry the change: the pair is VOID, and the build is looked into.
+- *Model refuted* (the rtl lane's criteria):
+  - gcc is not below -0.5 % against 7180a83b6; this is the decisive criterion;
+  - ev34 or ev35 is off the model's count by more than 5 %. The model's calibration on gcc was already +13 % on ev34,
+    so this criterion can fire on calibration alone.
+- *Lever*: demand-only is a candidate for the performance batch if gcc and mcf are both faster than P1's
+  board-frcdkms readings (cq-b2: mcf 5,943.66 s, gcc 41,889,126,112 cycles) and makerand is not slower by more than
+  0.5 %.
+
+**Stops** as Addendum 199. **Dry run:** `perf/natstage/dry214/`.
