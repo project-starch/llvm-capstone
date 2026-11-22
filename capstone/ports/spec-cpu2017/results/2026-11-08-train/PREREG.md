@@ -6633,3 +6633,24 @@ Record: synth/b5adem-2ca17ad2a-full-out/SEAL.txt and board/meas-pw (2026-11-21-s
   0.5 %.
 
 **Stops** as Addendum 199. **Dry run:** `perf/natstage/dry214/`.
+
+## Addendum 215 (2026-11-22 14:08 +08, outcome): Addendum 210, Zcb with a capability base (ZCB9) on P1 Full, board 1
+
+Three boots on board 1 (P1, bkit91), 08:33-14:06. Each reached a shell, ran the nine smoke steps (PASS) and has no
+illegal-instruction, SIGILL, Oops or panic line. specdiff PASS on every row. The chain's "SPEC rc=2 NO RESULT" is the
+old classifier's native-format miss; the rows are read with read-one.sh (run-stage.py read).
+
+| Row | ZCB9 | Full mean (band) | Δ | Outcome |
+|---|---|---|---|---|
+| xz (sum of 12) | 4,953.93 s (dcf1632eb740c11e) | 4,956.87 (4,946.96-4,966.79) | -0.06 % | flat |
+| imagick (convert) | 11.43 s (bafdd92be8a4dc85) | 11.40 (11.38-11.43) | +0.26 % | flat, at the top edge; 0.01 s resolution |
+| perlbench (makerand + test.pl) | 273.33 + 12,757.86 = 13,031.19 s (228df5894b6bac8b) | 13,074.29 (13,048.14-13,100.44) | -0.33 % | **gain** |
+
+- perlbench's gain is in both commands: makerand 273.33 s against Full's 276.01, 275.62 and the third run's; test.pl
+  12,757.86 against 12,798.66. The twin saved 0.889 % of perl's fetch bytes at an unchanged instruction count, so a
+  0.33 % time gain is inside what the fetch side can give.
+- N = 1 per row. A second ZCB9 perlbench run would tell a real gain from the edge of the run-to-run spread (0.015 %
+  over three Full runs, so the gain is about 20 spreads away).
+- What follows (Addendum 210's reading): the compressed-instruction lever is not a loss on any row and gains on the
+  one row whose code is largest. It goes on to the stage-2 work (compressed capability instructions), and the
+  instruction count stays unchanged, as predicted. The paper is unchanged.
