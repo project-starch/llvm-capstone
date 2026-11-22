@@ -61,12 +61,43 @@ The kit's slot count is therefore the whole cause for these three tests. The kit
 where a second live context does not exist, so on this kit the tests measure the configuration, not the runtime.
 A suite that runs pthread tests needs a kit booted with matched slots above 1 (Q-32).
 
-## Arm 3, pre-registered: the other two failing tests at 32 slots
+## Arm 3: the other two failing tests at 32 slots; the prediction FAILED
 
 `pthread_robust` (3e19fa94112e4d06) faulted at `pthread_timedjoin_np+0x188` with cause 28, which was not explained.
 `cancel-points` (46fa1dd4d615351c) faulted at `pthread_cancel+0xe4`, address 0x44. Arm 2 did not include them. The
-same 32-slot boot runs them after pt-probe. Predicted reading if they share the cause: both exit 0 with no refusal
-line. A failure in either is a separate defect.
+prediction was pushed before the boot, in lane commit f689f2d3e4db: both exit 0 with no refusal line. Both exited 1
+on the same 32-slot boot (slot gate OK, `supervisor_slots=32`, no refusal line among 217 new dmesg lines). pt-probe
+passed again as the control. Neither test faults any more. Both now fail on a check of their own, past
+`pthread_create`, on two separate limitations of the virtual profile. Neither is the slot count.
+
+- **pthread_robust: PI mutexes.** The test prints `pthread_robust.c:43: pthread_mutexattr_setprotocol(&mtx_a,
+  PTHREAD_PRIO_INHERIT) failed: (pshared==0, pi==1) Function not implemented`, and the same for pshared==1. The
+  non-PI cases print nothing. The chain, read from source and not traced:
+  - musl 1.2.5's `pthread_mutexattr_setprotocol` probes `FUTEX_LOCK_PI` once and returns its error;
+  - both of the virtual profile's futex filters admit only WAIT, WAKE, WAIT_BITSET and WAKE_BITSET, and return
+    -ENOSYS for anything else (`runtime/virtual/pthread.c:175`, `runtime/virtual/exec.c:1218-1220`).
+
+  The delegated runtime implements PI futexes (`ports/musl-capstone/runtime/delegate.c:776-860`); the virtual
+  profile does not. The earlier cause-28 fault (the one-slot validation run) does not recur at 32 slots. That it
+  followed from a refused create is inferred: that run kept no stdout.
+- **cancel-points: thread signals.** Seven cases print `pthread_cancel.c:137: pthread_cancel(td) failed: No such
+  process`. musl's `pthread_cancel` signals the thread with tkill. The shared delegate service
+  (`runtime/linux/delegate-service.c:701-709`) hands tkill to `host->tkill` when the launcher sets one. When it
+  does not, it returns -ESRCH for every tid except the process's own. The physical launcher sets it
+  (`runtime/linux/exec.c:490, :805`, `context_tkill`). A `git grep -i tkill` over `runtime/virtual` and
+  `runtime/host` finds nothing. Virtual thread ids are 0x400000 + id, so every cancel of a virtual thread reads
+  ESRCH. The delegated runtime's tkill translation is B8 in `docs/plans/delegation-threads.md`.
+
+Both are features the virtual launcher lacks at this revision, not defects of the tests or the compiler. They belong
+to the runtime lane. Neither is new with delegate-pre-tls: the same images faulted the same way on base and tip.
+
+## What this closes
+
+- tls_local_exec, pthread_tsd and pthread_cond: the cause is the kit's one supervisor slot. They pass with matched 32
+  slots.
+- pthread_robust's PI cases and cancel-points: past the slot refusal, the virtual profile has no PI futexes and no
+  tkill translation.
+- The landed `delegate.c` (dev 7046cda1bdb6) is implicated in none of these.
 
 Not run: the same tests on the physical or delegated SDK. This kit boots the virtual profile, and the physical
 route refuses threads by design (the inventory above), so that arm cannot tell the hypotheses apart.
