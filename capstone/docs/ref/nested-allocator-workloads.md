@@ -3811,6 +3811,19 @@ the failed-compilation shape and keeps the protection.**
   - any fixture reading other than predicted, or test.pl's outputs not equal to stock's: revision 4 is not used, and
     the hash table is the suspect, since it is the only change from revision 3.
 
+**Result, revision 4's fixture (`perlfxo4-26dfe710`, END 01:03): every one of the 18 readings as predicted.**
+- prot6: mode 5 returns `errors=3`. Mode 7 fails the boot (`parse=13`, rc 3), so the boot check fires.
+- Revision 1: mode 5 faults with cause 25 at `Perl_op_free+0x60`, the positive control.
+- Revision 4:
+  - mode 0 reads (`live ok=1 slabbed=1`);
+  - modes 1-4 fault with cause 25 in `main`, at `main+0x328`, `+0x53c`, `+0x494` and `+0x5a2`. Each is the fixture's
+    own read through a freed op's pointer;
+  - mode 5 returns `errors=3`, mode 6 `errors=0`, and mode 7 fails the boot.
+- The no-revoke control reads freed ops in modes 1-3 (`read_after_free`, rc 0), faults in mode 4 at `main+0x5a2`,
+  and returns in modes 5 and 6.
+- So the page index refuses what revision 3's sorted array refused, on the same fixture. test.pl
+  (`zperl-ops4-26dfe710`) is running.
+
 ## perlbench train on the twin: the image zone per allocator (2026-11-22)
 
 The same twin configuration as test.pl (slot 28, `perf/natio/images`, `dom_grant_root=/tmp/nt/sr`, zones4 plugin at
