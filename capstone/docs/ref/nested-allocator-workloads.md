@@ -4368,3 +4368,39 @@ phases equal to the native reference (`cmp-sq.py`: none differ, none missing, no
 - **For silicon:** these images run one-operand CREVOKE and CRENEW, which P1 does not decode (funct7 0x54 is CSNODE
   there). They wait for bitstream 4. What this run settles is the answers and the instruction cost on the ISA
   bitstream 4 is to implement.
+
+### Pre-registration: mruby `bm_ao_render.rb 16`, Fig. 10's revision, in oneop (written 2026-11-23 00:48, before the runs)
+
+- **Build worktree.** `nested/oneop/fig10/wt` is revision 71ce199d8fea, so the recipes, runtime and SDK are the
+  environment's. Fig. 10's patch file replaces that revision's file there, and is never committed from it. For mruby
+  that is `0008-gc-slots-as-sublet-lifetimes.patch` of 5060011844e (`4a1314e3ab82f318…`). It differs from
+  71ce199d8fea's 0008 only in raising out-of-memory when `gc_issue` fails.
+- **A builder trap, caught before any run.** `ports/common/application/build-virtual.sh` sets `MRBD_PIN=4.0.0-rc2`
+  only for the lifetime arm. The stock arm then builds mruby head (ad98f216e), with 174 objects and 2.42 MB of text
+  against the protected arm's 124 objects and 1.69 MB. Both arms are now built with `MRBD_PIN=4.0.0-rc2`, the pin
+  Fig. 10 and P1 used. The head build is kept as `fig10/mruby/stock-head-unmatched` and is not run.
+- **Images** (`fig10/build-mruby.sh`, the environment's compiler clang cba01ed3090d). Both apply 0001-0003, 0008,
+  0009 and 0010, and 0008 is live only under `-DMRB_CAPSTONE_SUBLET`:
+  - stock `6fd8fe7b2b2b6246…`, text 1,691,804 bytes;
+  - prot `02584cf74a3fb56e…`, text 1,692,224 bytes.
+  - By encoding, `gc.o` holds no lifetime instruction on stock, and CDERIVE 2 and one-operand CREVOKE 2 on prot.
+    Each whole image adds mallocng's 6 CDERIVE and 3 CREVOKE.
+- **Workload, Fig. 10's:** `bm_ao_render.rb 16` (`e44efffd…`, the same file in both trees). The answer is the PPM
+  on stdout. The reference `cfd73bb1…` (781 bytes) is this tree's native build, and equals the P1 record's.
+- **Runs.** `fig10/chain-mruby.sh`, with the SQLite chain's design: opcount on unprot, then on prot, then zones3
+  ABBA. The runner is `fig10/run-app-zones.sh`; its gate's MATCH and MISMATCH branches were exercised on stubs.
+  The stubbed chain reached all six rungs, and its first dry run caught a truncated EXPECT, fixed before this
+  commit.
+- **Predictions:**
+  - **Answers:** every boot prints the reference PPM, status 0.
+  - **Lifetime instructions** (opcount, image region):
+    - prot executes at least 100,000 CDERIVE and 100,000 CREVOKE, and no CRENEW;
+    - stock executes fewer than 1,000 of each.
+    - The control: prot's CREVOKEs are at least 100 times stock's.
+  - **Image instructions, prot against stock:** +0.5 % to +5 % (the twin's in-context +1.64 % on P1's images).
+    Repeats agree within 0.01 %.
+- **Branches:**
+  - A prot fault with cause 29 at `add_heap`'s CDERIVE is Q-15 in this environment: the page's 80 KiB life is not
+    representable. It is recorded, and the Q-15-repaired variant (P1's) is pre-registered separately.
+  - Any other prot fault is localised first.
+  - An answer that differs stops the comparison.
