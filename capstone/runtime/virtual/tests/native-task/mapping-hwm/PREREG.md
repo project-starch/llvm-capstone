@@ -288,3 +288,57 @@ native-format twin stages (mrhwm/stages mcftest-ctl, gcctrain01-ctl, mcftrain-h)
 replaced by the Plain image and plan.json's hash updated (`plain/mkstage.py`). The Plain binary has no Capstone
 sections and runs as an ordinary process. ctl's executables are the board images (mcf 2d48ad97ae6009c7, gcc
 93bc8e196b036d07). The predictions stand.
+
+## Outcome of pre-registration 3 part A (read 2026-11-22 17:07)
+
+All six calibration runs completed on the twin. The first launch was void (amendment above). In the relaunch every
+run waited on the shared QEMU lock, and they ran between 14:26 and 17:06.
+
+| # | Prediction | Reading | |
+|---|---|---|---|
+| 1 | specdiff PASS everywhere | mcf test 2/2 and 2/2, gcc train01 1/1 and 1/1, mcf train 2/2 and 2/2 | held |
+| 2 | hmcheck rc 0 on each HL0 log; HL0 VmHWM within 1 % of ctl on mcf train and gcc train01 | hmcheck rc 0 on all three, 0 model mismatches. VmHWM: mcf train 619,896 against 619,900 kB; gcc train01 137,444 against 128,496 kB (+7.0 %) | **failed on gcc's VmHWM** |
+| 3 | replay --check ctl MATCH | MATCH on all three: hits / unmaps 196/5, 16,869/0, 316/7 | held |
+
+- The remap event is real. X appears 4 times on mcf (both inputs) and 2 times on gcc. Without the hook, live would
+  have undercounted those resizes.
+- **gcc's VmHWM is unexplained.** HL0 and ctl run the same policy, and hmcheck and replay show the same events, so
+  the allocator is not the cause.
+  - A candidate is the sampler. It reads VmHWM once a second, and Plain gcc train01 runs for about two minutes on the
+    twin. If RSS is still growing when the last sample is taken, ctl can be read below its own peak.
+  - That is a hypothesis, untested. Part B adds a second ctl of gcc train01 and of mcf train as noise pairs, and gcc's
+    VmHWM is reported in part B as a reading only.
+
+## Pre-registration 3 part B (2026-11-22 17:07, before any of its runs): Plain H16 on the twin
+
+Runs (`plain/partb.sh`): H16 and HL16 of gcc train01, mcf test and mcf train, then ctl2 of gcc train01 and of mcf
+train. The stages are part A's; ctl2 uses the board images. Images: H16 mcf 2143e828aef3665c, gcc 3768a3738d47f095;
+HL16 mcf 98eeec439bfd2d10, gcc ca13978dc98d6db8.
+
+Model (replay of each HL0 stream, ctl → hwm+16):
+
+| program | hits | fresh | unmaps | live + cached peak (MiB) |
+|---|---|---|---|---|
+| gcc train01 | 16,869 → 16,840 | 888 → 917 | 0 → 94 | 131.2 → 109.0 |
+| mcf test | 196 → 197 | 30 → 29 | 5 → 4 | 657.2 → 611.5 |
+| mcf train | 316 → 317 | 38 → 37 | 7 → 5 | 673.9 → 628.2 |
+
+**Predictions:**
+1. specdiff PASS on every run.
+2. Each HL16 log satisfies `hmcheck --hwm --slack 16777216` rc 0 and `replay --check hwm+16` MATCH.
+3. Each HL16 log's own counts equal the model column above, which was computed from a different run's stream: U
+   (hits) 16,840 / 197 / 317 and E+R+H+F (unmaps) 94 / 4 / 5. This tests that Plain's request stream does not depend
+   on the policy, as Full's does.
+4. H16's VmHWM is at most ctl's plus 0.1 % on mcf test and mcf train (306,012 and 619,900 kB): the rule never raises
+   the footprint. No lower bound is predicted, because VmHWM counts touched pages and the mapping-byte drop
+   (45.7 MiB) does not translate into resident pages by any model here.
+5. Noise (a reading): ctl2 against ctl VmHWM on gcc train01 and mcf train. If gcc's ctl2 moves by more than 1 %, part
+   A's gcc failure is read as instrument resolution, and gcc's VmHWM decides nothing in part B.
+
+**Outcomes:**
+- If 1-4 hold, the Plain counterpart is ready. Full + H16 and Plain + H16 then go to the board together, under a new
+  SPEC addendum on mcf train (Full was killed at 13,777 s, Addendum 212) and the rows that use the cache. Board time
+  is the measurement the twin cannot give.
+- If 3 fails, the Plain stream depends on the policy (the remap path is the first suspect), and the model is not used
+  for Plain.
+- If 4 fails, the rule raises Plain's footprint, which contradicts its design. Read the HL16 log.
