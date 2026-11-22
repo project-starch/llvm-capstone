@@ -280,3 +280,11 @@ those streams with `replay.py` and written before any H16 run.
 3. `replay.py --check ctl` over each HL0 log MATCHes. Plain's cache and Full's ctl policy are the same rule (512
    entries, 64 MiB, front eviction), and the model's hit pick, the newest match, is Plain's own scan order.
    A mismatch means the model must change before part B.
+
+**Amendment to part A (2026-11-22 12:26, before any part A run).** The first launch ran nothing. All six runs stopped at the twin
+runner's first check: it asserts the native board stage's cleanup line, and the Plain al3 board stages have their own
+format. Those six are void (RESULTS). The stages are now the RVAL twins' method (perf/alean/plain/st-gcc): Full's
+native-format twin stages (mrhwm/stages mcftest-ctl, gcctrain01-ctl, mcftrain-h) with only the native executable
+replaced by the Plain image and plan.json's hash updated (`plain/mkstage.py`). The Plain binary has no Capstone
+sections and runs as an ordinary process. ctl's executables are the board images (mcf 2d48ad97ae6009c7, gcc
+93bc8e196b036d07). The predictions stand.
