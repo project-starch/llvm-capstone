@@ -3477,6 +3477,13 @@ Both commands together: in-context +4.88 %, span +4.62 %.
 
 - The L1D misses (+110.5 M) are not priced: no measured price exists. If they carried the whole remainder, each
   would cost 42-43 cycles.
+- **prot2's +15,591.2 M (pt2 against st2, the paper's image), the brief's attribution item.** The same reading of
+  that pair puts 11,497.9 M (73.7 %) in its +3,629,052,979 twin instructions at st2's mean (3.168), 343.3 M (2.2 %)
+  in walks and 742.7-873.7 M (4.8-5.6 %) in event-23 replays. That leaves 2,876-3,007 M (18.4-19.3 %) unattributed.
+  Both images make the same record traffic (the protected arms' hpm3, hpm5 and hpm7 counts within 1 % of each other), yet the remainders differ by 1.8 G. So
+  the mean price is wrong for at least the lookup's instructions. The decomposition this boot supports is the
+  difference itself: 1,982.3 M (12.7 % of prot2's cost) is the binary-search lookup prot6 removes, measured as a pair.
+  The other 13,583.8 M is prot6's cost, divided as in the table above with its 34-35 % remainder.
 - **The instruction price decides the remainder, and it is the softest number here.** At the mean (3.17) the
   instructions take 57 %. At the price this boot's pair measured for the lookup's instructions (1.67), they take
   4,070.6 M (30.0 %), and the remainder grows to 8,338-8,468 M (61.4-62.3 %). Neither price is measured for the
@@ -3570,7 +3577,9 @@ Checks:
     1,604 to 1,306 bytes, so the arena code most likely left it; that explains about 10 M of the 53.5 M (inferred from
     the sizes and the calls, not read from the disassembly). The rest of these decreases is not attributed.
   - The other functions add +0.9 M (858,740), and 15,681 instructions fall outside every named function.
-- Not read: memory (`census/out/rss-he-e9994b2e`) and cycles.
+- **Memory** (`census/out/rss-he-e9994b2e`, test.out byte-equal to stock's): peak used 102,504 kB: -116 kB against
+  prot6's 102,620 kB, and +4.6 % against stock's 97,968 kB.
+- Not read: cycles.
 
 ### perlbench test.pl: ops as lifetimes of their op slabs, on top of the heads port (QEMU twin, 2026-11-22)
 
@@ -3783,3 +3792,30 @@ Predictions:
   result.
 
 VOID if any command's answer differs, or if the protected commands do not print mode 6.
+
+### Result: protected PHP costs +15.43 % against pristine zend_alloc, just above the predicted band (`nested/out/nphp10s-1`, 06:40-10:12)
+
+| command | rc | answer | in-context cycles | kernel + other | runs |
+|---|---|---|---:|---:|---:|
+| u1 pristine | 0 | `8f692e64…` | 7,605,688,343 | 37,199,838 | 4,949 |
+| p1 mode 6 | 0 | `8f692e64…` | 8,779,246,529 | 49,800,409 | 6,478 |
+| p2 mode 6 | 0 | `8f692e64…` | 8,779,247,394 | 49,935,512 | 6,478 |
+| u2 pristine | 0 | `8f692e64…` | 7,605,688,196 | 36,830,655 | 4,949 |
+
+Read with `parse-abba.py` from the boot's serial log (sha256 `6f661677…`); the stderr of each command decoded from it.
+- **Answers: met.** Every normalised output equals the native reference. p1 and p2 print `ZEND_CAP_MODE 6 exact=0
+  revoke=1`, and their allocator line reads 3,442,469 issues, retires and revokes with 0 live. u1 and u2 print
+  nothing on stderr. Not VOID.
+- **Repeats: met**, 0.00 % in both arms (147 and 865 cycles apart).
+- **Cost, protected vs pristine, in-context: +15.43 %. Predicted +0.5 % to +15 %: missed, just above the band.**
+- The protected arm reads the same as `nphp10-1`'s protected arm (8,779.2 M), so the two boots agree where they
+  share an image.
+- **The geometry alone** (two boots, not a paired result): pristine reads 7,605.7 M against `nphp10-1`'s mode 4,
+  8,765.5 M. On the twin, mode 4's geometry (every block back to mallocng) therefore costs +15.25 % over pristine
+  zend_alloc's own caches, and the lifetime adds +0.16 % on top. The protected arm also makes 1,529 more trips out of
+  context per command (6,478 against 4,949 runs) and spends 12.8 M more cycles outside it. That fits mallocng mapping
+  and unmapping what zend_alloc would keep, but this run does not show the calls themselves.
+- So on the twin almost all of PHP's cost against pristine is the allocator substitution, not the lifetimes. A protected
+  zend_alloc that keeps its own chunk caches (lifetimes carved from its chunks, as the perlbench and gcc ports do) is
+  the variant that would separate them. It has not been built. The P1 row's unprotected arm (`nested/appd/php10`) runs
+  mode 4, not pristine; which comparison the paper uses is the lead's decision.
