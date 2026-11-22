@@ -6767,3 +6767,36 @@ It waits for part 1's marker (perf/natstage/r75kit-b2.DONE, through wait-marker.
 **What follows.** If part 1 reads FIXED and part 2 is in band, r75d is a candidate for the board default, with
 bitstream 1 as the registered fallback. That choice is settled between the lanes (the lead's delegation, 22 Nov), and
 the paper chains stay on P1. **Stops** as Addendum 199. **Dry run:** `perf/natstage/dry219/`.
+
+## Addendum 220 (2026-11-22 21:12 +08): the Full half of Addendum 202, and perlbench train moved to a 2^20-record kit
+
+**Full train2 (t202f-b2, board 2, P1, bkit91), 22 Nov 00:35-21:09.** Each boot is clean: shell, smoke 9/9, no
+illegal-instruction, Oops or panic line. Rows read with read-one.sh; hashes are of board.txt.
+
+| Row | Reading | Addendum 202's estimate | |
+|---|---|---|---|
+| imagick train | 28,601.98 s, specdiff 1/1 PASS (479c97dfbb354c13) | 62,773 (V1f scaling: about 15,200) | between the two estimates, which disagreed by 4x |
+| x264 train | 24,858.03 s, specdiff 3/3 PASS (0b4f79774268e360) | 26,556 | -6.4 % |
+| perlbench train | commands 0, 1, 4 rc 0 (diffmail 11,770.52, perfect 3,342.32, suns 254.45 s); **commands 2 (scrabbl) and 3 (splitmail) rc 139 "Segmentation fault"**; specdiff 4/6 (3c85c9b06d314a5f) | 29,026 | **no row** |
+
+**The perlbench failure was predictable, and this lane's pre-registration missed it.** This file's Addendum 2 (8 Nov)
+records exactly this shape: commands 2 and 3 rc 139 on the twin, and on the 28 Oct board run "Out of memory!" at the
+lifetime-node table's capacity, 262,144 records. Addendum 4 sized the need: the uncapped twins hold 414,817 (scrabbl)
+and 410,594 (splitmail) live nodes. That is why E5's 20-bit index was used then. bkit91's command line has
+node_flat_records=262144 (read in this boot's transcript). Addendum 202 put perlbench train on bkit91 with no line
+about table size. CLAUDE.md asks that a pre-registration read the prior art of the rows it runs; this one did not.
+The cost is one perlbench boot, about 4.4 h of board 2.
+
+**Change, before either affected chain runs.**
+- perlbench train runs on nested/kits/bkit91-rec1m. Against bkit91 it differs in board.env's node_flat_records
+  (1048576) and its SHA256SUMS line only (diff -r). It ran perlbench's full test VALID on board 1 (Addendum 188, pt2).
+- +Spatial: t202s-b1 (waiting, never booked) is replaced. t202s2-b1 keeps imagick and x264 on bkit91; t202sp-b1 runs
+  perlbench on bkit91-rec1m.
+- Full: t202fp-b1 reruns perlbench train on bkit91-rec1m.
+- Board 1 order after t201s: t202fp (Full perl), t202sp (+Spatial perl), then t202s2.
+- The table size is a Capstone-only parameter: Plain has no table. 2^20 against 2^18 has no board pair yet; the
+  nested lane's 2^22-against-2^20 pair is planned. Until one exists, perlbench train's Full and +Spatial seconds
+  carry the table size as an unpaired term, and the reading says so.
+- Prediction for both perl rows: all five commands rc 0 and specdiff 6/6. If scrabbl or splitmail still fail at
+  2^20, the reading is that 2^20 is not enough on P1's tree, and the twin's live-node peak is read first.
+**Dry run:** `perf/natstage/dry220/`.
