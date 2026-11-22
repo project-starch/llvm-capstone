@@ -53,6 +53,11 @@ Nothing here touches dev's module.
 - wire.h differs. table-tree's cv_map drops the `linear` field ("copyable-only grant ABI: smaller payload gives CV_ADD a
   new ioctl number; old linear-grant launchers are rejected, not silently converted"). So dev's capstone-vexec is
   refused by the table-tree module.
-- The kit's launcher must therefore be built from table-tree's sources (capstone/runtime/virtual, the same tree as
-  the module). The images stay dev-built.
-- Q1 is next: one corpus case, a dev-built image under a table-tree-built capstone-vexec, on the twin images-tree.
+- ~~The kit's launcher must therefore be built from table-tree's sources.~~ Corrected 2026-11-23: table-tree retired the
+  launcher build (b9f5f1976d36, an ancestor of 722416c35e77: build-adapter.sh now exits 1 and says so). exec.c's
+  ioctl launcher source is still in the tree, unbuilt. The route the native kits use is the kernel's own `.dom` exec
+  (capstone_vm.native_task=1 capstone_vm.dom_binfmt=1, tests/native-task/README.md), which is how the board smoke runs
+  probe.dom and the other domains. The images stay dev-built.
+- Q1, restated: does a dev-built corpus image run when exec'd as a `.dom` under the table-tree kernel on the twin
+  images-tree? Only if it does not is a launcher built from exec.c, and that would then be a deviation from the
+  tree's own recipe.
