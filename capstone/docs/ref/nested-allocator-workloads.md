@@ -4249,3 +4249,93 @@ Read with `parse-abba.py` from the boot's serial log (sha256 `6f661677…`); the
   zend_alloc that keeps its own chunk caches (lifetimes carved from its chunks, as the perlbench and gcc ports do) is
   the variant that would separate them. It has not been built. The P1 row's unprotected arm (`nested/appd/php10`) runs
   mode 4, not pristine; which comparison the paper uses is the lead's decision.
+
+## Item 5: the SQLite and PHP bug corpora for the board (2026-11-23)
+
+The programme's item 5: prepare the images and the pre-registration, and the runtime lane queues them on a P1 board.
+Neither corpus has run on a board with its nested arm. SQLite's control arm (vp2-malloc) ran on vp2. PHP has no board
+reading at all.
+
+**Board kit: to be named.** No P1 board kit runs the virtual profile today. The runtime lane checked every t3-smoke
+kit: the non-native ones are on older bitstreams or riscv-base. P1's lifetime hardware is the paged table, which
+the native kits drive with the table-tree module (llvm-capstone table-tree 722416c35e77, not on dev). So a P1 virtual
+kit needs dev's virtual module plus the table-tree code, with a VM ABI matching kit-devq's runtime. That kit, its ABI
+check and its Tier 1 boot are the runtime lane's next build. Every board claim below waits for it. The board
+prediction will be the QEMU verdict on the same image bytes (Tier 3's rule).
+
+**Images**, from the dev worktree at deb4ebf0b06b with the llvm-agp compiler (clang d9fa11a409d2), and corpus SDKs
+(`-fno-builtin`, mallocng, virtual profile, application ABI 2):
+- **SQLite engine-repros**, 33 cases per arm: `ports/sqlite/repro322/build-virtual.py` over the adapted 3.22.0
+  amalgamation (`7fc92e19…`, the bundles' input), `--ext-src` the 3.22.0 full tree, and the two memsys5 controls
+  (`control_uaf_mem5.c`, `control_bounds_mem5.c`) built in.
+  - `virtual-malloc` (`--memsys5`): 33 built, 0 failed.
+  - `virtual-nested-pools` (`--sublet`): 33 built, 0 failed.
+  - SDK `sdk.json` `6ff09cfbe6ad7b5d…`.
+  - By encoding, case 00's image carries CDERIVE 7 and CREVOKE 3 on the malloc arm (mallocng's own lifetimes),
+    and 9 and 4 on the pools arm. Every CREVOKE has two operands, which is the form P1 decodes.
+- **PHP engine-repros**: one interpreter image for the four `PHP_CAP_MODE` arms, built by
+  `ports/php/app/build-virtual.sh realphp` on PHP 5.0.0 from `prepare-sources.sh` (tarball `5783e0c0…`, patch set
+  `ac187130…`):
+  - `php-real-nested.dom` `6321dcc8993ac0af…`;
+  - the bound control's probe, `probe-nested.dom` `f6b1e7085a423dd7…`;
+  - `probe-putenv.dom` `7367104ffe1552bb…`.
+  - The build counts nested capability instructions as derive=8, revoke=4.
+- **QEMU readings on kit-devq**, queued behind the twin's runs:
+  - SQLite: one persistent VM per arm, `shared/run-virtual.py`;
+  - PHP: `run-realphp.py`, one boot per population.
+  - What those runs will read is not predicted here. Their verdicts become the board's predictions, and each is
+    compared with the 2026-10-29 (SQLite) and 2026-10-28 run18 (PHP) bundles. A cell that differs from those
+    bundles is reported as a difference of the newer toolchain and runtime before any board pre-registration.
+
+## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
+
+The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
+QEMU 9e69171f1c, rebuilt as `nested/oneop`), so that they are ready for silicon when bitstream 4 exists.
+- **Which revisions.** At native-kernel-new-qemu 5060011844e, Fig. 10's tree, nine lifetime patches use one-operand
+  CREVOKE (`capstone_cap_release`) or CRENEW (`capstone_cap_renew`):
+  - SQLite `sublet-3220000-memsys5.patch`;
+  - CPython 0014;
+  - FFmpeg 0003;
+  - memcached 0006;
+  - mruby 0008;
+  - Perl 0001;
+  - PHP's zend-alloc layer;
+  - PostgreSQL 0003;
+  - Wireshark wmem 0001.
+- **The API.** 5060011844e pins QEMU 35de150cef, not the environment's 9e69171f1c. The two revisions'
+  `runtime/include/capstone/capability.h` define the same functions with the same encodings: `capstone_cap_release`
+  is `.insn r 0x5b, 0x1, 0x52, x0, obj, x0`, and `capstone_cap_renew` is funct7 0x54. So the patches build
+  against this environment's SDK.
+- **Order.** SQLite first: it has the smallest workload and this lane's longest record.
+
+### Pre-registration: SQLite speedtest1 `--size 1`, Fig. 10's revision, in oneop (written 2026-11-23 00:34, before the runs)
+
+- **Images** (`nested/oneop/fig10/build-sqlite.sh`, the environment's SDK and compiler, clang cba01ed3090d, `-O2`):
+  the adapted amalgamation `7fc92e19…`, and `speedtest1.c` `16750ede…`.
+  - unprot: stock memsys5, `speedtest1.dom` `f0ea7e65dbca76a2…`.
+  - prot: `sublet-3220000-memsys5.patch` of 5060011844e (`8fa2d094e4edc6a3…`) applied with `-F0`, `8e166381d039dc2b…`.
+  - By encoding, `sqlite3.o` holds no lifetime instruction on the unprot arm. On the prot arm it holds CDERIVE 10,
+    one-operand CREVOKE 5 and CRENEW 14.
+- **Runs.** `fig10/chain-sqlite.sh`: six boots of the environment's kit (`oneop/kit`, lock domain A), one run each
+  of `--heap 8388608 64 --size 1 st.db` under `-icount` shift 0.
+  - Boots 1-2: `opcount.so`, executed 0x5B instructions by region and funct7, on unprot and then prot.
+  - Boots 3-6: `zones3.so`, exact instructions by code address, as ABBA u1, p1, p2, u2.
+  - The stubbed dry run reached all six rungs. Its comparator refused empty result files, and read 31 of 32 against
+    a reference with one changed hash. The gate's fault branch fired on a stub job that exited 3.
+- **Predictions:**
+  - **Answers:** in every boot, all 32 phases equal `2026-10-11-same-answers/phases.json`'s native phases (rows and
+    hash), with status 0.
+  - **Lifetime instructions** (opcount, image region):
+    - prot executes CDERIVE (funct7 0x51) and CREVOKE (0x52) each between 10,000 and 100,000 times, and CRENEW
+      (0x54) at least once;
+    - unprot executes fewer than 1,000 of each and no CRENEW.
+    - This is the control: if prot's CREVOKE count is not 10 times unprot's, the patch did not take effect, and
+      the run says nothing about it.
+  - **Image instructions, prot against unprot:** +0.3 % to +3 % (the two-operand revision on the twin was +0.63 %).
+    Repeats of an arm agree within 0.01 %.
+- **Branches:**
+  - A prot fault is a finding about this revision in this environment, localised before anything else. One
+    candidate is known in advance: on this table CRENEW cannot renew in place (the gcc section above). The patch
+    takes a zero result as a failed renew, and what follows that path is not predicted.
+  - An answer that differs in either arm stops the comparison.
+  - A boot that returns no SQ_TEST line is void and is rerun once.
