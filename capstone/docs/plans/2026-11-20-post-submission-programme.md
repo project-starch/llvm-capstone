@@ -200,6 +200,19 @@ Train inputs that do not fit the board's memory are found on the QEMU twin first
 - The paper says "with both a QEMU and an FPGA implementation available"; the FPGA one matches Section 5 only after
   bitstream 5. Any wording change is the lead's.
 
+**Rulings of the lead, 22 Nov** (asked by the runtime lane, answered in its session):
+- R-75: option (d). The LSU's ALLOW/DEAD records give no PC verdict while a namespace change is pending (prototype
+  capstone-ariane r75-earlyclr b7ea390a1). No ruling change. It becomes a candidate on bitstream 1's tree, through lint,
+  the sweep with a firing count, a synthesis-only gate and then a full build.
+- Line B (B5b): option (C), staged.
+  - B5b-1 is the Sublet format, the record and the instructions, with CSRUNV kept. The format has no types, so
+    keeping CSRUNV means a monitor redesign.
+  - B5b-2 is the trap route, the raw tag moves and the deletions.
+- Settled by the lanes the same day: the bitstream-1 default with P1 as the registered fallback (the lead, relayed by
+  the board lane; board choices are delegated to the lanes); and the cone programme on P1 stops after cut 1.
+  - The clock stays at 40 ns, so the slack cut 2 would buy is unused.
+  - Its mcf cost bound is +0.25 %.
+
 ## 7. Lane briefs
 
 Rules for every lane. A report from another lane or from a subagent is a claim: check it at its primary source before
