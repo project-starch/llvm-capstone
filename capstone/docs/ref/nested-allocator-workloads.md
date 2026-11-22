@@ -4530,3 +4530,42 @@ phases equal to the native reference (`cmp-sq.py`: none differ, none missing, no
   above). A walk over hundreds of arenas per lifetime instruction would give a price of this size. Two diagnostic boots with per-function counts (zones3 with
   each image's symbols, `fig10-perl-fn-*`) are queued to read where the 726.6 M fall. No mechanism is claimed
   before they are read.
+- **Per function** (`fig10-perl-fn-stock` and `-prot`, zones3 with each image's symbols; both give SPEC's answer, and
+  the zones equal the chain's within 3 instructions). The named functions sum to +726,556,497:
+  - `Perl_sv_arena_head` +434,181,209 at 80,084 entries (absent from stock): 5,421 instructions per call. prot
+    allocates 2,536 arenas (`Perl_more_sv` entries), so a call that walks the arena list most of the way is this
+    size;
+  - `Perl_sv_arena_issue` +87,051,697 at 238,418 entries;
+  - `Perl_newSV_type` +104,610,611 (entries 53,215 to 890,464, so inlining moved);
+  - `Perl_newSVsv_flags` +76,284,648 at the same 53,139 entries;
+  - `Perl_sv_free2` +33,644,294 and `Perl_sv_clear` +12,122,082 at the same entries;
+  - `Perl_newSVpvn_flags` -25,979,116 at the same entries.
+- **Reading.** The price is mainly the arena lookup. `Perl_sv_arena_head` alone is 60 % of it, at a per-call
+  size that fits a walk, and the patch's source has the walk (`S_sv_arena_of` over `PL_sv_arenaroot`). That the
+  other increases are the same walk inlined elsewhere is inferred from the entries, and was not read from the
+  disassembly. Fig. 10's revision predates the repair in pending patch 0002, so on silicon this revision would carry
+  the walk too. The variant worth pricing is 0001 plus 0002. Its landing is under way (`perl0002`, queued on the
+  twin).
+
+### Result: the CPython chain is void: the environment refuses `ioctl(FIOCLEX)`, so no script can be run by path (01:26-01:28)
+
+- Every boot exited with status 2 in 0.8 s and printed only `./app: can't open file
+  '/tmp/ap/bench/pyperformance-subset.py': [Errno 38] Function not implemented`. Stock's image ran 43.3 M
+  instructions: start-up and its imports worked.
+- Diagnostic boots (`fig10-cpy-probe-*`, stock image), with the probe imported as a module:
+  - `os.open`, `O_CLOEXEC`, `stat`, `fstat`, `open(…, 'rb')`, `realpath`, `listdir` and `lstat` all
+    succeed on that file;
+  - `os.set_inheritable` (either value) fails with errno 38, and so does `fcntl.ioctl(fd, FIOCLEX)`;
+  - `fcntl(F_SETFD, FD_CLOEXEC)` succeeds.
+  - So this environment's native route answers `ioctl(FIOCLEX)` with ENOSYS. CPython's run-file path calls
+    `_Py_set_inheritable`, which does not fall back on ENOSYS. Imports open with `O_CLOEXEC` and never reach it.
+    Fig. 10's own runs used a different platform (the trap route of 35de150cef).
+
+### Amendment 2: CPython run as a module (written 2026-11-23 01:34, before the run)
+
+- The only change: the driver runs as `-S -m pyperformance_subset`, with `PYTHONPATH=/tmp/ap/bench`. The driver
+  is the same file under a module name, staged and compiled with the rest (stage `stage2`: stdlib tree
+  `c5549c6d…` as before, bench tree `bf5cc1a0…`). It finds its benchmarks through `__file__`, which `-m` sets.
+- The native build's stdout run the same way equals its script-mode stdout byte for byte (`58211793…`). That is
+  still the reference.
+- Predictions and branches as pre-registered. The stubbed chain reached all six rungs.
