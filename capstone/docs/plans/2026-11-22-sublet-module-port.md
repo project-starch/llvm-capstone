@@ -86,6 +86,11 @@ CSCHECK exists in the reference decoder.
    Item 8's twin-first condition already holds by code: sublet_resolve and sublet_get refuse index >= t->next, so
    QEMU reads a never-used slot dead whatever its page holds. The publish rule makes the hardware agree.
 
+9a. **S holds no capabilities under Sublet** (2026-11-23, for B5b-1 step 2b). The caller snapshot keeps its lossless
+    internal format (ruling (A)), which has 25 slot and 30 generation bits. A wider id cannot be stored there, so S
+    must never hold a capability. That follows from the rules above: capmode is never set, the module issues no
+    LDC/STC (capstone_vm.c:619-620), and the monitor holds none. The switcher's backstop, the rtl lane's (U), untags a
+    caller row whose id does not fit, fail-closed, with a directed arm. It is expected never to fire.
 10. **Tables only in RAM.** The module publishes only tables and record pages it allocated from RAM (page_to_phys of
     its own pages). The step-2a unit has no range check (the rtl lane's divergence D3: hardware touches a table that
     QEMU would refuse as outside RAM), so this obligation is what closes it. Divergences D1, D2 and D4 are fail-open
