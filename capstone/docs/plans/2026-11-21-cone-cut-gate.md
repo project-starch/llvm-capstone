@@ -129,3 +129,29 @@ grade_full.py against P1's seal reads 4/4 (`grade-board/grade-full.txt`): routed
 - **Reading:** the second entry is D$ read port 2's grant, from the D$ read arbitration and that port's controller state,
   feeding the rev_node unit's events combinationally. That is the grant the cut left live by design
   (`rv_rd_res.data_gnt`). The names are approximate under cross-boundary optimization and retiming.
+
+## Predictor for a second cut that buffers the D$ grants (read-only on the cut's routed checkpoint, 2026-11-22)
+
+The rtl lane's ask, for a one-entry buffer in ex_stage whose flops answer the unit's read and write acks. Arcs were
+disabled in memory only (`twc/lattr/grant-pred*.tcl`, logs `PRED*.log`; the classified pin list is `PRED2.pins.tsv`).
+The control, with nothing disabled, reproduces -10.130 and the `syncstate_546` entry. Every candidate is an input pin of a
+rev_node leaf cell driven from the i_cache_subsystem hierarchy, 121 in all:
+- 88 `address_tag_q`;
+- 11 walker `pw_*` FSM;
+- 4 from `rv_rsp_q[data_rvalid]`'s input logic;
+- **18 grant pins:** the grant-named ones, the moved `syncstate_546` logic, the D$ `rd_ack` and port-2 `mem_wait_flag`.
+
+| Disabled | Worst path | Worst through rev_node (entry) | Worst-500 crossing rev_node |
+|---|---|---|---|
+| nothing (control) | -10.130, 101 levels, cpmp_q → fu_data_q | -10.130 (`syncstate_546_q_i_2/I2`) | 500 |
+| the 1 pin on the `n_1913` grant net | -8.641, 92 levels, cur_idx_q → fu_data_q | -8.641 (`gnt_rd_q_i_2/I1`, a copy of the grant) | 500 |
+| **the 18 grant pins** | **-5.606, 101 levels, fu_data_q[cap_metadata_a] → [cap_metadata_b]** (no rev_node cell) | +0.019 | **0** |
+| 115 "read"-class pins (the first, wider classing) | -5.606, the same path | +0.019 | 0 |
+| those + 2 write-grant pins | -5.606 | +0.019 | 0 |
+
+Reading:
+- The grant set alone takes every worst-500 path out of rev_node. The other 97 pins change nothing.
+- The next limit is issue_read_operands' own operand path, not the unit.
+- Per this lane's own lesson (memory: a hierarchy disable over-predicts a single cut), these are arcs removed on today's
+  placement: -5.606 is a bound for a grant buffer, not its prediction. A buffer also moves the request side and
+  re-places the design.
