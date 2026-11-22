@@ -44,3 +44,31 @@ The pre-registration is in the commit message, pushed before any gate.
 
 Name: `caplifive_…-pagedtbl-reccache-r76-demandonly_2ca17ad2a.bit`. Its board pair, against 7180a83b6, is the runtime
 lane's.
+
+## Reading: the step C gate PASSES 4 of 4; its full build launched (2026-11-22)
+
+`<mnt-hdd>/synth/spc-321af31a3-gate-out/grade-spc.txt`, against step A's gate:
+- TM peak 4,925.0 MB (step A 4,914.4, +10.6);
+- no loops by any probe, each control firing;
+- core LUT 154,652 (+23) and core FF 50,398 (-1);
+- guard peak 32.01 GB.
+
+The full build launched 04:46:02Z (tag spc-321af31a3).
+
+## Reading: the demand-only full build routes and passes every key (apollo, tag b5adem-2ca17ad2a, 2026-11-22)
+
+Sealed 05:28:41Z as `caplifive_…-pagedtbl-reccache-r76-demandonly_2ca17ad2a.bit`:
+- sha256 b716f9cd913351907a8213dd3fbbea5c8ccecbd0a09e25637f0e8f0e310ebd6b; the stored copy hashes equal;
+- tarball 8a1512963051…; PROVENANCE HEAD 2ca17ad2a;
+- guard exit 0 at a 26.15 GB run peak; the collector waited for the headroom floor, then peaked at 13.18 GB.
+
+| Key (against 7180a83b6's own seal) | Reading | |
+|---|---|---|
+| mapping in class | TM peak 6,856.6 MB vs 6,867.5; growth +8.0 on both (from `synth_1.runme.log`: the full tree keeps no `.vds`) | in |
+| placed LUT 189,920 -200..+500 | 190,172 (+252) | in |
+| loops | 0 | PASS |
+| routed | 0 errors, 245,812 / 245,812 | PASS |
+| congestion ≤ 5 | placer 3 | PASS |
+| WNS (reported) | -12.349 (7180a83b6 -13.615, Δ +1.266) | |
+
+The seal goes to the runtime lane, for the board pair against 7180a83b6.
