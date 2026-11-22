@@ -42,7 +42,19 @@ def run(ev, pol, mem_kb):
     hwm = pol.startswith("hwm") or frac is not None
     for e in ev:
         if e[0] == "X":
-            live += e[1] - e[2]; peak = max(peak, live)
+            g = e[1] - e[2]   # an in-place growth runs the rule first, as a fresh mapping of g bytes would (plain_reuse.c __plain_remap_fit)
+            if hwm and g > 0:
+                cap = max(live + g, peak) + slack
+                if frac is not None:
+                    cap = max(cap, frac)
+                while free and live + cached + g > cap:
+                    need = live + cached + g - cap
+                    pick = 0
+                    for i in range(1, len(free)):
+                        a, c = free[i], free[pick]
+                        if (c < need or a < c) if a >= need else (c < need and a > c): pick = i
+                    cached -= free.pop(pick); unmaps += 1
+            live += g; peak = max(peak, live)
         elif e[0] == "A":
             b = e[1]
             for i in range(len(free) - 1, -1, -1):

@@ -342,3 +342,52 @@ Model (replay of each HL0 stream, ctl → hwm+16):
 - If 3 fails, the Plain stream depends on the policy (the remap path is the first suspect), and the model is not used
   for Plain.
 - If 4 fails, the rule raises Plain's footprint, which contradicts its design. Read the HL16 log.
+
+## Outcome of pre-registration 3 part B (read 2026-11-22 20:02)
+
+| # | Prediction | Reading | |
+|---|---|---|---|
+| 1 | specdiff PASS | all 8 runs | held |
+| 2 | HL16: hmcheck --slack 16 MiB rc 0 and replay --check hwm+16 MATCH | mcf test and mcf train: rc 0 and MATCH. gcc train01: replay MATCH, but **hmcheck rc 1**, with 3 events above peak + slack, by at most 45,056 B | **failed on gcc** |
+| 3 | HL16 counts equal the model's from HL0 | mcf test 197/4 and mcf train 317/5: equal. gcc train01: 16,766/102 against 16,840/94 | **failed on gcc** |
+| 4 | H16 VmHWM at most ctl + 0.1 % | mcf test 274,792 against 306,012 kB (-10.2 %); mcf train 573,108 against 619,900 kB (-7.5 %) | held |
+| 5 | noise (a reading) | ctl2 against ctl VmHWM: gcc train01 128,472 against 128,496 kB (-0.02 %), mcf train equal | under 1 % |
+
+- **2 failed because of a defect in the Plain counterpart, which the check exposed.** Every over-cap event is an X, an
+  in-place growth by mremap, or the C right after one. The rule ran only before a fresh mmap. A growth raises live
+  without moving the peak, so live + cached passed peak + slack. The Capstone arm's remap is a fresh counted mapping
+  plus copy plus unmap, so the rule runs for it. Plain's growth bypassed the rule. Fix: `__plain_remap_fit` runs the
+  rule for the growth before the mremap (plain/plain_reuse.c, plain-hwm.diff), and replay.py models it the same way.
+  The new replay rejects part B's gcc HL16 log (MISMATCH, its negative control) and still MATCHes every Full log.
+  Rebuilt with neither macro, the libc is again byte-identical to the paper's Plain libc (off2).
+- **3 failed because gcc's request stream is not one stream.** `tools/streamdiff.py` finds HL0 and HL16 of gcc
+  equal for 38 events, and then HL16 has a 36,864-byte fresh mapping that HL0 has not. At that point nothing is
+  cached and the rule has done nothing, so the difference is not the policy's. mcf train's two streams are IDENTICAL
+  (712 events). The candidate is run-to-run variation in gcc's allocation order: an address-dependent hash under
+  ASLR. Untested; part C repeats part A's HL0 to test it.
+- **Part A's gcc VmHWM failure (+7.0 %) is not sampler resolution.** The gcc noise pair moves by 0.02 %. That
+  hypothesis is withdrawn. The run-to-run stream variation above is the remaining candidate, also untested.
+
+## Pre-registration 3 part C (2026-11-22 20:02, before any of its runs): the fixed rule, and gcc's stream
+
+Images (relinked as before):
+- H16b: mcf 91acc837eab23a7f, gcc 5ba5f57ab7a96527;
+- HL16b: mcf 7181eac57e3ad9e0, gcc f8fc078f0cc55543;
+- hl0c: part A's HL0 gcc image cd68517252a929ad, run again.
+Runs (`plain/partc.sh`): pgcctrain01-hl0c, pgcctrain01-hl16b, pgcctrain01-h16b, pmcftrain-hl16b, pmcftrain-h16b.
+
+**Predictions:**
+1. specdiff PASS on every run.
+2. HL16b gcc train01 and mcf train: `hmcheck --hwm --slack 16777216` rc 0, with no event above peak + slack, and
+   `replay --check hwm+16` MATCH under the fixed model.
+3. mcf train HL16b's stream is IDENTICAL to part A's mcf train HL0 stream, and its counts equal the fixed model's
+   replay of that HL0 stream.
+4. The gcc question, a hypothesis test: streamdiff(part A HL0, hl0c) reads DIFFER. If it reads IDENTICAL, gcc's
+   stream is reproducible, part B's divergence was caused by the policy, and the mechanism is unexplained.
+5. H16b VmHWM at most ctl + 0.1 % on gcc train01 (128,496 kB) and mcf train (619,900 kB).
+
+**Outcomes:**
+- If 1, 2 and 5 hold, the Plain counterpart's rule is correct as fixed, and its footprint is never above ctl's.
+- If 3 holds, a deterministic program gives exact counts on Plain.
+- 4 decides only how gcc is predicted: a band instead of exact counts.
+- If 2 fails again, a growth path is still uncounted; read the over-cap events.

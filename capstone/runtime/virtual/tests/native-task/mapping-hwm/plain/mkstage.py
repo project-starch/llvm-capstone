@@ -12,6 +12,7 @@ name, src, v = sys.argv[1:]
 sha = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()
 dst = f"{P}/stages/{name}"
 assert not os.path.exists(dst), dst
+assert os.path.isdir(f"{P}/rl-{v}"), f"no relink rl-{v}: nothing is copied"   # a failed check after cp -a left a stage with the Full binary
 os.makedirs(f"{P}/stages", exist_ok=True)
 subprocess.run(["cp", "-a", src, dst], check=True)
 plan = json.load(open(f"{dst}/plan.json")); bd = f"{dst}/stage/bin/native"

@@ -161,6 +161,17 @@ void __plain_unmap(void *p, size_t len)
 }
 
 #if PR_COUNT
+/* realloc.c, before it grows a large mapping in place from old to new bytes: the growth is a fresh mapping of
+ * new - old as far as the footprint goes, so the rule runs for it as before a fresh mmap (pre-registration 3
+ * part B: without this, gcc train01's in-place growths took live + cached 45 KiB above the peak + slack). */
+void __plain_remap_fit(size_t old, size_t new)
+{
+	pr_lock();
+	pr_fit_peak(new - old);
+	pr_unlock();
+	(void)old;
+}
+
 /* realloc.c, after a successful mremap of a large mapping from old to new bytes (both page multiples). */
 void __plain_remapped(size_t old, size_t new)
 {
