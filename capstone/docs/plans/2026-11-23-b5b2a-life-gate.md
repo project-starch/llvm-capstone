@@ -119,3 +119,29 @@ Core FF 52,931 (-1,056). RAMB36 113 and LUTRAM 2,480 are unchanged.
   1b gate had moved it -5,885.
 - It is beyond the ±2,500 floor and left unattributed. The metadata register file's doubling is the row that stands
   outside its own history.
+
+**The CPMP cut is dead logic, read at source in the gate tree (a5b2a0d1f).** The rtl lane cited this chain, and the
+runtime lane accepted it as releasing its hold on a 2a full build. I read every link myself:
+- Both CPMP faults fire only under `capmode_i`: fetch at `pmp_data_if.sv:331-335`, load and store at `:396-399`.
+- capmode is sticky. It resets to 0 and is set only by `capmode_set_i`: `csr_regfile.sv:342`, `:3365` and `:3461`.
+- `capmode_set_i` is driven by `capenter_commit` alone (`cva6.sv:2202`). That is a committed CAPENTER without an
+  exception (`commit_stage.sv:359-364`).
+- Under `CAPSTONE_SUBLET_FMT` the decoder makes CAPENTER illegal before any other check (`decoder.sv:1441-1443`).
+
+So the check is never armed on a Sublet core, and the roughly 21k LUTs are a Sublet saving, not a loss of function.
+They stay not like-for-like with bitstream 1. The rtl lane's condition stands: if any capmode setter becomes legal
+under Sublet, the tie-off becomes a pass-through first. The runtime lane also cites this session's Sublet-build
+simulations, in which S fetches and loads ordinary code under the tie-off; I have not re-run those.
+
+The rtl lane's explanation of the trimmed register widths is the lane's claim, not checked here:
+- cap_q and h0w0_q are duplicate flops, merged;
+- the constant-zero bits are wr_q [166:160], [30] and [28:25], rd_idx_q [28:25] and link0_q [31];
+- aw1_q, pw0_q, pw1_q and nw0_q keep only the fields that are read.
+
+**Next: splitting the issue_stage_i growth.** It runs as a reported-only gate, same chain and guard, tag
+b5b2s-8cbf393d4, on capstone-ariane 8cbf393d4.
+- That tree is the 1b tree plus the CPMP tie-off, a simulation-only `ifdef` in issue_read_operands.sv, and verif files.
+  It is an ancestor of a5b2a0d1f, and 2a adds nothing more to pmp_data_if.sv.
+- If issue_stage_i already grows here, the growth is the tie-off's redistribution.
+- If it does not, it belongs to 2a's op lists.
+- Its grader verdict line is not a gate.
