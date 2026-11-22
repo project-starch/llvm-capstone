@@ -48,3 +48,25 @@ The modules move well beyond the ±2,500-per-module floor, though the core nets 
 
 **By its own keys the full build does not follow.** Whether the FF shortfall means registers trimmed or merged, or a
 mis-sized key, is the rtl lane's to read.
+
+## Re-key after the reading, and its count (2026-11-21)
+
+**The rtl lane re-keyed both FF keys after the FAIL above, in writing, before any full launch** (land/rtl-cone-cut
+319c1f5b9d25). This record treats it as a re-key made after the reading, not as the key first registered.
+- Its stated reason: the +150 floor was the cut's own 155 bits with no redistribution allowance.
+- New gate key 1: a name count of the cut's flops on the gate checkpoint, at least 150 to pass, with P1's gate
+  checkpoint reading 0 as the control.
+- New gate key 2: core FF within P1 ± 2,000. +101 passes.
+- Full-build FF key: placed FF within P1 ± 2,000. The other full-build keys are unchanged.
+
+**The count** (`<mnt-hdd>/synth/twc/cut/cutflops.tcl`, logs `twc/cut/CF-{CUT,P1}.log`; 8 GB guard, 1.6 GB peak):
+
+| Name | Cut gate dcp | P1 gate dcp (control) |
+|---|---|---|
+| `rv_rsp_q_reg*` | 129: data_rdata 64, data_ruser 64, data_rvalid 1 | 0 |
+| `rv_rsp_idx_q_reg*` | 25 | 0 |
+| `rv_rsp_vctx_q_reg*` | **0** | 0 |
+| any other sequential cell named `*rv_rsp*` | 0 | 0 |
+
+That is 154 FDCE in all, against the rtl lane's 155: no flop carries the namespace flag's name. **Key 1 reads 154 ≥ 150:
+PASS.** By the rtl lane's written rule the full build may launch. It waits for a free guarded slot.
