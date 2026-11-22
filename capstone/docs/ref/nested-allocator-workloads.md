@@ -3933,6 +3933,24 @@ Not one of the pre-registered branches.
   runs first and unprot second, each at `--size 100` with a fresh database. If the refused `faccessat` is the cause,
   uacc passes phase 142 and unprot stops there. If uacc also stops at 142, the cause is elsewhere.
 
+### Result of the matched pair: the refused `faccessat` is the cause (`nested/out/nst1-s100acc`, 14:50-17:38)
+
+- **uacc** (`1bc95737…`) returns rc 0 after all 32 phases, in 657.8 s of guest time. Each phase's rows and hash equal
+  the host reference (`2026-11-22-size100-host/phases.json`): 32 of 32. Its st.err is empty.
+- **unprot** (`817b1652…`), in the same boot, prints phases 100-140, all five equal to the reference, then stops at
+  phase 142 with `step error: disk I/O error`, rc 1, as in every earlier boot.
+  `native_refused_calls` reads 4 at the end of the boot.
+- The two arms differ only in SQLite's `access` entry. So the error comes from `unixTempFileDir` finding no usable
+  temporary directory, because the native boundary answers `faccessat` (48) with ENOSYS.
+- The comparator was run against a reference with one hash changed: it reports 31 of 32 and names phase 170.
+- Still not explained: why phase 142 needs a temporary file on the twin, when the host run needs none there. A sort
+  that spills to a temporary file is the likely reader, and that was not checked.
+- What follows:
+  - **Measured run.** Either the boundary routes `faccessat`, which is the runtime lane's module (`native_supported`
+    in the natio tree; not this lane's), or every arm carries the same `access` shim. The shim changes the program, so
+    it needs its own pre-registration and a protected arm built the same way.
+  - **Until then,** an `--size 100` result on this boundary is uacc's, a diagnostic arm, and it is not a result arm.
+
 ## PHP against a pristine second binary (2026-11-22)
 
 Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
