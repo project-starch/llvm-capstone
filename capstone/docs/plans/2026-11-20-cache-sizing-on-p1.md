@@ -260,3 +260,26 @@ rows = 24 RAMB36).
 - placed LUT about 187,368 + 4,540 = 191,900 ± 2,500.
 - A GO above +4,000 carries the route-failure branch as the likely one, as registered above: no retry, no flow change,
   and the reading is "48 KiB does not fit beside P1".
+
+## Reading: the L1D 48 KiB / 12-way full build routes, fits and passes 4 of 4 (apollo, tag l1d48-0039e34f4, 2026-11-21)
+
+Sealed 19:00:00Z as `caplifive_…-pagedtbl-l1d48k_0039e34f4.bit`:
+- sha256 683094435d27930c90979c7d7113bfe07704859f7cf4e105de38f02299950626; the stored copy hashes equal;
+- PROVENANCE HEAD 0039e34f4;
+- guard exit 0 at a 31.07 GB run peak, collector 15.49 GB.
+
+grade_full.py against P1's seal (`grade-board/grade-full.txt`):
+
+| Key | Reading | Prediction | |
+|---|---|---|---|
+| placer congestion | 4 | | PASS |
+| loops | 0 | | PASS |
+| WNS | -13.482 (Δ -0.309) | | PASS |
+| routed clean | 248,081 / 248,081 | | PASS |
+| placed LUT (reported) | 191,825 (94.12 %, +4,457) | 191,900 ± 2,500 | in |
+| placed FF (reported) | 77,634 (+1,091) | | |
+| slices (reported) | 50,845 (99.79 %, +45, about 105 free) | about 65 free | fewer slices used than predicted |
+
+The route-failure branch did not fire. The hand-off is released: the rtl lane's sweep reads 92/92 (values, RVFI and
+cycles), and its d12 set-stress test reads equal checksums on P1 and 0039e34f4 with 0 traps, verified at the logs. The
+fold is measured in the rtl lane's sim print (p1-l1d48-12way 5f3a1d1d0 / 044d2ad60).

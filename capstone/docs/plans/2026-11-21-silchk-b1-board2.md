@@ -43,3 +43,34 @@ correction to the PREREG's VOID rule, both received during the run:
 - The witness is position 1, the trap count position 36, and it must be 0. The ratio keys are unchanged.
 - The words are in `<mnt-hdd>/capstone/silchk-b2/r68-paddrs.json`, and the grader is `grade-silchk.py` beside it. The
   grader was negative-tested on fabricated fixed, pre-fix and void-control runs before any reading.
+
+## Reading: the control passes, and R-60, R-72, R-32 and R-68 read their fixed vectors on silicon (board 2, resident P1, 2026-11-21 02:43-02:49 local)
+
+Run: `<mnt-hdd>/capstone/silchk-b2/run-20261120T1843/`. It holds `chain.log`, each image's `run.log` and `uart.txt`, and
+`grade.txt` from `grade-silchk.py ... r68-paddrs.json`.
+- Every image's run log reads back the resident bitstream as P1's
+  `caplifive_…-pagedtbl_d83d3a633.bit`. The console exposes no sha256, so the match is by name.
+- The run used booking 1391 and unbooked it. The marker was touched at 02:49:31.
+- Each load took about 52 s, and each saw `SUPTEST END`.
+
+| Image (sha256 prefix) | Reading | Grade |
+|---|---|---|
+| va-runv f0ed3fac351b60f3 | SR 15; its 15 values exactly | control PASS |
+| alias-store 46ca6a4475b06ec0 | `0x5a5a 0x1234 0x0 0x1 0x18 0x5a5a 0x7 0x58` | **R-60 CONFIRMED FIXED ON SILICON** |
+| pcc-end-in 6e67467e0074c440 | `0x123 0x1c 0x4 0x4 0x1` | control as predicted |
+| pcc-end-out 1dc587cd8489fe89 | `0x0 0x1c 0x0 0x0 0x1` | control as predicted |
+| pcc-end f0935c425401b34d | `0x0 0x1c 0x0 0x0 0x1` | **R-72 CONFIRMED FIXED** |
+| shrinkto 34311f6d26259cb1 | the 16 fixed values (position 6 `0x40`, not the pre-fix `0x3f`) | **R-32 CONFIRMED FIXED** |
+| niss-superpage f34bd6e59092b95c | SR 36, witness `0xa00000800`, traps 0 | **R-68 FIXED by the ratio keys** |
+
+**R-68 detail.**
+- Ratios: arm1/arm2 250/250 = 1.00, arm10/arm9 275/275 = 1.00, arm17/arm16 1817/1818 = 1.00.
+- All 14 DRAM arms read the simulated paddr words.
+- The CLINT words of arms 16 and 17 are equal (0x0).
+- Arm 12 reads the board's bootrom doubleword 0x3049107300800913. That differs from the simulation's 0x1f4141300100413,
+  as the rtl lane said a device read may, and it is not graded.
+- Cycles per arm 1-17: 250 250 250 250 272 272 272 272 275 275 250 1832 304 326 328 1818 1817.
+- Its standing residual (ISSUES R-68) is unchanged by any reading: the test cannot tell the fix from deleting the splice.
+
+**For bitstream 1:** these are readings on P1. They close the four entries for bitstream 1 by the byte-identity of the
+four fixes' files plus the ccsrrw source check above, not by a reading on bitstream 1.
