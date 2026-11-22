@@ -176,3 +176,21 @@ firing. Mapping 5,049.8 MB. rev_node is module capstone_rev_node, as it must be 
   register file's doubling inside 2a stays unattributed. The rtl lane has no source reason for it.
 - Even with no source change to the old unit, rev_node moves -1,822 on the split. That is the size of null-change
   movement at module level here.
+
+**An instrument for 2b's gate, dry-run on the split and 2a checkpoints.** The rtl lane asked for it in place of a 2a
+attribution, which 2b's widened register file (the lane grows from 90 to 98 bits) would overtake.
+- `twc/b5b2b/pins.tcl` is a boundary-pin census of three cells, each pin's far-side leaf pins grouped by owner, with
+  ex_stage_i and issue_stage_i split one level deeper:
+  - the capability-metadata register file;
+  - i_issue_read_operands;
+  - i_scoreboard.
+- Both dry runs finished with bad=0, under an 8 GB guard, peak 1.59 GB.
+- What the dry pair shows. These are leaf-pin counts, not LUTs:
+  - the register file's inputs from dom_switcher fall 2,799 -> 150, beside the file's +2,784 LUT and dom_switcher's
+    -2,406;
+  - i_issue_read_operands' outputs into dyn_unit rise 3,259 -> 8,576, beside dyn_unit's -3,397 and the operand
+    stage's own +4,005;
+  - branch_unit_i's boundary is gone in 2a: 0 pins against the split's 131 in and 624 out.
+- So the boundaries themselves moved, which fits logic being absorbed across them. It is still not a LUT
+  attribution, and the doubling stays NOT ATTRIBUTED for 2a. The census runs on both of 2b's checkpoints in 2b's
+  gate.
