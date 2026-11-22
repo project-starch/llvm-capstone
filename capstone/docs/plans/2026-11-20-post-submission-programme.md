@@ -76,6 +76,7 @@ Specification: `capstone/docs/design/sublet-reference-model.md` at 32dde56a6b42.
 | compiler C4 (move round trips), C5 (redundant bounds) | C4 not counted per benchmark; C5 built, default off, not in the link driver |
 | open compiler issues | C-32, C-46, C-53, C-56, C-57, C-59, C-60, C-63 (C++ exceptions), C-68, C-70, C-74 |
 | native route | refuses sockets, epoll, eventfd, timerfd, threads, fork; so memcached never ran as a server |
+| virtual-profile threads | need a kit with matched supervisor slots above 1 (Q-32); on a 1/1 kit the module refuses the second context with EBUSY (capstone_vm.c:3271), which musl's pthread_create returns as EAGAIN. Measured 22 Nov by the compiler lane: with 32 slots on both sides, pthread_create, tls_local_exec, pthread_tsd and pthread_cond pass (lane compiler/virtual-thread-slots) |
 | kernel and module | kfast and NO_HZ never run on a board; huge pages refused (mcf's only lever); Plain's ticks are corrected by an estimate |
 | record table | default 262,144 records too small for Perl and gcc; a subtree above 65,532 records cannot be built, cause unknown |
 | QEMU twin | models neither P1's paged table nor code placement; Zcb off; runtime cases 29-31 fail |
