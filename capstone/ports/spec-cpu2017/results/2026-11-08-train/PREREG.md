@@ -6816,3 +6816,43 @@ is written when its images are built: Full + H16, +Spatial + H16 and Plain + H16
 nab train on bkit91, unchanged. The chains behind it are relaunched in the same order: t202fp, t202sp, t202s2
 (Addendum 220). None of the four had booked board 1.
 **Dry run:** `perf/natstage/dry221/`.
+
+## Addendum 222 (2026-11-22 22:01 +08, before it runs): mcf train on all three arms under the H16 mapping-cache rule
+
+**Why.** Full mcf train was OOM-killed (Addendum 212). Addendum 221 took +Spatial's mcf train out for the same reason.
+The H16 rule is complete on the twin for Full (mapping-cache-hwm 6209e8c699fb, pre-registration 2) and for Plain (pre-
+registration 3, 4996c191115a). Under Addendum 87 both arms run one allocator, so this row's table carries H16 on
+every arm.
+
+**Images**, each relinked from its arm's own objects with one runtime object replaced. Each control relink reproduces
+its paper stage image:
+- Full: FRCDKMSa3 + Full H16 malloc-mapping (sdkm13b flags), 62690f60eb3f9429. The control relink is fa650b98b77a1ba1,
+  the board-frcdkmsa3-train image.
+- +Spatial: FRCDKMSspa3 + the same source under sdksp13b's flags (CAPSTONE_HEAP_LIFETIMES=0), c46bf36b75ced2b0. The
+  control object is 6f0735ed857501be, equal to the SDK's, and the control relink is 17b2fa0b796e806e, the
+  board-frcdkmsspa3-train image. A twin check (perf/mrhwm spmcftrain-h16, predictions in RESULTS before launch) runs
+  first. If it does not complete with specdiff 2/2, the +Spatial chain is stopped before it books.
+- Plain: rv-al3 objects + plain_reuse.c with PLAIN_REUSE_HWM_SLACK 16 MiB (perf/plainhwm h16c), bb877b5f16e1e9ef. The
+  off build is byte-identical to the paper's Plain libc, and its relink is 2d48ad97ae6009c7, the rv-al3 image.
+
+**Stages**: each paper train stage with only the image swapped (diff -rq: the image and plan.json).
+- board-frcdkmsa3h16-train/505.mcf_r-train-native;
+- board-frcdkmsspa3h16-train/505.mcf_r-train-native;
+- fair/stages-train-h16/505.mcf_r-train-rv-h16.
+
+**Chains**
+- h16p-b3, board 3, behind t202p (3749194). It uses t202p's bitstream, kit, refkit, runner and module.
+- h16f-b2 then h16s-b2, board 2, behind Addendum 219's r75n chain. P1 is flashed back, its sha256 checked against the
+  seal. Kit bkit91, whose 262,144 records hold mcf's 14k live nodes.
+
+**Predictions.**
+1. Every row completes with specdiff 2/2. There is no rc 137.
+2. Plain + H16 within ±0.5 % of Plain's 23,841.61 s on the same board 3. The twin's events against ctl differ by one
+   hit and one fresh mapping (317/37 against 316/38).
+3. Full + H16 about 29,081 s, and +Spatial + H16 about 27,684 s, each ±5 %. Both are scaled from their test-size means
+   (5,944.52 and 5,658.92 s) by Plain's own train/test ratio (23,841.61 / 4,873.57 = 4.892). There is no Full or
+   +Spatial train reading to compare with. The band is wide because the scaling is a model, not a measurement.
+4. The other train rows ran without the rule. The twin's held-out runs show H16 changing no service count on lbm,
+   nab, imagick, xz or gcc test. So those rows are not rerun. If a later reading contradicts this, it is reported.
+
+**Stops** as Addendum 199. **Dry runs:** `perf/natstage/dry222/`.
