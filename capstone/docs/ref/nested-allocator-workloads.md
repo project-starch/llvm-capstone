@@ -2946,6 +2946,21 @@ returned 0 and the smoke passed all 9 steps. Read by `appd/parse-abba.py` and `p
 - What makes up the +789 M is not separated by this boot. The twin prices the added instructions at +10.00 %; the
   boot adds 1.94 M CDERIVEs and CREVOKEs, 16.6 M paged record accesses and 7.5 M L1D misses.
 
+**Cycle attribution (added 2026-11-22, the method of the test.pl attribution in the prot6 section), protected minus
+stock, +788.8 M in-context cycles** (the means of p1/p2 and u1/u2):
+
+| part | cycles | share | price and its source |
+|---|---:|---:|---|
+| the port's instructions | 491.7 M | 62.3 % | +173,265,263 twin instructions (`nested/out/nperl-fix`, the in-context `run_cycles` of p1/p2 minus u1/u2: 1,905,131,312 against 1,731,866,049) at 2.838 cycles each, the stock arm's own cycles per twin instruction (a model: the mean) |
+| record-table walks | 12.3 M | 1.6 % | hpm4, read as cycles (measured; the table's rounded values) |
+| event-23 replays | 24.7-29.0 M | 3.1-3.7 % | +1.45 M at 17-20 cycles each (Addendum 1's RTL estimate, from source) |
+| **not attributed** | **255.7-260.1 M** | **32.4-33.0 %** | |
+
+- The remainder's share is close to test.pl's (34.4-35.4 % at the same mean price). The L1D misses (+7.46 M) are
+  not priced; if they carried the whole remainder, each would cost 34-35 cycles.
+- As on test.pl, the instruction price is the softest number here. No board run has priced the CDERIVE/CREVOKE pairs
+  and the head checks on their own. At a lower price the instructions take less and the remainder grows.
+
 ## gcc (SPEC 502.gcc_r) with its pool allocator protected
 
 **Scope.** SPEC's Full build protects only `malloc`. gcc carves its own objects from three allocators. This lane
@@ -3811,6 +3826,26 @@ Not one of the pre-registered branches.
   turns `native_route_trace` on through sysfs for the command only, since the kernel command line has no room for a
   further flag, and at the end prints `native_refused_calls`, the routes by call and result, and the last failing
   routes. No reading of it enters the predictions.
+
+### Result of the diagnostic boot: the last failing calls before the error are the temporary-directory probe (`nested/out/nst1-s100diag`, 10:26-14:31)
+
+- u1 prints phases 100-140 and stops at phase 142 with `step error: disk I/O error`, rc 1, as in every earlier
+  boot. The route trace was on for the command (`@@DIAG route_trace=Y`). `native_refused_calls` reads 3.
+- The last four routed calls that fail, which are the last lines of the trace, are: `newfstatat` (79) returning -2
+  twice, then `faccessat` (48) returning -38 (ENOSYS) twice. The successful routes include `newfstatat` returning 0
+  twice. That is what `unixTempFileDir` does on this guest: stat `/var/tmp` and `/usr/tmp` (absent, -2), then stat
+  `/tmp` and `.` (present), and `access(dir, 3)` on each, which the boundary refuses. The order within each pair is
+  not shown, because the summary lines are sorted and the failing tail holds only failures.
+- This is read from the trace, not shown by a matched pair. The command made 53,499 register routes, and the kernel
+  log ring cannot hold a line for each. The summary also stops at its 60th line (871 `read` (63) routes of 4,096
+  bytes, then `lseek` (62) offsets). Only these four failing routes are in the ring, so the third refused call is not
+  identified.
+  The phase is still unexplained: on the host, phase 142 needs no temporary file.
+- **Next: a matched pair in one boot** (`nested/out/nst1-s100acc`, the same flags). Arm uacc is the unprot source
+  with one change: SQLite's `access` system-call entry is replaced by a function that returns `stat`'s result
+  (`nested/st1/build-acc.sh`; image `1bc95737…`). The same recipe rebuilds unprot to its staged `817b1652…`. uacc
+  runs first and unprot second, each at `--size 100` with a fresh database. If the refused `faccessat` is the cause,
+  uacc passes phase 142 and unprot stops there. If uacc also stops at 142, the cause is elsewhere.
 
 ## PHP against a pristine second binary (2026-11-22)
 
