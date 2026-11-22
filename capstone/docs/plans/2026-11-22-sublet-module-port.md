@@ -77,6 +77,13 @@ CSCHECK exists in the reference decoder.
    Item 8's twin-first condition already holds by code: sublet_resolve and sublet_get refuse index >= t->next, so
    QEMU reads a never-used slot dead whatever its page holds. The publish rule makes the hardware agree.
 
+10. **Tables only in RAM.** The module publishes only tables and record pages it allocated from RAM (page_to_phys of
+    its own pages). The step-2a unit has no range check (the rtl lane's divergence D3: hardware touches a table that
+    QEMU would refuse as outside RAM), so this obligation is what closes it. Divergences D1, D2 and D4 are fail-open
+    only on a corrupt or unpublished table, which needs a kernel bug. Each gets a directed arm in the rtl lane.
+11. **Encoding:** under Sublet funct7 0x54 decodes as CRENEW (the reference's), so CSNODE no longer exists. The board
+    module never issues CSNODE; it appears only in a comment, capstone_vm.c:478.
+
 ## What the census found (2026-11-22)
 
 No software on the native route creates or holds a capability whose cursor is at or above 2^38:
