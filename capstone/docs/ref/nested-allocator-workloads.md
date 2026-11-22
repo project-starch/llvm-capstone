@@ -3798,7 +3798,15 @@ the protected arms' images replaced). Each zone is the image zone (`ZONE image`)
     count is still T3's F0-vs-W agreement within 0.001 % per command (`tests/rtl-smoke/ids55-flat-module/RESULTS-twin.md`);
     2^22 itself is unpaired. The table's work is done in the emulator's helpers, outside the image range the zone counts.
   - Consequence for the board: an ids55 kit at its 2^20 default cannot run this arm on splitmail train. A bodies board
-    cycle needs a larger table, and its node-table work is then not the other arms'.
+    cycle needs a larger table. The SPEC lane offers a kit cut from bkit91 with only `node_flat_records` changed to
+    4194304 (bkit91-rec1m is the 2^20 precedent). The same cycle must pair stock or prot6 at 2^22 against 2^20 on one
+    image, so that the bodies delta in cycles is not confounded by the table's size.
+  - **The twin's pair, pre-registered (20:30):** prot6's train stage again at 2^22 (`ztrain-prot6-r22-37381b03`), with
+    everything else as `ztrain-prot6-37381b03`. Prediction: specdiff 6/6, and an image zone within 0.001 % of
+    216,796,670,174 (T3's F0-vs-W band). Branches:
+    - within 0.001 %: the geometry does not move the image's count on this stage, and the bodies delta above stands;
+    - beyond it: the bodies delta is restated against prot6 at 2^22, and the difference is reported as the table's
+      cost on the image.
 
 ## mcf train on the twin: what separates the Full image's OOM from V1f's pass (2026-11-22)
 
