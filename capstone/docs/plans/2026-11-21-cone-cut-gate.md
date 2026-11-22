@@ -110,3 +110,22 @@ grade_full.py against P1's seal reads 4/4 (`grade-board/grade-full.txt`): routed
   / 99 / 92) and `rv_rsp_*` 0 (`rv_rsp_q[data_rvalid]` fanout 133).
 - The port lookup again returned `?noport`, so these are boundary nets. Retiming makes the hierarchy approximate.
 - Which RTL path the new entry is, is the rtl lane's to read.
+
+**The second entry, path by path** (read-only on the cut's routed checkpoint; `twc/lattr/entry2.tcl` → `E2.log`, and
+`entry3.tcl` → `E3.log`, for the rtl lane's mapping):
+- The worst path and the first three of each exit family (dyn_unit, the scoreboard's pc_revnode) all enter rev_node at
+  one pin: `rev_node/_thread_3_event_syncstate_546_q_i_2/I2`, on the net named `_thread_3_event_counter_531_1_q_reg_1`.
+  - Inside rev_node the cells are plain LUTs: 6 on the dyn_unit family, 13 on the pc_revnode family (through
+    `pw_wr_q`, `_mem_ch_write_req_valid_selector_q`, `revnode_fill_*`, `cpmp_revnode_valid_q`, `pc_revnode_unk_q`). None is
+    named `_bret`/`_fret`/`_rep`.
+  - No net named for a grant is on these paths.
+- **The cell that drives the entry is a LUT6 named for rev_node logic, `_thread_3_event_syncstate_546_q_i_4`, which sits
+  in the D$ tag SRAM's hierarchy** (`i_wt_dcache_mem/gen_tag_srams[4].i_tag_sram/.../i_ram/`). Optimization has moved it
+  across the boundary.
+  - Its net's segments run from `i_wt_dcache_mem ... enable_q_reg` through `i_cache_subsystem_n_1913` into
+    `ex_stage_i/rev_node`, with one more segment in `gen_rd_ports[2].i_wt_dcache_ctrl`.
+  - Its six inputs are: port 2's `i_wt_dcache_ctrl` FSM state (I0), the D$ `cache_en` flop (I1), and four LUTs named
+    `gnt_rd_q_i_*` in the D$ tag SRAMs (I2-I5).
+- **Reading:** the second entry is D$ read port 2's grant, from the D$ read arbitration and that port's controller state,
+  feeding the rev_node unit's events combinationally. That is the grant the cut left live by design
+  (`rv_rd_res.data_gnt`). The names are approximate under cross-boundary optimization and retiming.
