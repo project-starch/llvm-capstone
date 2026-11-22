@@ -6800,3 +6800,19 @@ The cost is one perlbench boot, about 4.4 h of board 2.
 - Prediction for both perl rows: all five commands rc 0 and specdiff 6/6. If scrabbl or splitmail still fail at
   2^20, the reading is that 2^20 is not enough on P1's tree, and the twin's live-node peak is read first.
 **Dry run:** `perf/natstage/dry220/`.
+
+## Addendum 221 (2026-11-22 21:58 +08, before it runs): +Spatial mcf train comes out of t201s and waits for the H16 rule
+
+Full mcf train was OOM-killed at 13,777 s on P1 (Addendum 212). On the twin the cause is the mapping cache: it held 65 MB
+of mappings of the wrong sizes when mcf asked for its 64 MB arcs mapping. +Spatial (FRCDKMSspa3) uses the same cache
+policy; its runtime differs only in CAPSTONE_HEAP_LIFETIMES=0. So Addendum 201's +Spatial mcf train row in t201s is
+expected to die the same way, at a cost of about 4 h of board 1.
+
+The rule that removes the kill is H16 (llvm-capstone mapping-cache-hwm; pre-registration 2 on Full, pre-registration
+3 on Plain, both complete on the twin). mcf train therefore runs, for all three arms, in the H16 board addendum, which
+is written when its images are built: Full + H16, +Spatial + H16 and Plain + H16.
+
+**Change.** t201s-b1 (waiting, never booked) is replaced by t201s2-b1 (TAG p1-frcdkmsspa3-trainb). It keeps lbm and
+nab train on bkit91, unchanged. The chains behind it are relaunched in the same order: t202fp, t202sp, t202s2
+(Addendum 220). None of the four had booked board 1.
+**Dry run:** `perf/natstage/dry221/`.
