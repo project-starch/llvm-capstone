@@ -55,3 +55,21 @@ synthesis and to lint).
 | worst-500 paths through r75_ns_pending or the srevroot compare | 0 (the term ends at flops) | named |
 
 Silicon: the runtime lane's (the R-75 shape on the board, and a bitstream-1 regression set).
+
+## Readings before the full build
+
+- **The firing print's positive control** (the R-75 arms on 1c5d31474, counted in the .log.iss, where SUP_TRACE prints
+  land; a first count from the .log read 0 everywhere and was an instrument error, corrected the same hour):
+  va-rc-trap and -p read R75-BLK 2 with (d) on (the DEAD verdict for physical id 1 withheld at cycles 92,107-92,108,
+  the R-75 mechanism), and 0 with +define+R75_OFF; -z, -zp and va-fetchsplit-s read R75-HOLD 1 each (a probe held one
+  cycle, no value moved).
+- **95-sweep on 1c5d31474** (dirty=no, SWEEP-RAN 95) against bitstream 1's (b1-wt swb1, 9e801ab5e): values 92/92,
+  RVFI traces 92/92 (26 parked by prefix), cycles 0 of 92 differ; 3 missing on both sides. **Firing count over the
+  sweep: R75-BLK 0, R75-HOLD 0.** (d) changes nothing outside the R-75 shape.
+- **Synthesis-only gate** (board lane): PASS 4 of 4. Mapping 5,051.6 MB, loops 0 by every probe, core LUT +579,
+  FF +250.
+  - The term's own cells: a 46-cell cone; 44 srevroot start points (bits [11:0] are constant zero at both writers,
+    csr_regfile.sv:2026 and the switcher's id 67); 78 endpoint flops in 5 stems, the probe-request group (rvc_pend /
+    _pend_id / _wait / _sent, load_store_unit.sv:1818) and pcc_v_q.
+  - All of them are registers. The pre-registration's "two flops" under-counted the probe group.
+- **Full build: GO** sent to the board lane on these readings.
