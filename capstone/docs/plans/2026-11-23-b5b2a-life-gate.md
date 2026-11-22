@@ -194,3 +194,58 @@ attribution, which 2b's widened register file (the lane grows from 90 to 98 bits
 - So the boundaries themselves moved, which fits logic being absorbed across them. It is still not a LUT
   attribution, and the doubling stays NOT ATTRIBUTED for 2a. The census runs on both of 2b's checkpoints in 2b's
   gate.
+
+## Reading (2026-11-23): step 2b's gate on 174e7d04a, B5B2B-GATE PASS (3/3 keys)
+
+Tag b5b2b-174e7d04a (capstone-ariane b5b1-step2b 174e7d04a; keys land/rtl-b5b1 5ac2be9540d1). The base is the 2a gate
+above. gate.done 23:32:29Z. The guard peak was 28.97 GB under the 40 GB ceiling; the host's MemAvailable never fell
+below 81 GB. Checkpoint 8a497bafaa21eb6b…. srcwatch OK.
+
+The chain is `twc/b5b2b/post-b5b2b.sh`, which is the 2a chain with the base and grader swapped and the pin census added.
+The grader `twc/b5b2b/grade-b5b2b.py` was checked before the launch:
+- dry-run on the split -> 2a pair, it reproduces the reading above (core +715, issue_stage_i +7,022, register file
+  +2,784, 6 rows beyond the floor);
+- with the core limit set to 0 it reads KEY3 FAIL, so that key can fire.
+
+| key | reading | verdict |
+|---|---|---|
+| 1 mapping | TM peak 5,158.2 MB against 2a's 5,025.4 (+132.8; limit ±505); whole run 5,226.3 MB | PASS |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy 1), LUTLP-1 0 (toy 1), in-flight gate PASS | PASS |
+| 3 core LUT | 144,151 (+2,419 against 141,732; limit 146,732) | PASS |
+
+**Reported, not graded:**
+- **Core FF** 54,347 (+1,416; the prediction was at least +248). The metadata register file's own FF is +248, which is
+  the lane's 8 bits x 31 registers exactly.
+- **LUTRAM** +128 at core and at top. The rvc tag array is 64 x 63 per way (RAM64M x 63, four ways), against 2a's
+  64 x 55.
+- **The unit** is still module capstone_sublet_life. Its LUT is 7,882 against 2a's 3,054 (+4,828); its FF is 1,410
+  (+20). The .vds names it in no ERROR, CRITICAL or WARNING line; the load_store_unit control reads WARNING 5. That
+  zero is blind on the five warning ids at the .vds's 100-per-id cap (8-3332, 8-3917, 8-6014, 8-7129, 8-7137), as for
+  2a.
+- **Module rows beyond ±2,500:**
+  - rev_node +4,828;
+  - dyn_unit -3,012;
+  - i_issue_read_operands -3,268 (33,694);
+  - the metadata register file -2,566 (5,214 -> 2,648);
+  - i_scoreboard +2,602 (17,189).
+  - Also: dom_switcher +1,822, issue_stage_i -666.
+
+**The pin census** (`pins.tcl` addeb3a5808de4eb). It ran on both checkpoints with bad=0; the 2a base reads as in its
+dry run. These are far-side leaf pins, 2a -> 2b:
+- the register file's inputs from dom_switcher 150 -> 2,575: back near the split's 2,799. Its LUT is back near the
+  split's 2,430 too;
+- i_scoreboard's inputs from rev_node 4 -> 5,330;
+- i_scoreboard's outputs into i_issue_read_operands 27,196 -> 18,557;
+- i_issue_read_operands' outputs into rev_node 21 -> 1,877;
+- i_scoreboard's inputs from i_issue_read_operands 4,607 -> 1,365, and from dyn_unit 1,801 -> 210.
+
+**What this does and does not show:**
+- 2a's register-file doubling went away in 2b, together with the dom_switcher boundary it had absorbed. That is the
+  pattern the rtl lane read as redistribution, now seen in both directions. It is still a pin count, not a LUT
+  attribution.
+- rev_node's +4,828 sits beside a new boundary of some 5,000 pins into the scoreboard and the falls in dyn_unit and the
+  operand stage. That fits logic absorbed into the unit across its boundary more than a growth of the unit itself.
+  It is NOT ATTRIBUTED: the 55 -> 63-bit widening also lands in the unit, and nothing here separates the two.
+- Routing is not measured by this gate.
+
+No full build was requested for 2b.
