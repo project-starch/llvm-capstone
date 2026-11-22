@@ -4339,3 +4339,32 @@ QEMU 9e69171f1c, rebuilt as `nested/oneop`), so that they are ready for silicon 
     takes a zero result as a failed renew, and what follows that path is not predicted.
   - An answer that differs in either arm stops the comparison.
   - A boot that returns no SQ_TEST line is void and is rerun once.
+
+### Result: Fig. 10's SQLite revision runs in oneop at +0.56 % image instructions, every prediction met (00:35-00:36)
+
+Six boots, `nested/oneop/fig10/runs/fig10-sq-*`, each lock grant immediate. Every boot returned status 0 with all 32
+phases equal to the native reference (`cmp-sq.py`: none differ, none missing, none extra).
+
+| boot | arm | plugin | image instructions | CDERIVE | CREVOKE | CRENEW |
+|---|---|---|---:|---:|---:|---:|
+| opc-u | unprot | opcount | 223,245,566 | 6 | 1 | 0 |
+| opc-p | prot | opcount | 224,493,724 | 28,228 | 28,215 | 539 |
+| u1 | unprot | zones3 | 223,245,669 | | | |
+| p1 | prot | zones3 | 224,493,621 | | | |
+| p2 | prot | zones3 | 224,493,805 | | | |
+| u2 | unprot | zones3 | 223,245,566 | | | |
+
+- **Control: met.** prot executes 28,215 CREVOKEs against unprot's 1, and 28,228 CDERIVEs and 539 CRENEWs, inside
+  the predicted ranges. Unprot's 6 and 1 are mallocng's own lifetimes. The two plugins agree on each arm's image
+  count: opcount's `ALL image` and zones3's `ZONE image` differ by at most 103 instructions.
+- **Image instructions: +1,248,095.5 (+0.559 %)**, ABBA means 224,493,713 against 223,245,617.5. That is inside
+  the +0.3 % to +3 % band. The repeats agree within 0.0001 %. That is 21.9 image instructions per executed lifetime
+  instruction, not attributed per function.
+- Against the two-operand revision: on the twin, the dev-era patch cost +0.63 % in program instructions over
+  56,442 lifetime instructions (`--size 1` section above). That was a different SDK, compiler, kit and counting rule, so
+  the two numbers are not a difference of the revisions.
+- CRENEW ran 539 times, and nothing faulted. Whether each one renewed in place or fell back on this table was not
+  read.
+- **For silicon:** these images run one-operand CREVOKE and CRENEW, which P1 does not decode (funct7 0x54 is CSNODE
+  there). They wait for bitstream 4. What this run settles is the answers and the instruction cost on the ISA
+  bitstream 4 is to implement.
