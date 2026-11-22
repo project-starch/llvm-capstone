@@ -3612,7 +3612,31 @@ Checks:
   - the control built with `PERL_CAPSTONE_SUBLET_OPS_NOREVOKE` reads in modes 0-3 and faults in mode 4: freeing a
     slab ends every op lifetime carved from it, revoked or not, so mode 4 has no control that separates the per-op
     revocation, as in the bodies arm.
-- Not read: test.pl (`census/out/zperl-ops-b296436b`, image `b296436b…`), memory and cycles.
+
+**Result, revision 1 on test.pl (twin, `census/out/zperl-ops-b296436b`, image `b296436b…`): the outputs differ from
+stock's, so it is not priced.**
+- makerand.out equals the twin stock arm's. test.out does not: three tests the stock arm passes print "FAILED--no
+  leader found" (comp/package_block, uni/opcroak, uni/package). The twin's stock arm already fails io/perlio and
+  op/inccode(-tie), as every twin arm does (prot6, HE and bodies each equal stock's test.out byte for byte), so the
+  reference for this check is the twin stock arm, not SPEC's file.
+- The console shows three faults with cause 25 during test.pl. With the image mapped at 0x3ff7c00000 = vaddr 0x10000,
+  two are at `Perl_op_free`+0x60 (`lhu a0, 0x38(s1)`, the `o->op_type == OP_FREED` test at op_free's head) and one at
+  +0xe6 (`lhu a0, 0x38(s7)`, the same test on a kid in the kid loop).
+- Perl reads those ops after freeing them by design. op.c says so above both reads: "During the forced freeing of ops
+  after compilation failure, kidops may be freed before their parents." All three tests compile string evals that
+  fail (`eval q[package Foo {]`, a prototype croak). So this is a defect of the port: a freed op's type and sibling are
+  read through its revoked child. It is not a fault in Perl. The fixture did not catch it, because no mode let a
+  compilation fail.
+- Revision 2 (`port-op-slabs.py`, this commit) reads those two fields through the slab's own pointer, and only while
+  `opslab_force_free` frees the chain that holds the op. Every other read of a freed op still goes through its child.
+  The fixture gains mode 5: three string evals that fail to compile, which must return with no fault. Revision 1 must
+  fault in mode 5, which is the positive control.
+- Revision 2's image is `b75cbd06…` (unstripped `06ab5518…`). Its op.h equals revision 1's, and its op.c differs from
+  revision 1's only in the hunks above (46 diff lines). The other 68 objects are revision 1's own files.
+- Not read: revision 2's fixture (`census/out/perlfxo2-5a1b1473`: revision 1, revision 2 and the no-revoke control,
+  each in modes 0-5), test.pl (`zperl-ops2-b75cbd06`), memory (`rss-ops2-b75cbd06`) and cycles. Revision 1's zone is
+  not used, because three of test.pl's tests ended early. Its memory run was stopped while it waited for the slot
+  (`rss-ops-b296436b-void-stopped`).
 
 ## mcf train on the twin: what separates the Full image's OOM from V1f's pass (2026-11-22)
 
