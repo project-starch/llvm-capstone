@@ -83,6 +83,11 @@ CSCHECK exists in the reference decoder.
     only on a corrupt or unpublished table, which needs a kernel bug. Each gets a directed arm in the rtl lane.
 11. **Encoding:** under Sublet funct7 0x54 decodes as CRENEW (the reference's), so CSNODE no longer exists. The board
     module never issues CSNODE; it appears only in a comment, capstone_vm.c:478.
+12. **Record pages stay put during an op** (the rtl lane's step-2a fix F2, an auditor finding). The module never unmaps,
+    frees or reuses a record page while a lifetime op can be walking it. Under c5a, a page leaves a context's table
+    only between windows, after the srevroot edge. The unit answers 29 for an unreachable record in CREVOKE's commit
+    pass, as sublet_reached does, but a page that changes under a walk is a kernel bug the hardware does not fully
+    contain (a D3-class row).
 
 ## What the census found (2026-11-22)
 
