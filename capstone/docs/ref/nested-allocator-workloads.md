@@ -3951,6 +3951,35 @@ Not one of the pre-registered branches.
     it needs its own pre-registration and a protected arm built the same way.
   - **Until then,** an `--size 100` result on this boundary is uacc's, a diagnostic arm, and it is not a result arm.
 
+### Pre-registration: unprot on a kernel that routes `faccessat` (written 2026-11-22 17:49, before the runs)
+
+The runtime lane routes `faccessat` (48) on the native path: llvm-capstone `native-faccessat` 80bfe800dfc9, off
+table-tree 722416c35e77. Its twin kernel is `perf/facc/images-facc`, Image `bf95cde78f45c0a6…`, with
+images-tree's rootfs. It is images-tree's kernel (`perf/tree/images-tree`, Image `8bc7dc8d722fe906…`) with three
+files replaced, as that lane states. This lane has not read that change.
+- **Runs.** Two twin boots on slot 28, in this order, both with stage `nested/st1/stages/s100diag`: unprot
+  (`817b1652…`, no shim), command u1 alone, the route trace on, `--heap 33554432 64 --size 100`. Both use the module
+  flags of `nst1-s100acc` (`dom_local_tmp=1`) and 262,144 records.
+  - `nst1-s100facc` on images-facc;
+  - `nst1-s100tree` on images-tree.
+  The two boots differ only in the kernel image.
+- **Predictions:**
+  - facc: rc 0, all 32 phases equal to the host reference (`2026-11-22-size100-host/phases.json`, by
+    `cmp-s100`'s rule: rows and hash per phase), and no `faccessat` line with result -38 among the failing routes.
+  - tree: phase 142 with `step error: disk I/O error` and rc 1, as on `perf/natio/images`, with `faccessat` -38
+    among the failing routes. That arm is the control: it shows that this check of the failing routes can name
+    `faccessat`.
+- **Readings:** rc, the phase lines against the reference, `native_refused_calls`, and the failing-route tail
+  (`@@DIAGT`).
+- **Branches:**
+  - facc passes and tree stops at 142: the routed `faccessat` is enough for `--size 100` on the twin. The runtime
+    lane then builds the board kernel and kit with it, and the measured run is pre-registered separately.
+  - facc stops at 142: the routed call does not satisfy `unixTempFileDir`, or something else follows. The failing
+    routes are read before anything else.
+  - tree passes: the earlier failures belong to `perf/natio/images`, not to images-tree's kernel. Then the pair
+    says nothing about `faccessat`, and this is written down as such.
+  - Either boot ends without a phase line or rc: that boot is void and is rerun once.
+
 ## PHP against a pristine second binary (2026-11-22)
 
 Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
