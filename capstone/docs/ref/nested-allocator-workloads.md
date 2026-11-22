@@ -3775,6 +3775,9 @@ the failed-compilation shape and keeps the protection.**
   stopped inlining them, which was not read from the disassembly either.
 - So revision 3 is correct on test.pl and the fixture, and its index costs most of its price. The memory run
   (`rss-ops3-aba18d33`) was started by the chain's gate. The next revision replaces the sorted array.
+- **Memory** (`census/out/rss-ops3-aba18d33`, test.out and makerand.out byte-equal to stock's, END 01:02): peak used
+  102,464 kB, -156 kB against prot6's 102,620 kB and +4.6 % against stock's 97,968 kB (2 samples matched). It is the
+  bodies arm's peak to the kilobyte, which at this granularity says only that neither port moves the peak.
 
 **Revision 4 (`port-op-slabs.py`, this commit): the index by page, pre-registered (22:27).**
 - The index has an entry for each 4 KiB page a slab's memory touches: `{slab, page, end}` in an open-addressing table
@@ -4458,3 +4461,31 @@ phases equal to the native reference (`cmp-sq.py`: none differ, none missing, no
       +5.619 % against stock. suns.pl alone was not measured.
     - repeats within 0.01 %.
   - Branches as for mruby: a fault is localised first, and an answer that differs stops the comparison.
+
+### Pre-registration: CPython, Fig. 10's pyperformance subset, Fig. 10's revision, in oneop (written 2026-11-23 01:11, before the runs)
+
+- **Images** (`fig10/build-cpython.sh`). 5060011844e's `cpython-3.13.7-0009-pymalloc-arena-pointer.patch`
+  (`8456fb1d48304444…`) and `0014-pymalloc-sublet-lifetimes.patch` (`fc63552d6c4d9eaf…`) are copied into
+  `fig10/wt`. Both arms apply the port's series and prot adds 0014; the logs' patch lists differ by 0014 alone.
+  - stock `9966571644f86eb9…`, text 6,520,620 bytes;
+  - prot `d14a767ceb839438…`, text 6,521,532 bytes.
+  - By encoding, the cross-built `Objects/obmalloc.o` holds no lifetime instruction on stock, and CDERIVE 6 and
+    one-operand CREVOKE 2 on prot.
+- **Workload, Fig. 10's:** `pyperformance-subset.py` of 5060011844e (`544de26d…`), over pyperformance 1.14.0 and
+  pyperf 2.10.0 from the pinned PyPI wheels (sha256 `94068ac2…` and `79196bc4…`, both checked).
+  - The run is `-S`, with `PYTHONHASHSEED=0`.
+  - One stage, built from stock's build (`fig10/tools/stage-cpython.py`), serves both arms, so the arms differ
+    only in the image. It holds the Lib and `_sysconfigdata`, compiled by the native 3.13.7 with
+    `--invalidation-mode unchecked-hash`, because the guest's copy of the stage does not keep mtimes. Two stagings
+    give the same trees (stdlib `c5549c6d…`, bench `2d53e3a0…`).
+  - The answer is stdout. It is the native build's own stdout on the same driver (`58211793…`): eight benchmark
+    lines, then `PYPERFORMANCE-OK 8`.
+- **Runs:** `fig10/chain-cpython.sh`, six boots as for mruby, on `run-app-zones2.sh`. The stubbed chain reached
+  all six rungs.
+- **Predictions:**
+  - **Answers:** the native stdout in every boot, status 0.
+  - **Lifetime instructions:** prot beyond stock, at least 100,000 CDERIVE and 100,000 CREVOKE, and no CRENEW. The
+    twin's dev-era runs of seven benchmarks issued 2.9 M CDERIVEs, so this floor is deliberately low.
+  - **Image instructions, prot against stock:** +0.5 % to +5 % (the twin's in-context +1.63 % summed, dev-era patch).
+    Repeats agree within 0.01 %.
+- **Branches** as for mruby.
