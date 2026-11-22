@@ -80,7 +80,7 @@ passed again as the control. Neither test faults any more. Both now fail on a ch
   The delegated runtime implements PI futexes (`ports/musl-capstone/runtime/delegate.c:776-860`); the virtual
   profile does not. The earlier cause-28 fault (the one-slot validation run) does not recur at 32 slots. That it
   followed from a refused create is inferred: that run kept no stdout.
-- **cancel-points: thread signals.** Seven cases print `pthread_cancel.c:137: pthread_cancel(td) failed: No such
+- **cancel-points: thread signals.** Seven cases print `pthread_cancel-points.c:137: pthread_cancel(td) failed: No such
   process`. musl's `pthread_cancel` signals the thread with tkill. The shared delegate service
   (`runtime/linux/delegate-service.c:701-709`) hands tkill to `host->tkill` when the launcher sets one. When it
   does not, it returns -ESRCH for every tid except the process's own. The physical launcher sets it
