@@ -231,3 +231,52 @@ What the reading does not say:
 
 **Next (the table's first row):** Full + H16 is a candidate configuration. Before any board arm, Plain's riscv-base
 musl `plain_reuse.c` gets the same rule with the same slack, under a new SPEC addendum.
+
+## Correction to the outcome of pre-registration 2 (2026-11-22 12:23): gcc train01's k1+k3+k4 is attributed
+
+The outcome read gcc train01's k1+k3+k4 at +3.9 % and left it unattributed. Split by counter (ctl / ctl2 / H16):
+- k1 1,981 / 1,982 / 1,970;
+- k3 2,459 / 2,459 / 2,679;
+- k4 2,521 / 2,513 / 2,586;
+- service_other 2,303 / 2,303 / 2,523.
+
+k3 rises by 220, exactly service_other's rise. mcf test shows the same identity in the other direction: k3 774 to 728
+and service_other 621 to 575, both -46. So 220 of the +274 are the service calls that prediction 2 already priced in.
+The remainder is k4, +65 (+2.6 %; the noise pair moves it by 8).
+
+## Pre-registration 3, part A (2026-11-22 12:23, before any of its runs): calibration of the Plain counterpart
+
+Under Addendum 87 both SPEC arms run the same allocator. The paper's Plain images, the al3 stages, carry
+`plain_reuse.c`: `__plain_map` is in the mcf image 2d48ad97ae6009c7. So H16 reaches a board arm only together with
+the same rule in Plain.
+
+`plain/plain_reuse.c` and `plain/plain-hwm.diff` (against perf/alean/plain/musl-src) add three things:
+- `PLAIN_REUSE_HWM_SLACK`: the rule, with Full's pick order;
+- `PLAIN_REUSE_TEST_LOG`: Full's @@HM lines;
+- a realloc hook, `__plain_remapped`. Plain's realloc grows a large mapping with the kernel's mremap, outside the
+  cache, and without the hook live would undercount that growth.
+`hmcheck.py` and `replay.py` read the remap event (X); on Full's logs their output is unchanged.
+
+Built with neither macro (b-off), every one of the 1,352 objects and libc.a are byte-identical to
+`musl-rv64gc-alean`. With the rule on, exactly plain_reuse.lo and realloc.lo differ. Relinked with that libc
+(`plain/relink.sh`, the SPEC build's recorded link line), ctl reproduces the stage images exactly: mcf 2d48ad97ae6009c7,
+gcc 93bc8e196b036d07.
+
+Images:
+
+| variant | mcf | gcc |
+|---|---|---|
+| H16 | 2143e828aef3665c | 3768a3738d47f095 |
+| HL0 (log, policy unchanged) | c1edb491ac75758b | cd68517252a929ad |
+| HL16 | 98eeec439bfd2d10 | ca13978dc98d6db8 |
+
+**Part A runs** (`plain/calib.sh`): ctl and HL0 of mcf test, gcc train01 and mcf train on the twin. They measure no
+rule. They give Plain's own request streams, and part B's predictions (H16, HL16, held-out programs) are computed from
+those streams with `replay.py` and written before any H16 run.
+
+**Part A predictions:**
+1. Every run specdiff PASS.
+2. hmcheck over each HL0 log exits 0. HL0's VmHWM is within 1 % of ctl's on mcf train and gcc train01.
+3. `replay.py --check ctl` over each HL0 log MATCHes. Plain's cache and Full's ctl policy are the same rule (512
+   entries, 64 MiB, front eviction), and the model's hit pick, the newest match, is Plain's own scan order.
+   A mismatch means the model must change before part B.

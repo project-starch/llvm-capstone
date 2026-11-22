@@ -3,7 +3,7 @@
 The stream is policy-independent: M or U is an acquire of <bytes>, C is a cacheable release, F a release that is
 never cached (noreuse, untracked, or above the byte bound; under the logged policies make_room always makes room for
 a cacheable mapping of at most MR_FREE_BYTES, so an F of at most that size is a noreuse mapping). E/R/H/P are the
-logged policy's own evictions and are dropped. Alignment is not modelled: a hit needs equal bytes only.
+logged policy's own evictions and are dropped. X (Plain only) resizes a live mapping from <old> to <bytes>. Alignment is not modelled: a hit needs equal bytes only.
 
 Policies:
   ctl          Full's rule: 512 entries, 64 MiB, make_room oldest-first on a put
@@ -21,8 +21,9 @@ FREE_N, FREE_B = 512, 64 << 20
 
 def stream(path):
     ev = []
-    for m in re.finditer(r"^@@HM ([MUCFERHP]) (\d+) (\d+) (\d+) (\d+)$", open(path, errors="replace").read(), re.M):
+    for m in re.finditer(r"^@@HM ([MUCFERHPX]) (\d+) (\d+) (\d+) (\d+)(?: (\d+))?$", open(path, errors="replace").read(), re.M):
         op, b = m.group(1), int(m.group(2))
+        if op == "X": ev.append(("X", b, int(m.group(6)))); continue
         if op in "MU": ev.append(("A", b))
         elif op == "C": ev.append(("R", b, True))
         elif op == "F": ev.append(("R", b, False))
@@ -40,7 +41,9 @@ def run(ev, pol, mem_kb):
     if pol.startswith("frac"): frac = int(pol[4:]) / 100 * mem_kb * 1024
     hwm = pol.startswith("hwm") or frac is not None
     for e in ev:
-        if e[0] == "A":
+        if e[0] == "X":
+            live += e[1] - e[2]; peak = max(peak, live)
+        elif e[0] == "A":
             b = e[1]
             for i in range(len(free) - 1, -1, -1):
                 if free[i] == b:
