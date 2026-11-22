@@ -20,11 +20,14 @@ Under the new define:
 - opslab_force_free frees the live ops of an unfinished CV through the slab's own pointers. Those are recognised by
   their bounds (the whole slab) and not revoked: their lifetimes end when the slab is freed, as every op's does.
 - op_free reads the type and the sibling of ops it may already have freed: its own comments say ops may be freed
-  twice and kids before their parents. Those two reads find the op's slab in an index of every slab, sorted by
-  address (entered in S_new_slab, removed in opslab_free before the free; a lookup reads no slab and not the op), and
+  twice and kids before their parents. Those two reads find the op's slab in an index of every slab, by address
+  (entered in S_new_slab, removed in opslab_free before the free; a lookup reads no slab and not the op), and
   go through the slab's own pointer. Every other read of an op goes through its child, so a stale op whose slot was
   reused passes the type test and faults at op_free's next read. A slab already freed is not in the index, and the
   read faults through the child.
+  The index has an entry per 4 KiB page each slab touches, in an open-addressing table (revision 4). Revision 3's
+  sorted array was correct (fixture `census/out/perlfxo3b-c81dca75`, test.pl `census/out/zperl-ops3-aba18d33`
+  equal to stock) but cost +4.775 % on test.pl, most of it in memmove, most likely the array's shifts.
   Revision 1 read those two fields through the revoked child and faulted in three of test.pl's tests
   (comp/package_block, uni/opcroak, uni/package: `census/out/zperl-ops-b296436b`). Revision 2 took the slab's pointer
   only while opslab_force_free ran, and still faulted at op_free's type test in the fixture's mode 5
@@ -109,29 +112,35 @@ S_op_retire(OP *o, OPSLAB *head)
 				  - __builtin_capstone_cap_get_cursor(home)));
 }
 
-/* Every op slab, sorted by address: [lo, hi) is the slab's memory and slab its
-   own pointer. op_free reads the type and the sibling of an op it may already
-   have freed (its own comments: ops may be freed twice, and kids may be freed
-   before their parents). Those two reads find the op's slab here, reading no
-   slab and not the op, and go through the slab's own pointer; every other read
-   goes through the op's own. */
-typedef struct { UV lo, hi; OPSLAB *slab; } capstone_opslab_ent;
-static capstone_opslab_ent *S_op_slabs;
-static size_t S_op_nslabs, S_op_capslabs;
+/* Every op slab, by page: an entry for each 4 KiB page a slab's memory
+   touches, in a table with open addressing (linear probing, deletion by
+   backward shift, so no tombstones). op_free reads the type and the sibling of
+   an op it may already have freed (its own comments: ops may be freed twice,
+   and kids may be freed before their parents). Those two reads find the op's
+   slab here, reading no slab and not the op, and go through the slab's own
+   pointer; every other read goes through the op's own. Revision 3 kept a sorted
+   array, and its shifts cost most of its price on test.pl. */
+typedef struct { OPSLAB *slab; UV page, hi; } capstone_opslab_ent;
+static capstone_opslab_ent *S_op_tab;
+static size_t S_op_tabmask, S_op_tabn;	/* table size - 1, entries in use */
+#  define CAPSTONE_OP_PAGE 12
 
-/* the number of slabs that start at or below a */
 static size_t
-S_op_slab_pos(UV a)
+S_op_slot0(UV page)
 {
-    size_t lo = 0, hi = S_op_nslabs;
-    while (lo < hi) {
-	const size_t mid = lo + (hi - lo) / 2;
-	if (S_op_slabs[mid].lo <= a)
-	    lo = mid + 1;
-	else
-	    hi = mid;
-    }
-    return lo;
+    return (size_t)((page * (UV)0x9E3779B97F4A7C15ULL) >> 24) & S_op_tabmask;
+}
+
+static void
+S_op_tab_put(OPSLAB *slab, UV page, UV hi)
+{
+    size_t i = S_op_slot0(page);
+    while (S_op_tab[i].slab)
+	i = (i + 1) & S_op_tabmask;
+    S_op_tab[i].slab = slab;
+    S_op_tab[i].page = page;
+    S_op_tab[i].hi = hi;
+    S_op_tabn++;
 }
 
 /* S_new_slab, the only place a slab is made, sz pointers long. The bounds are
@@ -140,17 +149,25 @@ static void
 S_op_slab_register(OPSLAB *slab, size_t sz)
 {
     const UV lo = __builtin_capstone_cap_get_cursor(slab);
-    size_t i;
-    if (S_op_nslabs == S_op_capslabs) {
-	S_op_capslabs = S_op_capslabs ? S_op_capslabs * 2 : 64;
-	Renew(S_op_slabs, S_op_capslabs, capstone_opslab_ent);
+    const UV hi = lo + sz * sizeof(I32 *);
+    const UV p0 = lo >> CAPSTONE_OP_PAGE, p1 = (hi - 1) >> CAPSTONE_OP_PAGE;
+    UV p;
+    if (!S_op_tab || 2 * (S_op_tabn + (p1 - p0 + 1)) > S_op_tabmask + 1) {
+	capstone_opslab_ent *const old = S_op_tab;
+	const size_t oldn = old ? S_op_tabmask + 1 : 0;
+	size_t n = oldn ? oldn : 1024, i;
+	while (2 * (S_op_tabn + (p1 - p0 + 1)) > n)
+	    n *= 2;
+	Newxz(S_op_tab, n, capstone_opslab_ent);
+	S_op_tabmask = n - 1;
+	S_op_tabn = 0;
+	for (i = 0; i < oldn; i++)
+	    if (old[i].slab)
+		S_op_tab_put(old[i].slab, old[i].page, old[i].hi);
+	Safefree(old);
     }
-    i = S_op_slab_pos(lo);
-    Move(S_op_slabs + i, S_op_slabs + i + 1, S_op_nslabs - i, capstone_opslab_ent);
-    S_op_slabs[i].lo = lo;
-    S_op_slabs[i].hi = lo + sz * sizeof(I32 *);
-    S_op_slabs[i].slab = slab;
-    S_op_nslabs++;
+    for (p = p0; p <= p1; p++)
+	S_op_tab_put(slab, p, hi);
 }
 
 /* opslab_free, the only place a slab is freed, before the free */
@@ -158,11 +175,37 @@ static void
 S_op_slab_unregister(OPSLAB *slab)
 {
     const UV lo = __builtin_capstone_cap_get_cursor(slab);
-    const size_t i = S_op_slab_pos(lo);
-    if (i == 0 || S_op_slabs[i - 1].lo != lo)
+    UV p;
+    if (!S_op_tab)
 	return;
-    Move(S_op_slabs + i, S_op_slabs + i - 1, S_op_nslabs - i, capstone_opslab_ent);
-    S_op_nslabs--;
+    for (p = lo >> CAPSTONE_OP_PAGE; ; p++) {
+	size_t i = S_op_slot0(p), j, k;
+	UV hi;
+	while (S_op_tab[i].slab
+	    && !(S_op_tab[i].page == p
+		 && __builtin_capstone_cap_get_cursor(S_op_tab[i].slab) == lo))
+	    i = (i + 1) & S_op_tabmask;
+	if (!S_op_tab[i].slab)
+	    return;		/* not entered: nothing more to remove */
+	hi = S_op_tab[i].hi;
+	/* backward shift: move up every later entry of the cluster whose home
+	   slot does not lie cyclically in (i, j] */
+	for (j = i; ; ) {
+	    j = (j + 1) & S_op_tabmask;
+	    if (!S_op_tab[j].slab)
+		break;
+	    k = S_op_slot0(S_op_tab[j].page);
+	    if (i <= j ? (i < k && k <= j) : (i < k || k <= j))
+		continue;
+	    S_op_tab[i] = S_op_tab[j];
+	    i = j;
+	}
+	S_op_tab[i].slab = NULL;
+	S_op_tab[i].page = S_op_tab[i].hi = 0;
+	S_op_tabn--;
+	if (p == (hi - 1) >> CAPSTONE_OP_PAGE)
+	    return;
+    }
 }
 
 /* the op at o's address through its slab's own pointer, or o if no slab holds it */
@@ -170,12 +213,17 @@ static OP *
 S_op_view(OP *o)
 {
     const UV a = __builtin_capstone_cap_get_cursor(o);
-    const size_t i = S_op_slab_pos(a);
-    OPSLAB *slab;
-    if (i == 0 || a >= S_op_slabs[i - 1].hi)
+    const UV p = a >> CAPSTONE_OP_PAGE;
+    size_t i;
+    if (!S_op_tab)
 	return o;
-    slab = S_op_slabs[i - 1].slab;
-    return (OP *)((char *)slab + (a - __builtin_capstone_cap_get_cursor(slab)));
+    for (i = S_op_slot0(p); S_op_tab[i].slab; i = (i + 1) & S_op_tabmask) {
+	OPSLAB *const slab = S_op_tab[i].slab;
+	const UV lo = __builtin_capstone_cap_get_cursor(slab);
+	if (S_op_tab[i].page == p && a - lo < S_op_tab[i].hi - lo)
+	    return (OP *)((char *)slab + (a - lo));
+    }
+    return o;
 }
 #endif
 """)

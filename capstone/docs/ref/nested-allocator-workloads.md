@@ -3776,6 +3776,38 @@ the failed-compilation shape and keeps the protection.**
 - So revision 3 is correct on test.pl and the fixture, and its index costs most of its price. The memory run
   (`rss-ops3-aba18d33`) was started by the chain's gate. The next revision replaces the sorted array.
 
+**Revision 4 (`port-op-slabs.py`, this commit): the index by page, pre-registered (22:27).**
+- The index has an entry for each 4 KiB page a slab's memory touches: `{slab, page, end}` in an open-addressing table
+  (linear probing; a deletion shifts the cluster back, so there are no tombstones; the table doubles at half load).
+  A slab enters at S_new_slab and leaves at opslab_free, one entry per page, at most 9 for the largest slab
+  (2,048 pointers of 16 bytes). op_free's two lookups hash the op's page and scan its cluster. As in revision 3, a
+  lookup reads no slab and not the op, and the two reads go through the slab's own pointer.
+- Image `26dfe710…` (unstripped `d2db8e9c…`), symbols `census/perl-ops4.syms`. op.h equals revision 1's. op.c
+  differs from revision 3's by 142 diff lines, the index only. Warnings 24, as in revision 3. op.o has one CREVOKE and
+  six CDERIVE, as revision 3's. The no-revoke control's op.o has no CREVOKE and six CDERIVE.
+- Fixture (`perlfxo4-26dfe710`, `perlspec/fx2/fixture-ops4`; fixture revision 2's main): prot6 in modes 5 and 7,
+  revision 1 in mode 5, revision 4 in modes 0-7 (`ad5f528f…`), its control in modes 0-6 (`7814d89f…`). 18 commands.
+- Then test.pl priced (`zperl-ops4-26dfe710`). Then the memory run (`rss-ops4-26dfe710`), only if test.out and
+  makerand.out equal the stock twin run's (`census/chain-ops4.sh`). Before launch, a copy with the runs stubbed
+  took each gate branch on recorded results: revision 3's (equal: memory run), revision 1's and a missing directory
+  (no memory run).
+- Predictions:
+  - fixture: as revision 3 on fixture revision 2. prot6 returns `errors=3` in mode 5 and fails the boot in mode 7.
+    Revision 1 faults in `Perl_op_free` in mode 5. Revision 4 reads in mode 0, faults with cause 25 in `main` in
+    modes 1-4, returns `errors=3` in mode 5 and `errors=0` in mode 6, and fails the boot in mode 7. The control reads
+    in modes 1-3, faults in mode 4, and returns in modes 5 and 6;
+  - test.pl: outputs byte-equal to stock's, and no capability fault on the console;
+  - zone: from +0.8 % to +2.0 % over prot6's 86,774,090,874. That is revision 3's +4.775 % less its `memmove` growth
+    and most of op_free's search;
+  - `memmove` within 5 % of prot6's 1,037,644,188 instructions.
+- Branches:
+  - `memmove` still more than 5 % above prot6's: revision 3's growth was not the sorted array's shifts, and that
+    reading is withdrawn;
+  - the zone above +2.0 % with `memmove` back: the remaining price is the carve and the revocation, and it is
+    reported per function as it stands;
+  - any fixture reading other than predicted, or test.pl's outputs not equal to stock's: revision 4 is not used, and
+    the hash table is the suspect, since it is the only change from revision 3.
+
 ## perlbench train on the twin: the image zone per allocator (2026-11-22)
 
 The same twin configuration as test.pl (slot 28, `perf/natio/images`, `dom_grant_root=/tmp/nt/sr`, zones4 plugin at
