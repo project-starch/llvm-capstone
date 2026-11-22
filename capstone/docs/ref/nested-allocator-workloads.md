@@ -3876,8 +3876,8 @@ the protected arms' images replaced). Each zone is the image zone (`ZONE image`)
     - beyond it: the bodies delta is restated against prot6 at 2^22, and the difference is reported as the table's
       cost on the image.
   - **Result** (`ztrain-prot6-r22-37381b03`, END 00:07): rc 0, specdiff 6/6, image zone **216,796,670,174, equal to
-    the 2^20 run's to the instruction**. Per function (fndelta) every named function's count and entries are equal, sum
-    delta 0. So the first branch holds: on this stage the table's size does not move the image's count, and bodies'
+    the 2^20 run's to the instruction**. Per function, all 2,788 `FN` lines of the two capmix files have equal counts
+    and entries (read over every line, not fndelta's top rows). So the first branch holds: on this stage the table's size does not move the image's count, and bodies'
     +2,101,564,292 (+0.969 %) against prot6 stands as measured.
     - Outside the image the two runs differ, and neither zone is a measure here. The user zone outside the image is
       4,332,830,738 at 2^22 against 4,299,404,280 at 2^20 (bodies at 2^22: 4,331,995,799); not attributed. The kernel
@@ -3886,6 +3886,33 @@ the protected arms' images replaced). Each zone is the image zone (`ZONE image`)
     - A first launch of this run was stopped before it took the lock, because it was given bodies' symbol file
       (`perl-bodies.syms`) instead of prot6's; its directory is kept as `ztrain-prot6-r22-37381b03-void-stopped` and
       wrote no zone. The run above used `perl-prot6.syms`, checked in its environment before launch.
+
+### The CRENEW and liveness-test variant: no environment measures it yet (2026-11-23)
+
+The programme asks for a perlbench variant with CRENEW and the liveness test. Where each can run, enumerated:
+- **The liveness test.** No QEMU decodes it. The programme lists it as a stage-2 proposal, "first in QEMU and the
+  compiler" (plan lines 67 and 127). Its performance case is already measured: today a liveness test is mallocng's
+  load probe in `free`, `realloc` and `calloc`, and a dedicated instruction replaces one instruction with one. On perl
+  that is 26.7 M probes, 0.032 % of instructions and 0.162 % of loads (`compiler/liveness-census` 77bf93aef483,
+  `docs/history/21-11-2026_10-00-00_liveness-test-census.md`). So the variant's liveness half has no instruction
+  saving to measure. Its case is semantic: no read permission or bytes in bounds are needed.
+- **CRENEW**:
+  - The twin's QEMU (`native01/qemu55`, a0501ebc39) does not decode it. `insn32.decode` has `csderive` (0x51),
+    `cskill` (0x52) and `csretire` (0x53), and no entry at 0x54; `git grep -i crenew` in `target/riscv` finds nothing.
+  - P1's RTL decodes 0x54 as CSNODE (plan, section 1.1).
+  - The one-operand environment (`nested/oneop`, QEMU 9e69171f1c) has it. Its table carries no generations, so CRENEW
+    cannot renew in place, and the table's cost there is the kit's sweeps (the gcc section above).
+  - The reference model c1985bb529 has it, with generations, and no kit (plan, section 1.1).
+- **What a CRENEW arm could read.** The bodies port's image cost is its code, around the lifetime instructions:
+  `Perl_sv_upgrade` +1,200.6 M and `Perl_sv_clear` +1,026.2 M on train. Renewing a body when it goes on the free list
+  would replace the release's CREVOKE with CRENEW. A reused body would then need no CDERIVE when it is taken again. The
+  image zone of an arm in the one-operand environment would see that change in the port's code. It would not see the
+  table's cost, which that kit charges to its sweeps. Cycles need a bitstream with CRENEW, and none is written
+  (B5b-1 step (c)). How much of `Perl_sv_upgrade`'s +1,200.6 M is the derive path a renew would skip is not read
+  from the port's code here, so no saving is predicted.
+- **Decision.** The arm needs perl rebuilt in the one-operand environment, on that environment's compiler and SDK
+  (application ABI 2, mallocng, virtual profile), and every bodies-port control repeated there. That build is
+  deferred behind item 5 (the bug-corpus images), which has a consumer on the board.
 
 ## mcf train on the twin: what separates the Full image's OOM from V1f's pass (2026-11-22)
 
@@ -4141,11 +4168,29 @@ Every prediction held, so the first branch applies.
   `native_refused_calls` reads 3: those two plus the same exchange query. So the control fires. The check of the
   failing routes names `faccessat` when the kernel refuses it, and the -38 count in facc is a reading, not a blind
   zero.
-- The two boots differ only in the kernel image. The runtime lane's `faccessat` route is therefore what
+- The two boots differ only in the kernel image. Read, not taken from the runtime lane: the two image directories
+  hold `Image` (`bf95cde78f45c0a6…` against `8bc7dc8d722fe906…`) and the same `rootfs.ext2` symlink
+  (`9903242c37a72425…`). The runtime lane's `faccessat` route is therefore what
   `--size 100` needs on the twin. As the branch says, the runtime lane builds the board kernel and kit with it, and
   the measured run is pre-registered separately.
 - Not settled by this pair: why phase 142 is the first to need a temporary directory on the twin. The earlier note
   (a sort that spills) still stands unchecked. This lane has not read the route's change (80bfe800dfc9).
+
+### Amendment 2: the measured twin run on the `faccessat` kernel (written 2026-11-23 00:16, before the run)
+
+- **Run.** `nst1-s100c`: the pre-registration of 06:05 (`nst1-s100`) with two changes. The kernel is images-facc
+  (`bf95cde78f45c0a6…`, the same rootfs), and the module flags carry `capstone_vm.dom_local_tmp=1` (Amendment 1).
+  Everything else is unchanged: stage `nested/st1/stages/s100` (u1, p1, p2, u2, each `--heap 33554432 64 --size 100
+  st.db`), images `817b1652…` and `945fb69f…`, slot 28, 262,144 records, PROF=1 with `nested/prof/capmixn.so` at
+  shift 24, as `nst1-s100b` ran.
+- **Predictions and failure branches:** those of 06:05, unchanged. In particular:
+  - 32/32 in every command;
+  - 1 M to 6 M CREVOKEs in each protected command, against fewer than 100 in each unprotected one;
+  - program instructions +0.3 % to +3 %, with repeats within 0.01 %;
+  - QEMU cause 30 in a protected command means the 262,144 records are too few.
+- **Why before the board.** The runtime lane's board kit with this route (`t3-smoke/bkit107-k2n-native-p1-tree-facc`,
+  a lane build, not on dev) runs 262,144 records too. So the board pre-registration waits for this run's answers,
+  lifetime counts and the table branch.
 
 ## PHP against a pristine second binary (2026-11-22)
 
