@@ -105,3 +105,26 @@ Limits stated in advance: the next-family number comes from disabling the whole 
 cut, since the unit's internal paths and the post-cut side remain; retiming makes hierarchy approximate; and a new
 placement moves everything. A WNS inside [-8.3, -0.9] supports "the cut moved the critical path out of the rev_node
 cone"; it does not say by how much on another placement. The clock stays at 40 ns, and any gain is reported as slack.
+
+## The synthesis-only gate, read (board lane, board/meas-pw 4d64c19cb53b), and a RE-KEY of both FF keys
+
+Readings against P1's gate: mapping peak 5,050.2 MB (+8.5), loops 0, core LUT +471: PASS. **Core FF +101 against the
+key's +150 to +400: the key FAILED by its letter.** Module moves, ungraded: ex_stage +5,039 LUT / +106 FF, dyn_unit
++7,421, issue_stage -4,218, lsu_i -774, rev_node -1,094, netting +471.
+
+**The FF key was mis-sized.** Its lower edge was the cut's own bit count with no allowance for redistribution: 155 bits
+(data_rvalid 1, data_rdata 64, data_ruser 64 since the user width is XLEN, the index 25, the namespace flag 1; data_rid,
+data_rtag and the grant are not read through the register). It is a band of 250 flops on a design-level count whose
+null redistribution this lane keys at +-2,000 everywhere else (the spatial gates, every full build). That is the
+LUT-floor error of 2026-10-22 in flop units. The full-build FF key below (+0 to +1,000) has the same fault.
+
+What the FF key was meant to show is that the cut's registers exist. The replacement keys are written here AFTER the
+gate reading and BEFORE any full launch, and say so:
+
+| key | prediction | if missed |
+|---|---|---|
+| the cut's own flops in the gate checkpoint, by name (`rv_rsp_q_reg*`, `rv_rsp_idx_q_reg*`, `rv_rsp_vctx_q_reg`, and any retimed or merged variant of those names, counted separately) | 155, less any bit the D$ drives constant, each such bit named from source | fewer than 150 unexplained: no full build; the missing bits named |
+| gate core FF | P1 +- 2,000 | census |
+| full build placed FF (replaces "+0 to +1,000") | P1 +- 2,000 | census |
+
+Every other key above stands unchanged.
