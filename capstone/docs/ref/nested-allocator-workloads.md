@@ -3698,6 +3698,49 @@ control, each in modes 0-5): revision 2 is not a fix, and mode 5 had no working 
   makerand.out equal the twin stock arm's (`census/chain-ops3.sh`). Before launch, that gate was run on recorded
   pairs: prot6 reads equal, revision 1 differs, a missing run differs.
 
+**Result, revision 3's fixture (`census/out/perlfxo3-3d40f11b`, 21 commands): modes 5 and 6 are broken in the fixture
+itself, as the pre-registered branch above allowed ("a fault there means mode 5 itself is broken").**
+- prot6, with no ops port, faults in mode 5 and in mode 6, with cause 24 at `Perl_sv_setsv_flags`+0xc2
+  (`lw a0, 0x14(a1)`, the head read when the destination SV is in no arena). So does every other build in mode 6
+  (revisions 1, 2 and 3 and the control), and revision 3 and the control in mode 5, all at that same instruction.
+- Cause: the fixture booted the interpreter from `-e 0`. For `-e`, perl opens /dev/null as the script
+  (`S_open_script`, perl.c:3800). The twin's sandbox refuses it, and every command's stderr reads
+  "Can't open /dev/null: Permission denied". That croak ends `perl_parse` inside `open_script` (perl.c:2162), before
+  `init_predump_symbols` (:2229) and `init_postdump_symbols` (:2234). The fixture never read `perl_parse`'s status. So
+  every mode ran on a half-built interpreter. Modes 0-4 only make and free ops, and they read as designed.
+- The other readings, for the record:
+  - prot6 mode 1 reads the freed op (`read_after_free` printed, rc 0): no protection without the port, as expected;
+  - revision 3, modes 1-4: cause 25 in `main` at +0x210, +0x424, +0x37c and +0x48a, each the fixture's own
+    `ldc a0, 0x20(a0)`. Mode 2 printed `same=1 o3_ok=1 o2_ok=1` and mode 3 `live_ok=2999 bad=0` before the fault;
+  - the control reads in modes 1-3 and faults in mode 4 at `main`+0x48a, as before;
+  - in mode 5, revisions 1 and 2 still fault in `Perl_op_free`, at +0x60 and +0x98 with cause 25, before the eval
+    reaches `sv_setsv_flags`. Revision 3 no longer faults in op_free; it reaches the fault that prot6 hits.
+  That last point is a reading on a broken interpreter, not a result.
+
+**Fixture revision 2 (`make-ops-fixture.py`, this commit) and its run, pre-registered (20:27).**
+- The fixture writes `fx-boot.pl` (`1;`) in its working directory through PerlIO, then runs `perl_parse` on that file
+  and `perl_run`. If either returns non-zero it prints `FIXTURE boot failed` and exits 3. Mode 7 boots from `-e 0`
+  instead, as revision 1 did: that is the boot check's positive control.
+- Five builds, objects unchanged (`perlspec/fx2/fixture-ops3b`, built by the same link lines as revision 1's
+  builds): prot6 `8d1ba63c…`, revision 1 `19d3f29d…`, revision 2 `45cd5565…`, revision 3 `c81dca75…`, the control
+  `7d89f2f1…`. 24 commands: prot6 in modes 0, 1, 5, 6 and 7; revisions 1 and 2 in modes 5 and 6; revision 3 in modes
+  0-7; the control in modes 0-6. The run is `perlfxo3b-c81dca75`, after the queued runs on slot 28.
+- Predictions:
+  - mode 7 prints `FIXTURE boot failed` and exits 3 in prot6 and revision 3. No other command prints it;
+  - prot6: mode 0 reads, mode 1 reads after the free, mode 5 returns with `errors=3`, mode 6 with `errors=0`;
+  - revision 1: mode 5 faults in `Perl_op_free` with cause 25 (mode 5's positive control); mode 6 returns `errors=0`;
+  - revision 2: mode 5 faults in `Perl_op_free` with cause 25; mode 6 returns `errors=0`;
+  - revision 3: mode 0 reads; modes 1-4 fault with cause 25 in `main`; mode 5 returns `errors=3`; mode 6 `errors=0`;
+  - the control: modes 0-3 read; mode 4 faults in `main`; mode 5 returns `errors=3`; mode 6 `errors=0`.
+- Branches:
+  - mode 7 does not fail the boot: the check cannot fire, and the boot lines of the other commands are not evidence;
+  - prot6 faults in mode 5 or 6: the fixture is still broken there, and modes 5 and 6 decide nothing;
+  - prot6 returns in both and revision 3 faults in mode 5: revision 3 is insufficient, whatever test.pl reads;
+  - revision 1 returns in mode 5: mode 5 does not reproduce test.pl's fault, and a return from revision 3 there
+    proves nothing;
+  - any of modes 0-4 reads differently from revision 3's fixture above: the half-built interpreter had changed them,
+    and those modes are re-read from this run.
+
 ## perlbench train on the twin: the image zone per allocator (2026-11-22)
 
 The same twin configuration as test.pl (slot 28, `perf/natio/images`, `dom_grant_root=/tmp/nt/sr`, zones4 plugin at
@@ -3710,6 +3753,7 @@ the protected arms' images replaced). Each zone is the image zone (`ZONE image`)
 | prot6 (heads) | `ztrain-prot6-37381b03` | 6/6 | 216,796,670,174 | +5.619 % | |
 | hash entries | `ztrain-he-e9994b2e` | 6/6 | 216,596,614,164 | +5.522 % | -200,056,010 (-0.092 %) |
 | bodies | `ztrain-bodies-279647af` | **5/6** | not priced | | |
+| bodies, 2^22 records | `ztrain-bodies-r22-279647af` | 6/6 | 218,898,234,466 | +6.643 % | +2,101,564,292 (+0.969 %) |
 
 - **Hash entries cost less than prot6 on train**, where they cost +0.112 % on test.pl. Per function (fndelta, the
   named functions sum to -200,055,869):
@@ -3739,12 +3783,22 @@ the protected arms' images replaced). Each zone is the image zone (`ZONE image`)
     from the raise sites and the arms that passed. No live count was read.
   - A twin kit at 2^20 records cannot run the bodies port on splitmail train. The board's ids55 default is also 2^20
     (`paper-nested-allocators/notes/section5-rtl-encoding-evidence.txt`, from capstone_vm.c's `node_flat_records`).
-  - Queued: the same stage at 2^22 records (`ztrain-bodies-r22-279647af`, 64 MiB of the 256 MiB CMA). It differs from
-    the failed run only in the table size. In the same RESULTS-twin.md, T3's instret on the flat 2^20 table (F0) and
-    on the module without one (W) agreed within 0.001 % per command. That is the evidence that the table's geometry
-    does not move the image's instruction count, and it is what makes a zone at 2^22 comparable with the other arms'
-    at 2^20. It is evidence, not a proof: 2^22 itself was not paired. If it faults
-    again with cause 30, the next step is 2^23, not another doubling.
+  - **Rerun at 2^22 records** (`ztrain-bodies-r22-279647af`, 64 MiB of the 256 MiB CMA; the same image and stage, only
+    the table size differs): rc 0, specdiff 6/6, splitmail included. So the 2^20 failure was the table's size, as the
+    raise sites predicted; the live count itself was still not read.
+  - Image zone 218,898,234,466: **+2,101,564,292 (+0.969 %) against prot6**, +6.643 % against stock for heads and
+    bodies together. On test.pl bodies cost +0.733 %. Per function against prot6 (fndelta, the named functions sum to
+    +2,101,568,306):
+    - the issue and retire: `Perl_sv_upgrade` +1,200.6 M at the same 46,036,356 entries, `Perl_sv_clear` +1,026.2 M at
+      35,883,962 entries, `Perl_more_bodies` +10.0 M (3,133 to 46,007 calls, the same rise as on test.pl);
+    - decreases: `Perl_sv_setsv_flags` -72.9 M, `Perl_sv_arena_head` -14.7 M, `Perl_sv_free2` -11.9 M,
+      `Perl_newSV` -10.5 M, `Perl_sv_mortalcopy_flags` -9.2 M, `__libc_malloc_impl` -5.8 M. These are not attributed.
+  - Comparability. The zone was taken at 2^22, the other arms' at 2^20. The failed 2^20 run wrote no zone, so its
+    four completed commands cannot be paired with this run. The evidence that the geometry does not move the image's
+    count is still T3's F0-vs-W agreement within 0.001 % per command (`tests/rtl-smoke/ids55-flat-module/RESULTS-twin.md`);
+    2^22 itself is unpaired. The table's work is done in the emulator's helpers, outside the image range the zone counts.
+  - Consequence for the board: an ids55 kit at its 2^20 default cannot run this arm on splitmail train. A bodies board
+    cycle needs a larger table, and its node-table work is then not the other arms'.
 
 ## mcf train on the twin: what separates the Full image's OOM from V1f's pass (2026-11-22)
 

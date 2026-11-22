@@ -20,6 +20,13 @@ is of the op's pp function pointer. Modes:
   6  three string evals that compile and run, after the same steps as mode 5: each must return with $@ empty in
      every build. It checks that the fixture can run an eval at all, so that a fault in mode 5 is about the failing
      compilation
+  7  the boot's positive control: the interpreter is parsed from "-e 0", whose script perl opens as /dev/null, which
+     the twin's sandbox refuses (EACCES). perl_parse then croaks in open_script, before init_predump_symbols, and the
+     fixture must print "FIXTURE boot failed" and exit 3. Every other mode parses fx-boot.pl, a file the fixture writes
+     in its working directory, then calls perl_run; a failure of either prints the same line and exits 3.
+     Revision 1 of the fixture booted every mode from "-e 0" and never read perl_parse's status: on the twin the parse
+     had always failed, modes 0-4 ran on a half-built interpreter, and every eval of modes 5 and 6 faulted in
+     Perl_sv_setsv_flags in every build, the one without the ops port included (census/out/perlfxo3-3d40f11b)
 A build without the ops port (prot6's objects) must read in modes 0-3, return in modes 5 and 6, and is the reference
 for mode 5. A build with PERL_CAPSTONE_SUBLET_OPS_NOREVOKE (the control) must read in modes 0-3 and return in mode 5. In mode 4 it must fault as well:
 freeing a slab ends every op lifetime carved from it, revoked or not, so mode 4 checks the own-pointer path (a fault
@@ -32,14 +39,33 @@ HEADER = """/* perl-ops-fixture: perlmain.c with its main renamed; the main belo
 """
 TAIL = r"""
 #undef main
-static void fixture_boot(void)
+static int fixture_boot(int dash_e)
 {
-    static char *args[] = { "perl", "-e", "0", NULL };
+    static char *eargs[] = { "perl", "-e", "0", NULL };
+    static char *fargs[] = { "perl", "fx-boot.pl", NULL };
+    int rp, rr = 0;
     my_perl = perl_alloc();
     perl_construct(my_perl);
+    if (!dash_e) {   /* perl.h replaces stdio, so the file is written through PerlIO */
+        dTHX;
+        PerlIO *f = PerlIO_open("fx-boot.pl", "w");
+        if (!f || PerlIO_puts(f, "1;\n") != 3 || PerlIO_close(f) != 0) {
+            PerlIO_printf(PerlIO_stdout(), "FIXTURE boot failed write\n");
+            PerlIO_flush(PerlIO_stdout());
+            return 1;
+        }
+    }
     PL_perl_destruct_level = 2;
     PL_exit_flags |= PERL_EXIT_DESTRUCT_END;
-    perl_parse(my_perl, xs_init, 3, args, (char **)NULL);
+    rp = dash_e ? perl_parse(my_perl, xs_init, 3, eargs, (char **)NULL)
+                : perl_parse(my_perl, xs_init, 2, fargs, (char **)NULL);
+    if (rp == 0) rr = perl_run(my_perl);
+    if (rp != 0 || rr != 0) {
+        PerlIO_printf(PerlIO_stdout(), "FIXTURE boot failed parse=%d run=%d\n", rp, rr);
+        PerlIO_flush(PerlIO_stdout());
+        return 1;
+    }
+    return 0;
 }
 static OP *volatile kept;   /* a client's copy of an op pointer */
 #define SAY(...) do { PerlIO_printf(PerlIO_stdout(), __VA_ARGS__); PerlIO_flush(PerlIO_stdout()); } while (0)
@@ -49,9 +75,14 @@ int main(int argc, char **argv, char **env)
 {
     int mode = argc > 1 ? atoi(argv[1]) : -1;
     void *volatile got;
-    if (mode < 0 || mode > 6) return 2;
+    if (mode < 0 || mode > 7) return 2;
     PERL_SYS_INIT3(&argc, &argv, &env);
-    fixture_boot();
+    if (fixture_boot(mode == 7) != 0) return 3;
+    if (mode == 7) {
+        PerlIO_printf(PerlIO_stdout(), "FIXTURE mode=7 booted\n");   /* the control failed to fire */
+        PerlIO_flush(PerlIO_stdout());
+        return 0;
+    }
     {
         dTHX;
         CV *cv = MUTABLE_CV(newSV_type(SVt_PVCV));
