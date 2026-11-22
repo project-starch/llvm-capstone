@@ -3821,6 +3821,7 @@ the protected arms' images replaced). Each zone is the image zone (`ZONE image`)
 | hash entries | `ztrain-he-e9994b2e` | 6/6 | 216,596,614,164 | +5.522 % | -200,056,010 (-0.092 %) |
 | bodies | `ztrain-bodies-279647af` | **5/6** | not priced | | |
 | bodies, 2^22 records | `ztrain-bodies-r22-279647af` | 6/6 | 218,898,234,466 | +6.643 % | +2,101,564,292 (+0.969 %) |
+| prot6, 2^22 records | `ztrain-prot6-r22-37381b03` | 6/6 | 216,796,670,174 | +5.619 % | 0 |
 
 - **Hash entries cost less than prot6 on train**, where they cost +0.112 % on test.pl. Per function (fndelta, the
   named functions sum to -200,055,869):
@@ -3863,7 +3864,7 @@ the protected arms' images replaced). Each zone is the image zone (`ZONE image`)
   - Comparability. The zone was taken at 2^22, the other arms' at 2^20. The failed 2^20 run wrote no zone, so its
     four completed commands cannot be paired with this run. The evidence that the geometry does not move the image's
     count is still T3's F0-vs-W agreement within 0.001 % per command (`tests/rtl-smoke/ids55-flat-module/RESULTS-twin.md`);
-    2^22 itself is unpaired. The table's work is done in the emulator's helpers, outside the image range the zone counts.
+    at the time of this run 2^22 was unpaired (the pair below now pairs it). The table's work is done in the emulator's helpers, outside the image range the zone counts.
   - Consequence for the board: an ids55 kit at its 2^20 default cannot run this arm on splitmail train. A bodies board
     cycle needs a larger table. The SPEC lane offers a kit cut from bkit91 with only `node_flat_records` changed to
     4194304 (bkit91-rec1m is the 2^20 precedent). The same cycle must pair stock or prot6 at 2^22 against 2^20 on one
@@ -3874,6 +3875,17 @@ the protected arms' images replaced). Each zone is the image zone (`ZONE image`)
     - within 0.001 %: the geometry does not move the image's count on this stage, and the bodies delta above stands;
     - beyond it: the bodies delta is restated against prot6 at 2^22, and the difference is reported as the table's
       cost on the image.
+  - **Result** (`ztrain-prot6-r22-37381b03`, END 00:07): rc 0, specdiff 6/6, image zone **216,796,670,174, equal to
+    the 2^20 run's to the instruction**. Per function (fndelta) every named function's count and entries are equal, sum
+    delta 0. So the first branch holds: on this stage the table's size does not move the image's count, and bodies'
+    +2,101,564,292 (+0.969 %) against prot6 stands as measured.
+    - Outside the image the two runs differ, and neither zone is a measure here. The user zone outside the image is
+      4,332,830,738 at 2^22 against 4,299,404,280 at 2^20 (bodies at 2^22: 4,331,995,799); not attributed. The kernel
+      zone varies across this table's arms from 4,048,869,547 (stock) to 201,478,463,827 (prot6 at 2^20), and is
+      4,169,137,669 here; it is not read as a cost of any arm.
+    - A first launch of this run was stopped before it took the lock, because it was given bodies' symbol file
+      (`perl-bodies.syms`) instead of prot6's; its directory is kept as `ztrain-prot6-r22-37381b03-void-stopped` and
+      wrote no zone. The run above used `perl-prot6.syms`, checked in its environment before launch.
 
 ## mcf train on the twin: what separates the Full image's OOM from V1f's pass (2026-11-22)
 
