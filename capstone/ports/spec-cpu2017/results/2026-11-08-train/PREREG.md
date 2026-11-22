@@ -6525,3 +6525,72 @@ the chain went on to nab, which is a valid reading. Neither stop rule is changed
 above the instruction-ratio estimate on both arms alike, so its cost against Plain is not affected.
 
 The +Spatial half of Addendum 201 (board 1) waits behind ZCB9. Nothing in the paper changes.
+
+## Addendum 213 (2026-11-22 12:06 +08, before it runs): the 48 KiB 12-way L1D on P1 (0039e34f4) against P1, board 2
+
+**Why.** Addendum 205 sent the L1D lever on to a P1 variant with a 48 KiB 12-way L1D. That variant routed and is
+sealed: `caplifive_…-pagedtbl-l1d48k_0039e34f4.bit`, sha256 683094435d27930c90979c7d7113bfe07704859f7cf4e105de38f02299950626,
+re-hashed here. It is capstone-ariane p1-l1d48-12way 0039e34f4, P1 plus the L1D configuration lines and the victim fold.
+grade_full.py reads 4 of 4 against P1: WNS -13.482 ns (-0.309), routed clean, 191,825 LUT (+4,457), 50,845 slices. The
+rtl lane's 95-test sweep reads 92/92 and its set-stress test equal checksums on P1 and 0039e34f4 (board lane record,
+board/meas-pw 4d64c19cb53b). This pair decides whether the lever goes into the performance batch (programme, bitstream 3).
+
+**Kit** bkit103-k2n-native-p1-l1d48 is bkit91 with only the two bitstream fields of `board.env` changed (`diff -r`:
+board.env and its SHA256SUMS line). The firmware selects event 2, the L1D miss, into hpm8 (`CAPSTONE_HPM_EVENTS_PAGED`,
+wt-wrap-hpmpaged `sbi_hart.c`), summed in context by the kernel.
+
+**Stages.** The paper's Full stages (FRCDKMSa3), as in Addenda 196 and 210. For perlbench makerand alone there was no
+FRCDKMSa3 stage, so `perf/natstage/board-frcdkmsa3-mk/` is board-frcdkms's makerand-only stage with its native image
+replaced by FRCDKMSa3's `perlbench_r.strip.dom` (c1744e87cb2244f6, byte-identical to board-frcdkmsa3-full's) and
+plan.json's exe path changed; `diff -rq` shows those two files and nothing else.
+
+**Chains on board 2**, one after the other, behind Addendum 202's Full train2 chain (2986689):
+
+| Chain (TAG) | Bitstream | Kit | Rows |
+|---|---|---|---|
+| l1d48c-b2 (p1-l1d48ctl) | P1, resident: no flash | bkit91 | perlbench makerand, gcc train01 |
+| l1d48c2-b2 (p1-l1d48ctl2) | P1 | bkit91 | perlbench makerand |
+| l1d48-b2 (p1-l1d48) | 0039e34f4: flash, sha256 checked against the seal, name read back | bkit103 | perlbench makerand, imagick, nab, lbm, gcc train01, xz, mcf |
+| l1d48r-b2 (p1-l1d48rep) | 0039e34f4 | bkit103 | perlbench makerand |
+| l1d48f-b2 (p1-l1d48full) | 0039e34f4 | bkit103 | full perlbench (makerand + test.pl) |
+
+The P1 control chains give a same-board reference for the two short rows that Addendum 205 singled out (makerand twice
+on each bitstream) and for gcc. Every other row's reference is the three P1 Full readings of Addendum 208 (boards 1 and
+3). Cross-board offsets have read 0.035 % (F2 mcf) and 0.26 % (F mcf). The board is left on 0039e34f4; whatever runs
+next on board 2 sets its own bitstream. Fallback: P1 with bkit91. About 9 h, flash and boots included.
+
+**Model for the prediction.** The 64 KiB pair (Addendum 205, F2 footing) saved 21.4 to 24.0 cycles per L1D miss removed:
+mcf 6.15 G cycles for 256.5 M misses (24.0), gcc 0.96 G for 44.6 M (21.4). Assume 48 KiB removes between half and all of the
+64 KiB variant's relative miss reduction, and apply that to P1's own hpm8 and run_cycles (Addendum 196's board 1
+third runs, out-nat-p1-r3a3-b1); the low end takes half the reduction at 21.4 cycles, the high end all of it at 24.0:
+
+| Row | P1 hpm8 | P1 run_cycles | 64 KiB miss change | Predicted cycles |
+|---|---|---|---|---|
+| mcf | 3,752,848,143 | 144,684,884,972 | -6.84 % | -1.9 % to -4.3 % |
+| gcc train01 | 372,746,799 | 41,893,463,753 | -12.09 % | -1.2 % to -2.6 % |
+
+**Predictions.**
+1. hpm8 (L1D misses) falls on every row with a P1 reading of it: mcf, gcc train01, xz, imagick, perlbench.
+2. mcf and gcc train01 seconds fall inside the ranges above. The gcc reference is the board 2 control; the mcf
+   reference is the Addendum 208 Full mean 5,944.52 s.
+3. lbm and nab stay within ±0.3 % of their Full means (989.21 s, 694.02 s): no prediction of a change.
+4. xz, imagick and full perlbench: the direction is not predicted, because there is no 64 KiB reading of xz or
+   imagick, and perlbench's cycles rose on the 64 KiB pair while its misses fell. Each is reported against its Full
+   mean (4,956.87, 11.40, 13,074.29 s) with ±0.3 % as flat.
+5. specdiff PASS on every row, and every boot's Tier 1 smoke is clean (nine steps, task 70 waived).
+
+**Decision** (Addendum 205's rule, made precise before the reading).
+- The lever goes into the performance batch if mcf or gcc train01 is faster by more than 0.5 % and no row is slower
+  by more than 0.5 %.
+- It is blocked by a makerand slowdown above 0.5 % on both of its runs, against the mean of the two board 2 P1
+  controls.
+- A single makerand run above 0.5 % with the other inside is reported and resolved by a third run on each bitstream.
+  Neither run is dropped.
+- A row slower by 0.3 % to 0.5 % is reported with its hpm8 and decides nothing.
+- If prediction 2 fails while prediction 1 holds, the cycles-per-miss model is wrong for P1. That is recorded, and
+  the lever is still decided by the rule above.
+
+**Stops** as Addendum 199, keyed to failures: no shell, a smoke FAIL other than task 70, a missing smoke step, a
+non-zero status, a specdiff FAIL.
+
+**Dry runs** (stubbed, every chain): `perf/natstage/dry213/`.
