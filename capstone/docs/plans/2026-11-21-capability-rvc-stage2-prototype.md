@@ -403,3 +403,33 @@ Each row validates as every arm does in this driver: perl 1/2 on and off, x264 0
   the other driver. That is run-to-run noise at 2×10⁻⁷, not a missing site.
 - These are fetch bytes, not cycles. The board pair (xz, imagick, perl full) belongs to the runtime lane; x264 is
   left at its twin reading.
+
+### ZCB9 on silicon (2026-11-22): perlbench gains 0.33 %, xz and imagick flat
+
+Run by the runtime lane: Addendum 210 pre-registered it, and Addendum 215 records the outcome. Both are on
+spec-silicon in `ports/spec-cpu2017/results/2026-11-08-train/PREREG.md` (f3fd06a646e1). Board 1 ran P1 Full with kit
+bkit91 in three boots, 08:33-14:06. The runs are in `spec/board/out-nat-p1-zcb9-b1/<bench>-native/`. Checked here
+against the files:
+- The native binaries the bake staged hash to ZCB9's images above: xz 8266cf53, imagick dc1ff60c, perl 7b9f097c.
+- Each boot passes 9/9 smoke steps, with no illegal-instruction, SIGILL, Oops or panic line in `board.txt`.
+- specdiff passes on every validation in `read/result.json`: perl 2/2, imagick 1/1, xz 12/12.
+- The seconds are recomputed from the `@@SPEC-END` up0/up1 pairs.
+
+| row | ZCB9 | Full mean of three runs (band) | Δ | outcome | board.txt sha256 |
+|---|---:|---:|---:|---|---|
+| perlbench (makerand + test.pl) | 273.33 + 12,757.86 = 13,031.19 s | 13,074.29 (13,048.14-13,100.44) | -0.33 % | **gain** | 228df5894b6bac8b |
+| xz (sum of 12) | 4,953.93 s | 4,956.87 (4,946.96-4,966.79) | -0.06 % | flat | dcf1632eb740c11e |
+| imagick (convert) | 11.43 s | 11.40 (11.38-11.43) | +0.26 % | flat, top edge of the band | bafdd92be8a4dc85 |
+
+- The prediction was "down or flat, never up beyond noise", and no row is up beyond noise.
+  - imagick's +0.03 s is three ticks of the 0.01 s timer, and it is still inside the band.
+  - perl's 0.33 % is below the 0.889 % fetch-byte saving, as the prediction requires: the time gain is smaller than
+    the encoding gain.
+- perl's gain shows in both commands. Against the first Full run, makerand ran 273.33 s against 276.01 s, and
+  test.pl 12,757.86 s against 12,798.66 s.
+- The Full mean is Addendum 208's, over three P1 runs. Not all three ran on board 1: the first (13,074.67 s,
+  Addendum 154) ran on board 3. Against board 1's own Full run (13,073.09 s, Addendum 196), perl reads -0.32 %, still
+  below the band.
+- N = 1 per row. A second ZCB9 perl run is what would show whether the gain is real: the three Full runs spread by
+  0.015 %.
+- x264 was not run on the board. Its 1.289 % saving is a twin reading only.
