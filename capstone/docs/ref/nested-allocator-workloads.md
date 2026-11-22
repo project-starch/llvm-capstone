@@ -3824,6 +3824,33 @@ the failed-compilation shape and keeps the protection.**
 - So the page index refuses what revision 3's sorted array refused, on the same fixture. test.pl
   (`zperl-ops4-26dfe710`) is running.
 
+**Revision 4 on test.pl (`census/out/zperl-ops4-26dfe710`, 01:03-05:37): outputs equal stock's at +0.724 % against
+prot6. That is below the band of +0.8 % to +2.0 %, so the prediction missed on the cheap side.**
+- test.out and makerand.out are byte-equal to the stock twin run's (`cmp`; specdiff 1/2, as for every arm). The
+  console has no `capstone_task: fault` line.
+- **`memmove`:** 1,037,615,195 instructions against prot6's 1,037,644,188 (−0.003 %), at the same 20,478,129 calls.
+  That is within 5 %, so the reading of revision 3's growth stands: the sorted array's shifts.
+- Image zone 87,402,132,122: **+628,041,248 (+0.724 %) against prot6**, and +3.639 % against stock's
+  84,333,527,702 for heads and ops. Per function against prot6 (`fndelta.py`; the named functions sum to
+  +628,039,940):
+  - `Perl_op_free` +208.7 M at the same 2,683,185 entries, about 78 instructions per call. In revision 3 it was
+    +792.3 M, about 295 per call;
+  - `Perl_Slab_Free` +205.8 M at 4,022,039 entries, 0 in prot6;
+  - `Perl_Slab_Alloc` +133.6 M at the same entries;
+  - `S_new_slab` +51.7 M at 413,912 entries, and `Perl_opslab_free` +23.4 M at 143,772 entries, both absent from
+    prot6's counts;
+  - everything else lies within ±5 M per function.
+- Why the band missed. The band assumed that "most of" op_free's search would go. The page hash cut op_free's added
+  price by 74 %, which is more than that. `Perl_Slab_Free` also fell, from +291.7 M to +205.8 M. `Perl_Slab_Alloc`
+  (+133.6 M in both) and `S_new_slab` (+57.0 M, now +51.7 M) stayed near revision 3's. These counts are the only
+  evidence; no disassembly was read.
+- **Memory** (`census/out/rss-ops4-26dfe710`, both outputs byte-equal to stock's): peak used **102,384 kB**.
+  - That is −236 kB against prot6 (102,620), −80 kB against revision 3 (102,464), and **+4.5 % against stock's
+    97,968 kB**.
+  - The page index does not move the peak at this granularity.
+- So revision 4 is correct on the fixture (18/18) and on test.pl, keeps the protection, and is the op-slab revision
+  to price. Its price on test.pl alone against prot6 is +0.724 %.
+
 ## perlbench train on the twin: the image zone per allocator (2026-11-22)
 
 The same twin configuration as test.pl (slot 28, `perf/natio/images`, `dom_grant_root=/tmp/nt/sr`, zones4 plugin at
