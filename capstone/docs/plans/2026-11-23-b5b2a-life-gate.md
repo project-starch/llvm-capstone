@@ -130,8 +130,9 @@ runtime lane accepted it as releasing its hold on a 2a full build. I read every 
 
 So the check is never armed on a Sublet core, and the roughly 21k LUTs are a Sublet saving, not a loss of function.
 They stay not like-for-like with bitstream 1. The rtl lane's condition stands: if any capmode setter becomes legal
-under Sublet, the tie-off becomes a pass-through first. The runtime lane also cites this session's Sublet-build
-simulations, in which S fetches and loads ordinary code under the tie-off; I have not re-run those.
+under Sublet, the tie-off becomes a pass-through first. The rtl lane's Sublet-build simulations on capstone-ariane
+b5b1-step2-fix (sublet-ns, -f4, -edge, -edgem, va-runv-snap) have S fetching and loading ordinary code under the
+tie-off. The runtime lane relayed them; they were not re-run here.
 
 The rtl lane's explanation of the trimmed register widths is the lane's claim, not checked here:
 - cap_q and h0w0_q are duplicate flops, merged;
@@ -145,3 +146,33 @@ b5b2s-8cbf393d4, on capstone-ariane 8cbf393d4.
 - If issue_stage_i already grows here, the growth is the tie-off's redistribution.
 - If it does not, it belongs to 2a's op lists.
 - Its grader verdict line is not a gate.
+
+## Reading (2026-11-23): the 8cbf393d4 split gate, reported only
+
+Tag b5b2s-8cbf393d4, gate.done 19:59:28Z, same chain. The guard peak was 33.76 GB under the 40 GB
+ceiling; the host's MemAvailable never fell below 78 GB. Checkpoint 082abdd55bd0b1e3…. Loops 0 with every control
+firing. Mapping 5,049.8 MB. rev_node is module capstone_rev_node, as it must be on this tree. The grader printed PASS
+3/3 against the 1b gate; that line is not a gate here.
+
+| row | 1b 4c576521d | split 8cbf393d4 (1b + tie-off) | 2a a5b2a0d1f |
+|---|---|---|---|
+| core LUT | 162,040 | 141,017 | 141,732 |
+| csr_regfile_i | 28,245 | 7,219 | 6,910 |
+| issue_stage_i | 42,758 | 44,527 | 51,549 |
+| i_issue_read_operands | 29,737 | 29,294 | 36,962 |
+| capability-metadata register file | 2,430 | 2,430 | 5,214 |
+| dyn_unit | 11,319 | 14,004 | 10,607 |
+| dom_switcher | 11,545 | 11,527 | 9,121 |
+| rev_node | 5,884 | 4,062 (same module) | 3,054 |
+
+- **The CPMP cut is the tie-off's, by a single-variable split.** The tie-off alone takes csr_regfile down 21,026 and
+  the core down 21,023. pmp_data_if's FF falls -910 on the split too.
+- **The issue_stage_i growth belongs to 2a, not to the tie-off.** On the split it is +1,769, inside the ±2,500
+  floor, and the metadata register file is unchanged at 2,430. Between the split and 2a it is +7,022, and the register
+  file doubles to 5,214.
+- **Against the split, 2a's whole core is only +715.** The issue_stage_i growth sits beside dyn_unit -3,397,
+  dom_switcher -2,406 and rev_node -1,008. In 2a's report branch_unit_i has no row of its own (142 LUT on the split).
+  That pattern fits logic moving across module boundaries more than new logic, but it is not shown: the cause of the
+  register file's doubling inside 2a stays unattributed. The rtl lane has no source reason for it.
+- Even with no source change to the old unit, rev_node moves -1,822 on the split. That is the size of null-change
+  movement at module level here.
