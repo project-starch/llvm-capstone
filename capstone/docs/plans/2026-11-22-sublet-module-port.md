@@ -27,9 +27,12 @@ CSCHECK exists in the reference decoder.
    checks and entries are unreachable for the same reason, and the step-2a tie-off guards dead logic (rtl lane, at
    source; board lane's gate: about 21k LUT pruned, a Sublet saving and not a like-for-like comparison).
 4. CSCHECK, the checked copy, is emulated today on page capabilities derived from the monitor's genesis, so it cannot
-   exist as written. **Open, and the runtime lane's decision at step 3**, with the reference read first:
-   - a hardware CSCHECK, added to the reference before the RTL (twin first);
-   - or the B5b-2 route: raw tag moves plus a software record walk ("S accesses checked through references").
+   exist as written. **Decided 2026-11-23: it goes with B5b-2, not step 3.** capstone-qemu c1985bb529 has no
+   checked-copy mechanism at all (no CSCHECK in target/riscv or hw/riscv). The reference's answer is the trap route,
+   "S accesses checked through references" (9289114e06). A hardware CSCHECK on Sublet would be a third design that
+   neither reference carries. So the native route does not run on a Sublet bitstream before B5b-2, and B5b-1 (steps
+   1b to 3) keeps no silicon key. CSMINT in step 3 is the reference's memory-to-memory form; a register-operand form
+   would change the ISA the paper states, and is the lead's call.
 
 ## The kernel module (capstone_vm)
 
@@ -106,6 +109,6 @@ No software on the native route creates or holds a capability whose cursor is at
 
 Nothing here reaches a board before:
 - B5b-1 step 3 (hardware CSMINT);
-- the checked-copy decision (item 4);
+- B5b-2's trap route, which carries the checked copy (item 4);
 - the module port (items 5-7).
 Until then, B5b-1's evidence is synthesis and directed simulation, and its bitstreams carry no silicon key.
