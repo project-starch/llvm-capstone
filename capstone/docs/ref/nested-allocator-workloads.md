@@ -4404,3 +4404,57 @@ phases equal to the native reference (`cmp-sq.py`: none differ, none missing, no
     representable. It is recorded, and the Q-15-repaired variant (P1's) is pre-registered separately.
   - Any other prot fault is localised first.
   - An answer that differs stops the comparison.
+
+### Result: the mruby chain is void on two instrument errors of this lane; nothing is read from it (00:48-01:00)
+
+- **Answers were not checked.** `bm_ao_render.rb`'s PPM does not end in a newline, so `icount`'s own
+  `ICOUNT instructions=… status=…` line was appended to its last line. The gate then hashed 821 bytes, the 781-byte
+  PPM plus that line, and every boot reads MISMATCH with a different hash. The count itself was lost the same way.
+  The gate was tested on stub output that ended in a newline, so the stub could not show this. The answer files
+  stayed in the guest, so the PPMs cannot be checked afterwards.
+- **The control was mis-specified.** Stock executes 1,173,238 CDERIVE and 1,172,318 CREVOKE, because mruby's
+  `mrb_malloc` sits on mallocng, whose lifetimes are on in both arms (`heap_lifetimes` in the SDK). The
+  pre-registered "stock below 1,000, prot at least 100 times stock" cannot hold. That is my prediction's error, not
+  the patch's: prot executes 916,189 CDERIVE and 916,101 CREVOKE more than stock.
+- By the pre-registered rule, a run whose answers differ or whose control fails is not read, so no cost is read.
+  Seen anyway: image zones stock 4,721,740,155 in each of its three boots, prot 4,798,649,926 in each of its three
+  boots.
+- **A process slip as well.** I edited `run-app-zones.sh` while the chain's first boot was running it. That boot's
+  data (serial log, opcount file) was complete. The tail of the script then ran from a shifted offset
+  (`timeout: failed to run command '--icount'`) and reported rc 1. The rule is already in this lane's notes:
+  never edit a running script. The fixed runner is a new file, `run-app-zones2.sh`.
+
+### Amendment 1 to the mruby pre-registration, and the Perl pre-registration (written 2026-11-23 01:01, before the runs)
+
+- **The runner, for both:** `fig10/run-app-zones2.sh`. `icount` runs `sh -c "exec ./capstone-vexec ./app … > answer.txt"`
+  with its own line sent to `count.txt`, so the answer file holds only the program's stdout. On a stub whose output
+  has no final newline it reads MATCH. Both chains' stubbed dry runs reached all six rungs on it.
+- **The control, restated for any port whose allocator sits on malloc:** the lifetime instructions prot executes
+  beyond stock. It is not a ratio, because mallocng's own lifetimes are in both arms. Plus the static census: the
+  ported object holds lifetime instructions in prot and none in stock.
+- **mruby rerun** (`fig10-mrb-r2`, otherwise as pre-registered):
+  - the reference PPM in every boot;
+  - prot beyond stock: at least 100,000 CDERIVE and 100,000 CREVOKE, and no CRENEW in either arm;
+  - image instructions +0.5 % to +5 %, the band written before the void chain;
+  - repeats within 0.01 %.
+  - The void chain's zones were seen before this amendment. So the cost result of the rerun is a confirmation on the
+    same images, not a blind prediction.
+- **Perl**, Fig. 10's revision, `0001-sv-heads-as-sublet-lifetimes.patch` of 5060011844e (`83501a59ae08d54a…`),
+  copied into `fig10/wt` (`fig10/build-perl.sh`):
+  - Images: Perl 5.36.3 with the port's tree patches 0001-0012 in both arms; prot adds the sublet 0001.
+    - stock `9ebe0d0456894107…`, text 7,023,436 bytes;
+    - prot `3c1962c60f1ce918…`, text 7,009,156 bytes.
+    - By encoding, `sv.o` holds no lifetime instruction on stock, and CDERIVE 28 and one-operand CREVOKE 3 on
+      prot.
+  - Workload, Fig. 10's: perlbench's train script as SPEC runs it, `perl -I. -I./lib suns.pl` with
+    `PERL_HASH_SEED=0`. The staged files are SPEC's `suns.pl`, `WORDS` and `lib`, licensed, and staged outside
+    the repository. The answer is stdout against SPEC's `suns.out` (`01688ea0c1058063…`). The validate file is
+    not compared.
+  - Runs: `fig10/chain-perl.sh`, six boots as for mruby.
+  - **Predictions:**
+    - SPEC's `suns.out` in every boot, status 0;
+    - prot beyond stock: at least 100,000 CDERIVE and 100,000 CREVOKE, and no CRENEW;
+    - image instructions +1 % to +10 %. The twin's train zone with SV heads protected, all five commands, was
+      +5.619 % against stock. suns.pl alone was not measured.
+    - repeats within 0.01 %.
+  - Branches as for mruby: a fault is localised first, and an answer that differs stops the comparison.
