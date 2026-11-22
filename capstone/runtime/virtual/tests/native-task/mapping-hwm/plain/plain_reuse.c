@@ -172,6 +172,16 @@ void __plain_remap_fit(size_t old, size_t new)
 	(void)old;
 }
 
+/* realloc.c, after the mremap of such a growth failed: realloc then falls back to malloc, copy and free, which
+ * the log shows as M, C. The line lets a replay apply the rule for the growth that was tried (part C: without it,
+ * one gcc train01 eviction had no visible cause). No count changes. */
+void __plain_remap_failed(size_t old, size_t new)
+{
+	pr_lock();
+	pr_log('Y', new, old, 1);
+	pr_unlock();
+}
+
 /* realloc.c, after a successful mremap of a large mapping from old to new bytes (both page multiples). */
 void __plain_remapped(size_t old, size_t new)
 {

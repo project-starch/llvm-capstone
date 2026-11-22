@@ -21,9 +21,9 @@ FREE_N, FREE_B = 512, 64 << 20
 
 def stream(path):
     ev = []
-    for m in re.finditer(r"^@@HM ([MUCFERHPX]) (\d+) (\d+) (\d+) (\d+)(?: (\d+))?$", open(path, errors="replace").read(), re.M):
+    for m in re.finditer(r"^@@HM ([MUCFERHPXY]) (\d+) (\d+) (\d+) (\d+)(?: (\d+))?$", open(path, errors="replace").read(), re.M):
         op, b = m.group(1), int(m.group(2))
-        if op == "X": ev.append(("X", b, int(m.group(6)))); continue
+        if op in "XY": ev.append((op, b, int(m.group(6)))); continue
         if op in "MU": ev.append(("A", b))
         elif op == "C": ev.append(("R", b, True))
         elif op == "F": ev.append(("R", b, False))
@@ -41,7 +41,7 @@ def run(ev, pol, mem_kb):
     if pol.startswith("frac"): frac = int(pol[4:]) / 100 * mem_kb * 1024
     hwm = pol.startswith("hwm") or frac is not None
     for e in ev:
-        if e[0] == "X":
+        if e[0] in "XY":
             g = e[1] - e[2]   # an in-place growth runs the rule first, as a fresh mapping of g bytes would (plain_reuse.c __plain_remap_fit)
             if hwm and g > 0:
                 cap = max(live + g, peak) + slack
@@ -54,7 +54,8 @@ def run(ev, pol, mem_kb):
                         a, c = free[i], free[pick]
                         if (c < need or a < c) if a >= need else (c < need and a > c): pick = i
                     cached -= free.pop(pick); unmaps += 1
-            live += g; peak = max(peak, live)
+            if e[0] == "X":   # Y: the growth was tried and failed; the rule ran, nothing grew
+                live += g; peak = max(peak, live)
         elif e[0] == "A":
             b = e[1]
             for i in range(len(free) - 1, -1, -1):

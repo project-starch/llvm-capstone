@@ -391,3 +391,53 @@ Runs (`plain/partc.sh`): pgcctrain01-hl0c, pgcctrain01-hl16b, pgcctrain01-h16b, 
 - If 3 holds, a deterministic program gives exact counts on Plain.
 - 4 decides only how gcc is predicted: a band instead of exact counts.
 - If 2 fails again, a growth path is still uncounted; read the over-cap events.
+
+## Outcome of pre-registration 3 part C (read 2026-11-22 21:02)
+
+| # | Prediction | Reading | |
+|---|---|---|---|
+| 1 | specdiff PASS | all 5 runs | held |
+| 2 | HL16b: hmcheck rc 0, replay MATCH | hmcheck rc 0 on both, with **0 events above peak + slack**, so the growth fix works. replay: mcf train MATCH; **gcc MISMATCH, unmaps 92 against the log's 93** | **failed on gcc's replay** |
+| 3 | mcf train HL16b's stream IDENTICAL to part A's HL0; counts equal the model's | IDENTICAL (712 events); 317/5 | held |
+| 4 | streamdiff(part A gcc HL0, hl0c) reads DIFFER | DIFFER at event 139: 36,864 against 40,960, with the policy and the image unchanged | held: gcc's allocation stream varies from run to run |
+| 5 | H16b VmHWM at most ctl + 0.1 % | gcc train01 111,316 against 128,496 kB (-13.4 %); mcf train 573,108 against 619,900 kB (-7.5 %) | held |
+
+**2's one missing eviction, found with a new instrument.** `tools/host/drive.c` replays a logged request stream
+through the real plain_reuse.c, built on the host with the same macros, and prints its own @@HM lines.
+- On gcc's HL16b stream it reproduces the twin's log byte for byte for 34,894 events.
+- Then it evicts 192,512 where the twin evicted 32,768 and then 151,552. That is the model's choice too.
+- So the difference is not the model's. It is an event the log never shows: realloc grew a 151,552-byte mapping to
+  188,416.
+  - The rule ran for the 36,864-byte growth and evicted 32,768.
+  - The mremap failed, and musl fell back to malloc, copy and free: the M 188,416 and the C 151,552 that follow.
+  - That M ran the rule again and evicted 151,552.
+- The arithmetic reproduces both evictions exactly.
+- The fix is to the instrument, not the rule. A failed growth now logs `@@HM Y <new> ... <old>`
+  (`__plain_remap_failed`, under the same macros). replay.py runs the rule for a Y without growing, hmcheck counts
+  nothing for it, and streamdiff keeps it.
+- Check: part C's gcc log with the Y line inserted MATCHes (93 unmaps), and without it MISMATCHes, as before.
+- Rebuilt with neither macro, the libc is byte-identical to the paper's Plain libc (off3).
+- The footprint bound was never violated: the rule ran twice where once would have done, which is conservative.
+
+**4 settles the gcc question.** gcc train01's allocation order varies between runs of one image under one policy.
+The candidate is address-dependent hashing under ASLR, not established. So exact counts cannot be predicted across
+gcc runs. A gcc prediction is a band, or is made against its own run's stream, which is what replay --check does.
+This also explains part A's gcc VmHWM failure better than the sampler did: HL0's +7.0 % is a different run's
+allocation order. That is a candidate, not shown.
+
+## Pre-registration 3 part D (2026-11-22 21:02, before its runs): the rule with Y logged
+
+Images:
+- H16c: mcf bb877b5f16e1e9ef, gcc 20ae69c308e0b672;
+- HL16c: mcf 62b17762450c1349, gcc 62030fc73c6d6800.
+off3 relinks to the board images (mcf 2d48ad97ae6009c7, gcc 93bc8e196b036d07). Runs (`plain/partd.sh`):
+pgcctrain01-hl16c, pgcctrain01-h16c, pmcftrain-hl16c, pmcftrain-h16c.
+
+**Predictions:**
+1. specdiff PASS on every run.
+2. HL16c gcc train01 and mcf train: hmcheck --hwm --slack 16777216 rc 0, with 0 events above peak + slack, and
+   replay --check hwm+16 MATCH.
+3. H16c VmHWM at most ctl + 0.1 % on both (128,496 and 619,900 kB).
+
+**Outcome:** if 1-3 hold, the Plain counterpart is complete. Full + H16 and Plain + H16 then go to the board together
+under a new SPEC addendum. If 2 fails on replay again, read drive.c against the log before anything else.

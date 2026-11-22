@@ -16,7 +16,7 @@ if lost:
     print("LOST: the image's queue dropped", sum(lost), "lines; the event model cannot be checked")
     sys.exit(3)
 ev = [(m.group(1), *map(int, m.groups()[1:5]), int(m.group(6) or 0))
-      for m in re.finditer(r"^@@HM ([MUCFERHPX]) (\d+) (\d+) (\d+) (\d+)(?: (\d+))?$", text, re.M)]
+      for m in re.finditer(r"^@@HM ([MUCFERHPXY]) (\d+) (\d+) (\d+) (\d+)(?: (\d+))?$", text, re.M)]
 if not ev:
     print("NO DATA: no @@HM lines in", sys.argv[1])
     sys.exit(2)
@@ -31,6 +31,7 @@ for i, (op, b, l, c, p, old) in enumerate(ev):
     elif op == "C": live -= b; cached += b
     elif op == "F": live -= b
     elif op == "X": live += b - old
+    elif op == "Y": pass   # a failed in-place growth: logged so the replay can run the rule; no count changes
     else: cached -= b
     peak = max(peak, live)
     if (live, cached, peak) != (l, c, p):

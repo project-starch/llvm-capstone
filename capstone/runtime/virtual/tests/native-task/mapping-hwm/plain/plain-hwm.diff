@@ -1,5 +1,5 @@
 --- a/src/malloc/mallocng/plain_reuse.c	2026-11-13 11:03:17.924285793 +0800
-+++ b/src/malloc/mallocng/plain_reuse.c	2026-11-22 19:59:45.608909133 +0800
++++ b/src/malloc/mallocng/plain_reuse.c	2026-11-22 21:00:42.143871309 +0800
 @@ -15,6 +15,76 @@
  static void pr_lock(void) { while (__atomic_exchange_n(&pr_lock_word, 1, __ATOMIC_ACQUIRE)) ; }
  static void pr_unlock(void) { __atomic_store_n(&pr_lock_word, 0, __ATOMIC_RELEASE); }
@@ -112,7 +112,7 @@
  }
  
  void __plain_unmap(void *p, size_t len)
-@@ -52,12 +139,46 @@
+@@ -52,12 +139,56 @@
  			void *b = pr_free[0].base; size_t l = pr_free[0].len;
  			memmove(pr_free, pr_free + 1, --pr_n * sizeof *pr_free);
  			pr_bytes -= l; munmap(b, l); ++__plain_reuse_evicted;
@@ -149,6 +149,16 @@
 +	(void)old;
 +}
 +
++/* realloc.c, after the mremap of such a growth failed: realloc then falls back to malloc, copy and free, which
++ * the log shows as M, C. The line lets a replay apply the rule for the growth that was tried (part C: without it,
++ * one gcc train01 eviction had no visible cause). No count changes. */
++void __plain_remap_failed(size_t old, size_t new)
++{
++	pr_lock();
++	pr_log('Y', new, old, 1);
++	pr_unlock();
++}
++
 +/* realloc.c, after a successful mremap of a large mapping from old to new bytes (both page multiples). */
 +void __plain_remapped(size_t old, size_t new)
 +{
@@ -160,21 +170,22 @@
 +}
 +#endif
 --- a/src/malloc/mallocng/glue.h	2026-11-07 16:23:43.631449386 +0800
-+++ b/src/malloc/mallocng/glue.h	2026-11-22 19:59:45.598909134 +0800
-@@ -37,6 +37,10 @@
++++ b/src/malloc/mallocng/glue.h	2026-11-22 21:00:42.143871309 +0800
+@@ -37,6 +37,11 @@
  
  void *__plain_map(size_t);
  void __plain_unmap(void *, size_t);
 +#if defined(PLAIN_REUSE_HWM_SLACK) || defined(PLAIN_REUSE_TEST_LOG)
 +void __plain_remapped(size_t, size_t);
 +void __plain_remap_fit(size_t, size_t);
++void __plain_remap_failed(size_t, size_t);
 +#endif
  #define mmap __mmap
  #define madvise __madvise
  #define mremap __mremap
 --- a/src/malloc/mallocng/realloc.c	2024-03-01 10:07:33.000000000 +0800
-+++ b/src/malloc/mallocng/realloc.c	2026-11-22 19:59:45.599909134 +0800
-@@ -30,9 +30,15 @@
++++ b/src/malloc/mallocng/realloc.c	2026-11-22 21:00:42.143871309 +0800
+@@ -30,9 +30,18 @@
  		assert(g->sizeclass==63);
  		size_t base = (unsigned char *)p-start;
  		size_t needed = (n + base + UNIT + IB + 4095) & -4096;
@@ -183,6 +194,9 @@
 +#endif
  		new = g->maplen*4096UL == needed ? g->mem :
  			mremap(g->mem, g->maplen*4096UL, needed, MREMAP_MAYMOVE);
++#if defined(PLAIN_REUSE_HWM_SLACK) || defined(PLAIN_REUSE_TEST_LOG)
++		if (new == MAP_FAILED && g->maplen*4096UL < needed) __plain_remap_failed(g->maplen*4096UL, needed);
++#endif
  		if (new!=MAP_FAILED) {
 +#if defined(PLAIN_REUSE_HWM_SLACK) || defined(PLAIN_REUSE_TEST_LOG)
 +			if (g->maplen*4096UL != needed) __plain_remapped(g->maplen*4096UL, needed);

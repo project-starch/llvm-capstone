@@ -4,8 +4,8 @@ IDENTICAL. Exit 0 identical, 1 different, 2 no data. Two runs of one image under
 program's own run-to-run variation, not the policy's."""
 import re, sys
 def stream(p):
-    s = [("A" if m.group(1) in "MU" else "R" if m.group(1) in "CF" else "X", int(m.group(2)), int(m.group(3) or 0))
-         for m in re.finditer(r"^@@HM ([MUCFX]) (\d+) \d+ \d+ \d+(?: (\d+))?$", open(p, errors="replace").read(), re.M)]
+    s = [("A" if m.group(1) in "MU" else "R" if m.group(1) in "CF" else m.group(1), int(m.group(2)), int(m.group(3) or 0))
+         for m in re.finditer(r"^@@HM ([MUCFXY]) (\d+) \d+ \d+ \d+(?: (\d+))?$", open(p, errors="replace").read(), re.M)]
     if not s: print("NO DATA:", p); sys.exit(2)
     return s
 a, b = stream(sys.argv[1]), stream(sys.argv[2])
