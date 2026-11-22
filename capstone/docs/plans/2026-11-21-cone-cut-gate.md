@@ -81,3 +81,32 @@ PASS.** By the rtl lane's written rule the full build may launch. It waits for a
   - P1: 1 FDCE, Q fanout 14.
 - So the merge reading fits: the register gained about 25 times its fanout and was replicated. The rtl lane's "1 FDCE in
   both" does not hold for the cut, which carries 4.
+
+## Reading: the full build routes, but its WNS is the pre-registered kill (apollo, tag cut-5155e8e02, 2026-11-22)
+
+Sealed 07:18:31Z as `caplifive_…-pagedtbl-revrdcut_5155e8e02.bit`:
+- sha256 a1981c3c854106e941001a7056b5b0abe7dd4948c26f49aad6479f6aa838dbe6;
+- guard exit 0 at 27.48 GB.
+
+grade_full.py against P1's seal reads 4/4 (`grade-board/grade-full.txt`): routed clean 242,960 / 242,960, placer congestion
+5, loops 0, LUT 187,801 (+433), FF 76,644 (+101). Against the rtl lane's keys (319c1f5b9d25):
+
+| Key | Reading | |
+|---|---|---|
+| LUT ± 2,500, FF ± 2,000, routed, congestion ≤ 5, loops 0 | +433, +101, clean, 5, 0 | PASS |
+| WNS inside [-8.3, -0.9]; inside P1's null band [-16.913, -9.433] is the kill | **-10.130 ns** (Δ +3.043) | **KILL** |
+| 0 worst-500 paths through the old rd_data crossing | 0 through `rev_node/rd_data*`, 0 through `rv_rd_res*` | PASS |
+
+**The seal is not handed over for a flash.**
+
+**What limits it now** (read-only on the routed checkpoint: `twc/lattr/cut-paths.tcl` → `CUTPATHS.log`, and
+`cone-ports.tcl` → `CUTCONE.log`):
+- The worst 20 all start at `csr_regfile_i/cpmp_q[8][bE][1]` and end at `issue_read_operands/fu_data_q[0][cap_data]`,
+  with 99-108 levels (-10.130 down to -9.734).
+- **All 500 still cross the rev_node hierarchy, at a different entry:**
+  - the net `rev_node/_thread_3_event_counter_531_1_q_reg_1`, with 12 rev_node cells per path (31 on P1);
+  - 448 leave into `dyn_unit/EVENTS3[1084].event_current`, and 52 into `i_scoreboard/pc_revnode_unk_d145_out`.
+- The cut's own nets are on none of the worst 500: `vctx_rev_qq*` 0 (the register and its three replicas, fanout 68 / 92
+  / 99 / 92) and `rv_rsp_*` 0 (`rv_rsp_q[data_rvalid]` fanout 133).
+- The port lookup again returned `?noport`, so these are boundary nets. Retiming makes the hierarchy approximate.
+- Which RTL path the new entry is, is the rtl lane's to read.
