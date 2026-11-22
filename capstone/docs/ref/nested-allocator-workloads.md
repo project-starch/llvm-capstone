@@ -3668,6 +3668,13 @@ control, each in modes 0-5): revision 2 is not a fix, and mode 5 had no working 
   two mode-5 faults above are evidence about op_free's pc and nothing more.
 - The memory run of revision 2 was refused before it started (`census/out/rss-ops2-b75cbd06` holds a placeholder).
   Its test.pl run, `zperl-ops2-b75cbd06`, was already running and is kept as data for revision 3.
+- **Revision 2 on test.pl** (`zperl-ops2-b75cbd06`): makerand.out equals the twin stock arm's. test.out does not:
+  - uni/opcroak now passes;
+  - comp/package_block and uni/package still print "FAILED--no leader found";
+  - the console shows two faults with cause 25, both at `Perl_op_free`+0x98 (`lhu a0, 0x38(a1)`, vaddr 0x5572a in
+    revision 2's image). That is mode 5's pc in revision 2's fixture.
+  So the fixture's mode 5 reproduces what test.pl hits, though its own control is still to be shown working. The zone
+  (87,136,450,735) is not used.
 
 **Revision 3 (`port-op-slabs.py`, this commit) and its fixture (`perlfxo3-3d40f11b`, queued).**
 - Every op slab enters an index sorted by address: in `S_new_slab`, with the slab's own address range (not its
