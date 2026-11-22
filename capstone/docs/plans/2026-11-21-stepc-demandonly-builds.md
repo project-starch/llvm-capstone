@@ -72,3 +72,24 @@ Sealed 05:28:41Z as `caplifive_…-pagedtbl-reccache-r76-demandonly_2ca17ad2a.bi
 | WNS (reported) | -12.349 (7180a83b6 -13.615, Δ +1.266) | |
 
 The seal goes to the runtime lane, for the board pair against 7180a83b6.
+
+## Reading: the step C full build meets timing and passes every key (apollo, tag spc-321af31a3, 2026-11-22)
+
+Sealed 06:23:37Z as `caplifive_…-pagedtbl-spatialonly-c_321af31a3.bit`:
+- sha256 7faf2a5fa513e783b64cd8448e924e7b7bbcabc84e81c30ac92e3b7ee79248e3; the stored copy hashes equal;
+- PROVENANCE HEAD 321af31a3;
+- guard exit 0 at 32.11 GB; the collector waited about 35 min for the headroom floor.
+
+Graded against step B's seal with the one-reading grader copy (the router prints no congestion block; the copy reads
+P1 against itself 4/4):
+
+| Key | Reading | Band | |
+|---|---|---|---|
+| WNS | **+0.160 ns**, TNS 0, 0 / 214,985 failing (step B +0.170) | [-3.57, +3.91] | in |
+| placed LUT | 179,707 (+46) | 179,661 ± 2,500 | in |
+| placed FF | 72,847 (+0) | 72,847 ± 2,000 | in |
+| routed | 0 errors, 232,743 / 232,743 | | PASS |
+| congestion / loops | placer 4 / 0 | | PASS |
+
+Handed to the runtime lane for board 1 (Addendum 211, kit bkit102, the CSC_SPATIAL_ONLY firmware). The silicon key is the
+rtl lane's: the monitor's first domain create and enter returns.
