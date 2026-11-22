@@ -3741,6 +3741,41 @@ itself, as the pre-registered branch above allowed ("a fault there means mode 5 
   - any of modes 0-4 reads differently from revision 3's fixture above: the half-built interpreter had changed them,
     and those modes are re-read from this run.
 
+**Result (`census/out/perlfxo3b-c81dca75`, 24 commands): every prediction held. On the fixture, revision 3 fixes
+the failed-compilation shape and keeps the protection.**
+- The boot check fires: mode 7 prints `FIXTURE boot failed parse=13 run=0` and exits 3 in prot6 and in revision 3.
+  No other command prints it.
+- prot6: mode 0 reads; mode 1 reads after the free (`read_after_free` printed, rc 0); mode 5 returns `errors=3`,
+  mode 6 `errors=0`. So mode 5 has a working reference.
+- Revision 1 faults in mode 5 with cause 25 at `Perl_op_free`+0x60, and revision 2 at `Perl_op_free`+0x98, the pcs
+  test.pl hit. Both return `errors=0` in mode 6. So mode 5's positive control fires, and the fault needs a failed
+  compilation.
+- Revision 3: mode 0 reads; modes 1-4 fault with cause 25 in `main` at +0x328, +0x53c, +0x494 and +0x5a2, each the
+  fixture's `ldc a0, 0x20(a0)` (mode 2 printed `same=1 o3_ok=1 o2_ok=1` first, mode 3 `live_ok=2999 bad=0`, mode 4
+  `cv_freed`); mode 5 returns `errors=3`; mode 6 `errors=0`.
+- The control reads in modes 1-3 (`read_after_free` each time), faults in mode 4 at `main`+0x5a2, and returns in
+  modes 5 and 6.
+- Modes 0-4 read as on the half-built interpreter, so the earlier readings of those modes stand.
+- What this does not show: that test.pl passes. That is `zperl-ops3-aba18d33`.
+
+**Revision 3 on test.pl (`census/out/zperl-ops3-aba18d33`, image `aba18d33…`): outputs equal stock's, at +4.775 %.**
+- test.out and makerand.out are byte-equal to the stock twin run's (`cmp`; specdiff 1/2, as for stock, prot6 and
+  bodies). The console has no `capstone_task: fault` line. comp/package_block, uni/package and uni/opcroak pass.
+- Image zone 90,917,822,656: **+4,143,731,782 (+4.775 %) against prot6**, +7.807 % against stock for heads and ops.
+  Per function against prot6 (the named functions sum to +4,143,731,347):
+  - `memmove` +2,887.3 M, at 709,488 more calls (20,478,129 to 21,187,617), about 4,070 instructions per added call;
+  - `Perl_op_free` +792.3 M at the same 2,683,185 entries, about 295 instructions per call;
+  - `Perl_Slab_Free` +291.7 M (4,022,039 entries, 0 in prot6), `Perl_Slab_Alloc` +133.6 M at the same entries,
+    `S_new_slab` +57.0 M (413,912 entries, absent from prot6's counts).
+- Reading. The index is a sorted array: `S_op_slab_register` and `S_op_slab_unregister` shift it with `Move` (a
+  `memmove`) on every new and freed slab, and op_free's two lookups are a binary search. 413,912 slabs registered
+  and unregistered allow up to 827,824 such moves, against 709,488 added calls. So the `memmove` growth is most likely
+  the index's shifts, over arrays of some thousands of live slabs. That is inferred from the counts: no caller of
+  `memmove` was read. `Perl_Slab_Free` and `S_new_slab` reporting entries only in revision 3 most likely means clang
+  stopped inlining them, which was not read from the disassembly either.
+- So revision 3 is correct on test.pl and the fixture, and its index costs most of its price. The memory run
+  (`rss-ops3-aba18d33`) was started by the chain's gate. The next revision replaces the sorted array.
+
 ## perlbench train on the twin: the image zone per allocator (2026-11-22)
 
 The same twin configuration as test.pl (slot 28, `perf/natio/images`, `dom_grant_root=/tmp/nt/sr`, zones4 plugin at
