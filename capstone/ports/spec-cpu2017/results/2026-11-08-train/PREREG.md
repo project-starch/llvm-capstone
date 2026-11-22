@@ -6677,3 +6677,38 @@ at 14:07, after ZCB9 ended (14:06:51) and t201s had already booked board 1 and b
 three Full readings", but Addendum 208's mean of 13,074.29 includes ck-b3 (13,074.67 s), which ran on board 3. Against
 board 1's own Full reading (r3a3-b1, 13,073.09 s), ZCB9's perlbench still reads -0.32 %, below the band. Addendum
 215's outcome stands.
+
+## Addendum 217 (2026-11-22 14:40 +08, after step C's first boot, before its relaunch): the spatial waiver missed a consequence of the waived failure
+
+**Step C's first boot** (spoc-b1, board 1, 14:28-14:37). The flash checked the sha256 and the readback matched the name.
+- The boot reached the shell, and eight of the nine smoke steps passed: task 70 passed once its waived accounting
+  checks were set aside.
+- The imagick row ran: 11.34 s, specdiff 1/1 PASS, inside Addendum 211's limit (+Spatial on P1 11.39 s plus 0.2 %).
+- Step 40 (probe) failed three checks: "revoked input refused", "replacement sentinel intact" and "page chunked
+  contents". Addendum 211's waiver allows only the first two, so the chain's smoke gate stopped the chain, as written.
+- The silicon key holds: the monitor's first domain create and enter returned. This is the step that wedged step B.
+
+**The third failure is a consequence of the first** (`tests/native-integration/probe.c`, nat-fair-sdk; read at
+source).
+- The probe reads its stdin, `yes Q | head -c 131072`, so "Q\n" repeated.
+- Two reads succeed before the revocation check, each 1 byte: "direct input" and "kernel byte write". So on a
+  lifetime core the 65,536-byte "page chunked" read starts at offset 2 and reads 'Q' first.
+- On this core the revoked capability still works. The stale read(0, stale, 1) succeeds: it writes 'Q' through the
+  alias of the replacement, which is the sentinel failure, and it consumes a third byte.
+- The chunked read then starts at offset 3 and large[0] is '\n', which is the contents failure.
+- No other check reads stdin after the stale read. Every other probe check passed.
+
+**Change after the reading, stated as one.** bkit105 is bkit102 with "FAIL page chunked contents" added to the waivable
+set. The condition is unchanged: "revoked input refused" must be among the failures, the failure count must match, and
+every other failure in any step still fails. Controls of the new classifier:
+- this boot: PASS;
+- a P1 transcript (ZCB9 xz): PASS;
+- this boot with "revoked input refused" passing: FAIL;
+- this boot with one extra failure: FAIL;
+- this boot with only the two old waivable failures: PASS;
+- bkit102's classifier on this boot: FAIL, as the chain read it.
+
+**Relaunch.** spoc2-b1 (TAG spoc2-frcdkmsspa3, kit bkit105, the same list and seal) starts from imagick. The first
+boot's imagick reading stays recorded. t201s, which had begun its bake behind the stopped chain, is stopped again
+before its boot. It is relaunched behind spoc2, and t202s behind t201s. Predictions and stops are Addendum 211's. **Dry
+run:** `perf/natstage/dry217/`.
