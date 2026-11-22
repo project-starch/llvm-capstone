@@ -12,7 +12,7 @@ static const struct ns_descriptor table[] = {
     {CAPSTONE_SYS_mkdirat, "mkdirat", NS_RESOURCE, 1},
     {CAPSTONE_SYS_unlinkat, "unlinkat", NS_RESOURCE, 1},
     {CAPSTONE_SYS_ftruncate, "ftruncate", NS_FLAT, 1},
-    {CAPSTONE_SYS_faccessat, "faccessat", NS_REFUSE, 1},
+    {CAPSTONE_SYS_faccessat, "faccessat", NS_RESOURCE, 1},
     {CAPSTONE_SYS_symlinkat, "symlinkat", NS_RESOURCE, 2},
     {CAPSTONE_SYS_sync_file_range, "sync_file_range", NS_FLAT, 1},
     {CAPSTONE_SYS_flock, "flock", NS_FLAT, 1},

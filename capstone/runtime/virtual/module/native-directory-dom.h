@@ -283,6 +283,34 @@ static bool native_directory_issue(struct context *c,
         }
         mutex_lock(&vm_lock);
         break;
+    case CAPSTONE_SYS_faccessat:
+        /* faccessat(dirfd, path, mode): Linux's do_faccessat on the confined resolver (fchmodat's).
+         * The same mode check and inode_permission, and -EROFS for W_OK on a read-only mount
+         * (special files excepted). Three differences, each stated:
+         * - the check runs under the task's own credentials, not real-ID ones (no
+         *   access_override_creds outside fs/open.c); a native task has no setuid, so they are
+         *   the same ids;
+         * - the leaf is not followed: the resolver opens it O_NOFOLLOW beneath the grant, so a
+         *   symlink leaf reads -ELOOP;
+         * - there is no noexec-mount test for X_OK.
+         * SQLite's unixTempFileDir is the caller: access(dir, W_OK | X_OK). */
+        if (a[2] & ~(u64)S_IRWXO) { rc = -EINVAL; break; }
+        mutex_unlock(&vm_lock);
+        file = dom_path_file_name(c, &e, call->buffer[1].data);
+        if (IS_ERR(file)) rc = PTR_ERR(file);
+        else {
+            struct inode *inode = file_inode(file);
+            if (S_ISLNK(inode->i_mode)) rc = -ELOOP;
+            else if (!a[2]) rc = 0;
+            else {
+                rc = inode_permission(cv_mnt_idmap(file->f_path.mnt), inode, (int)a[2]);
+                if (!rc && (a[2] & S_IWOTH) && !special_file(inode->i_mode) &&
+                    __mnt_is_readonly(file->f_path.mnt)) rc = -EROFS;
+            }
+            fput(file);
+        }
+        mutex_lock(&vm_lock);
+        break;
     case CAPSTONE_SYS_truncate:
         if ((s64)a[1] < 0) { rc = -EINVAL; break; }
         e.args[0] = (u64)(s64)AT_FDCWD;

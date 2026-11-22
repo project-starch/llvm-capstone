@@ -152,6 +152,7 @@ static bool native_supported(u64 nr)
     case CAPSTONE_SYS_nanosleep: case CAPSTONE_SYS_clock_nanosleep: case CAPSTONE_SYS_pselect6:
     case CAPSTONE_SYS_mkdirat: case CAPSTONE_SYS_fchmodat: case CAPSTONE_SYS_symlinkat:
     case CAPSTONE_SYS_readlinkat: case CAPSTONE_SYS_truncate: case CAPSTONE_SYS_linkat:
+    case CAPSTONE_SYS_faccessat:
     case CAPSTONE_SYS_openat: case CAPSTONE_SYS_newfstatat: case CAPSTONE_SYS_fstat:
     case CAPSTONE_SYS_sysinfo: case CAPSTONE_SYS_prlimit64:
     case CAPSTONE_NR_SIGACTION:
@@ -171,7 +172,8 @@ static int native_acquire(void *opaque, const struct ns_invocation *call, void *
     if (!native_supported(nr)) return -ENOSYS;
     if (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_newfstatat || nr == CAPSTONE_SYS_unlinkat ||
         nr == CAPSTONE_SYS_mkdirat || nr == CAPSTONE_SYS_fchmodat || nr == CAPSTONE_SYS_symlinkat ||
-        nr == CAPSTONE_SYS_readlinkat || nr == CAPSTONE_SYS_truncate || nr == CAPSTONE_SYS_linkat) return 0;
+        nr == CAPSTONE_SYS_readlinkat || nr == CAPSTONE_SYS_truncate || nr == CAPSTONE_SYS_linkat ||
+        nr == CAPSTONE_SYS_faccessat) return 0;
     if (!call->descriptor->fd_mask) return 0;
     if (call->scalar[0] > INT_MAX || !dom_fd_allowed(c, call->scalar[0])) return -EBADF;
     file = fget(call->scalar[0]);
