@@ -57,6 +57,17 @@ CSCHECK exists in the reference decoder.
    The rtl lane's va-runv-snap arm shows an upper-half cursor surviving the round trip, and the zext38 hazard under
    its control.
 
+8. **Record pages are published retired** (the rtl lane's step 2a spec, land/rtl-b5b1 83462497f0ef). Before a record page
+   becomes reachable, the module writes every record with word1 = 0xffffffff << 32 and word0 = 0, the first page's
+   reserved slots 0 and 1 included. A never-used slot then reads retired (dead) in the hardware and in QEMU alike;
+   sublet_alloc already writes word1 = 0 on a fresh slot. Without the rule, a capability that names a never-used slot
+   whose page happens to hold a matching generation reads live in the hardware and dead in QEMU. Twin first: the
+   reference adopts the same rule, or is shown to read such a slot dead regardless, before the differential relies
+   on it.
+9. **The 256-slot reserve stays.** A domain CDERIVE fails, without a fault, when only the reserve is left. CSMINT
+   (S, in hardware from step 3) may use the reserve, so the kernel can still mint grants for a context that has
+   exhausted its table, as P1's ctx_reserve guarantees today.
+
 ## What the census found (2026-11-22)
 
 No software on the native route creates or holds a capability whose cursor is at or above 2^38:
