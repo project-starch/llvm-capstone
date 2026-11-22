@@ -194,3 +194,40 @@ nab 8e07b37e, lbm 690e11ff.
 | 3 fails | Mapping bytes do not model the resident footprint; read HL16 and the OOM line. |
 | 2 or 4 fails | The replay model is wrong for this rule. |
 | 5 fails | 16 MiB is fitted to the three streams; record which benchmark breaks. |
+
+## Outcome of pre-registration 2 (read 2026-11-22 12:01)
+
+All 17 runs completed, chain3 at 1ec86beb6ec4, one at a time on the twin. Readings come from each run's
+`@@NATIVE-CNT end` lines (summed over invocations) and its `@@MEM-PEAK` (`out/<run>.log`), and are recomputed by
+`tools/readings.py`.
+
+| # | Prediction | Reading | |
+|---|---|---|---|
+| 1 | mcf test H16: specdiff 2/2; k1+k3+k4 within 2 % of 32,036 | 2/2; 31,946 (-0.28 %) | held |
+| 2 | gcc train01 H16: specdiff 1/1; service_other in [2,494, 2,570]; VmHWM at most 218,000 kB | 1/1; 2,523 (ctl 2,303: 1.096 x); 217,776 kB (ctl 245,088) | held |
+| 3 | mcf train H16: completes, 2/2, VmHWM in [884,180, 887,180] kB | completes, 2/2, 886,368 kB | held |
+| 4 | HL16 gcc and mcf train: specdiff pass; hmcheck --slack 16 MiB rc 0; replay --check hwm+16 MATCH | gcc 1/1, rc 0, MATCH (hits 21,755, unmaps 216); mcf 2/2, rc 0, MATCH (hits 417, unmaps 44) | held |
+| 5 | held out: specdiff pass both arms; service_other at most 1.15 x ctl; k1+k3+k4 within 5 % | every arm passes; service_other equal to ctl on all five; k1+k3+k4 -0.05 % lbm, 0 nab, -3.5 % imagick, +0.01 % xz, -0.17 % gcc test | held |
+| 6 | noise (a reading): ctl2 vs ctl | mcf test k1+k3+k4 +0.14 %, service_other 0; gcc train01 -0.10 %, service_other 0 | under 1 %: prediction 1 resolved |
+
+Held-out detail:
+
+| bench | k1+k3+k4 ctl / H16 | service_other ctl / H16 | specdiff |
+|---|---|---|---|
+| lbm test | 3,837 / 3,835 | 217 / 217 | 1/1, 1/1 |
+| nab test | 1,666 / 1,666 | 52 / 52 | 1/1, 1/1 |
+| imagick test | 846 / 816 | 80 / 80 | 1/1, 1/1 |
+| xz test | 318,395 / 318,417 | 24,229 / 24,229 | 12/12, 12/12 |
+| gcc test | 1,165 / 1,163 | 153 / 153 | 1/1, 1/1 |
+
+What the reading does not say:
+- The held-out five never trip the rule: service_other is identical on each, so they show that H16 costs them
+  nothing, not that 16 MiB generalises to a program whose heap grows the way gcc's does.
+- The imagick and gcc test runs are too short for the memory sampler (VmHWM NONE on both arms).
+- Counts are twin counts of native-route events. Time on the board is not measured here.
+- gcc train01's k1+k3+k4, which was not predicted, reads 7,235 against ctl's 6,961 (+3.9 %), against the noise pair's
+  -0.10 %. Not attributed here; it is the reading to look at before any board arm.
+- N = 1 per arm. The one noise pair per fitted program bounds run-to-run movement for those two programs only.
+
+**Next (the table's first row):** Full + H16 is a candidate configuration. Before any board arm, Plain's riscv-base
+musl `plain_reuse.c` gets the same rule with the same slack, under a new SPEC addendum.
