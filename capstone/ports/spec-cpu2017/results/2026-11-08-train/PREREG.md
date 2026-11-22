@@ -6654,3 +6654,26 @@ old classifier's native-format miss; the rows are read with read-one.sh (run-sta
 - What follows (Addendum 210's reading): the compressed-instruction lever is not a loss on any row and gains on the
   one row whose code is largest. It goes on to the stage-2 work (compressed capability instructions), and the
   instruction count stays unchanged, as predicted. The paper is unchanged.
+
+## Addendum 216 (2026-11-22 14:26 +08, before it runs): Addendum 211's step C chain launched on board 1, ahead of the +Spatial train chains
+
+**Seal.** `caplifive_…-pagedtbl-spatialonly-c_321af31a3.bit`, sha256 7faf2a5fa513e783b64cd8448e924e7b7bbcabc84e81c30ac92e3b7ee79248e3,
+re-hashed here; PROVENANCE HEAD 321af31a3. It passes on the rtl lane's keys (ed7565cfd5c0) against step B's seal:
+WNS +0.160 ns, routed clean, congestion 4, loops 0, 179,707 LUT (+46). Record: synth/spc-321af31a3-full-out/SEAL.txt.
+
+bkit102's two bitstream fields are filled from it and SHA256SUMS is regenerated. Everything else is unchanged,
+including the monitor 37ebb55 (CSC_SPATIAL_ONLY). spoc-b1.conf's E0 and SEAL are filled the same way. The stubbed dry
+run reaches all seven rows (perf/natstage/dry216/).
+
+**Order on board 1.** Addendum 211 put step C ahead of the +Spatial train chains (Addenda 201 and 202). The seal came
+at 14:07, after ZCB9 ended (14:06:51) and t201s had already booked board 1 and begun its lbm train boot.
+- t201s was stopped 18 minutes into that boot (process groups killed, booking 1408 released). Its partial output is
+  kept in spec/board/attic-1122.
+- spoc-b1 runs now; then t201s and t202s, relaunched unchanged.
+- The cost is 18 minutes of board time. The alternative was about 24 h of delay for step C.
+- The cut boot is no reading. lbm train on +Spatial restarts from the beginning in the relaunched t201s.
+
+**Correction to Addendum 210's wording** (the compiler lane, 22 Nov). Its perlbench reference is called "board 1's
+three Full readings", but Addendum 208's mean of 13,074.29 includes ck-b3 (13,074.67 s), which ran on board 3. Against
+board 1's own Full reading (r3a3-b1, 13,073.09 s), ZCB9's perlbench still reads -0.32 %, below the band. Addendum
+215's outcome stands.
