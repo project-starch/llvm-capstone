@@ -441,3 +441,22 @@ pgcctrain01-hl16c, pgcctrain01-h16c, pmcftrain-hl16c, pmcftrain-h16c.
 
 **Outcome:** if 1-3 hold, the Plain counterpart is complete. Full + H16 and Plain + H16 then go to the board together
 under a new SPEC addendum. If 2 fails on replay again, read drive.c against the log before anything else.
+
+## Outcome of pre-registration 3 part D (read 2026-11-22 21:55): the Plain counterpart is complete
+
+| # | Prediction | Reading | |
+|---|---|---|---|
+| 1 | specdiff PASS | all 4 runs | held |
+| 2 | HL16c gcc train01 and mcf train: hmcheck rc 0 with 0 events above peak + slack; replay --check hwm+16 MATCH | gcc: rc 0, 0 above, MATCH (16,824 hits, 92 unmaps), with one Y logged; mcf train: rc 0, 0 above, MATCH (317/5) | held |
+| 3 | H16c VmHWM at most ctl + 0.1 % | gcc train01 111,300 against 128,496 kB (-13.4 %); mcf train 573,108 against 619,900 kB (-7.5 %) | held |
+
+So Plain's plain_reuse.c with `PLAIN_REUSE_HWM_SLACK=16 MiB` follows the Capstone arm's H16 rule:
+- the same cap and pick order, with in-place growths counted and fitted;
+- off, the libc is byte-identical to the paper's Plain libc;
+- its footprint is never above its own peak + 16 MiB on any program run here;
+- its resident peak is lower than ctl's on every program run here.
+
+**Next (pre-registration 2's outcome table, first row):** Full + H16 and Plain + H16 go to the board together, under
+a new SPEC addendum. The row that needs the rule is mcf train, where Full was OOM-killed at 13,777 s (Addendum 212).
+The other cache-using rows are rerun on both arms, so the table carries one allocator throughout. The board slot
+comes after the queues now running (Addenda 213, 214, 219 and 220).
