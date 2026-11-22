@@ -64,9 +64,18 @@ CSCHECK exists in the reference decoder.
    whose page happens to hold a matching generation reads live in the hardware and dead in QEMU. Twin first: the
    reference adopts the same rule, or is shown to read such a slot dead regardless, before the differential relies
    on it.
-9. **The 256-slot reserve stays.** A domain CDERIVE fails, without a fault, when only the reserve is left. CSMINT
-   (S, in hardware from step 3) may use the reserve, so the kernel can still mint grants for a context that has
-   exhausted its table, as P1's ctx_reserve guarantees today.
+9. **The 256-slot reserve stays, with the reference's behaviour** (corrected 2026-11-22: the first wording here,
+   "a domain CDERIVE fails without a fault at the reserve", is a third behaviour that neither model has; the rtl lane
+   read the pin). cap_rev_table_alloc_decision proceeds only while avail > (can_grow ? reserve : 0) (capstone-qemu
+   c1985bb529):
+   - inside a context, with avail at or under 256 and a growable table, an allocation returns GROW: cause 30, or in
+     a virtual-C context the pressure escape (op_helper.c:1286-1300), and the module grows the table;
+   - with a table that cannot grow, the reserve does not apply, and an allocation fails without a fault only at
+     zero.
+   So the reserve keeps the kernel's growth path, and its own mints (CSMINT from step 3), from meeting an empty
+   table.
+   Item 8's twin-first condition already holds by code: sublet_resolve and sublet_get refuse index >= t->next, so
+   QEMU reads a never-used slot dead whatever its page holds. The publish rule makes the hardware agree.
 
 ## What the census found (2026-11-22)
 
