@@ -6856,3 +6856,36 @@ its paper stage image:
    nab, imagick, xz or gcc test. So those rows are not rerun. If a later reading contradicts this, it is reported.
 
 **Stops** as Addendum 199. **Dry runs:** `perf/natstage/dry222/`.
+
+## Addendum 223 (2026-11-22 23:23 +08, outcome): Addenda 211, 216-218, the spatial-only core (step C, 321af31a3) on board 1
+
+spoc2-b1: board 1, step C (sha256 7faf2a5fa513…, read back by name), kit bkit105, 22 Nov 14:43-23:21.
+- Seven boots, each smoke PASS 9/9: probe 40's three revocation checks waived as Addendum 217 states, task 70's
+  accounting checks waived as on every native kit.
+- No illegal-instruction, Oops or panic line. specdiff PASS on every row.
+- The silicon key holds on every boot: the monitor's first domain create and enter return.
+
+| Row | Step C (board.txt) | +Spatial on P1 (Addendum 208 mean) | Δ | Prediction (≤ +0.2 %) | Against Plain |
+|---|---|---|---|---|---|
+| perlbench | 275.70 + 12,509.61 = 12,785.31 s (67551cab6154626a) | 12,834.43 | -0.38 % | held | +18.31 % |
+| gcc train01 | 1,750.19 (cecd53c290398850) | 1,752.23 | -0.12 % | held | +18.75 % |
+| mcf | 5,656.84 (7a6e8f95e5e44a06) | 5,658.92 | -0.04 % | held | +16.07 % |
+| lbm | 989.07 (3fdf4480dc92ff79) | 989.32 | -0.03 % | held | -1.48 % |
+| nab | 691.68 (b8d4cee9797ce390) | 691.72 | -0.01 % | held | +4.92 % |
+| xz (sum of 12) | 4,955.04 (1b39ed8524372eb7) | 4,956.80 | -0.04 % | held | +5.81 % |
+| imagick (convert) | 11.34 (eee007bcc8934a25) | 11.39 | -0.44 % | held | +6.88 % |
+
+- Seven-row geometric mean against matched Plain: **step C +9.66 %**, against +Spatial on P1's +9.82 % on the same
+  seven rows.
+- x264 was not in this list. So this is not the paper's eight-row figure (+Spatial 7.5 %), and no eight-row number
+  is formed from it.
+- Step C is the spatial-only core: the lifetime table, walker and verdict cache are removed, REVOKE and MREV are
+  stubs, DROP is illegal. Every row is within 0.44 % of +Spatial on P1, and none is slower. So the paper's estimate
+  of the lifetime hardware's cost when unused, now measured, is at most 0.44 % per row and 0.15 % in the geometric
+  mean on these seven rows (the ratio of the two seven-row means, 0.9985).
+- What the chain does not separate, as stated in Addendum 211: the hardware term, the no-op lifetime operations,
+  and the monitor's CSCHECK emulation without its liveness walk.
+- N = 1 per row. The +Spatial means each come from three runs with spreads of at most 0.09 %, so the perlbench and
+  imagick gains are each several spreads wide. The other five are within about two.
+- The paper is unchanged. The measurement goes to docs/ref/fpga-silicon-measurements-for-paper.md; any wording is
+  the lead's.
