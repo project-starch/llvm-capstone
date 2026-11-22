@@ -4502,3 +4502,31 @@ phases equal to the native reference (`cmp-sq.py`: none differ, none missing, no
   - **Image instructions, prot against stock:** +0.5 % to +5 % (the twin's in-context +1.63 % summed, dev-era patch).
     Repeats agree within 0.01 %.
 - **Branches** as for mruby.
+
+### Result: mruby rerun (fig10-mrb-r3): reference PPM in all six boots, +1.63 % image instructions (01:03-01:15)
+
+- A second rerun was needed first. `fig10-mrb-r2` (and the Perl chain launched with it) ran `icount sh -c …`, and
+  `icount` calls `execv`, which does not search PATH: every job returned status 32512 (127 << 8) with image zone 0.
+  Those 12 boots ran no image and are void. My host stub had searched PATH, so it could not show this. The runner
+  now names `/bin/sh`, and the stub now refuses a bare name, so it reproduces 32512 on the old form.
+- **Answers: met.** All six boots print the reference PPM (781 bytes, MATCH), status 0.
+- **Control: met.** prot executes 916,189 CDERIVE and 916,101 CREVOKE beyond stock (2,089,427 and 2,088,419
+  against 1,173,238 and 1,172,318). Neither arm executes a CRENEW.
+- **Image instructions: +76,909,771 (+1.629 %)**, stock 4,721,740,155 and prot 4,798,649,926. Every boot of an arm
+  reads the same count to the instruction, and opcount's `ALL image` agrees. Inside +0.5 % to +5 %. That is 42
+  image instructions per added lifetime instruction. As amended, this confirms on images whose zones had been seen.
+
+### Result: Perl, Fig. 10's revision on suns.pl: SPEC's answer, and +34.9 % image instructions, far above the band (01:15-01:26)
+
+- **Answers: met.** All six boots print SPEC's `suns.out` (53 bytes, MATCH), status 0.
+- **Control: met.** prot executes 1,077,695 CDERIVE and 864,583 CREVOKE beyond stock (2,064,268 and 1,684,005
+  against 986,573 and 819,422), and no CRENEW.
+- **Image instructions: +726,556,662.5 (+34.88 %)**, stock 2,082,932,016 and 2,082,932,020, prot 2,809,488,676
+  and 2,809,488,685 (repeats within 0.000001 %). **The prediction, +1 % to +10 %, is missed.** That is 374 image
+  instructions per added lifetime instruction, against mruby's 42 and SQLite's 22.
+- **Candidate, from the source, not yet from the counts.** Fig. 10's 0001 finds a head's arena with
+  `S_sv_arena_of`, a walk of `PL_sv_arenaroot` (the patch's lines 108-113), at every issue and release. That is the
+  walk pending patch 0002 replaces with a sorted array and bisection ("Perl with the arena lookup repaired"
+  above). A walk over hundreds of arenas per lifetime instruction would give a price of this size. Two diagnostic boots with per-function counts (zones3 with
+  each image's symbols, `fig10-perl-fn-*`) are queued to read where the 726.6 M fall. No mechanism is claimed
+  before they are read.
