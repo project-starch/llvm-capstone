@@ -4775,6 +4775,46 @@ This amendment corrects one statement in Amendment 3 and records malloc's QEMU s
 - **Malloc's QEMU session control** equals the P1-geometry twin in 33 of 33 cells on verdict, reason, cause, symbol and
   offset. Its case 11 matches the twin's `NO-READING:infra`.
 
+### Amendment 5 to the item 5 board pre-registration (written 2026-11-23 21:58, after the first board boot, before the re-slot)
+
+**The first boot read nothing.**
+- The chain booked board 2 at 21:39:55. The pools boot, `p1b1`, ran on bkit109 and resolved no corpus cell.
+  - Both b0 controls returned 0.
+  - The batch rung printed `@@XZSTAGE unpack 35 images` and then stayed silent. bkit109's wrapper unpacks 103,522,721
+    bytes of images (3,934,579 compressed) and hashes them without printing.
+  - After the driver's 200 s idle limit, the driver called the rung wedged.
+- Several apertures changed between two reads, so the core was probably still running. This is not established.
+- The stop gate read both controls as absent and stopped the chain before malloc. The board was unbooked at 21:51:05,
+  and the marker was written as `STOP-GATE1`.
+- No cell, control or verdict is taken from that boot.
+- The stubbed dry runs could not show this, because the unpack runs only on the board.
+
+**The kit becomes bkit111** (`t3-smoke/bkit111-p1v-corpus-xzv`, `board-run.sh` 359e90d6fc3dc265), cut by the runtime lane.
+- It is bkit109 with one change, to the wrapper `gate.sh`. The wrapper now prints a line for each file it unpacks, an
+  `unpacked` stamp, and one line per image hash. It also checks that the hash count equals the file count. So the
+  longest silence is one image of about 3 MB.
+- The rest of the kit is unchanged. The adapter, module, params, bitstream and monitor files are byte-identical to
+  bkit109's (`diff -rq`). `board.env` and `base.manifest` differ only in naming the kit's own path. The kit's
+  `SHA256SUMS` checks clean.
+- The runtime lane ran the wrapper under busybox 1.36.1 against four inputs:
+  - the positive case;
+  - a corrupted hash, which fails as `hash`;
+  - a truncated archive, which fails as `unpack`;
+  - an empty list, which fails as `count 0`.
+- It also ran the wrapper over a real bake of the pools stage: 35 file lines, then 35 hash lines, then `ok`.
+- The PHP boots use the same wrapper.
+
+**The SQLite boots' idle limit is 600 s** (`BOARD_IDLE_S`). That leaves a margin over one image's hash, while a real
+wedge still costs at most 10 minutes. PHP's runner sets its own limit (1,100 s, Amendment 3).
+
+**Dry run on bkit111** (21:58), with every board call stubbed:
+- the chain reached its marker;
+- pools matched the twin in 33 of 33 cells;
+- PHP matched the twin in 280 of 280 cells;
+- the bundles record the new kit.
+
+Everything else in Amendments 1-4 stands.
+
 ## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
 
 The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
