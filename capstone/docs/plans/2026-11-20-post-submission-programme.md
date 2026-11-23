@@ -79,7 +79,7 @@ Specification: `capstone/docs/design/sublet-reference-model.md` at 32dde56a6b42.
 | virtual-profile threads | need a kit with matched supervisor slots above 1 (Q-32); on a 1/1 kit the module refuses the second context with EBUSY (capstone_vm.c:3271), which musl's pthread_create returns as EAGAIN. Measured 22 Nov by the compiler lane: with 32 slots on both sides, pthread_create, tls_local_exec, pthread_tsd and pthread_cond pass (lane compiler/virtual-thread-slots) |
 | virtual-launcher thread gaps | at 32 slots two libc-tests still fail past pthread_create (compiler lane, dev 891610c248c1; read from source, not traced): PRIO_INHERIT mutexes get ENOSYS, because the virtual futex filters admit only WAIT/WAKE(_BITSET) (runtime/virtual/pthread.c:175, exec.c:1218-1220), while the delegated runtime has PI; pthread_cancel gets ESRCH, because the virtual launcher sets no host->tkill (delegate-service.c:701-709). Also: run-libc-test-delegated.py should skip pthread tests with a reason on a 1-slot kit instead of reporting faults |
 | kernel and module | kfast and NO_HZ never run on a board; huge pages refused (mcf's only lever); Plain's ticks are corrected by an estimate |
-| record table | default 262,144 records too small for Perl and gcc; a subtree above 65,532 records cannot be built, cause unknown (resolved 24 Nov: not a limit of the native route, see 7.5 item 4) |
+| record table | default 262,144 records too small for Perl and gcc; a subtree above 65,532 records cannot be built, cause unknown (resolved 24 Nov: not a limit of the native route; the P1 native table already grows on demand, and 262,144 is a per-stage ceiling; see 7.5 item 4) |
 | QEMU twin | models neither P1's paged table nor code placement; Zcb off; runtime cases 29-31 fail |
 | tooling | `spec-classify.py` misreads native transcripts (fix only in `kitfix-next`); kits cap firmware at 26 MB; the board watchdog reminds and queues nothing |
 | measurements | SPEC train and ref never run on the final configuration; rows have 1-2 runs, no intervals; SQLite and PHP bug corpora never rerun on the board |
@@ -362,5 +362,15 @@ In this order; items 1 to 3 are independent of each other and can overlap.
    - The native route keeps its records in the table at `srevroot`. On silicon F, through that route, a
      100,000-node subtree builds and revokes. The 10^6 probe dies between 196,609 and 262,145 nodes, at the table's
      262,144 records (nested-workloads doc, 54b5fb9b7578).
-   - So the limit to remove is the table's fixed size: the record table that grows on demand, above.
+   - So the only limit left is the table's size. The table already grows on demand.
+   State, 24 Nov: the growing record table already exists. Every P1 native kit has it except bkit92, pair B's
+   flat control (checked by Makefile over the kits' BOARD_NATIVE_KERNEL).
+   - The native tree build (CAPSTONE_VM_TABLE_TREE, 722416c35e77; linux-board-k2n-native-hpm2tree
+     drivers/misc/capstone/Makefile: CV_TABLE_TREE ?= 1) starts with one batch of record pages.
+   - On cause 30 (escape kind 5) it adds batches of 16 contiguous pages, up to node_flat_records.
+   - node_flat_records is therefore a ceiling, not an allocation. The kits' 262,144 (2^20 for Perl and gcc) is a
+     ceiling set per stage in BOARD_NATIVE_CMDLINE.
+   - What is left is a choice, not a mechanism: raise the kits' default ceiling, which costs memory only when records
+     are used. 2^25 records would be 512 MiB, more than the 256 MiB CMA pool. Each change of ceiling goes into a
+     pre-registration.
 5. The silicon check of the `ccsrrw` defect, run last in its boot.
