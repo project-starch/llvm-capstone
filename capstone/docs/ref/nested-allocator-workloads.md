@@ -5017,9 +5017,46 @@ read back resident before every later booking. Bundles: `bug-corpora/{sqlite,php
 - It is P1's FLAT table, not the paged tree.
 - It says nothing about memory or cycles.
 - It covers 190 of the 346 pre-registered cells. PHP asan-blind (156 cells) read nothing on the re-slot
-  (Amendment 7) and is being re-run.
+  (Amendment 7). Its re-run is the next section.
 - The xz unpack timings: `@@XZSTAGE ok` came at board times 954 s and 953 s, which puts each stage's unpack and
   hashing at about 15 minutes.
+
+### Result: item 5's PHP asan-blind population on a P1 board, every cell as predicted (re-run `p1b3`, 2026-11-24 05:18-07:47)
+
+Board 2, P1 (`…-pagedtbl_d83d3a633`), booking 1458. The chain flashed P1 at 05:18:41-05:20:53 (sha checked before, name
+read back after, readback rc 3), parked the switches, ran the four boots through `php-board.sh` on bkit112, and
+unbooked at 07:47:39. Bundles: `bug-corpora/php/engine-repros/results/2026-11-24-p1-board/asan-blind/`.
+
+**All 156 cells match the P1-geometry twin**, in verdict, reason, cause and function. Each arm's count is the twin's:
+
+| arm | asan-blind (39): CAUGHT / MISSED | NO-READING |
+|---|---|---|
+| stock | 5 / 29 | out of denominator 3, infra 1 (case 30), not reached 1 |
+| system allocator (block) | 12 / 21 | out of denominator 3, infra 1 (case 30), not reached 1, unattributed 1 |
+| nested (object) | 26 / 10 | out of denominator 3 |
+| nested exact | 31 / 4 | out of denominator 3, unattributed 1 |
+
+- Case 30 (crash-092) on stock and block reads `NO-READING:infra`, as Amendment 7 predicted. Both boots print
+  `VM_EXIT_TIMEOUT` and `VM_EXIT:…crash-092:137`. In each boot, the kernel line that closes case 29 and the one that
+  closes case 30 are 801 s apart: 958.8 s to 1,759.9 s on stock, 978.5 s to 1,779.6 s on block. That is the
+  runner's 800 s guard. Both boots then ran cases 31 to 41 to the end.
+- The repeat: the re-run's object and exact boots match the re-slot's (`p1b2`) in every exit, 42 of 42 each.
+- The landing check compares verdict and reason against the twin again, and finds no difference.
+
+**The watchdog fix is what changed.** bkit112's watchdog ran in all four boots (119 to 170 `ALIVE`/`QUIET` lines each).
+In stock and block it logged 780 s without UART during case 30, above bkit111's 420 s limit, and did not abort. No
+watchdog log has a stall line.
+
+**Gates**, read the same way as on the re-slot:
+- Gate 2: each boot's sysfs gives `ids=55`, `index_bits=25`, `node_flat_records=1048576`, `supervisor_slots=1`,
+  `resolve_dirty=Y` and `resolve_pte=Y`.
+- Gate 3: each boot's dmesg shows `flat table 1048576 records, 16777216 bytes, from CMA`.
+- Gate 5: every boot completed the sanity arm first (`sanity 573 200 17 abc …`). It shows 6,375 revokes on object and
+  exact, and none on stock and block. The bound probe exited 139 on object and exact, as declared.
+
+**So item 5 on the board is complete: 346 of 346 pre-registered cells read, each as predicted.** That is 190 from
+the re-slot and 156 from this run. Like the re-slot, this is P1's flat table, not the paged tree, and it reads verdicts
+only, not memory or cycles.
 
 ## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
 
