@@ -123,3 +123,34 @@ The nested lane ran the gate behind the VM-lock turnstile, 11:12:04-11:12:27:
 
 The board's predictions come from the nested lane's full re-read of both corpora on this kit, not from the 0542c5556c
 exact-bounds readings.
+
+## The board kit: what is settled and what is open (2026-11-23)
+
+Settled:
+- The kit's module is dev 1a051da6e82b's capstone_vm.c with the twin's defines (FLAT_TABLE=1, IDS=55, INDEX_BITS=25,
+  BENCH_COUNTERS), built for the board kernel (6.4.14 build-fpga, -march=rv64g, a 0 count of 2-byte instructions
+  checked). Its .ko bytes differ from the twin's 0d5a7d627787af56. The prediction rests on the same source and the same
+  defines. The README records the .ko sha256, the build line, and a vermagic and defines diff against perf/p1v/buildq.sh
+  f55dev.
+- The launcher is byte-identical, 2488e5d2f88169e4.
+- Prior art for exactly this module on silicon: dev tests/rtl-smoke/ids55-flat-module, RESULTS-twin.md "Board",
+  bitstream 325966ee4. The table came from CMA as a linear mapping, inside 0xac000000..0xbbffffff. Tier 1 equalled the
+  twin only with resolve_dirty=1 resolve_pte=1 (S-24's fix defaults off). Kit bkit14-b4r-b2.
+  So this kit loads the module with resolve_dirty=1 resolve_pte=1, and the twin re-read must use the same parameters.
+- The twin appends cma=256M when the guest cmdline has none (the board DT reserves 256 MiB). Without it, PHP's flat
+  table failed to allocate (nested lane, 2026-11-23).
+- The nested lane's first-boot gates are the kit's acceptance:
+  1. the cause mapping is fixed from the RTL before the boot;
+  2. ids, index_bits and node_flat_records are read from sysfs;
+  3. dmesg shows "from CMA" with no failure;
+  4. supervisor_slots equals P1's hardware count;
+  5. the positive control runs first, with at most one wedge risk last.
+
+Open, before the kit is cut:
+- Q5. The monitor. bkit14 ran this module under the vp2c monitor line (csbi-batch, wrapper wt-wrap-s26). P1's kits run
+  native01/csbi-ids55-paged. Is there a P1 monitor that serves the virtual profile's module, and does its CSCHECK
+  emulation walk a FLAT table (bkit88/89 ran flat tables on P1 with firmware 4f51541)? To be read at source.
+  - The csbi-* worktrees under /tmp/capstone were removed in the 2026-11-23 cleanup. Their commits are in the
+    capstone-sbi repository, and their HEADs and diffs are in attic/tmp-capstone-20261123/<name>/.
+- Q6. P1's saved-context slot count and its cause numbers for a stale and an out-of-bounds domain load. Asked of the rtl
+  lane.
