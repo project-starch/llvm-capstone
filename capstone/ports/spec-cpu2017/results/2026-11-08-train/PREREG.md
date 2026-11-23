@@ -6993,3 +6993,31 @@ repeats run in ABBA order, so a slow drift cannot read as the lever:
 
 **Dry runs** (stubbed, against a pushed commit as the pre-registration stand-in): `perf/natstage/dry225/`. Each of
 the four chains reached DONE.
+
+## Addendum 226 (2026-11-23 10:34 +08, outcome): Addendum 214, the demand-only record cache (2ca17ad2a) against 7180a83b6, board 2
+
+Chain dem-b2, kit bkit104. Every boot's smoke read 9/9 and every row specdiff PASS. Transcripts are in
+`/mnt/hdd/<user>/capstone/spec/board/out-nat-b5adem-hpmrc-frcdkms-b2/`.
+
+**The change is present.** ev37 (fills) reads 0 on mcf, gcc train01 and makerand, where 7180a83b6 read 137.5 M on mcf.
+
+| Row | 2ca17ad2a (board.txt) | 7180a83b6 (Addendum 197) | Δ | Prediction |
+|---|---|---|---|---|
+| gcc train01 run_cycles | 41,874,434,751 (1,762.90 s; 463fb573166bf3f2) | 42,038,861,933 (1,769.51 s) | -0.39 % | 1: about -1.68 % |
+| mcf run_cycles | 144,919,108,858 (5,953.62 s; 566e1aef3c4065f6) | 143,951,946,853 (5,914.79 s) | +0.67 % | 2: about +0.40 % |
+| perlbench makerand | 275.11 s (2d37b4c88b2d32d3) | 275.27 s | -0.06 % | 4: ±0.5 %, held |
+
+| Counter | gcc read | gcc predicted | mcf read | mcf predicted |
+|---|---|---|---|---|
+| ev34 | 8,520,989 | 9.61 M (-11.3 %) | 2,756,098 | 2.98 M (-7.5 %) |
+| ev35 | 7,143,248 | 6.84 M (+4.4 %) | 178,364,955 | 178.3 M (+0.04 %) |
+| ev37 | 0 | about 0 | 0 | about 0 |
+
+- **Model refuted** on its decisive criterion: gcc train01 is -0.39 %, not below -0.5 %. The count criterion fires too,
+  with ev34 off by more than 5 % on both rows. Addendum 214 noted that this one could fire on calibration alone.
+- mcf moved in the predicted direction, but by more: +0.67 % against +0.40 %.
+- **Lever:** not a candidate. Against P1's board-frcdkms readings (cq-b2), gcc train01 is -0.035 % in cycles, but mcf
+  is +0.17 % slower in seconds (5,953.62 against 5,943.66).
+- What this does not establish is why B5a's background fill helped mcf. The readings show only that removing it made
+  mcf slower, and that gcc gained less than the model said.
+- N = 1 per row.
