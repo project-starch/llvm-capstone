@@ -7226,3 +7226,55 @@ with the kit's multiplier), booking 1,800 min.
 
 **Dry runs:** bkit112's `dry/` (real bake, relink and firmware for c0; driver stopped after its parse; the host test
 and its negative control), and `perf/natstage/dry231/` (the chain, stubbed, both stages rc 0).
+
+## Addendum 232 (2026-11-24 02:12 +08, before it runs): xz train on Plain + H16c, kit bkit113, board 3 after its queue
+
+**Why.** Addendum 231 runs Full + H16. Addendum 87's rule puts one allocator on every arm, and the twin read Plain's
+need for it (perf/xztwin, chain4): at 944M Plain ctl was OOM-killed, and Plain + H16c completed with specdiff 1/1
+(used peak 922,988 kB of 929,552; VmHWM 889,644). bkit95 cannot deliver the input: it has no initrd step.
+
+**Kit** bkit113-k2n-rvm-initrd-mem: bkit95 with Addendum 231's initrd and `@@MEM` steps, carried to the Plain batch
+layout, as its README states.
+- The wrapper replaces the batch's gate.sh (the Plain rung's runner). It checks the moved files, prints `@@MEM pre`,
+  runs the batch's own gate.sh as gate-inner.sh, then prints `@@MEM post` and dmesg's OOM and `Memory:` lines.
+- The kernel is relinked in its own tree (perf/k2n/linux-board-k2n-ir, a copy of linux-board-k2n). Its CONFIG_CMDLINE
+  is the shared tree's string plus `initrdmem=0x98000000,<size>`. The relink stops unless the Image carries the string.
+- The driver is perf/initrd/rtl-smoke: bkit95's driver plus the extra load, both files pinned.
+- The Plain board reserves CMA at 0xac000000 too ("cma: Reserved 256 MiB at 0x00000000ac000000", t202rvm's transcript).
+  So the same end check applies.
+
+**Stages** (fair/stages-train-h16, made by fair/mk-xz-h16c.py): each paper rv-al3 train stage with only the image
+swapped (15a91fd819f863a4 to the H16c relink ec07def0bf1702a7) and spec/initrd.paths added. diff -rq names only those
+changes.
+- c0's input input.combined.xz is in a cpio of 8,252,928 B.
+- c1's IMG_2560.cr2.xz is in a cpio of 15,698,944 B.
+
+**Chain** xzh16p-b3 (thrun.sh, TAG xzh16rvm), board 3, after b1c2 (pid 484500), the last chain queued there. thrun.sh's
+own wait stops at 24 h, shorter than that queue, so it is started by perf/natstage/wait-pid-thrun.sh, which waits up to
+7 days. thrun flashes the sealed rvbase bitstream (SEAL-rvm), sha256 checked, and reads the name back. Each stage has
+a step of 21,600 s and a booking of 1,800 min. chain-board.sh runs c1 after a failed c0 READ; only an SB STOP or a
+failed control stops the chain.
+
+**Predictions.**
+1. Both boots reach the rung and print `@@INITRD ok`, and their `@@MEM` lines.
+2. c0 completes: rc 0, specdiff 1/1, no OOM. On the twin's kernel Plain + H16c had about 6.5 MB left at 944M. The Plain
+   board's kernel keeps less after boot. Reserved less what is freed is 35,816 - 9,904 = 25,912K on t202rvm's line,
+   against P1's 35,476 - 6,436 - 1,256 = 27,784K on the probe's. Its batch also holds a smaller stage in RAM (1.5 MB
+   against Full's 3.3 MB). So c0's `@@MEM pre` MemAvailable is expected above Full's (Addendum 231). This ordering
+   is predicted; no value is.
+3. c1 completes: rc 0, specdiff PASS.
+4. No time band. No Plain native train reading of xz exists on these images. October and November's Plain c0 and c1
+   ran on other images and routes.
+
+Rows are read by the chain's reader, the k2n tree's run-stage.py read. It stops with "KERNEL OOPS/OOM" on an OOM line,
+and it gives the same result.json with the new lines as without them (tested on h16rvm's mcf transcript).
+
+**Dry runs** (bkit113/dry):
+- real bakes, relinks and firmware for c0 and c1 (17,468,936 B each), with the driver stopped;
+- gate-host-test.sh PASS on both images; its negative control (`m pre` deleted) gives 2 cases wrong;
+- perf/natstage/dry232, the chain stubbed, both stages rc 0.
+
+**Found on the way:** the /tmp cleanup of 23 Nov removed /tmp/capstone/r55-table/fpga-pkg-127/module/capstone.ko.
+Every bkit7-rev2x* base manifest names it (bkit95 among them), so any Plain bake would have stopped. The first bkit113
+dry bake stopped there. It was restored from bkit95's ctl-capstone.ko (sha256 f2a2645cc570dcc6), which equals the
+test-domains/capstone-proc.ko inside the rootfs.cpio of the last two Plain bakes (t202rvm, h16rvm). No run was lost.
