@@ -4607,9 +4607,14 @@ at 575c9a343). A sim-only PMPCHK line gives each judgement's type:
   - d0afdb40f, the branch tip with the fix: RIGHT 16/16, with every other arm unchanged and the Sublet lint PASS.
 - Not synthesized yet. It lands with B5b-1 step 3, and goes on bitstream 3's fix list (the semantics owner, 2026-11-23).
 
-**What is by source only:**
-- The PMP tval defect. Before the fix no arm recorded the faulting access's tval: the faulting load's was not saved,
-  and the other zeros were a cleared register.
+**The PMP tval defect, measured** (2026-11-23, on the silicon kit's image `tests/rtl-smoke/r79-pmp-bare-2026-11-23`,
+simulated on 9e801ab5e and on 1c5d31474, identical word for word): a refused access reports the FOLLOWING access's
+address as tval.
+- A legal ld of the R-only page, with an independent store right behind it, was refused 7 with tval res + 8 (that
+  store's address).
+- An sd to r_page + 8 with an sd to w_page + 8 behind it was refused 7 with tval w_page + 8.
+- The fixed tree reports each access's own address.
+- (csmint-pmp's first readings could not show this: its faulting load's tval was not saved.)
 - The CPMP's own tval, cpmp_paddr_x from the registered paddr, was right.
 
 **Reach** (claim-audited). The defective wiring is at e7af48457, dcc6daf6e, c721c1a2a, 325966ee4 and 603528b8b.
@@ -4632,17 +4637,29 @@ at 575c9a343). A sim-only PMPCHK line gives each judgement's type:
     unproven reading).
 - The board lane's read-only sweep of silicon records (2026-11-23) found no reading in the exposed classes: relying on
   a write denial, an unattributed cause 7 on a load, or a PMP fault read with tval 0.
+- The Plain baseline (riscv-base 8db8f9cda) has its own pmp_data_if.sv, a different blob, but the same wiring:
+  `.lsu_is_store_i(st_translation_req)`, `.lsu_vaddr_i(mmu_vaddr)`, judged on pmp_translation_valid. So the paper's
+  baseline core carries R-79 too. It is a protection defect, not a timing one: it changes which accesses fault, not how
+  fast they run.
 
-**Behaviour change to pin:** every AMO, LR included, goes through fu STORE. So after the fix it is always judged as a
-WRITE, as the MMU's own lsu_is_store_q judges it; before, it depended on the next instruction. An lr.d to an R-only
-region now faults 7. That arm against the reference is OWED.
+**LR takes the store/AMO judgement on silicon (upstream CVA6); the twin's LR needs R only.** The semantics owner ruled
+on 2026-11-23 to keep it in both the MMU and the PMP and record it as a twin divergence:
+- It is the stricter side, so it cannot open an access.
+- The MMU has always judged LR so.
+- Nothing on the route issues LR to memory without W.
+After the fix an AMO, LR included, goes through fu STORE and is always judged a WRITE; before, it depended on the next
+instruction. The positive control is the kit's p6: an lr.d of the R-only page reads 7 on the fixed tree, and 0 (allowed)
+pre-fix. The Sublet differential must not include an LR-on-R-only case, or must expect the divergence by name. Making LR
+a read is a separate change, with a spec question for the lead.
 
 **Owed:**
 - a capability-mode CPMP arm with perm-4 and perm-2 entries (an ids55 build, where CAPENTER is legal);
 - an Sv39 arm with a D-TLB miss on the R-only page;
-- the lr.d arm;
-- synthesis;
-- a silicon kit of the PMP-only arms on today's bitstream (before) and on step 3's (after).
+- synthesis.
+
+**Silicon kit:** `capstone/tests/rtl-smoke/r79-pmp-bare-2026-11-23` (PREREG.md, pre-registered before any board run).
+It is one bare image, with the pre-fix vector for every Capstone tree resident today and the fixed vector for step 3's
+batch.
 
 ### R-78 — no RTL assertion had ever run in simulation: the Verilator build never passed --assert, and Verilator 5.008 cannot build the model with it `RESOLVED AS AN INSTRUMENT 2026-11-20 — 101 assertion sites compiled in, 0 fired on P1's 95-test set, on a SIDE instrument (Verilator 5.038 with --assert); gating sweeps stay on 5.008`
 
