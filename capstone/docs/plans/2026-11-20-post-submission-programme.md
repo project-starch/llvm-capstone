@@ -339,6 +339,16 @@ In this order; items 1 to 3 are independent of each other and can overlap.
 2. Tooling: the classifier fix into the kits (native transcripts read as NO RESULT today, so readings come from
    `read/result.json`); the firmware size cap (the kits stop at 26 MB because the console refuses uploads above
    32 MB); a board watchdog that starts the next queued run.
+   State, 24 Nov:
+   - The classifier fix (e2ca116a965b) is in bkit112. Older native kits still print NO RESULT, so their rows are
+     read with read-one.sh.
+   - The firmware cap is avoided rather than raised. Kits bkit110 (native), bkit112 (native) and bkit113 (Plain)
+     move a stage's input to an initrd that is loaded separately at 0x98000000. The probe passed on silicon
+     (train Addendum 231): xz test 12/12, in band.
+   - The watchdog is a watcher, not a starter. Chains are queued behind one another by pid, and
+     `capstone/ports/spec-cpu2017/board/board-idle-watch.py` reports any board that holds no booking for 45
+     minutes. A start is not automatic: each one needs its own pre-registration, and a refused start must be read
+     first.
 3. SPEC train stages for the seven benchmarks that have none, with a memory check on the QEMU twin and the board
    hours per arm; then three runs per arm with intervals.
 4. Kernel and module levers: board readings for kfast and NO_HZ; huge pages in the module; a record table that
