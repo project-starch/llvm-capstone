@@ -136,3 +136,55 @@ cut to records below next.
 
 The part of the control the unit writes reads exactly: the fourteen trap causes, both header quadwords, records 2 to
 4, and the trap count (6).
+
+## Amendment, then re-run (2026-11-23): CSMINT CONFIRMED ON SILICON and R-79 FIXED ON SILICON, board 2, N=1
+
+**The inference above was checked from source and the PREREG amended before any re-run** (rtl lane,
+`land/rtl-csmkit-amend` d919aa1316e3). Nothing in the boot writes a flat-table slot at or above next. At reset the unit
+writes only hidx 0, hidx 1 and slot 2. An allocation writes the slot it takes. A fresh candidate is read only when
+paged_q is set, and the test stores nothing to the pool. So positions 24-33 (slots 5-9) were never a prediction. Boot
+1450 stays VOID. For every re-run the control is graded on the readback, SR 35 and positions 0-23 and 34 (25 values),
+and positions 24-33 are recorded but not graded. The images, hashes and other vectors are unchanged. The grader is
+`csmintkit/grade-csmintkit2.py`, generated from v1 by an asserted patch. It refuses a PREREG without the amendment
+(rc 2). It was tested before the run: a control change at position 5, 23 or 34 voids, a wrong readback voids, a
+csmint-vm change at position 7 is the first failure with the later loads collateral, and an r79 change at position 16
+reads NOT FIXED.
+
+**Slot.** The runtime and nested lanes put the re-run after nested's item-5 re-slot and ahead of h16s. The orchestrator
+is `orch-csm2.sh` (unchanged), in tmux csm-b2d, run `run-b2d-20261123T1407`, armed 14:07:56Z.
+
+**Run.** ITEM5-BOARD-DONE ("… OK") was written at 21:10:37Z. The kit booked at 21:10:59Z (booking 1457) and unbooked at
+21:18:37Z.
+- Before the flash: P1 `…_d83d3a633.bit` was resident (rc 1).
+- Flash: the local sha256 matched the seal, then the power cycle. The resident after the cycle was
+  `…-r75d-b5b1_d0afdb40f.bit`.
+- Readback after the flash: the same name (rc 3).
+- csmint-b2.DONE was written at 21:18:37Z, and h16s started on it. Its runner reads the board back and flashes P1
+  itself, sha-checked, if P1 is not resident.
+
+| load | image | reading (`grade-csmintkit2.py`, amended PREREG) |
+|---|---|---|
+| 1 sublet-life (control) | eb281996594bcec1 | SR 35; the 25 graded positions exact |
+| 2 csmint | e9ba3863d3bc8f70 | SR 51, exact |
+| 3 csmint-vm | 74f4c5896d0d2dd1 | SR 30, exact |
+| 4 csmint-vm-nc | d73ceff87be78e06 | SR 30, exact |
+| 5 csmint-pmp | 7d672a84e8d8dda5 | SR 16, exact |
+| 6 r79-pmp | 8eb72553965cfc1c | SR 17, exact: R-79's fixed row |
+
+**Verdict: CSMINT CONFIRMED ON SILICON, and R-79 FIXED ON SILICON** (grader rc 0). The control passed on the Sublet
+unit's own words, so loads 2-6 are verdicts.
+
+Load 6 checked by hand against the raw UART:
+`0x0 0x0 0x0 0x5a5a5a5a5a5a5a5a 0x7 0x80002000 0x5a5a5a5a5a5a5a5a 0x7 0x80002008 0x5a5a5a5a5a5a5a5a 0x7 0x80002000
+0x77 0x77 0x77 0x77 0x3`. That is the PREREG's fixed row. R-79's pre-fix row, read on P1 (board 1,
+`r79kit/run-b1-20261123T0130`), first differs from it at position 1 (0x7 where the fixed row reads 0x0).
+
+Ungraded positions 24-33 this boot: `0xff000300ff010003 0x90004000800000 0xff000380ff014006 0x4000040000
+0xff000400ff018006 0x14004000040000 0xff000480ff014006 0x80004000380001 0xff000500ff000006 0x20440009a0000`. Eight
+of the ten differ from boot 1450's words. That fits memory nothing in the boot writes, and is not itself evidence about
+the unit.
+
+**Scope.** N=1, one board. The PREREG welcomes N=2 across boards, and the simulation is cycle-deterministic, so board
+1 should read the same vectors. d0afdb40f is left resident on board 2 until the next chain reflashes it. Its status
+for the default and as a candidate is to be agreed between the board, rtl and runtime lanes under the delegated rule.
+Until then the default is unchanged.
