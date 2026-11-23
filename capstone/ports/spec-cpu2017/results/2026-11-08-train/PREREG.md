@@ -7085,3 +7085,44 @@ N = 1 per row. +Spatial mcf train is in Addendum 222 (h16s).
 Addendum 222 put h16s after h16f. The nested lane's item-5 bug corpora (kit bkit109) now take board 2 first, at h16f's
 exit. The board lane's CSMINT kit then waits for the corpus marker. h16s waits for the CSMINT kit's end marker
 (`perf/natstage/csmint-b2.DONE`, waiter pid 813474). The order changes; h16s's images, kit and list do not.
+
+## Addendum 229 (2026-11-23 17:41 +08, before it runs): an external initrd for inputs over the firmware cap; its probe on board 1
+
+**Why.** xz train does not fit the 26,000,000 B firmware cap (Addendum 202): its inputs are xz files and do not
+compress. Command 1's would also exceed the console's 32 MB upload limit. The boot already JTAG-loads the firmware
+through gdb (`monitor load_image ... 0x80000000`), so a second file can go to its own address. The 6.4 kernel takes it as
+an initrd through `initrdmem=<addr>,<size>`. It unpacks the initrd over the built-in initramfs and then frees it, so
+during the run the input is held only as often as today.
+
+**Kit** bkit110-k2n-native-p1-initrd: bkit91 plus the initrd step and a driver copy, as its README states.
+- Driver: `perf/initrd/rtl-smoke`, run_baked_rungs_fpga.py f34d7a16183a175e, run_ladder_perf_fpga.py 04ca99416941c428.
+  OpenOCD's bytes-written line must give the exact size and address. Board-free tests: `perf/initrd/test`.
+- Load address 0x98000000.
+- The stage's spec.sh becomes a sha256 gate over the moved files: `@@INITRD ok` or `@@INITRD FAILED`, and no benchmark
+  on failure. The host test covers ok, a missing initrd and one flipped byte.
+
+**Probe** (chain irprobe-b1, TAG p1-frcdkmsa3-irprobe, board 1, P1): Full's xz test stage
+(`perf/natstage/board-frcdkmsa3-ir/557.xz_r-native`, which is board-frcdkmsa3's plus `initrd.paths`). Its input
+cpu2006docs.tar.xz (1,287,176 B) moves to the initrd. Nothing else in the stage changes. The kernel's command line
+gains `initrdmem=0x98000000,1287680`.
+
+**Predictions.**
+1. The boot reaches the shell and passes smoke 9/9.
+2. `@@INITRD-DMESG` carries "Trying to unpack rootfs image as initramfs" and a "Freeing initrd memory" line, and
+   `@@INITRD ok` follows.
+3. specdiff 12/12 PASS. The sum of the 12 commands lies in board 1's Full band, 4,946.96-4,966.79 s (mean 4,956.87,
+   Addendum 210). Only the delivery changes, and the initrd is freed before any benchmark runs.
+
+Rows are read with read-one.sh. If prediction 2 or 3 fails, the route is not used for xz train, and the failure is
+recorded with the transcript's lines.
+
+**Order.** The probe is inserted on board 1 after t202fp (Full perlbench train, running) and before t202sp and t202s2
+(Addendum 220). Those two chains had not booked; they are relaunched unchanged behind the probe. The probe costs
+about 1.5 h; xz train needs it first.
+
+**xz train itself** waits for this probe and for a twin check of its memory (`perf/xztwin`). Both commands run on
+Full and Full + H16 at the twin's 936M, and the predictions are in that directory's RESULTS. In October command 0 was
+OOM-killed at 912M and passed at 936M, before the heap-mapping reuse cache. xz train is pre-registered separately.
+
+**Dry runs:** bkit110's `dry/` (real bake, relink and firmware; driver stopped after its parse), and
+`perf/natstage/dry229/` (the chain, stubbed).
