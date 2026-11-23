@@ -1,0 +1,48 @@
+test	outcome	cause	function	ok	not_ok
+op/my.t	completed			59	0
+base/lex.t	completed			120	0
+op/die.t	completed			20	1
+op/ref.t	fault	24	Perl_mro_package_moved	25	0
+op/local.t	fault	24	Perl_sv_clear	197	0
+op/sub.t	fault	24	Perl_sv_clear	32	0
+op/closure.t	fault	24	Perl_sv_clear	50	0
+op/gv.t	fault	24	Perl_mro_package_moved	236	1
+op/stash.t	fault	24	Perl_mro_get_linear_isa	2	0
+op/caller.t	completed			104	2
+op/eval.t	fault	24	Perl_mro_package_moved	122	1
+op/hash.t	fault	24	Perl_sv_clear	2	0
+op/array.t	completed			194	0
+op/for.t	completed			147	1
+op/universal.t	fault	24	Perl_mro_get_linear_isa	129	0
+op/tie.t	completed			0	0
+op/magic.t	fault	24	Perl_sv_clear	62	0
+io/open.t	fault	24	Perl_sv_clear	0	0
+io/print.t	fault	24	Perl_sv_clear	0	0
+op/readline.t	completed			25	5
+op/undef.t	completed			74	0
+op/delete.t	completed			56	0
+op/each.t	completed			63	1
+op/split.t	completed			191	1
+op/join.t	completed			29	0
+op/sort.t	fault	24	Perl_sv_clear	160	0
+op/method.t	fault	24	Perl_mro_package_moved	0	0
+op/do.t	fault	24	Perl_sv_clear	0	0
+op/attrs.t	completed			0	0
+op/state.t	completed			164	0
+op/goto.t	completed			117	7
+op/tr.t	fault	24	Perl_sv_clear	246	0
+op/sprintf.t	fault	24	Perl_sv_clear	3	0
+op/inc.t	fault	24	Perl_sv_clear	42	0
+op/lc.t	fault	24	Perl_sv_clear	138	0
+op/chop.t	fault	24	Perl_sv_clear	139	0
+op/push.t	completed			32	0
+op/splice.t	completed			33	0
+op/reverse.t	completed			25	0
+op/grep.t	completed			67	0
+op/range.t	fault	24	Perl_sv_clear	14	0
+op/sub_lval.t	fault	24	Perl_sv_clear	78	0
+op/die_keeperr.t	completed			24	0
+op/svflags.t	completed			0	0
+op/lex.t	completed			24	2
+op/concat2.t	completed			3	0
+op/qr.t	completed			37	0
