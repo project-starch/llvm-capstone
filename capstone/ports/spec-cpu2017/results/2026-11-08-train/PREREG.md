@@ -7151,3 +7151,78 @@ recorded in Addendum 224.
 - The table-size term, on the three commands that completed at both sizes (Addendum 220's t202f-b2 at 2^18, board 2;
   this boot at 2^20, board 1): diffmail +0.75 s (+0.006 %), perfect +1.31 s (+0.039 %), suns +0.06 s (+0.024 %).
   Two boards, one boot each; scrabbl and splitmail have no 2^18 reading, so the term on them stays unpaired.
+
+## Addendum 231 (2026-11-24 02:07 +08): Addendum 229's initrd probe (outcome); xz train on Full + H16 (before it runs)
+
+**Probe outcome** (irprobe-b1, board 1, P1 d83d3a633, kit bkit110).
+Boot 00:28:53 to 02:01:34, P1 name read back. Read with read-one.sh; transcript board.txt b8908d3b84c0fab5.
+- The driver's second load: "extra load xfw_78439d8788ff.bin: 1287680 bytes written at 0x98000000".
+- Prediction 1 held: smoke 9/9 PASS. No Oops, panic, illegal-instruction or segmentation line.
+- Prediction 2 held, with the kernel's other wording. dmesg reads "Unpacking initramfs..." and "Freeing initrd memory:
+  1256K". The kernel prints "Unpacking initramfs..." in place of "Trying to unpack rootfs image as initramfs..." when
+  CONFIG_BLK_DEV_RAM is off, and this kernel has it off. `@@INITRD ok` follows the check of the one moved file.
+- Prediction 3 held: specdiff 12/12 PASS, rc 0 on all 12 commands. The sum, 4,956.13 s, is inside the band
+  4,946.96-4,966.79 s, 0.74 s below its mean.
+- The kit's classifier printed "NO RESULT", the defect of Addendum 224; bkit112 replaces it.
+So the route is used for xz train.
+
+**xz train on Full + H16** (chain xzh16f-b1, TAG p1-frcdkmsa3h16-xztrain, board 1, kit bkit112).
+
+**Why H16, and why only Full now.** The twin (`perf/xztwin`, predictions in its RESULTS before each launch) ran
+command 0 on each arm, with and without H16, at 944M:
+- Full without H16 needs 982,132 kB used at 2G, and is OOM-killed at 944M. Full does not fit P1 without H16.
+- Full + H16 completes at 944M (specdiff 1/1), with no free memory left: used peak 929,392 kB of MemTotal 929,552.
+- +Spatial + H16 is OOM-killed at 944M. Its memory follows Full + H16's to the last sample (VmHWM 891,588 against
+  891,844 kB at 123 s). Its pre-registered rule therefore holds it back: +Spatial xz train is not run as staged.
+- Plain + H16c completes at 944M; Plain without H16 is OOM-killed. Plain runs with H16c, which also follows Addendum
+  87's rule (one allocator on every arm, as in Addendum 222). bkit95 has no initrd step, so Plain xz train waits for a
+  Plain kit with one.
+So command 0 sits at the memory edge for Full and +Spatial alike. On the twin one draw passed and one was killed.
+
+**Kit** bkit112-k2n-native-p1-initrd-mem: bkit110 plus two changes, as its README states.
+- The stage wrapper prints `@@MEM pre` and `@@MEM post` (11 /proc/meminfo fields) around the benchmark, then the
+  OOM and `Memory:` lines of dmesg as `@@MEM-DMESG`.
+- The fixed classifier (e2ca116a965b's spec-classify.py) replaces bkit110's, which reads native transcripts as NO
+  RESULT.
+- Host test `dry/gate-host-test.sh`: the ok, rc 7, missing and flipped-byte cases, and the order pre, benchmark, post.
+  It PASSes on bkit112. On bkit110's wrapper it fails 2 cases, so the test can fire. run-stage.py read gives the same
+  result.json with and without the new lines, and exits 2 on an OOM line.
+- A busybox sh stays resident around the benchmark to print `@@MEM post`. Its memory is part of the `pre` reading.
+
+**Stages** (`perf/natstage/board-frcdkmsa3h16-train`, made by mk-h16-xz.py): image 3d961ae1848d126f (Full + H16,
+mrhwm/xz-h16), the image the twin ran. initrd.paths moves each command's input to the initrd:
+- c0: input.combined.xz (8,252,524 B, 76086ab8b057c487), cpio 8,252,928 B;
+- c1: IMG_2560.cr2.xz (15,698,480 B, 6e17c28f9efe39ec), cpio 15,698,944 B.
+Both cpios load at 0x98000000 and end below CMA (0xac000000).
+
+**Board memory, read.** The probe's native kernel prints "Memory: 688308K/985928K available (... 6436K init ... 35476K
+reserved, 262144K cma-reserved)". The twin at 944M prints 665268K/964608K, 2143K init, 37196K reserved. Its MemAvailable
+before the run is 908,776 kB.
+
+**Predictions.**
+1. Both boots pass smoke 9/9 and print `@@INITRD ok`.
+2. c0's `@@MEM pre` MemAvailable is about 918,000 kB (912,000-924,000). MemTotal is taken as the `Memory:` line's
+   total less reserved, plus what is freed after boot (init, and the initrd). This gives the twin's read 929,552 to
+   3 kB (964,608 - 37,196 + 2,143). For the board it gives 985,928 - 35,476 + 6,436 + 1,256 = 958,144. That is the
+   probe's kernel; c0's initrd is reserved and freed the same way. From that, subtract:
+   - the twin's pre-run use (929,552 - 908,776 = 20,776);
+   - what the board holds in RAM and the twin holds on disk: the built-in rootfs with the stage, about 11,230 kB, and
+     the unpacked initrd, about 8,060 kB.
+   Equal kernel overheads on the two kernels are assumed, not read. `@@MEM pre` reads the result directly.
+3. c0 completes, rc 0, specdiff PASS, with about 9 MB more than the twin had. An OOM kill is a live outcome. If
+   `@@MEM pre` reads below about 909,000 kB, the twin's edge, an OOM is the expected outcome rather than an anomaly.
+4. c1 (preset 4, 40 MB) completes, rc 0, specdiff PASS. Capstone c1 completed on the board in November by the
+   module route (8,730.5 s).
+5. No time band is predicted. No native Full reading of xz train exists. The earlier Capstone readings, c0 12,159.09 s
+   and c1 8,730.5 s, came by other routes on other images.
+
+Rows are read with read-one.sh, which stops with "KERNEL OOPS/OOM" on an OOM line. The kit's classifier does not
+look for one. If c0 is killed, the row records the kill with its `@@MEM` and dmesg lines. c1 still runs in its own
+boot: nat-run3.sh logs a SPEC rc and goes on, and only a failed smoke stops the chain. The `@@MEM pre` reading then
+sets the twin's memory for a +Spatial re-check, which is pre-registered on its own.
+
+**Order.** Board 1, after t202sp and t202s2 (Addendum 220), behind pid 893426. Each stage: timeout 21,600 s (86,400 s
+with the kit's multiplier), booking 1,800 min.
+
+**Dry runs:** bkit112's `dry/` (real bake, relink and firmware for c0; driver stopped after its parse; the host test
+and its negative control), and `perf/natstage/dry231/` (the chain, stubbed, both stages rc 0).
