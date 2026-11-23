@@ -4831,6 +4831,44 @@ Everything else in Amendments 1-4 stands.
   - a failed flash stops the chain, unbooks the board and writes `STOP-P1`;
   - a mismatch followed by a successful flash reaches the marker. Pools reads 33 of 33.
 
+### Amendment 7 to the item 5 board pre-registration (written 2026-11-24 05:17, after the re-slot, before the asan-blind re-run)
+
+**The re-slot's PHP asan-blind population read nothing.** Board 2, P1, bookings 1454 (01:00-02:56).
+- The stock and block boots ran cases 01 to 29, 25 of the population's 39. Then both were silent in case 30
+  (crash-092). Without protection that case spins until the runner's per-case guard kills it at 800 s. The
+  P1-geometry twin reads it `NO-READING:infra` for that reason, and the pre-registration names it a timing cell.
+- bkit111's `board-run.sh` starts `board-watchdog.sh` with `ABORT_ON_ENTRY_STALL=1 ENTRY_STALL_S=420`. A vexec batch
+  never prints `SHA6`, so after the boot's `SHA5`, 420 s of silence reads as an entry stall. The watchdog aborted
+  each runner (at 1,605 s and 1,636 s) before the guard could fire, and no transcript was written.
+- The object and exact boots completed, with every exit read (42 of 42 each). But the runner's cross-arm gate needs
+  all four arms. It refused every verdict of the population ("the arms are not the arms they claim to be").
+- So no asan-blind cell is taken from the re-slot. Amendment 3's budget list read the guard (800 s) and the driver's
+  idle limit (1,100 s), not the kit's watchdog. That watchdog was the binding limit for case 30.
+
+**The asan-blind population runs again, on bkit112** (`t3-smoke/bkit112-p1v-corpus-stall`, `board-run.sh`
+699dca0696779aa6).
+- bkit112 is bkit111 with one line changed: `ENTRY_STALL_S=${BOARD_ENTRY_STALL_S:-420}`. The stub mode also prints
+  the effective limit. `board.env` and `base.manifest` name the kit's own path, and the rest is byte-identical
+  (`diff -r`).
+- `php-board.sh` sets `BOARD_ENTRY_STALL_S=1000`. That is above the guard's 800 s and below the driver's idle limit
+  of 1,100 s. A real entry stall now costs up to 17 minutes instead of 7.
+- Controls of the watchdog line, run from bkit112's own text on the re-slot's recorded stock `driver.log`:
+  - with a limit of 30 s it aborted the runner at 45 s (positive);
+  - with 1,000 s it did not fire while the runner lived (negative).
+- Dry runs (05:16-05:17), with the board edge stubbed:
+  - the re-run chain (`item5-rerun.sh`, tag `p1b3`) reaches its marker through a held window, a flash and a park;
+  - a failed flash unbooks and writes `STOP-P1`;
+  - with `BOARD_STUB=1`, the real runner reaches bkit112's `board-run.sh` for all four arms. Each prints
+    `ENTRY_STALL_S=1000`, a driver idle limit of 1,100 s and a batch budget of 16,800 s.
+- The booking, P1 check, flash, readback and park are Amendment 6's. The marker is `corpus5/board/ITEM5-RERUN-DONE`,
+  and no other lane waits on it.
+
+**Prediction.**
+- Every asan-blind cell is the P1-geometry twin's (156 cells), with the pre-registration's exceptions.
+- Case 30 on stock and block, which the pre-registration did not predict, is now predicted as the guard's timeout:
+  `NO-READING:infra`, as on the twin.
+- The re-slot's complete object and exact boots are compared exit by exit with the re-run's, as a repeat.
+
 ## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
 
 The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
