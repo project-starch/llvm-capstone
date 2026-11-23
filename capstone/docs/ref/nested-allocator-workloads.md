@@ -4658,6 +4658,30 @@ read `supervisor_slots=1`, `resolve_dirty=Y` and `resolve_pte=Y`.
   smaller CMA moves any cell on the twin. SQLite malloc 11 is again the runner timeout (rc 75), as the exception
   already allows.
 
+### Amendment 2 to the item 5 board pre-registration (written 2026-11-23 15:25, before any board kit has booted)
+
+The runtime lane cut the board kit as `t3-smoke/bkit109-p1v-corpus-flat`. Its README answers gate 6. Two corrections
+and one addition follow.
+
+- **Gate 6's flag list was incomplete.**
+  - The module's identity defines are four: `CAPSTONE_VM_FLAT_TABLE=1`, `CAPSTONE_VM_IDS=55`,
+    `CAPSTONE_VM_INDEX_BITS=25` and `CAPSTONE_VM_BENCH_COUNTERS`.
+  - The source alone would give ids 30 and index bits 16 (`capstone_vm.c:35-36`, `:245-246`), so ids and index bits
+    come from the build's extra `KCFLAGS`.
+  - The runtime lane compared the twin and board builds' defines and found them identical. Gate 2's sysfs read of
+    `ids` and `index_bits` checks the same thing on the board.
+- **`supervisor_slots` is not a board parameter.**
+  - It is read-only after load, with default 1 (`capstone_vm.c:616-617`, mode 0444).
+  - So the kit's `params` sets only `resolve_dirty=1 resolve_pte=1`. Gate 2 still reads `supervisor_slots=1` from
+    sysfs.
+- **Stages.**
+  - The firmware payload is capped at 26,000,000 bytes, and an image is about 3.3 MB (PHP's nested build 4.9 MB). So
+    each corpus runs as several boots of a few images.
+  - Every stage boot runs its corpus's virtual positive control first (gate 5). A stage whose control fails is void,
+    and none of its cells is compared.
+  - The twin ran each arm's cases in one VM. So when a board cell differs from the twin, its position in the stage is
+    reported beside it. Before anything else, the same case is read as the first case of a stage (boot history).
+
 ## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
 
 The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
