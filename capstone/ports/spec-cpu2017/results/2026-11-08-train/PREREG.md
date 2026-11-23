@@ -7126,3 +7126,28 @@ OOM-killed at 912M and passed at 936M, before the heap-mapping reuse cache. xz t
 
 **Dry runs:** bkit110's `dry/` (real bake, relink and firmware; driver stopped after its parse), and
 `perf/natstage/dry229/` (the chain, stubbed).
+
+## Addendum 230 (2026-11-24 00:33 +08, outcome): Addendum 220's Full perlbench train on bkit91-rec1m (t202fp-b1)
+
+Board 1, P1 (d83d3a633, name read back), nested/kits/bkit91-rec1m; boot 2026-11-23 17:11:46 to 2026-11-24 00:28:32.
+The transcript prints node_flat_records=1048576 (board.txt, d43418af45512dd9). Smoke 9/9; no Oops, panic,
+illegal-instruction or segmentation line. Read with read-one.sh (run-stage.py read) and with the repository's fixed
+classifier (e2ca116a965b): PASS on both. The kit's own spec-verdict printed "NO RESULT", the bkit91 classifier defect
+recorded in Addendum 224.
+
+| Command | Seconds | rc |
+|---|---|---|
+| 0 diffmail | 11,771.27 | 0 |
+| 1 perfect | 3,343.63 | 0 |
+| 2 scrabbl | 4,221.51 | 0 |
+| 3 splitmail | 5,765.45 | 0 |
+| 4 suns | 254.51 | 0 |
+| all | 25,356.37 | specdiff 6/6 PASS |
+
+- **Addendum 220's prediction held:** all five commands rc 0 and specdiff 6/6 at 2^20 records. scrabbl and splitmail,
+  rc 139 at 2^18, complete.
+- Against Plain (Addendum 224, 21,848.37 s): +16.06 % in raw seconds. As there, this includes Plain's 100 Hz timer
+  share, uncorrected, so it is not a cost.
+- The table-size term, on the three commands that completed at both sizes (Addendum 220's t202f-b2 at 2^18, board 2;
+  this boot at 2^20, board 1): diffmail +0.75 s (+0.006 %), perfect +1.31 s (+0.039 %), suns +0.06 s (+0.024 %).
+  Two boards, one boot each; scrabbl and splitmail have no 2^18 reading, so the term on them stays unpaired.
