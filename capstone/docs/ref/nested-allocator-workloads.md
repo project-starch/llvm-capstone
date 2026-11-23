@@ -4815,6 +4815,22 @@ wedge still costs at most 10 minutes. PHP's runner sets its own limit (1,100 s, 
 
 Everything else in Amendments 1-4 stands.
 
+### Amendment 6 to the item 5 board pre-registration (written 2026-11-23 22:03, before the re-slot boots)
+
+**The re-slot runs on board 2, and the chain now flashes P1 itself.**
+- After the board lane's CSMINT work, board 2 holds `…-pagedtbl-r76-r75d-b5b1_d0afdb40f`. A read-only readback at
+  22:03 reported a mismatch against P1.
+- bkit111's `board-run.sh` does not flash. So after each booking the chain runs these steps:
+  1. It checks the local P1 `.bit` against sha256 `dc411e36…`.
+  2. It reads back the resident name. If the name is not P1, it flashes P1 with `flash-bitstream.py` and reads the
+     name back again.
+  3. It parks the switches at 0 (`pre_boot_park.py`).
+- A failed check, flash, readback or park unbooks the board, writes the marker as `STOP-P1` and stops the chain.
+- The known-good fallback stays the console's default, bitstream 1.
+- Dry runs with the readback, flash and park stubbed:
+  - a failed flash stops the chain, unbooks the board and writes `STOP-P1`;
+  - a mismatch followed by a successful flash reaches the marker. Pools reads 33 of 33.
+
 ## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
 
 The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
