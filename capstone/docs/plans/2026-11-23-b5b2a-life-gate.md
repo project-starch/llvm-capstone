@@ -375,3 +375,39 @@ path set to ex_stage_i/dyn_unit; 8 GB guard, peak 2.31 GB, rc 0 on all three che
   two.
 - So a per-module LUT row in ex_stage_i is not a measure of the unit named in it while this logic floats. The units'
   own cones are, and they moved by -113 (rev_node, 2b), +192 (rev_node, 3), -1 and +2 (dyn_unit).
+
+**The scoreboard write-back cells across the core, 2a -> 2b -> 3.** This was the rtl lane's request: it decides what
+2b's lane widening costs. Its prediction, written before the reading:
+- the cells grow by at most ~1,500 from 2a to 3 across i_issue_read_operands + i_scoreboard + rev_node + dyn_unit;
+- more than ~3,000 would make the widening the cost.
+
+Two instruments, on the same three gate checkpoints:
+- the cell census on i_issue_read_operands and i_scoreboard (`twc/b5b3/dl/iroluts.tcl`, `sbluts.tcl`: unitluts.tcl with
+  only the unit path changed);
+- a core-wide count of LUT cells named for `mem_q[...][sbe]`, by owner (`twc/b5b3/dl/mqall.tcl`).
+They agree to the cell on every unit both read; for example dyn_unit is 10,851 and i_issue_read_operands 14,264 on 2a.
+
+| LUT cells named `mem_q[][sbe]` | 2a | 2b | 3 |
+|---|---|---|---|
+| i_issue_read_operands | 14,264 | 11,471 | 11,536 |
+| dyn_unit | 10,851 | 7,403 | 16,101 |
+| rev_node | 5 | 5,726 | 4 |
+| i_scoreboard | 760 | 573 | 620 |
+| **the four units** | **25,880** | **25,173** | **28,261** |
+| lsu_i | 5,917 | 5,212 | 5,006 |
+| fpu_i | 2,994 | 3,531 | 3,420 |
+| i_mult, id_stage_i, branch_unit, ex_stage top, dom_switcher | 687 | 707 | 1,139 |
+| **core-wide** | **35,478** | **34,623** | **37,826** |
+| for scale: every LUT cell in i_cva6 | 161,616 | 163,148 | 164,998 |
+
+- **2b, the widening step, does not grow them:** -707 across the four units, -855 core-wide.
+- **The growth is at step 3:** +3,088 across the four units, +3,203 core-wide.
+- **2a -> 3:** +2,381 across the four units, against the prediction of at most ~1,500. That is above the prediction,
+  and below the ~3,000 line it set for "the widening is the cost". The widening step itself reads negative.
+- The operand stage's falls are cells moving out, as predicted: i_issue_read_operands -2,793 at 2b, while rev_node
+  took +5,721.
+- **What this cannot say:**
+  - These are counts of cells grouped by the names Vivado gives them, not a LUT attribution. A cell is named for one of
+    its nets, and the naming can move with a change.
+  - The whole core's LUT cells grew +1,532 and +1,850, so step 3's +3,203 named cells exceed its whole growth. Part of
+    that +3,203 must be cells renamed, not cells added.
