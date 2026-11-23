@@ -169,7 +169,7 @@ Open, before the kit is cut:
   KERNEL_BUILD and CROSS_COMPILE point at build-fpga's linux-6.4.14, whose .config equals the kits' board-stock.config.
 - The kit carries the twin's launcher, 2488e5d2f88169e4, not b55dev's rebuild (a8a4dbe637ac758a). Both are static, so
   the launcher stays byte-identical to the twin's.
-- **Blocker:** the vp2 virtual-profile recipe (bkit14's board-run.sh) replaces /capstone.ko with the process-ABI control
+- **Blocker (withdrawn below):** the vp2 virtual-profile recipe (bkit14's board-run.sh) replaces /capstone.ko with the process-ABI control
   module, /tmp/capstone/r55-table/fpga-pkg-127/module/capstone.ko. That file was deleted in the 2026-11-23 cleanup: it is
   a binary, and the salvage kept scripts only. build-fpga's target/capstone.ko is the stock module (its sections equal
   bkit91's capstone-stock.ko), not the process-ABI one. The native kits' adapter/control/capstone.ko has equal
@@ -178,3 +178,40 @@ Open, before the kit is cut:
   - rebuild the process-ABI module from its source against build-fpga;
   - or run this kit without the b0 process-ABI controls, with the corpus's own memsys5 controls as the first steps of
     the batch rung. That would be a recorded deviation from the Tier 1 recipe.
+- **Blocker, withdrawn the same afternoon: the control module was never lost.** The recipe's
+  /tmp/capstone/r55-table/fpga-pkg-127/module/capstone.ko was deleted in the 2026-11-23 cleanup, but the module is
+  not gone:
+  - Rebuilt from its surviving source (/tmp/capstone/b0/fpga-pkg with MAX_REGION_N 127, -march=rv64g, the
+    2026-10-15 recipe read from that session's transcript) into perf/p1v/fpga-pkg-127, it is byte-identical to the
+    October build: f2a2645cc570dcc6.
+  - Every native kit's adapter/control/capstone.ko is that same file (bkit38, bkit91, bkit100, bkit108).
+  - So the sentence above, "built against the native kernels", was wrong: one sha256sum would have shown it.
+- Q5, answered at source:
+  - Monitor 4f51541 (native01/csbi-ids55) is bkit14's d9da397 plus three commits. All 349 added lines are under
+    `#ifdef CAPSTONE_CSCHECK_EMU` (capstone_cscheck.S, and 18 lines in sbi_capstone.S). The CSCHECK dispatcher returns
+    "not ours" for any other illegal instruction, so the CSMINT emulation runs after it as before.
+  - Wrapper fd31cdc4 (wt-wrap-hpmpaged) is bkit14's aab63d51 plus the two HPM-event commits (sbi_hart.c, +33).
+  - So the kit takes bkit89's firmware: P1 flat arm, monitor 4f51541, bkit89's defines.
+
+## The kit: t3-smoke/bkit109-p1v-corpus-flat (cut 2026-11-23)
+
+- Recipe: bkit14-b4r-b2's board-run.sh and bake-manifest.sh, byte-identical.
+- Bitstream: P1 d83d3a633, sha256 dc411e36…, checked against the bitstream store.
+- Firmware: bkit89's.
+- Base files: kit-local copies, each byte-identical to bkit14's and the native kits' sources.
+- Module: b55dev, 74b4cceb69d159c1. The defines of the twin's and the board's builds are compared and do not differ.
+- Launcher: 2488e5d2f88169e4.
+- params: resolve_dirty=1 and resolve_pte=1, written through sysfs and read back by boardvm.
+  - supervisor_slots is 0444, so it cannot be a params line: a write would refuse the batch. Its default, 1, is P1's
+    count, and gate 2 reads it from sysfs.
+- The README records gate 6's identity and diff.
+- The SQLite stages must be split: 70 images of about 3.3 MB each against the 26,000,000-byte firmware cap.
+- Dry runs, kept in the kit's dry/:
+  - The stub run resolves every input.
+  - The board-free real run ran bake, cpio checks, restore and firmware, with only the driver call cut.
+    - Stage: php-real-nested.dom plus ctl.sh, 4.9 MB. Firmware 19,565,064 B, dom_stack gate PASS.
+    - So a stage of about 11 MB fits one boot, which is three SQLite images.
+    - The Image has no built-in capstone_vm, and the DT reserves CMA at 0xac000000.
+- Still to do: the board and queue slot, and the nested lane's stage split.
+  - At three images a boot, SQLite needs about 23 boots.
+  - The second-JTAG-load initrd (programme, firmware cap) would cut that.
