@@ -4596,6 +4596,68 @@ read as a kit fault first: gates 1-4.
 
 Memory and cycles are not measured by this run.
 
+### Amendment 1 to the item 5 board pre-registration (written 2026-11-23 15:11, before any board kit has booted)
+
+This replaces gates 1, 2 and 4 above and adds gate 6. The rest of the pre-registration stands, including the
+exceptions and branches.
+
+**Withdrawn: gate 1's "Predicted: the stale access 26 and the bound 29".** This lane wrote it from
+`docs/ref/README.md`'s cause table, which predates capstone-ariane c77c65324 (2026-09-15), the renumbering. dev
+8b3d792e6b5d corrects the README. P1's own source agrees with the twin's numbering:
+- `riscv_pkg.sv:358-363` at the bitstream's revision d83d3a633 gives 24 UNEXPECTED_OPERAND_TYPE, 25 INVALID_CAP, 26
+  UNEXP_CAP_TYPE, 27 INSUF_PERM, 28 OOB and 29 ILLEGAL_OPERAND_VALUE.
+- Those are cpu_bits.h's numbers.
+
+**Gate 1, as amended.**
+- Predicted: the stale access reads 25 and the bound reads 28, and the judge's `catch_causes [25, 28]` applies
+  unchanged.
+- A 26 or 27 on either control means the arm's capability is not the one it assumes: wrong type, or wrong
+  permissions. A 29 means a wrong operand. In each case no cell is judged until it is read.
+- **A 25/28 swap is not a verdict difference.** Some cells read 25 on the twin and 28 on the board, or the reverse.
+  Such a cell is reported as a check-order difference: same verdict, both causes listed. These are the cells whose
+  access is both stale and out of bounds.
+- Where the order is known:
+  - At d83d3a633, the M-mode capmode load/store check (`load_store_unit.sv:1390-1465`) raises 28 for bounds before
+    25 for lifetime.
+  - For LDC/STC, ex_stage applies the lifetime deny (25) only when the DYN unit raised nothing (`ex_stage.sv:1528-1533`).
+  - The order for the corpora's own accesses in a supervised user context is not established here.
+
+**Gate 4, as amended: P1 has one saved context.**
+- The rtl lane reports that P1 holds one saved virtual context: `csr_regfile.sv:392-393`, "the one saved virtual
+  context (QEMU keeps 32 slots; the plan takes one)".
+- The board's module therefore runs `supervisor_slots=1`.
+- PHP's twin cells were read at 32 slots, so both corpora were re-read at P1's geometry (below). The memory part of
+  gate 4 is unchanged.
+
+**Gate 2, as amended.** The module also runs `resolve_dirty=1 resolve_pte=1`. On silicon, the flat ids55 module
+matches its twin only when loaded with `resolve_dirty=1`, S-24's fix, which defaults off. The source is dev
+`tests/rtl-smoke/ids55-flat-module/RESULTS-twin.md`, "Board": bitstream 325966ee4, boot b4-t1c, kit bkit14-b4r-b2, both
+parameters set. Loaded bare, the module read 28/45. The twin never takes that branch. So on the board, `/sys/module/capstone_vm/parameters/` must also
+read `supervisor_slots=1`, `resolve_dirty=Y` and `resolve_pte=Y`.
+
+**Gate 6, new: module identity.**
+- The board module cannot be the twin's bytes. It is built for the board kernel 6.4.14; the twin's was built for 6.1.
+- The runtime lane's board build of 13:58 (`perf/p1v/buildb.sh`, output `b55dev`) is `74b4cceb69d159c1…`.
+  - Source: the same `capstone_vm.c`, `f256348b49d59426…`.
+  - Flags: the same `KCFLAGS`, `-march=rv64g -mabi=lp64d -DCAPSTONE_VM_FLAT_TABLE=1 -DCAPSTONE_VM_BENCH_COUNTERS`.
+  - vermagic `6.4.14`; no 2-byte instructions among its 8,071.
+- The module the board loads must be the one the runtime lane's kit README names, with this source hash. If it is
+  not this build, the kit README says what differs.
+
+**The P1-geometry re-read (14:49-15:07), now the prediction of record.**
+- What ran:
+  - The same image bytes and kit-p1v.
+  - Module arguments `supervisor_slots=1 resolve_dirty=1 resolve_pte=1`; QEMU with `x-capstone-supervisor-slots=1`.
+  - The CMA reserve was 256 MiB; the flat table came from CMA on every boot.
+  - The kit's applied `-cpu` (`ids=55`, `sv39`, no exact bounds) was read from each PHP boot's `KIT-P1V-APPLIED` line
+    and from the running SQLite QEMU's argv. The parameters were read back from sysfs on both SQLite VMs.
+- Bundles: `results/2026-11-23-p1v-twin-p1geom/`, per corpus.
+- **Every cell equals the 12:12-13:41 readings.** SQLite: 66 of 66 in verdict, reason, cause, function and offset
+  (only absolute addresses differ, with the load base). PHP: 280 of 280 in verdict, reason, cause and function.
+- So the predicted cells and the exceptions above are unchanged. Neither the slot count, nor `resolve_*`, nor the
+  smaller CMA moves any cell on the twin. SQLite malloc 11 is again the runner timeout (rc 75), as the exception
+  already allows.
+
 ## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
 
 The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
