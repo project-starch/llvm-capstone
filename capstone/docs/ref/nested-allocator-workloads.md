@@ -5262,6 +5262,29 @@ All six predictions hold.
 - **Branches.** A peak outside a band is reported with both arms' readings before any reading of why. A mismatch
   in the answer stops the comparison for that arm.
 
+### Result: Perl's peak memory on suns.pl: p0002 is +4,800 kB (+10.3 %) over stock, every prediction met (05:28-05:37)
+
+- **Answers: met.** All six boots print SPEC's `suns.out`, status 0. The readings are in `fig10/runs-mem/perl-mem-*`.
+- **Peak RSS of the vexec process** (printed `ru_maxrss` / 4):
+
+  | arm | boot 1 | boot 2 | against stock |
+  |---|---|---|---|
+  | stock `9ebe0d04…` | 46,744 kB | 46,744 kB | |
+  | prot `3c1962c6…` | 51,408 kB | 51,412 kB | +4,666 kB (+9.98 %) |
+  | p0002 `528d7f1e…` | 51,544 kB | 51,544 kB | +4,800 kB (+10.27 %) |
+
+- **Repeats: met**, within 4 kB.
+- **prot against stock: met** (band +4,000 to +12,000 kB). The arena arithmetic gave +7,098 kB, so the reading sits
+  2,432 kB below that estimate. The estimate assumed every arena stays resident at the peak, and no reading here says
+  why it falls short.
+- **p0002 against prot: met**, +134 kB (band −64 to +256). That is about the index's size, 2,536 entries of 16 bytes
+  grown by doubling.
+- The census's system-wide "peak used", sampled once a second, reads 175,516 and 175,768 kB for stock, 184,352 kB for
+  both prot boots, and 184,092 and 184,596 kB for p0002. That is about +8.7 MB against stock. It counts the kernel and
+  the module as well as the process, and it is sampled too coarsely to judge. It is recorded and not read further.
+- **So the memory condition for p0002 is answered:** its peak is 10.3 % above stock's on this workload. Fig. 10's
+  revision accounts for 10.0 % of that, and the index for 0.3 %.
+
 ### Result: the CPython chain is void: the environment refuses `ioctl(FIOCLEX)`, so no script can be run by path (01:26-01:28)
 
 - Every boot exited with status 2 in 0.8 s and printed only `./app: can't open file
