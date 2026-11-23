@@ -4682,6 +4682,80 @@ and one addition follow.
   - The twin ran each arm's cases in one VM. So when a board cell differs from the twin, its position in the stage is
     reported beside it. Before anything else, the same case is read as the first case of a stage (boot history).
 
+### Amendment 3 to the item 5 board pre-registration (written 2026-11-23 17:27, before any board kit has booted)
+
+This amendment replaces Amendment 2's stage split with the route agreed with the runtime lane. It also states the stop
+gate, the budgets each boot gets and the sources of those budgets, and two facts about reading the board bundles.
+
+- **Route.**
+  - SQLite runs as one boot per arm, pools first, then malloc. A boot runs the runner's two controls, then every case
+    except 11, then case 11 alone, last. This is the twin's order, where case 11 also ran last in its VM.
+  - Both arms go through `appvm-session.py`: phase collect, then one board boot, then phase read. The kit is
+    `bkit109-p1v-corpus-flat`, run with `BOARD_STAGE_XZ=1`, which packs the stage's images into one xz archive. With
+    the archive, an arm's 33 images fit under the 26,000,000-byte firmware cap. Without it, they do not.
+  - PHP runs through the runtime lane's board runner `app-p1b`. Its `run-realphp.py`, `count-cap-insns.py` and
+    `run-virtual-twin.py` are byte-identical to the twin's. That makes four boots per population, one per arm, for
+    eight PHP boots in all.
+  - Every boot carries its own controls: SQLite's `uaf-mem5` and `bounds-mem5`, and PHP's sanity and probe arms. So
+    Amendment 2's rule holds for each boot: a boot whose control fails is void.
+  - Amendment 2's position rule still applies. A board cell that differs from the twin is reported with its position in
+    its boot, then re-read as the first case of a boot.
+- **The session mechanism's own QEMU control.** Pools as one `appvm-session` boot on `vkit-p1v` (kit-p1v, with the
+  board's two parameters) equals the P1-geometry twin in 33 of 33 cells. Malloc's control is queued behind the QEMU
+  lock and is reported when it lands. The board boots do not wait for it.
+- **Stop gate after pools.**
+  - The chain reads the pools boot's controls from its `verdicts.jsonl`. The gate passes only when `uaf-mem5` reads
+    fault 25 and `bounds-mem5` reads fault 28. Anything else stops the chain before malloc and before any PHP boot.
+  - Both branches were dry-run: the empty transcript reached the STOP branch, and a transcript built from the QEMU
+    session control reached the PASS branch. The PASS-branch dry run goes as far as the chain's marker.
+  - Dry-run readings (17:28-17:31, every board call stubbed: lab-book, including one rc 3, and the board boot):
+    - pools through the board read path equals the P1-geometry twin in 33 of 33 cells;
+    - the same pools transcript fed to the malloc arm reads `NO-READING:control-failed` in all 32 cases, because
+      stock's controls expect completion. That is the void rule firing;
+    - PHP equals the twin in 280 of 280 cells on verdict, reason, cause and symbol;
+    - the marker was written after the last unbook.
+  - The marker's per-step codes are the scripts' exit codes, not readings. A void boot shows in its bundle, not in
+    the marker.
+- **Budgets each boot actually gets.** Each figure is read from the staged `gate.sh` or the kit, not from a runner
+  default.
+  - SQLite.
+    - The boot timeout is `appvm-session`'s default, 300 + Σ min(step, 600). For 35 steps of 300 s that is 10,800 s.
+    - The in-guest budget is that timeout minus boardvm's 300 s margin, so 10,500 s. Each step's bound is min(the
+      remaining budget − 60, 6,000) s.
+    - The driver gets 10,800 × `BOARD_TIMEOUT_MULT` 4 = 43,200 s, plus 1,800 s.
+    - The in-guest budget is not multiplied. So the binding limit is 10,500 s, not the 43,200 s the multiplier
+      suggests.
+  - Source of the SQLite budget figures.
+    - The QEMU session control on `vkit-p1v` ran all 35 steps of pools in 62 s of guest time. The kernel clock reads
+      62.2 s at the last step.
+    - The kit's README puts a board step at about 18 times its QEMU time (vp2, pym0).
+    - So the expected pools boot is about 19 min of steps, about nine times inside the budget.
+    - Case 11 faulted in 2 s on the twin and exits on the QEMU control with status 139. It is not the spin that
+      the earlier kit-devq attempts had to work around.
+  - PHP.
+    - Each run's in-guest watchdog is the twin's run timeout times 20, so 800 s. The idle limit is 1,100 s. Both
+      figures are read from the dry-run bundle's `board` field.
+    - The twin's arms ran 48 to 111 s of guest time each. At 18 times that, a boot runs up to about 35 min.
+- **Booking.**
+  - Board 2 is booked through `lab-book.py` once per corpus step: pools 180 min, malloc 240 min, and each PHP
+    population 300 min.
+  - Each booking is released when its step's boot exits, before the next is booked.
+  - A held window (rc 3) is retried every 300 s, up to 12 h.
+  - On every exit path, the chain unbooks and then writes `corpus5/board/ITEM5-BOARD-DONE` with its status. Those
+    paths are done, stopped, and SIGINT/SIGTERM. The runtime lane's h16s and the board lane's CSMINT kit wait on that
+    marker.
+  - The chain starts only after the runtime lane's mcf train on board 2 has exited.
+- **Gate 4 gets one more candidate kit difference: memory.**
+  - The board has 962 MiB, with 256 MiB of CMA.
+  - The twin had 8 GiB for SQLite and 2 GiB for PHP.
+  - A board cell that differs from the twin through an allocation failure is read as this difference before anything
+    else.
+- **Reading the board bundles.**
+  - The board arm is recorded as `vp2-<arm>` (`boardvm.record_arm`), even on P1. The bitstream comes from the
+    bundle's firmware record, not from the label.
+  - In PHP, `platform.json` hashes the `--qemu` and `--images` inputs, which the board does not run. The board's
+    identity is the `board` field of each `<arm>-run.json`.
+
 ## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
 
 The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
