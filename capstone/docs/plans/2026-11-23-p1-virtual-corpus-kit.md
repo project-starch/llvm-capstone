@@ -150,7 +150,13 @@ Open, before the kit is cut:
 - Q5. The monitor. bkit14 ran this module under the vp2c monitor line (csbi-batch, wrapper wt-wrap-s26). P1's kits run
   native01/csbi-ids55-paged. Is there a P1 monitor that serves the virtual profile's module, and does its CSCHECK
   emulation walk a FLAT table (bkit88/89 ran flat tables on P1 with firmware 4f51541)? To be read at source.
+  Candidate: bkit89's firmware, monitor native01/csbi-ids55 at 4f51541 with bkit89's FW_DEFINES (-DCAPSTONE_VP2_CSMINT
+  among them) and wrapper wt-wrap-hpmpaged. It ran a flat ids55 table on P1 (B-FLAT gcc, 2026-11-16), and dev's module
+  issues CSRUNV, CSMINT and CSRETIRE itself (capstone_vm.c:950, 1227, 1419).
   - The csbi-* worktrees under /tmp/capstone were removed in the 2026-11-23 cleanup. Their commits are in the
     capstone-sbi repository, and their HEADs and diffs are in attic/tmp-capstone-20261123/<name>/.
-- Q6. P1's saved-context slot count and its cause numbers for a stale and an out-of-bounds domain load. Asked of the rtl
-  lane.
+- Q6, answered by the rtl lane from d83d3a633's RTL:
+  - P1 has ONE saved-context slot (csr_regfile.sv:392; runv_used/paused/terminal are single flops). So supervisor_slots=1
+    on the board and x-capstone-supervisor-slots=1 on the twin. The PHP twin read at 32 slots must be redone at 1.
+  - The causes are unrenumbered mcause values: stale 25, out of bounds 28, as on QEMU's twin. In the capmode-M load check
+    bounds precede lifetime (load_store_unit.sv:1413-1465), so a stale capability used out of bounds reads 28.
