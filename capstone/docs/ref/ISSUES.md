@@ -4560,7 +4560,7 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
-### R-79 — the PMP and CPMP judged a load or store with the NEIGHBOURING cycle's access type: a lone S/U store passed a region without W, and a load followed at once by a store was refused 7 `OPEN 2026-11-23 — DEMONSTRATED IN SIMULATION (capstone-ariane b5b1-step3, csmint-pmp.S, both branches pre-registered); FIX IN RTL, sim only (09b9cf9fd, claim-audited: the defect and the fix SUPPORTED); NOT MEASURED ON SILICON; upstream CVA6 wiring (the PMP extraction, 23355d29f), so on every bitstream since`
+### R-79 — the PMP and CPMP judged a load or store with the NEIGHBOURING cycle's access type: a lone S/U store passed a region without W, and a load followed at once by a store was refused 7 `CONFIRMED ON SILICON 2026-11-23 (board 2, R-75 (d) 1c5d31474, N=1: the r79-pmp-bare-2026-11-23 kit's pre-fix vector word for word, board/meas-pw 7eb67baa00a1); DEMONSTRATED IN SIMULATION (capstone-ariane b5b1-step3, csmint-pmp.S, both branches pre-registered); FIX IN RTL, sim only (09b9cf9fd, claim-audited: the defect and the fix SUPPORTED), in the first B5b-1 bitstream's build; upstream CVA6 wiring (the PMP extraction, 23355d29f), so on every bitstream since`
 
 Siblings: none in the registry. Found by the claim-auditor's pass over CSMINT's sequencer (step 3), whose
 store-permission probe is always a lone store.
@@ -4656,6 +4656,18 @@ a read is a separate change, with a spec question for the lead.
 - a capability-mode CPMP arm with perm-4 and perm-2 entries (an ids55 build, where CAPENTER is legal);
 - an Sv39 arm with a D-TLB miss on the R-only page;
 - synthesis.
+
+**On silicon** (2026-11-23, board 2, booking 1438, resident read back as `…-pagedtbl-r76-r75d_1c5d31474.bit`, name
+only; the board lane's grader rc 0; board/meas-pw 7eb67baa00a1):
+- the va-runv control (f0ed3fac351b60f3) read SR 15 and its 15 values;
+- r79-pmp (8eb72553965cfc1c) read SR 17
+  `0x0 0x7 0x80007008 0x77 0x0 0x0 0x1234 0x7 0x80003008 0x5a5a5a5a5a5a5a5a 0x0 0x0 0x77 0x77 0x77 0x77 0x2`.
+  That is the PREREG's pre-fix row word for word (checked by script against the committed PREREG).
+On silicon, then, as in simulation:
+- a legal load with a store behind it is refused 7, with the store's address as tval;
+- a lone store to the W-less page lands;
+- an lr.d with nothing behind it is allowed.
+N=1. Board 1's run on P1 d83d3a633 is armed as the second.
 
 **Silicon kit:** `capstone/tests/rtl-smoke/r79-pmp-bare-2026-11-23` (PREREG.md, pre-registered before any board run).
 It is one bare image, with the pre-fix vector for every Capstone tree resident today and the fixed vector for step 3's
@@ -4766,7 +4778,7 @@ ccsrrw (S and U, return and ecall-escape variants), and they read identically on
 
 **For B5b:** under the trap route, protected U is the defended boundary. So this gate and F-A's are required there, not optional.
 
-### R-75 — after a CSRUNV escape the PC tracker re-adopts the caller's PHYSICAL code capability unresolved; its probe goes out at the next M-mode moment, and when that moment is the switcher's RESUME transit (M with sup_active, so the table namespace) the id resolves in the context's table, where ids 0 and 1 are header slots: DEAD; a one-cycle lag of the record clear then delivers that DEAD to the M trap handler, which takes cause 25 for ever `FIX IN RTL, SEALED, NOT YET MEASURED ON SILICON (2026-11-22): option (d), ruled by the lead (relayed by the runtime lane). capstone-ariane b1-r75d 1c5d31474 = bitstream 1 9e801ab5e + (d): no PC verdict from the ALLOW/DEAD records between a lifetime-namespace change and its flush, and no PC probe while it is pending. Simulation, two-sided on one tree: every R-75 arm passes with (d), and +define+R75_OFF reproduces R-75. 95-sweep identical to bitstream 1 in values, RVFI and cycles, with (d) firing 0 times outside the R-75 shape (R75-BLK 2 on va-rc-trap). Synthesis-only gate and full build PASS on every key (board lane, board/meas-pw c817561a7c2a; sealed sha256 2d2ba92c2e19..., WNS -13.598). Record: llvm-capstone docs/plans/2026-11-22-r75-option-d-on-bitstream-1.md. Was: OPEN 2026-11-16 — DEMONSTRATED IN SIMULATION on P1 d83d3a633 (tests only added) and on capstone-ariane rtl/record-cache; LOCALISED 2026-11-20 by matched readings and a one-variable pair (below), claim-audited; two accounts RETRACTED on 2026-11-20 (the 2026-11-16 "illegal instruction" mechanism, and the same day's trigger "an id change while srevroot holds a table, then code under that id"); NOT MEASURED ON SILICON; the SPEC native route is unaffected by construction (below); an option-(a) prototype passes in simulation (sim only, not a fix)`
+### R-75 — after a CSRUNV escape the PC tracker re-adopts the caller's PHYSICAL code capability unresolved; its probe goes out at the next M-mode moment, and when that moment is the switcher's RESUME transit (M with sup_active, so the table namespace) the id resolves in the context's table, where ids 0 and 1 are header slots: DEAD; a one-cycle lag of the record clear then delivers that DEAD to the M trap handler, which takes cause 25 for ever `FIXED ON SILICON 2026-11-23 (board 2, N=1 per bitstream: REPRODUCED on bitstream 1 9e801ab5e, FIXED on R-75 (d) 1c5d31474; the r75-bare-2026-11-22 kit, PREREG 515d5bc97c7b; board/meas-pw 7eb67baa00a1). Was: FIX IN RTL, SEALED (2026-11-22): option (d), ruled by the lead (relayed by the runtime lane). capstone-ariane b1-r75d 1c5d31474 = bitstream 1 9e801ab5e + (d): no PC verdict from the ALLOW/DEAD records between a lifetime-namespace change and its flush, and no PC probe while it is pending. Simulation, two-sided on one tree: every R-75 arm passes with (d), and +define+R75_OFF reproduces R-75. 95-sweep identical to bitstream 1 in values, RVFI and cycles, with (d) firing 0 times outside the R-75 shape (R75-BLK 2 on va-rc-trap). Synthesis-only gate and full build PASS on every key (board lane, board/meas-pw c817561a7c2a; sealed sha256 2d2ba92c2e19..., WNS -13.598). Record: llvm-capstone docs/plans/2026-11-22-r75-option-d-on-bitstream-1.md. Was: OPEN 2026-11-16 — DEMONSTRATED IN SIMULATION on P1 d83d3a633 (tests only added) and on capstone-ariane rtl/record-cache; LOCALISED 2026-11-20 by matched readings and a one-variable pair (below), claim-audited; two accounts RETRACTED on 2026-11-20 (the 2026-11-16 "illegal instruction" mechanism, and the same day's trigger "an id change while srevroot holds a table, then code under that id"); NOT MEASURED ON SILICON; the SPEC native route is unaffected by construction (below); an option-(a) prototype passes in simulation (sim only, not a fix)`
 
 Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the same ROOT -- ids carry no namespace identity -- reached there through the index-only invalidation broadcast; here through the R-43 probe), R-43 (the probe path).
 
@@ -4832,6 +4844,21 @@ Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the 
   Its must-pass: `va-rc-trap` and `-zp` as regression arms, and the record clear taking effect no later than the
   namespace change it follows.
 
+
+**On silicon** (2026-11-23, board 2, booking 1437; the kit `capstone/tests/rtl-smoke/r75-bare-2026-11-22`, PREREG
+515d5bc97c7b; the board lane's grader rc 0; board/meas-pw 7eb67baa00a1).
+- Each flash's local sha256 matched the seal, and each resident was read back by name after the power cycle.
+- **Bitstream 1** (9e801ab5e):
+  - va-runv (f0ed3fac351b60f3) read SR 15 and its 15 values, before and after;
+  - the matched control r75-trapz (311e56388094b2ad) read SR 3 `0x2 0x80004000 0x5`;
+  - r75-trap (73ce33d96fac8e91) printed SUPTEST BEGIN and SB1, then no SR line within its timeout.
+  - **REPRODUCED**, by the PREREG's rule.
+- **R-75 (d)** (1c5d31474):
+  - the same controls;
+  - r75-trap read SR 3 `0x2 0x80004000 0x5` in two separate loads.
+  - **FIXED**, by the PREREG's rule.
+- N=1 per bitstream, one board. The kit grades R-75's point, the M handler's re-entry, not the in-tree arm's vector.
+  The runtime lane's makerand perf null on (d) is its own reading.
 **Exposure.** The native module's `run()`/`run_x0()` (`capstone_vm.c:2009`, `:2021`, bkit91 kernel; the runtime lane's reading) put `csrw 0x5c1, zero` in the same asm statement as every CSRUNV. So the SPEC native route never takes an S trap with srevroot non-zero after an escape, and its service resumes (gcc train01: about 2,450 per run) complete on P1 silicon with every smoke 9/9. Any other CSRUNV caller, including B5b's replacement of CSRUNV, must keep that write or have this fixed.
 
 ### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `OPEN 2026-11-20 — DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
