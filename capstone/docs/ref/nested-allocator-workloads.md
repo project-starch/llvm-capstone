@@ -4421,10 +4421,22 @@ every reading below says which QEMU ran it and which `-cpu` it applied.
   - `x-capstone-exact-bounds=true`: 25, 29 and 31 all cause 28 (`RISCV_EXCP_CAP_OOB`, 0x1c), CAUGHT;
   - the property absent: 25 cause 28 CAUGHT; 29 and 31 cause 24 (`RISCV_EXCP_UNEXP_OP_TYPE`, 0x18, `cpu_bits.h:699`)
     in the same function, which the arm's judge does not count as its mechanism, so MISSED.
-- **Reading.** The property explains the two cells. Under compact bounds, the profile the silicon has, the two
-  overreads still fault in the function ASan names, but with a cause the judge does not score. This is a finding
-  about the judge and the compact profile against the 10-29 bundle's exact-bounds verdicts. It goes to the lead with
-  this evidence. Which cause the board will read is the board's question, and no paper text changes here.
+- **Where the cause-24 traps are.** Both halves of the pair trap at the same instruction and the same address,
+  on the same image (sha256 `59b4941d…` for 29, `9f6d8fb7…` for 31). Offsets below are from the code window's
+  base, which is ELF 0x10000:
+  - 29: pc +0x643fc, address +0x35a3a2, ra +0x2041f0 in both halves. That is ELF 0x743fc, `lbu a0, 0(a1)` in
+    `sqlite3Get4byte`, the first byte load of the 4-byte read.
+  - 31: pc +0x204290, address +0x3585e0 in both. That is ELF 0x214290, `lbu a1, 0(a0)` in `statDecodePage`, right
+    after `cincoffset a0, a0, a1` with an offset read from the page.
+  - In the exact-bounds half the same pc and address are cause 28, so that instruction is the out-of-bounds load
+    and the address is outside the capability.
+- **Reading.** The property explains the two cells, and under compact bounds, the profile the silicon has, both
+  overflowing loads are still stopped, at the load itself. Only the cause differs. Cause 24 there fits the reference's
+  moved-capability rule (`op_helper.c:845`): a cursor that is not representable leaves an untagged integer, and its
+  dereference traps with 24. That the tag was dropped is inferred from the cause; the operand's tag was not read.
+  So the bugs are caught, and the judge's mechanism list for the pools arm lacks 24 under the compact profile. This
+  is a finding about the judge against the 10-29 bundle's exact-bounds verdicts, for the lead. Which cause the board
+  will read is the board's question, and no paper text changes here.
 
 **PHP engine-repros, against 2026-10-28-run18.** Both populations, the four arms each.
 - Every arm booted.
