@@ -61,3 +61,27 @@ Nothing here touches dev's module.
 - Q1, restated: does a dev-built corpus image run when exec'd as a `.dom` under the table-tree kernel on the twin
   images-tree? Only if it does not is a launcher built from exec.c, and that would then be a deviation from the
   tree's own recipe.
+
+## Q1, read on the twin (2026-11-23)
+
+Twin: images-tree (the table-tree kernel, built-in capstone_vm), qemu55 with x-capstone-ids=55 and x-capstone-addr=sv39,
+the native SPEC twins' module parameters (native_task, dom_binfmt, c5a_model, the direct-arm native_* set). One boot ran
+five `.dom` files exec'd directly from a read-only ext4 stage.
+
+| Image | Built by | Reading |
+|---|---|---|
+| io-direct.dom, io-exchange.dom (the board smoke's) | native SDK | entered, ran, returned rc 3: their file checks fail with errno 30 (EROFS, the stage is mounted read-only), as they would |
+| control_uaf_mem5.dom (a2c6489d70b5386c), control_bounds_mem5.dom (9234c522603fda9f) | dev virtual SDK (wt-perl0002 deb4ebf0b06b) | `capstone_task: fault ... cause=26 pc=0x3ff7c02870`, SIGSEGV, before any output |
+| 25_415540ddaa_fts5_getvarint_overread.dom (5cf0ec9a1350b1bd) | same | the same fault at pc 0x3ff7802870 |
+
+- So the answer to Q1 is no. A dev-built virtual-profile corpus image does not run when exec'd as a `.dom` under the
+  table-tree kernel. All three die at a pc ending in 0x2870 before printing anything, while two native images on the same boot run their own code and return.
+- The 26 is QEMU's cause numbering, not the silicon table, and it has not been decoded.
+- The two VM ABIs are equal (vm-abi.h 561f933ae0f4e86c on both). So the difference is the launch path: these images
+  expect capstone-vexec's set-up, not the kernel's `.dom` exec.
+- Two ways on, neither taken yet:
+  - (a) build table-tree's exec.c launcher, whose recipe the tree retired;
+  - (b) build the corpus with the native SDK, so each case is a native task on both the twin and the board, under the
+    same module.
+  (b) keeps the tree's own route, but it changes the corpus's images from the ones its QEMU verdicts were read on. So it
+  needs a twin re-read of the corpus before any board kit.

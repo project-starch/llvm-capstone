@@ -31,6 +31,10 @@ CSCHECK exists in the reference decoder.
    silicon: a csrr of it is an illegal instruction (the rtl lane: no CSR at 0x5c0 in riscv_pkg.sv, csr_regfile.sv:1089's
    default arm). QEMU agrees only with x-capstone-test-csrs=false, the default (cpu.c:2160). The table-tree module
    already states that no reader may use it (capstone_vm.c:349).
+   **Descriptor reads (D-csmint-1, 2026-11-23):** CSMINT reads its six descriptor words raw, with no
+   tagged-first-doubleword projection (capstone_table.c:463-468, cpu_ldq). The RTL's sequencer does the same
+   (CSMINT_LD). The module writes descriptors as integers, so a tagged descriptor can only come from a kernel bug. Its
+   raw words then go through the same value checks as any other descriptor (arm a18's words are refused with 29).
 3a. **No capability-CSR access.** Under Sublet capmode is never set: its only setter is a committed CAPENTER, which is
    illegal there. A capability-CSR write requires capmode (csr_regfile.sv:2212: capmode_q && ccsr_en && ccsr_we_i &&
    !privilege_violation), so in integer M a CCSRRW writes nothing. Today's trap entry swaps S's sp through CSCRATCH
