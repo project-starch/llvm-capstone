@@ -3215,3 +3215,604 @@ Both commands together (the unit of the SPEC table's perlbench bar): in-context 
   the checks and cache effects is not separated by this pair.
 - This replaces suns.pl (+16.05 %) as the Perl cost with the widest coverage: suns.pl is one script on Perl 5.36,
   test.pl is SPEC's own test workload on SPEC's Perl 5.22.
+
+## Item 5: the SQLite and PHP bug corpora for the board (2026-11-23)
+
+The programme's item 5: prepare the images and the pre-registration, and the runtime lane queues them on a P1 board.
+Neither corpus has run on a board with its nested arm. SQLite's control arm (vp2-malloc) ran on vp2. PHP has no board
+reading at all.
+
+**Board kit (updated 2026-11-23 13:47): route (c) of the runtime lane's plan, a twin read, the board kit not yet
+cut.** `docs/plans/2026-11-23-p1-virtual-corpus-kit.md` on spec-silicon (099555b5d3c5) settled it. The table-tree module
+has no ioctl interface, so it cannot run these images, and dev-built corpus images exec'd as `.dom` under it die
+before any output. The kit therefore runs the images' own adapter: dev 1a051da6e82b's module and launcher, the module
+built FLAT for ids55 (`-DCAPSTONE_VM_FLAT_TABLE=1 -DCAPSTONE_VM_IDS=55 -DCAPSTONE_VM_INDEX_BITS=25`). That is P1's
+flat table, which P1 has run on silicon (bkit88/89, 2026-11-16), not its paged tree. Its twin is kit-p1v (readings
+below); the board kit is the runtime lane's next build. The text from here to the kit-p1v readings is as written
+before that decision.
+
+Earlier text: no P1 board kit runs the virtual profile today. The runtime lane checked every t3-smoke
+kit: the non-native ones are on older bitstreams or riscv-base. P1's lifetime hardware is the paged table, which
+the native kits drive with the table-tree module (llvm-capstone table-tree 722416c35e77, not on dev). So a P1 virtual
+kit needs dev's virtual module plus the table-tree code, with a VM ABI matching kit-devq's runtime. That kit, its ABI
+check and its Tier 1 boot are the runtime lane's next build. Every board claim below waits for it. The board
+prediction will be the QEMU verdict on the same image bytes (Tier 3's rule).
+
+**Images**, from the dev worktree at deb4ebf0b06b with the llvm-agp compiler (clang d9fa11a409d2), and corpus SDKs
+(`-fno-builtin`, mallocng, virtual profile, application ABI 2):
+- **SQLite engine-repros**, 33 cases per arm: `ports/sqlite/repro322/build-virtual.py` over the adapted 3.22.0
+  amalgamation (`7fc92e19…`, the bundles' input), `--ext-src` the 3.22.0 full tree, and the two memsys5 controls
+  (`control_uaf_mem5.c`, `control_bounds_mem5.c`) built in.
+  - `virtual-malloc` (`--memsys5`): 33 built, 0 failed.
+  - `virtual-nested-pools` (`--sublet`): 33 built, 0 failed.
+  - SDK `sdk.json` `6ff09cfbe6ad7b5d…`.
+  - By encoding, case 00's image carries CDERIVE 7 and CREVOKE 3 on the malloc arm (mallocng's own lifetimes),
+    and 9 and 4 on the pools arm. Every CREVOKE has two operands, which is the form P1 decodes.
+- **PHP engine-repros**: one interpreter image for the four `PHP_CAP_MODE` arms, built by
+  `ports/php/app/build-virtual.sh realphp` on PHP 5.0.0 from `prepare-sources.sh` (tarball `5783e0c0…`, patch set
+  `ac187130…`):
+  - `php-real-nested.dom` `6321dcc8993ac0af…`;
+  - the bound control's probe, `probe-nested.dom` `f6b1e7085a423dd7…`;
+  - `probe-putenv.dom` `7367104ffe1552bb…`.
+  - The build counts nested capability instructions as derive=8, revoke=4.
+- **QEMU readings on kit-devq**, queued behind the twin's runs:
+  - SQLite: one persistent VM per arm, `shared/run-virtual.py`;
+  - PHP: `run-realphp.py`, one boot per population.
+  - What those runs will read is not predicted here. Their verdicts become the board's predictions, and each is
+    compared with the 2026-10-29 (SQLite) and 2026-10-28 run18 (PHP) bundles. A cell that differs from those
+    bundles is reported as a difference of the newer toolchain and runtime before any board pre-registration.
+
+### QEMU readings (2026-11-23 07:47-08:46)
+
+Three kit-devq defects came out of these runs. The runtime lane owns kit-devq and is fixing all three. Until then,
+every reading below says which QEMU ran it and which `-cpu` it applied.
+- **The QEMU drops two properties.** kit-devq's `qemu-system-riscv64` execs kit-profq's wrapper around a Q-34
+  binary (capstone-qemu 46b69c03a4).
+  - It refuses `x-capstone-addr`, which `ports/php/app/run-realphp.py` sets, so on it no PHP arm booted.
+  - It strips `x-capstone-exact-bounds=true` on purpose: that twin is RTL-pinned, and the silicon has no exact bounds.
+    The bundle's platform record copies the requested `-cpu`, so every kit-devq bundle says `"exact_bounds": true`.
+    The applied line is in kit-profq's `applied.log`; read the field as false.
+- **A timeout does not end the guest job.** `appvm.run_app`'s 300 s timeout ends the host side only. SQLite case 11
+  (fts3_zterm) spins on in the 1-CPU guest on the malloc arm. Every later case on that VM then read "runner timeout"
+  with an empty output (cases 11-25 of the first attempt, discarded as no data). In the 2026-10-29 bundle, case 11 is
+  the only timeout, and all 21 later cases began and completed or faulted. Its pools arm caught 11.
+- **So the readings below are on capstone-qemu 0542c5556c, run directly.** That is the pin of dev 1a051da6e82b, which
+  kit-devq's adapter comes from: binary `52f3daa98e3a487e…`, from a clean worktree. They use kit-devq's images and
+  adapter (module `af7484e5e39019a6…`), and SQLite's case 11 runs alone and last on each arm.
+
+**SQLite engine-repros, against 2026-10-29-virtual.**
+- **Exact bounds on, 66 of 66 cells the same.** The `-cpu` applied was
+  `rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true`. Same means
+  verdict and reason; the controls read as expected on both arms.
+  - Added 2026-11-23 13:47: "same" was verdict and reason, not the observation. One cell's observation differs. On
+    the malloc arm, case 24 (`writable_schema_stale_table`) completed in 10-29 and faults today with cause 24 in
+    `sqlite3OpenTable`. It reads that way in all three of today's runs (both QEMU profiles and kit-p1v below), and both
+    verdicts are MISSED. The images differ (case 24's malloc image `60b732d36a08…` today, `51ba0b0170c8…` in 10-29),
+    and vp2's board read the same fault in 2026-10-18-vp2-rdx0 (`vp2-malloc-sq0e`: cause 24 in `sqlite3OpenTable`).
+    So it is the later image's reading, the program's own consequence fault on the arm with no mechanism.
+  - virtual-malloc: MISSED 29, NO-READING inconclusive 1 (06), unattributed 2 (02, 20), infra 1 (11, the timeout).
+  - virtual-nested-pools: CAUGHT 29, MISSED 4.
+- **Exact bounds off (kit-devq): 64 of 66.** The two other cells are both pools-arm overreads:
+  - 29 (`sqlite3Get4byte`) reads cause 24 where 10-29 read cause 28 CAUGHT;
+  - 31 (`statDecodePage`) does the same.
+- **The pair that differs in the property alone.** Same binary 0542c5556c, same images, pools arm, cases 25, 29 and
+  31:
+  - `x-capstone-exact-bounds=true`: 25, 29 and 31 all cause 28 (`RISCV_EXCP_CAP_OOB`, 0x1c), CAUGHT;
+  - the property absent: 25 cause 28 CAUGHT; 29 and 31 cause 24 (`RISCV_EXCP_UNEXP_OP_TYPE`, 0x18, `cpu_bits.h:699`)
+    in the same function, which the arm's judge does not count as its mechanism, so MISSED.
+- **Where the cause-24 traps are.** Both halves of the pair trap at the same instruction and the same address,
+  on the same image (sha256 `59b4941d…` for 29, `9f6d8fb7…` for 31). Offsets below are from the code window's
+  base, which is ELF 0x10000:
+  - 29: pc +0x643fc, address +0x35a3a2, ra +0x2041f0 in both halves. That is ELF 0x743fc, `lbu a0, 0(a1)` in
+    `sqlite3Get4byte`, the first byte load of the 4-byte read.
+  - 31: pc +0x204290, address +0x3585e0 in both. That is ELF 0x214290, `lbu a1, 0(a0)` in `statDecodePage`, right
+    after `cincoffset a0, a0, a1` with an offset read from the page.
+  - In the exact-bounds half the same pc and address are cause 28, so that instruction is the out-of-bounds load
+    and the address is outside the capability.
+- **Reading.** The property explains the two cells, and under compact bounds, the profile the silicon has, both
+  overflowing loads are still stopped, at the load itself. Only the cause differs. Cause 24 there fits the reference's
+  moved-capability rule (`op_helper.c:845`): a cursor that is not representable leaves an untagged integer, and its
+  dereference traps with 24. That the tag was dropped is inferred from the cause; the operand's tag was not read.
+  So the bugs are caught, and the judge's mechanism list for the pools arm lacks 24 under the compact profile. This
+  is a finding about the judge against the 10-29 bundle's exact-bounds verdicts, for the lead. Which cause the board
+  will read is the board's question, and no paper text changes here.
+
+**PHP engine-repros, against 2026-10-28-run18.** Both populations, the four arms each.
+- Every arm booted.
+- "all cross-arm gates pass" in both logs (image capability instructions derive=8 revoke=4).
+- The `-cpu` was run-realphp.py's own, with `x-capstone-exact-bounds=true` and `x-capstone-addr=sv39`, applied
+  unchanged by the bare binary.
+
+| arm | asan-blind (39): CAUGHT / MISSED | temporal-asan-visible (31, 25 out of denominator): CAUGHT / MISSED |
+|---|---|---|
+| stock | 5 / 29 | 1 / 4 |
+| system allocator (block) | 12 / 21 | 5 / 0 |
+| nested (object) | 26 / 10 | 5 / 0 |
+| nested exact | 31 / 4 | 5 / 0 |
+
+- 274 of 280 cells equal run18's in verdict and reason. The six that differ are two cases:
+  - **30 (crash-092): the per-run watchdog moved.** In run18 it killed the two nested arms (infra), and stock and
+    block read not-reached. Today it kills stock and block (infra), and both nested arms read CAUGHT (cause 25 in
+    `_zval_ptr_dtor`). A timing case, on a different QEMU.
+  - **41 (crash-139, an `efree` of the `.rodata` literal "message").** In run18 the nested layer refused the free
+    (NO-READING unattributed, code=3). Today both nested arms read MISSED. But in today's image no arm performs that
+    free: `blocks=342 frees=342` in all four, which read the same. So the MISSED is a non-reach the judge cannot see,
+    not a free the layer accepted.
+    - Not attributed. A candidate: the trigger's member zval is never refcount-initialised (its header), so whether
+      `zval_ptr_dtor` frees depends on stack contents. Those can move with the image: dev's nested layer since
+      bbedfbd40c6c, `php-real-nested.dom` `6321dcc8…` against run18's `101c6524…`.
+    - So today's nested arm has one temporal MISSED where run18's has none, and that cell is a difference of reach.
+- These verdicts are the QEMU side of the board's predictions. The board pre-registration still waits for the P1
+  virtual kit above.
+- Superseded as the board's prediction by the kit-p1v readings below: kit-devq is not the board's module.
+
+### Readings on kit-p1v, the P1 twin (2026-11-23 12:12-13:41)
+
+kit-p1v is the runtime lane's `perf/p1v/kit-p1v` (its gate: 11:12, 25/28/28, `ids=55 index_bits=25
+node_flat_records=1048576`):
+- QEMU: a wrapper (`e855047c…`) over capstone-qemu 0542c5556c (binary `52f3daa98e3a487e…`). It adds
+  `x-capstone-ids=55` and `x-capstone-addr=sv39`, and strips exact bounds and test CSRs.
+- Images: kit-devq's (Image `e5861359…`, fw_jump `6f2b082c…`, rootfs `9903242c…`).
+- Adapter: launcher `2488e5d2…` and the ids55 flat module `0d5a7d627787af56…`.
+- The corpus images are the ones above, unchanged; every verdict's `image_sha256` is in the manifests below.
+
+Committed per corpus under `results/2026-11-23-p1v-twin/`: the bundles (`inputs.json`, `verdicts.jsonl`, with account
+paths shown as `<hdd>/`) and `images.sha256`. SQLite's manifest has 70 lines, the 33 cases and two controls per arm
+(`267960f79021a726…`). PHP's has the interpreter and two probes.
+
+**SQLite** (`run-sqlite-p1v.sh`; one VM per arm, `capstone_vm up`, `-m 8G`, `cma=512M`, `supervisor_slots=1`; case 11 alone
+and last):
+- applied `-cpu` (kit-p1v's `applied.log`, 12:12:48 and 12:19:31): `rv64,sstc=false,h=false,sv48=false,sv57=false,
+  x-capstone-u-mode=true,svadu=false,x-capstone-ids=55,x-capstone-addr=sv39`. No exact bounds, and the bundles say
+  `"exact_bounds": "False"`, which here is what was requested and what was applied.
+- dmesg: `flat table 1048576 records, 16777216 bytes, from CMA`.
+- Controls on every row: malloc arm `uaf-mem5` and `bounds-mem5` complete (33/33), pools arm both fault (33/33).
+- virtual-malloc: MISSED 29, NO-READING 4 (02 and 20 unattributed, 06 inconclusive, 11 infra, the 300 s timeout).
+  Faults among the MISSED: 05, 19, 22 and 24, cause 24 each.
+- virtual-nested-pools: CAUGHT 27 (cause 25: 20; cause 28: 7), MISSED 6 (01, 04, 08, 09; 29 and 31 with cause 24).
+- **Against kit-devq (compact bounds): 66 of 66 the same** in verdict and cause. **Against exact bounds (0542 run
+  with the property) and against 10-29: 64 of 66**, the two cells being pools 29 and 31. That is what the compact
+  profile predicted, from the pair above.
+
+**PHP** (`run-php-p1v2.sh`; `run-realphp.py`, one boot per arm, `-m 2G`, module args `node_initial_pages=1024
+supervisor_slots=32`):
+- First attempt void (`res-p1v`): no arm ran. The flat module takes its 16 MiB table from CMA, and run-realphp's VM
+  boots with `-append "root=/dev/vda ro"`, which has no CMA. dmesg read `flat table ... from CMA: ALLOCATION FAILED`,
+  and every case read `capstone-vexec: open: Cannot allocate memory`. `capstone_vm up` appends `cma=`, so SQLite was
+  not affected.
+- Second attempt: QEMU is `nested/corpus5/qemu-p1v-cma.sh` (`e3badf60…`). It adds `cma=256M`, the board's value
+  (`capstone_vm.c:485`), to that `-append` and execs kit-p1v's wrapper. It booted all eight arms (13:30:00-13:39:57
+  in kit-p1v's `applied.log`, with `x-capstone-supervisor-slots=32` and no exact bounds). dmesg read `262144K
+  cma-reserved` and `flat table 1048576 records ... from CMA`.
+- The platform record copies run-realphp's requested `-cpu`, which asks for exact bounds and test CSRs; neither was
+  applied (the lines above).
+- "all cross-arm gates pass" in both logs (derive=8, revoke=4).
+
+| arm | asan-blind (39): CAUGHT / MISSED | temporal-asan-visible (31, 25 out of denominator): CAUGHT / MISSED |
+|---|---|---|
+| stock | 5 / 29 | 1 / 5 |
+| system allocator (block) | 12 / 21 | 6 / 0 |
+| nested (object) | 26 / 10 | 5 / 0, infra 1 |
+| nested exact | 31 / 4 | 5 / 0, infra 1 |
+
+- **Against today's kit-devq run (res2): 278 of 280 cells the same** in verdict, reason, cause and function. All 156
+  asan-blind cells match, and 122 of 124 temporal ones. The two others are one case, 21 (crash-075):
+  - res2: infra on all four arms, a cause-30 node-table exhaustion (the judge's "not a reading about the program");
+  - kit-p1v: stock MISSED (completed, 550,844 nodes allocated), block CAUGHT (cause 25 in `php_array_walk`, the
+    declared function), both nested arms still infra with cause 30.
+  - The table is the difference: capacity 262,144 records on kit-devq's module, 1,048,576 on kit-p1v's (each bundle's
+    notes). No other case allocates more than 4,344 nodes, on either kit.
+- So against run18, the cells that differ are 30 and 41 as before, plus 21 on stock and block.
+
+Not measured here: memory and cycles. These runs read verdicts only.
+
+### Pre-registration: item 5 on a P1 board (written 2026-11-23 13:47, before any board kit or run)
+
+What runs: both corpora's images above, the same bytes (`results/2026-11-23-p1v-twin/images.sha256` per corpus), on a
+P1 board (bitstream `caplifive_ids55-…-pagedtbl_d83d3a633`) under the runtime lane's board kit for route (c). The
+kit is dev 1a051da6e82b's launcher `2488e5d2…` and flat ids55 module `0d5a7d627787af56…`, on a board kernel with no
+built-in capstone_vm. **This is P1's FLAT table, not its paged tree:** no reading below is about the paged table.
+
+**The prediction is the kit-p1v twin's cell, on the same image bytes and module.** That covers verdict, reason, cause
+and faulting function, for 66 SQLite cells (`2026-11-23-p1v-twin/{malloc,malloc-11,pools,pools-11}`) and 280 PHP
+cells (`2026-11-23-p1v-twin/{asan-blind,temporal-asan-visible}`), with these declared exceptions:
+- **Timing cells: verdict class only.** These are SQLite malloc 11 (the 300 s timeout, infra on the twin) and PHP 30
+  (crash-092, the watchdog moved between kits). Predicted: not CAUGHT on malloc 11; PHP 30 is not predicted.
+- **Consequence-fault causes on arms with no catch.** On silicon, an untagged dereference is reported as cause 4 or
+  13 as often as 24 (`arms.json`, silicon-sqlite-memsys5's `catch_causes_why`). vp2 read 4 and 13 on malloc 19, 20
+  and 22 (2026-10-18-vp2-rdx0). So on the malloc arm only the verdict is predicted for the faulting cells 05, 19, 22
+  and 24 (MISSED), and for 20 (NO-READING). On PHP's stock and block arms, a MISSED with a fault is predicted as MISSED
+  with any cause outside the mechanism set.
+- **SQLite pools 29 and 31: MISSED, with a cause outside the mechanism set,** at the twin's instruction if the pc is
+  read (ELF 0x743fc `lbu` in `sqlite3Get4byte`; ELF 0x214290 `lbu` after `cincoffset` in `statDecodePage`).
+  - Branch: CAUGHT with the bounds cause on either is a twin-vs-silicon difference in CINCOFFSET on an
+    unrepresentable cursor (the twin follows the reference's moved-capability rule, `op_helper.c:845`). It goes to the
+    RTL lane, and it is not a protection reading.
+- **PHP temporal 21 (crash-075): infra (cause-30 table exhaustion) on both nested arms.** That reading depends on the
+  table's capacity, which the geometry gate fixes. On stock and block it is the twin's cell.
+
+**Gates on the board's first boot, before any cell is compared:**
+1. **Cause numbering.** The judge's `catch_causes` is `[25, 28]` in the twin's numbering (cpu_bits.h: 25 INVALID_CAP,
+   28 CAP_OOB). The launcher prints the module's step cause unchanged (`exec.c:1122-1127`, `step->cause` from the
+   supervisor frame, `capstone_vm.c:2706`). On silicon that is the hardware's number. `docs/ref/README.md:22-23`
+   gives 26 for INVALID_CAPABILITY and 29 for OUT_OF_BOUNDS. vp2's board read 24 where the twin reads 24, for the
+   untagged dereference, and it had no mechanism arm to show the other two.
+   - So the pools arm's two controls (`uaf-mem5`, `bounds-mem5`) and a SQLite case-25 positive read the numbers.
+   - If the stale access reads 25 and the bound 28, the judge applies as is.
+   - If they read otherwise, no cell is judged until an amendment naming the mapping is pushed.
+   - Predicted: the stale access 26 and the bound 29. That is README's table, with the launcher passing the frame
+     through.
+2. **Geometry.** On the board, `/sys/module/capstone_vm/parameters/` must read `ids=55`, `index_bits=25` and
+   `node_flat_records=1048576`, as on the twin's gate. A different capacity voids the comparison of PHP 21 and of
+   any infra cell with cause 30.
+3. **CMA.** The board kernel's command line must reserve CMA of at least 16 MiB; `capstone_vm.c:485` gives
+   `cma=256M`. The boot's dmesg must show `flat table 1048576 records, 16777216 bytes, from CMA` without `ALLOCATION
+   FAILED`. Without it, every case reads ENOMEM, as PHP's first twin attempt did.
+4. **Slots and memory.** PHP's twin ran `supervisor_slots=32` against a QEMU with 32 slots, and SQLite's ran 1. The
+   board's module argument must equal the bitstream's slot count. A module with more slots than the hardware has halts
+   the guest at child entry. If the board needs a different count, or less memory than the twin's (2 GiB PHP, 8 GiB
+   SQLite), the kit's README says so. Any cell that then differs is read as a candidate kit difference first.
+5. Each boot runs the corpus's virtual positive control first, and puts at most one wedge risk last (Tier 3's rule).
+
+**Branches:** a cell outside the exceptions that differs from the twin is a silicon-vs-twin difference. It is reported
+with both cells and the image hash before any count is said. A whole arm that differs, such as every pools cell, is
+read as a kit fault first: gates 1-4.
+
+Memory and cycles are not measured by this run.
+
+### Amendment 1 to the item 5 board pre-registration (written 2026-11-23 15:11, before any board kit has booted)
+
+This replaces gates 1, 2 and 4 above and adds gate 6. The rest of the pre-registration stands, including the
+exceptions and branches.
+
+**Withdrawn: gate 1's "Predicted: the stale access 26 and the bound 29".** This lane wrote it from
+`docs/ref/README.md`'s cause table, which predates capstone-ariane c77c65324 (2026-09-15), the renumbering. dev
+8b3d792e6b5d corrects the README. P1's own source agrees with the twin's numbering:
+- `riscv_pkg.sv:358-363` at the bitstream's revision d83d3a633 gives 24 UNEXPECTED_OPERAND_TYPE, 25 INVALID_CAP, 26
+  UNEXP_CAP_TYPE, 27 INSUF_PERM, 28 OOB and 29 ILLEGAL_OPERAND_VALUE.
+- Those are cpu_bits.h's numbers.
+
+**Gate 1, as amended.**
+- Predicted: the stale access reads 25 and the bound reads 28, and the judge's `catch_causes [25, 28]` applies
+  unchanged.
+- A 26 or 27 on either control means the arm's capability is not the one it assumes: wrong type, or wrong
+  permissions. A 29 means a wrong operand. In each case no cell is judged until it is read.
+- **A 25/28 swap is not a verdict difference.** Some cells read 25 on the twin and 28 on the board, or the reverse.
+  Such a cell is reported as a check-order difference: same verdict, both causes listed. These are the cells whose
+  access is both stale and out of bounds.
+- Where the order is known:
+  - At d83d3a633, the M-mode capmode load/store check (`load_store_unit.sv:1390-1465`) raises 28 for bounds before
+    25 for lifetime.
+  - For LDC/STC, ex_stage applies the lifetime deny (25) only when the DYN unit raised nothing (`ex_stage.sv:1528-1533`).
+  - The order for the corpora's own accesses in a supervised user context is not established here.
+
+**Gate 4, as amended: P1 has one saved context.**
+- The rtl lane reports that P1 holds one saved virtual context: `csr_regfile.sv:392-393`, "the one saved virtual
+  context (QEMU keeps 32 slots; the plan takes one)".
+- The board's module therefore runs `supervisor_slots=1`.
+- PHP's twin cells were read at 32 slots, so both corpora were re-read at P1's geometry (below). The memory part of
+  gate 4 is unchanged.
+
+**Gate 2, as amended.** The module also runs `resolve_dirty=1 resolve_pte=1`. On silicon, the flat ids55 module
+matches its twin only when loaded with `resolve_dirty=1`, S-24's fix, which defaults off. The source is dev
+`tests/rtl-smoke/ids55-flat-module/RESULTS-twin.md`, "Board": bitstream 325966ee4, boot b4-t1c, kit bkit14-b4r-b2, both
+parameters set. Loaded bare, the module read 28/45. The twin never takes that branch. So on the board, `/sys/module/capstone_vm/parameters/` must also
+read `supervisor_slots=1`, `resolve_dirty=Y` and `resolve_pte=Y`.
+
+**Gate 6, new: module identity.**
+- The board module cannot be the twin's bytes. It is built for the board kernel 6.4.14; the twin's was built for 6.1.
+- The runtime lane's board build of 13:58 (`perf/p1v/buildb.sh`, output `b55dev`) is `74b4cceb69d159c1…`.
+  - Source: the same `capstone_vm.c`, `f256348b49d59426…`.
+  - Flags: the same `KCFLAGS`, `-march=rv64g -mabi=lp64d -DCAPSTONE_VM_FLAT_TABLE=1 -DCAPSTONE_VM_BENCH_COUNTERS`.
+  - vermagic `6.4.14`; no 2-byte instructions among its 8,071.
+- The module the board loads must be the one the runtime lane's kit README names, with this source hash. If it is
+  not this build, the kit README says what differs.
+
+**The P1-geometry re-read (14:49-15:07), now the prediction of record.**
+- What ran:
+  - The same image bytes and kit-p1v.
+  - Module arguments `supervisor_slots=1 resolve_dirty=1 resolve_pte=1`; QEMU with `x-capstone-supervisor-slots=1`.
+  - The CMA reserve was 256 MiB; the flat table came from CMA on every boot.
+  - The kit's applied `-cpu` (`ids=55`, `sv39`, no exact bounds) was read from each PHP boot's `KIT-P1V-APPLIED` line
+    and from the running SQLite QEMU's argv. The parameters were read back from sysfs on both SQLite VMs.
+- Bundles: `results/2026-11-23-p1v-twin-p1geom/`, per corpus.
+- **Every cell equals the 12:12-13:41 readings.** SQLite: 66 of 66 in verdict, reason, cause, function and offset
+  (only absolute addresses differ, with the load base). PHP: 280 of 280 in verdict, reason, cause and function.
+- So the predicted cells and the exceptions above are unchanged. Neither the slot count, nor `resolve_*`, nor the
+  smaller CMA moves any cell on the twin. SQLite malloc 11 is again the runner timeout (rc 75), as the exception
+  already allows.
+
+### Amendment 2 to the item 5 board pre-registration (written 2026-11-23 15:25, before any board kit has booted)
+
+The runtime lane cut the board kit as `t3-smoke/bkit109-p1v-corpus-flat`. Its README answers gate 6. Two corrections
+and one addition follow.
+
+- **Gate 6's flag list was incomplete.**
+  - The module's identity defines are four: `CAPSTONE_VM_FLAT_TABLE=1`, `CAPSTONE_VM_IDS=55`,
+    `CAPSTONE_VM_INDEX_BITS=25` and `CAPSTONE_VM_BENCH_COUNTERS`.
+  - The source alone would give ids 30 and index bits 16 (`capstone_vm.c:35-36`, `:245-246`), so ids and index bits
+    come from the build's extra `KCFLAGS`.
+  - The runtime lane compared the twin and board builds' defines and found them identical. Gate 2's sysfs read of
+    `ids` and `index_bits` checks the same thing on the board.
+- **`supervisor_slots` is not a board parameter.**
+  - It is read-only after load, with default 1 (`capstone_vm.c:616-617`, mode 0444).
+  - So the kit's `params` sets only `resolve_dirty=1 resolve_pte=1`. Gate 2 still reads `supervisor_slots=1` from
+    sysfs.
+- **Stages.**
+  - The firmware payload is capped at 26,000,000 bytes, and an image is about 3.3 MB (PHP's nested build 4.9 MB). So
+    each corpus runs as several boots of a few images.
+  - Every stage boot runs its corpus's virtual positive control first (gate 5). A stage whose control fails is void,
+    and none of its cells is compared.
+  - The twin ran each arm's cases in one VM. So when a board cell differs from the twin, its position in the stage is
+    reported beside it. Before anything else, the same case is read as the first case of a stage (boot history).
+
+### Amendment 3 to the item 5 board pre-registration (written 2026-11-23 17:27, before any board kit has booted)
+
+This amendment replaces Amendment 2's stage split with the route agreed with the runtime lane. It also states the stop
+gate, the budgets each boot gets and the sources of those budgets, and two facts about reading the board bundles.
+
+- **Route.**
+  - SQLite runs as one boot per arm, pools first, then malloc. A boot runs the runner's two controls, then every case
+    except 11, then case 11 alone, last. This is the twin's order, where case 11 also ran last in its VM.
+  - Both arms go through `appvm-session.py`: phase collect, then one board boot, then phase read. The kit is
+    `bkit109-p1v-corpus-flat`, run with `BOARD_STAGE_XZ=1`, which packs the stage's images into one xz archive. With
+    the archive, an arm's 33 images fit under the 26,000,000-byte firmware cap. Without it, they do not.
+  - PHP runs through the runtime lane's board runner `app-p1b`. Its `run-realphp.py`, `count-cap-insns.py` and
+    `run-virtual-twin.py` are byte-identical to the twin's. That makes four boots per population, one per arm, for
+    eight PHP boots in all.
+  - Every boot carries its own controls: SQLite's `uaf-mem5` and `bounds-mem5`, and PHP's sanity and probe arms. So
+    Amendment 2's rule holds for each boot: a boot whose control fails is void.
+  - Amendment 2's position rule still applies. A board cell that differs from the twin is reported with its position in
+    its boot, then re-read as the first case of a boot.
+- **The session mechanism's own QEMU control.** Pools as one `appvm-session` boot on `vkit-p1v` (kit-p1v, with the
+  board's two parameters) equals the P1-geometry twin in 33 of 33 cells. Malloc's control is queued behind the QEMU
+  lock and is reported when it lands. The board boots do not wait for it.
+- **Stop gate after pools.**
+  - The chain reads the pools boot's controls from its `verdicts.jsonl`. The gate passes only when `uaf-mem5` reads
+    fault 25 and `bounds-mem5` reads fault 28. Anything else stops the chain before malloc and before any PHP boot.
+  - Both branches were dry-run: the empty transcript reached the STOP branch, and a transcript built from the QEMU
+    session control reached the PASS branch. The PASS-branch dry run goes as far as the chain's marker.
+  - Dry-run readings (17:28-17:31, every board call stubbed: lab-book, including one rc 3, and the board boot):
+    - pools through the board read path equals the P1-geometry twin in 33 of 33 cells;
+    - the same pools transcript fed to the malloc arm reads `NO-READING:control-failed` in all 32 cases, because
+      stock's controls expect completion. That is the void rule firing;
+    - PHP equals the twin in 280 of 280 cells on verdict, reason, cause and symbol;
+    - the marker was written after the last unbook.
+  - The marker's per-step codes are the scripts' exit codes, not readings. A void boot shows in its bundle, not in
+    the marker.
+- **Budgets each boot actually gets.** Each figure is read from the staged `gate.sh` or the kit, not from a runner
+  default.
+  - SQLite.
+    - The boot timeout is `appvm-session`'s default, 300 + Σ min(step, 600). For 35 steps of 300 s that is 10,800 s.
+    - The in-guest budget is that timeout minus boardvm's 300 s margin, so 10,500 s. Each step's bound is min(the
+      remaining budget − 60, 6,000) s.
+    - The driver gets 10,800 × `BOARD_TIMEOUT_MULT` 4 = 43,200 s, plus 1,800 s.
+    - The in-guest budget is not multiplied. So the binding limit is 10,500 s, not the 43,200 s the multiplier
+      suggests.
+  - Source of the SQLite budget figures.
+    - The QEMU session control on `vkit-p1v` ran all 35 steps of pools in 62 s of guest time. The kernel clock reads
+      62.2 s at the last step.
+    - The kit's README puts a board step at about 18 times its QEMU time (vp2, pym0).
+    - So the expected pools boot is about 19 min of steps, about nine times inside the budget.
+    - Case 11 faulted in 2 s on the twin and exits on the QEMU control with status 139. It is not the spin that
+      the earlier kit-devq attempts had to work around.
+  - PHP.
+    - Each run's in-guest watchdog is the twin's run timeout times 20, so 800 s. The idle limit is 1,100 s. Both
+      figures are read from the dry-run bundle's `board` field.
+    - The twin's arms ran 48 to 111 s of guest time each. At 18 times that, a boot runs up to about 35 min.
+- **Booking.**
+  - Board 2 is booked through `lab-book.py` once per corpus step: pools 180 min, malloc 240 min, and each PHP
+    population 300 min.
+  - Each booking is released when its step's boot exits, before the next is booked.
+  - A held window (rc 3) is retried every 300 s, up to 12 h.
+  - On every exit path, the chain unbooks and then writes `corpus5/board/ITEM5-BOARD-DONE` with its status. Those
+    paths are done, stopped, and SIGINT/SIGTERM. The runtime lane's h16s and the board lane's CSMINT kit wait on that
+    marker.
+  - The chain starts only after the runtime lane's mcf train on board 2 has exited.
+- **Gate 4 gets one more candidate kit difference: memory.**
+  - The board has 962 MiB, with 256 MiB of CMA.
+  - The twin had 8 GiB for SQLite and 2 GiB for PHP.
+  - A board cell that differs from the twin through an allocation failure is read as this difference before anything
+    else.
+- **Reading the board bundles.**
+  - The board arm is recorded as `vp2-<arm>` (`boardvm.record_arm`), even on P1. The bitstream comes from the
+    bundle's firmware record, not from the label.
+  - In PHP, `platform.json` hashes the `--qemu` and `--images` inputs, which the board does not run. The board's
+    identity is the `board` field of each `<arm>-run.json`.
+
+### Amendment 4 to the item 5 board pre-registration (written 2026-11-23 20:26, before any board kit has booted)
+
+This amendment corrects one statement in Amendment 3 and records malloc's QEMU session control.
+
+- **Correction: what Amendment 3 says about case 11 holds for pools only.**
+  - On malloc (stock), case 11 does not fault.
+    - The P1-geometry twin reads it `NO-READING:infra` (runner timeout).
+    - In the QEMU session control, the step began and never ended. The QEMU gate has no per-step bound, so the boot
+      ran to its overall timeout (`boot DID NOT COMPLETE`).
+  - On the board, the step is bounded by the gate's watcher, at min(remaining − 60, 6,000) s. If a spinning domain
+    starves the watcher and the heartbeat, the driver's 200 s idle limit ends the rung instead.
+  - Case 11 runs last, so the spin costs no other cell. The board's malloc boot is still expected to fit its 240-minute
+    booking, with up to about 100 minutes of that spent in case 11.
+  - The prediction for malloc's case 11 is the twin's `NO-READING:infra`. A board boot that does not complete because
+    of this last step is not void for its other cells. Their readings are read from the rung segment, as the QEMU
+    control's were.
+- **Malloc's QEMU session control** equals the P1-geometry twin in 33 of 33 cells on verdict, reason, cause, symbol and
+  offset. Its case 11 matches the twin's `NO-READING:infra`.
+
+### Amendment 5 to the item 5 board pre-registration (written 2026-11-23 21:58, after the first board boot, before the re-slot)
+
+**The first boot read nothing.**
+- The chain booked board 2 at 21:39:55. The pools boot, `p1b1`, ran on bkit109 and resolved no corpus cell.
+  - Both b0 controls returned 0.
+  - The batch rung printed `@@XZSTAGE unpack 35 images` and then stayed silent. bkit109's wrapper unpacks 103,522,721
+    bytes of images (3,934,579 compressed) and hashes them without printing.
+  - After the driver's 200 s idle limit, the driver called the rung wedged.
+- Several apertures changed between two reads, so the core was probably still running. This is not established.
+- The stop gate read both controls as absent and stopped the chain before malloc. The board was unbooked at 21:51:05,
+  and the marker was written as `STOP-GATE1`.
+- No cell, control or verdict is taken from that boot.
+- The stubbed dry runs could not show this, because the unpack runs only on the board.
+
+**The kit becomes bkit111** (`t3-smoke/bkit111-p1v-corpus-xzv`, `board-run.sh` 359e90d6fc3dc265), cut by the runtime lane.
+- It is bkit109 with one change, to the wrapper `gate.sh`. The wrapper now prints a line for each file it unpacks, an
+  `unpacked` stamp, and one line per image hash. It also checks that the hash count equals the file count. So the
+  longest silence is one image of about 3 MB.
+- The rest of the kit is unchanged. The adapter, module, params, bitstream and monitor files are byte-identical to
+  bkit109's (`diff -rq`). `board.env` and `base.manifest` differ only in naming the kit's own path. The kit's
+  `SHA256SUMS` checks clean.
+- The runtime lane ran the wrapper under busybox 1.36.1 against four inputs:
+  - the positive case;
+  - a corrupted hash, which fails as `hash`;
+  - a truncated archive, which fails as `unpack`;
+  - an empty list, which fails as `count 0`.
+- It also ran the wrapper over a real bake of the pools stage: 35 file lines, then 35 hash lines, then `ok`.
+- The PHP boots use the same wrapper.
+
+**The SQLite boots' idle limit is 600 s** (`BOARD_IDLE_S`). That leaves a margin over one image's hash, while a real
+wedge still costs at most 10 minutes. PHP's runner sets its own limit (1,100 s, Amendment 3).
+
+**Dry run on bkit111** (21:58), with every board call stubbed:
+- the chain reached its marker;
+- pools matched the twin in 33 of 33 cells;
+- PHP matched the twin in 280 of 280 cells;
+- the bundles record the new kit.
+
+Everything else in Amendments 1-4 stands.
+
+### Amendment 6 to the item 5 board pre-registration (written 2026-11-23 22:03, before the re-slot boots)
+
+**The re-slot runs on board 2, and the chain now flashes P1 itself.**
+- After the board lane's CSMINT work, board 2 holds `…-pagedtbl-r76-r75d-b5b1_d0afdb40f`. A read-only readback at
+  22:03 reported a mismatch against P1.
+- bkit111's `board-run.sh` does not flash. So after each booking the chain runs these steps:
+  1. It checks the local P1 `.bit` against sha256 `dc411e36…`.
+  2. It reads back the resident name. If the name is not P1, it flashes P1 with `flash-bitstream.py` and reads the
+     name back again.
+  3. It parks the switches at 0 (`pre_boot_park.py`).
+- A failed check, flash, readback or park unbooks the board, writes the marker as `STOP-P1` and stops the chain.
+- The known-good fallback stays the console's default, bitstream 1.
+- Dry runs with the readback, flash and park stubbed:
+  - a failed flash stops the chain, unbooks the board and writes `STOP-P1`;
+  - a mismatch followed by a successful flash reaches the marker. Pools reads 33 of 33.
+
+### Amendment 7 to the item 5 board pre-registration (written 2026-11-24 05:17, after the re-slot, before the asan-blind re-run)
+
+**The re-slot's PHP asan-blind population read nothing.** Board 2, P1, bookings 1454 (01:00-02:56).
+- The stock and block boots ran cases 01 to 29, 25 of the population's 39. Then both were silent in case 30
+  (crash-092). Without protection that case spins until the runner's per-case guard kills it at 800 s. The
+  P1-geometry twin reads it `NO-READING:infra` for that reason, and the pre-registration names it a timing cell.
+- bkit111's `board-run.sh` starts `board-watchdog.sh` with `ABORT_ON_ENTRY_STALL=1 ENTRY_STALL_S=420`. A vexec batch
+  never prints `SHA6`, so after the boot's `SHA5`, 420 s of silence reads as an entry stall. The watchdog aborted
+  each runner (at 1,605 s and 1,636 s) before the guard could fire, and no transcript was written.
+- The object and exact boots completed, with every exit read (42 of 42 each). But the runner's cross-arm gate needs
+  all four arms. It refused every verdict of the population ("the arms are not the arms they claim to be").
+- So no asan-blind cell is taken from the re-slot. Amendment 3's budget list read the guard (800 s) and the driver's
+  idle limit (1,100 s), not the kit's watchdog. That watchdog was the binding limit for case 30.
+
+**The asan-blind population runs again, on bkit112** (`t3-smoke/bkit112-p1v-corpus-stall`, `board-run.sh`
+699dca0696779aa6).
+- bkit112 is bkit111 with one line changed: `ENTRY_STALL_S=${BOARD_ENTRY_STALL_S:-420}`. The stub mode also prints
+  the effective limit. `board.env` and `base.manifest` name the kit's own path, and the rest is byte-identical
+  (`diff -r`).
+- `php-board.sh` sets `BOARD_ENTRY_STALL_S=1000`. That is above the guard's 800 s and below the driver's idle limit
+  of 1,100 s. A real entry stall now costs up to 17 minutes instead of 7.
+- Controls of the watchdog line, run from bkit112's own text on the re-slot's recorded stock `driver.log`:
+  - with a limit of 30 s it aborted the runner at 45 s (positive);
+  - with 1,000 s it did not fire while the runner lived (negative).
+- Dry runs (05:16-05:17), with the board edge stubbed:
+  - the re-run chain (`item5-rerun.sh`, tag `p1b3`) reaches its marker through a held window, a flash and a park;
+  - a failed flash unbooks and writes `STOP-P1`;
+  - with `BOARD_STUB=1`, the real runner reaches bkit112's `board-run.sh` for all four arms. Each prints
+    `ENTRY_STALL_S=1000`, a driver idle limit of 1,100 s and a batch budget of 16,800 s.
+- The booking, P1 check, flash, readback and park are Amendment 6's. The marker is `corpus5/board/ITEM5-RERUN-DONE`,
+  and no other lane waits on it.
+
+**Prediction.**
+- Every asan-blind cell is the P1-geometry twin's (156 cells), with the pre-registration's exceptions.
+- Case 30 on stock and block, which the pre-registration did not predict, is now predicted as the guard's timeout:
+  `NO-READING:infra`, as on the twin.
+- The re-slot's complete object and exact boots are compared exit by exit with the re-run's, as a repeat.
+
+### Result: item 5 on a P1 board, SQLite and PHP temporal-asan-visible (re-slot `p1b2`, 2026-11-23 22:03 - 11-24 05:10)
+
+Board 2, P1 (`…-pagedtbl_d83d3a633`), flashed by the chain at 22:05:56 (sha checked before, name read back after) and
+read back resident before every later booking. Bundles: `bug-corpora/{sqlite,php}/engine-repros/results/2026-11-24-p1-board/`.
+
+**Every cell read matches its prediction: 190 cells, against the P1-geometry twin.**
+- SQLite pools (one boot, 22:05-22:42): 33 of 33 in verdict, reason, cause, function and offset.
+  - Gate 1 read on this boot: `uaf-mem5` faults with 25 and `bounds-mem5` with 28, and case 25 (fts5 getvarint)
+    is CAUGHT with 28. So the judge's `[25, 28]` applies unchanged (Amendment 1).
+  - Pools 29 and 31 read MISSED with cause 24, in `sqlite3Get4byte` and `statDecodePage`. These are the twin's
+    cells, so the CINCOFFSET branch did not fire.
+  - 27 CAUGHT, 6 MISSED.
+- SQLite malloc (one boot, 22:42-01:00): 33 of 33 in verdict, reason, function and offset.
+  - 30 cells also match in cause. Cases 19, 20 and 22 read cause 4, 4 and 13 where the twin reads 24. These are the
+    cells the pre-registration excepted ("consequence-fault causes on arms with no catch"). vp2 read the same 4 and
+    13 on them.
+  - Case 11 spun until the gate's watcher ended it at its 6,000 s bound (`@@STEP-BOUND … 6000`, exit 137). It reads
+    `NO-READING:infra`, as Amendment 4 predicted.
+- PHP temporal-asan-visible (four boots, 02:56-05:10): 124 of 124 in verdict, reason, cause and function. Stock has
+  1 CAUGHT and 5 MISSED. Block has 6 CAUGHT. Object and exact have 5 CAUGHT each, plus case 21's `NO-READING:infra`
+  (the excepted table-capacity cell). 25 cases per arm are out of the denominator, as on the twin.
+- The comparisons have controls:
+  - The PHP comparison run against the other population reports 160 differences, rc 1.
+  - The SQLite comparison reports the three malloc cause cells above.
+
+**Gates.**
+- Gate 2 was read in full on each PHP boot, from sysfs: `ids=55`, `index_bits=25`, `node_flat_records=1048576`,
+  `supervisor_slots=1`, `resolve_dirty=Y`, `resolve_pte=Y`.
+  - The SQLite boots print only the two `resolve_*` parameters (`@@PARAM`). They also print `supervisor_slots=1` in
+    the module's load line, and a flat table of 1,048,576 records.
+  - The SQLite and PHP boots load the same module, `74b4cceb…` (kit README).
+- Gate 3: every boot's dmesg shows `flat table 1048576 records, 16777216 bytes, from CMA`.
+- Gate 4: no cell differs outside an exception, so the memory candidate (962 MiB against the twin's 2-8 GiB) is not
+  needed to explain anything.
+- Gate 5: every boot ran its controls first.
+  - SQLite: two controls, both returned.
+  - PHP: the sanity arm completed on all four boots, with 6,375 revokes on object and exact. The bound probe faulted
+    as declared on object and exact.
+
+**What this does not say.**
+- It is P1's FLAT table, not the paged tree.
+- It says nothing about memory or cycles.
+- It covers 190 of the 346 pre-registered cells. PHP asan-blind (156 cells) read nothing on the re-slot
+  (Amendment 7). Its re-run is the next section.
+- The xz unpack timings: `@@XZSTAGE ok` came at board times 954 s and 953 s, which puts each stage's unpack and
+  hashing at about 15 minutes.
+
+### Result: item 5's PHP asan-blind population on a P1 board, every cell as predicted (re-run `p1b3`, 2026-11-24 05:18-07:47)
+
+Board 2, P1 (`…-pagedtbl_d83d3a633`), booking 1458. The chain flashed P1 at 05:18:41-05:20:53 (sha checked before, name
+read back after, readback rc 3), parked the switches, ran the four boots through `php-board.sh` on bkit112, and
+unbooked at 07:47:39. Bundles: `bug-corpora/php/engine-repros/results/2026-11-24-p1-board/asan-blind/`.
+
+**All 156 cells match the P1-geometry twin**, in verdict, reason, cause and function. Each arm's count is the twin's:
+
+| arm | asan-blind (39): CAUGHT / MISSED | NO-READING |
+|---|---|---|
+| stock | 5 / 29 | out of denominator 3, infra 1 (case 30), not reached 1 |
+| system allocator (block) | 12 / 21 | out of denominator 3, infra 1 (case 30), not reached 1, unattributed 1 |
+| nested (object) | 26 / 10 | out of denominator 3 |
+| nested exact | 31 / 4 | out of denominator 3, unattributed 1 |
+
+- Case 30 (crash-092) on stock and block reads `NO-READING:infra`, as Amendment 7 predicted. Both boots print
+  `VM_EXIT_TIMEOUT` and `VM_EXIT:…crash-092:137`. In each boot, the kernel line that closes case 29 and the one that
+  closes case 30 are 801 s apart: 958.8 s to 1,759.9 s on stock, 978.5 s to 1,779.6 s on block. That is the
+  runner's 800 s guard. Both boots then ran cases 31 to 41 to the end.
+- The repeat: the re-run's object and exact boots match the re-slot's (`p1b2`) in every exit, 42 of 42 each.
+- The landing check compares verdict and reason against the twin again, and finds no difference.
+
+**The watchdog fix is what changed.** bkit112's watchdog ran in all four boots (119 to 170 `ALIVE`/`QUIET` lines each).
+In stock and block it logged 780 s without UART during case 30, above bkit111's 420 s limit, and did not abort. No
+watchdog log has a stall line.
+
+**Gates**, read the same way as on the re-slot:
+- Gate 2: each boot's sysfs gives `ids=55`, `index_bits=25`, `node_flat_records=1048576`, `supervisor_slots=1`,
+  `resolve_dirty=Y` and `resolve_pte=Y`.
+- Gate 3: each boot's dmesg shows `flat table 1048576 records, 16777216 bytes, from CMA`.
+- Gate 5: every boot completed the sanity arm first (`sanity 573 200 17 abc …`). It shows 6,375 revokes on object and
+  exact, and none on stock and block. The bound probe exited 139 on object and exact, as declared.
+
+**So item 5 on the board is complete: 346 of 346 pre-registered cells read, each as predicted.** That is 190 from
+the re-slot and 156 from this run. Like the re-slot, this is P1's flat table, not the paged tree, and it reads verdicts
+only, not memory or cycles.

@@ -269,6 +269,11 @@ the run ends, which is too late to abort anything.
 over: it kills only when the last share marker is `SHA5` with no `SHA6`. Plain idle-limit
 exceeded merely prints `STALE`. That distinction is the whole point — a workload arm can be
 silent for hours *after* `SHA6`, and an entry stall is silent *at* `SHA5`.
+**Except where no `SHA6` ever comes: a vexec batch (the kits' `board-run.sh`) runs in a process, never
+prints `SHA6`, and so ANY silence of `ENTRY_STALL_S` after boot aborts it.** There the entry-stall limit is
+a whole-run silence limit: size it above the longest legitimately quiet case, e.g. above the in-guest
+per-case guard. On 2026-11-24 the kits' hardcoded 420 s cut two PHP asan-blind boots in a case the twin
+already read as spinning to the 800 s guard (nested amendment 7, bkit112 makes it `BOARD_ENTRY_STALL_S`).
 
 **Afterwards, confirm it actually ran** (`grep -c '^ALIVE\|^QUIET' watchdog.log`), because
 "configured but never started" is precisely the failure it exists to prevent, and it is invisible
