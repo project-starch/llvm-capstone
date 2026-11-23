@@ -4869,6 +4869,53 @@ Everything else in Amendments 1-4 stands.
   `NO-READING:infra`, as on the twin.
 - The re-slot's complete object and exact boots are compared exit by exit with the re-run's, as a repeat.
 
+### Result: item 5 on a P1 board, SQLite and PHP temporal-asan-visible (re-slot `p1b2`, 2026-11-23 22:03 - 11-24 05:10)
+
+Board 2, P1 (`…-pagedtbl_d83d3a633`), flashed by the chain at 22:05:56 (sha checked before, name read back after) and
+read back resident before every later booking. Bundles: `bug-corpora/{sqlite,php}/engine-repros/results/2026-11-24-p1-board/`.
+
+**Every cell read matches its prediction: 190 cells, against the P1-geometry twin.**
+- SQLite pools (one boot, 22:05-22:42): 33 of 33 in verdict, reason, cause, function and offset.
+  - Gate 1 read on this boot: `uaf-mem5` faults with 25 and `bounds-mem5` with 28, and case 25 (fts5 getvarint)
+    is CAUGHT with 28. So the judge's `[25, 28]` applies unchanged (Amendment 1).
+  - Pools 29 and 31 read MISSED with cause 24, in `sqlite3Get4byte` and `statDecodePage`. These are the twin's
+    cells, so the CINCOFFSET branch did not fire.
+  - 27 CAUGHT, 6 MISSED.
+- SQLite malloc (one boot, 22:42-01:00): 33 of 33 in verdict, reason, function and offset.
+  - 30 cells also match in cause. Cases 19, 20 and 22 read cause 4, 4 and 13 where the twin reads 24. These are the
+    cells the pre-registration excepted ("consequence-fault causes on arms with no catch"). vp2 read the same 4 and
+    13 on them.
+  - Case 11 spun until the gate's watcher ended it at its 6,000 s bound (`@@STEP-BOUND … 6000`, exit 137). It reads
+    `NO-READING:infra`, as Amendment 4 predicted.
+- PHP temporal-asan-visible (four boots, 02:56-05:10): 124 of 124 in verdict, reason, cause and function. Stock has
+  1 CAUGHT and 5 MISSED. Block has 6 CAUGHT. Object and exact have 5 CAUGHT each, plus case 21's `NO-READING:infra`
+  (the excepted table-capacity cell). 25 cases per arm are out of the denominator, as on the twin.
+- The comparisons have controls:
+  - The PHP comparison run against the other population reports 160 differences, rc 1.
+  - The SQLite comparison reports the three malloc cause cells above.
+
+**Gates.**
+- Gate 2 was read in full on each PHP boot, from sysfs: `ids=55`, `index_bits=25`, `node_flat_records=1048576`,
+  `supervisor_slots=1`, `resolve_dirty=Y`, `resolve_pte=Y`.
+  - The SQLite boots print only the two `resolve_*` parameters (`@@PARAM`). They also print `supervisor_slots=1` in
+    the module's load line, and a flat table of 1,048,576 records.
+  - The SQLite and PHP boots load the same module, `74b4cceb…` (kit README).
+- Gate 3: every boot's dmesg shows `flat table 1048576 records, 16777216 bytes, from CMA`.
+- Gate 4: no cell differs outside an exception, so the memory candidate (962 MiB against the twin's 2-8 GiB) is not
+  needed to explain anything.
+- Gate 5: every boot ran its controls first.
+  - SQLite: two controls, both returned.
+  - PHP: the sanity arm completed on all four boots, with 6,375 revokes on object and exact. The bound probe faulted
+    as declared on object and exact.
+
+**What this does not say.**
+- It is P1's FLAT table, not the paged tree.
+- It says nothing about memory or cycles.
+- It covers 190 of the 346 pre-registered cells. PHP asan-blind (156 cells) read nothing on the re-slot
+  (Amendment 7) and is being re-run.
+- The xz unpack timings: `@@XZSTAGE ok` came at board times 954 s and 953 s, which puts each stage's unpack and
+  hashing at about 15 minutes.
+
 ## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
 
 The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
