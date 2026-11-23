@@ -228,3 +228,16 @@ Open, before the kit is cut:
   - This replaces the second-JTAG-load initrd for the corpus; the initrd stays open for SPEC's xz train.
 - Stage split: the nested lane's, 31 baked boots, in the order gate, PHP, pools, malloc. Offered instead: pools and
   malloc as xz boots. The nested lane decides, one route per arm.
+- The nested lane's choice: SQLite as one xz boot per arm, pools first. B01-B29 are dropped.
+- PHP board route, perf/p1v/phpb (runtime lane, host-tested, not yet on a board).
+  - app-p1 with run-virtual.py replaced by a board runner with the same CLI and record. It runs the twin's
+    guest_script() through bkit109's board-run.sh.
+  - Against the twin's script there are two changes: /mnt/vm is a symlink to the batch directory, and @@PARAM/@@DMESG
+    lines follow insmod.
+  - Output stays on the tty: a file would change the domain's stdout buffering. So there is no heartbeat. Instead the
+    driver's idle limit is BOARD_IDLE_S, new in bkit109's board-run.sh with a default of 200 as before, set above
+    the per-run watchdog (twin's × 20).
+  - Host tests: a positive run, a rung with no END (rc 75), and an adapter mismatch (rc 2).
+  - One boot per arm: 8 for the two populations.
+- Board 2: h16s (Addendum 222) was stopped before it booked and re-armed behind the corpus boots. It now waits on the
+  nested lane's marker nested/corpus5/board/ITEM5-BOARD-DONE (wait-marker.sh). The corpus boots start when h16f exits.
