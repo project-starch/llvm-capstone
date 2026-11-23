@@ -4322,6 +4322,83 @@ Transcript `spec/board/out-nat-p1s100-b3r2/s100/board.txt` (`bfc1dc01c6b6be48…
   - an idle limit above the command, or a heartbeat line with the bytes written;
   - before that, the board-time cost is put to the runtime lane, which owns the queue.
 
+### Pre-registration: speedtest1 `--size 100` on P1, one command a boot, stock first (written 2026-11-24 06:34, before the boots)
+
+The runtime lane agreed to the pair on 2026-11-24, after the first boot's result.
+
+**Why the first boot's limit was too short.**
+- `bkit107`'s `board-run.sh` sets a SPEC stage's idle limit to its batch budget: the list's timeout × 4. The first
+  list gave 15,000, so 60,000 s.
+- That figure came from the SPEC lane's "about 6.5 h per command", not from a measurement.
+- Two measurements were available: P1's `--size 1` time (c0, 229 s in the first boot) and the twin's ratio between
+  the two sizes for the same arguments, 658.27 / 2.26 = 291. Together they give about 66,700 s.
+- The first boot also gives a lower bound: u1 ran for at least about 59,900 s without returning.
+
+**Boots.** Two stages, each derived from the first boot's stage `nested/p1s100/s100` (`s100.SHA256SUMS` 358cf568…).
+- `s100u` (`s100u.SHA256SUMS`, sha256 of the list `5ba7714d…`) runs c0, then u1.
+- `s100p` (`fb65fa93…`) runs c0, then p1.
+- Changes to `train/run.sh`, and nothing else:
+  - the other `--size 100` command is removed, with `commands=2` and p1's index renumbered;
+  - a heartbeat runs during the `--size 100` command, every 900 s:
+    `@@BEAT <uptime> st.db=<bytes> <native counters>`. It starts before `mark1` and is killed after the command
+    returns, so the same shape runs in both arms.
+- Images: unchanged, `817b1652…` (unprot) and `945fb69f…` (prot). Kit: unchanged, `bkit107-k2n-native-p1-tree-facc`
+  on P1.
+- c0 stays in each boot as that boot's known-good control.
+- **Budgets each boot gets** (from the kit's code and the dry run):
+  - the list timeout is 25,000, so the batch budget and the idle limit are both 100,000 s (`BAKED_TIMEOUT=100000` in
+    the dry run; `board-run.sh:155` gives a SPEC stage IDLE = TO and no entry-stall abort);
+  - the driver gets 101,800 s;
+  - the booking is 1,740 min;
+  - the guest stage has no timeout of its own.
+- Chain: `nested/p1s100/nat-run3p.sh <board> <wait pid> p1s100pair.conf`, list `p1s100pair.list` (s100u, then
+  s100p), with `NR_PREREG` set to this commit.
+  - It is `nat-run3n.sh` with the wait made optional. `NR_WAITLOG` is checked only when set. `NR_WAITMARK=<file>`
+    waits for a marker newer than the chain's start. A wait pid of 1 means no pid to wait for.
+  - The runtime lane arms it behind its board-3 queue, or on whichever board frees first. The chain flashes P1 if
+    another bitstream is resident.
+
+**Dry runs** (`nested/p1s100/pair-dry/`, `s100{u,p}-recheck/`):
+- Rule-8 recheck of each stage:
+  - real bake;
+  - `BOARD_STUB=2` on a returning and a non-returning transcript, both rc 0;
+  - real firmware, 19,566,088 B, under the 26 MB cap.
+- The chain with `NR_DRY=1` reaches DONE through both stages, each with `BAKED_TIMEOUT=100000`.
+- The wait block, run alone:
+  - pid only: proceeds;
+  - pid plus a marker written later: waits for it;
+  - a marker older than the start: ignored until rewritten;
+  - `NR_WAITLOG` without an END line: STOP, rc 2.
+- The heartbeat under busybox sh: it beats during the command and stops after it.
+- The reader `read-s100pair.py`:
+  - on the first boot it reads c0 32/32 and "u1 NO END", rc 1;
+  - on a transcript with the twin's u1 output and three beats, c0 and u1 are 32/32, rc 0;
+  - with c0's output put in u1's place, it reads 18/32 with 14 phases named, rc 1;
+  - an empty file gives NO DATA, rc 2.
+  - The kit's `spec-classify.py` reads every native transcript as NO RESULT (the known classifier gap), so this
+    reader gives the answer.
+
+**Predictions.**
+- **VOID** if `b0-stats`, `b0-hello` or the smoke fails, or if c0 is not 32/32.
+- **Answers:** u1 and p1 are each 32/32 against `2026-11-22-size100-host/phases.json`.
+- **Time:** u1 takes 60,000 to 93,000 s. The low end is the first boot's lower bound. The high end is 1.4 times
+  c0 × 291, because the twin's guest time is dominated by kernel instructions and may scale differently on silicon.
+  p1 is in the same band.
+- **Heartbeats:** about one every 900 s, so 66 to 103 per command, with `st.db` not shrinking.
+- **Cost, p1 against u1, in-context** (`sys=` of `@@SPEC-END`): +0.3 % to +5 %, the first pre-registration's band.
+  The twin read +0.457 % in program instructions; P1 at `--size 1` read +2.21 %. This is one boot per arm with no
+  repeat, so the noise is not measured. The F repeat rule (1 % `run_cycles`) is the only noise figure, and a
+  difference inside 3 % is reported as not resolved.
+- **Cause 30 or a refused derive in p1** is read as a table result (the 262,144-record limit or the paged table's
+  grow), as before.
+
+**Branches.**
+- A command that does not return within 100,000 s gives no cost. Its beats tell three cases apart:
+  - beats continue and `st.db` grows: slow;
+  - beats continue and `st.db` is frozen: stopped in the program or kernel;
+  - beats stop: the core or kernel stopped.
+- u1 failing does not stop the chain, because p1's boot is separate. The pair is read only if both return.
+
 ## PHP against a pristine second binary (2026-11-22)
 
 Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
