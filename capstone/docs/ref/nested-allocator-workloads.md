@@ -5237,3 +5237,45 @@ All six predictions hold.
     from the answer's headers;
   - control not met: the patch did not take effect, and the run says nothing about protection;
   - cost outside the band: attributed per function from the FN lines before anything else is said.
+
+### Result: Fig. 10's Wireshark revision in oneop (read 2026-11-23 22:44)
+
+The six boots of `fig10/chain-tshark.sh` ran from 12:22 to 22:41, with a 21,600 s timeout each (the chain prints
+`timeout=` per boot). Every runner exited 0.
+
+**Deviation from the pre-registration.** The pre-registration gives every boot 21,600 s, but the chain's first launch
+did not export `TIMEOUT`. `run-app-zones4.sh` therefore used its own 3,600 s default, and three boots (opc-u from 09:07,
+opc-p from 10:12, then u1) ran to that cap. Those three are void and nothing is read from them. The chain now exports
+the value. The relaunch reran all six boots under the same names, so the void boots' directories were overwritten.
+
+Readings against the predictions:
+1. **Every boot: holds.** All six report 169 inputs, 0 nonzero, and stdout sha256 `b190069b…` (MATCH).
+2. **Control: holds.** In the image zone, prot minus stock is:
+   - CDERIVE 4,091,559 − 2,016,854 = 2,074,705 (at least 100,000 was predicted);
+   - CREVOKE 1,992,502 − 1,963,762 = 28,740 (at least 1,000 was predicted);
+   - CRENEW: stock 0 (no funct7 0x54 line), prot 9,471.
+3. **Image instructions, prot vs stock: +2.27 %, inside the +0.3 % to +6 % band.**
+   - Stock u1 6,317,790,819 and u2 6,314,379,942; prot p1 6,460,856,200 and p2 6,458,616,090.
+   - The mean difference is 143,650,765 instructions.
+4. **Repeats within 0.01 %: does not hold.**
+   - Stock repeats agree within 0.054 % (3,410,877) and prot within 0.035 % (2,240,110). That is about a fortieth of
+     the measured effect.
+   - The spread is in musl mallocng, not in wmem: u1 − u2 is `alloc_slot` +1,635,543, `nontrivial_free` +919,091, and
+     `get_meta`, `__malloc_alloc_meta` and `enframe` at about +195,000 each. The wmem functions differ by 0 to 5
+     instructions between repeats.
+   - Why mallocng varies between identical boots is not established here.
+
+**Where the +2.27 % goes.** The FN lines cover 99.985 % of the image zone in every boot. Mean prot − stock:
+
+| function | instructions | share of the difference | entries stock / prot |
+|---|--:|--:|--:|
+| `wmem_block_fast_sublet_alloc` | 114,319,526 | 79.6 % | 0 / 1,905,321 |
+| `wmem_block_sublet_alloc` | 11,597,546 | 8.1 % | 0 / 153,761 |
+| `wmem_block_fast_alloc` | 9,626,582 | 6.7 % | 1,905,321 / 1,907,699 |
+| `memset` | 4,271,186 | 3.0 % | 976,197 / 1,134,526 |
+| `wmem_block_sublet_realloc` + `_fast_sublet_realloc` − the plain reallocs | 750,985 | 0.5 % | 0 / 14,505 |
+| `wmem_sublet_issue_at` | 689,462 | 0.5 % | 0 / 14,505 |
+| all other functions | 2,395,478 | 1.7 % | |
+
+So about 94 % of the difference is in the patched block allocators' alloc paths. Of the rest, `memset` is entered
+158,329 more times on prot. Its callers are not attributed here.
