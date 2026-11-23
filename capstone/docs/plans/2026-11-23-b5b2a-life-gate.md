@@ -280,3 +280,72 @@ against 3,054 LUTs, and 2b 9,701 against 7,882.
   widening's cost.
 - **Step 3 is graded against this census,** not against the utilization row alone. The row can move by thousands
   with the unit unchanged.
+
+## Reading (2026-11-23): step 3's gate on d0afdb40f, B5B3-GATE PASS (3/3 keys)
+
+Tag b5b3-d0afdb40f (capstone-ariane b5b1-step3 d0afdb40f; keys land/rtl-b5b1 02d1b24de556). The base is the 2b gate
+above. gate.done 02:20:51Z. The guard peak was 25.96 GB under the 40 GB ceiling (2b: 28.97); the host's MemAvailable
+never fell below 48 GB. Checkpoint 6a6dd7b3954f96d4…. srcwatch OK.
+
+The chain is `twc/b5b3/post-b5b3.sh` (b61a126546187701): 2b's chain with the base swapped to 2b's gate, the pin census
+on both checkpoints, and the unit census run on the trial checkpoint. The grader `twc/b5b3/grade-b5b3.py`
+(3135c54bd7e94a17) is 2b's with the rtl lane's step 3 limits. Run before the launch on the 2a -> 2b pair, it reproduced
+2b's recorded grade apart from the labels.
+
+| key | reading | verdict |
+|---|---|---|
+| 1 mapping | TM peak 5,446.4 MB against 2b's 5,158.2 (+288.2; limit ±505); whole run 5,514.5 MB | PASS |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy 1), LUTLP-1 0 (toy 1), in-flight gate PASS | PASS |
+| 3 core LUT | 145,492 (+1,341 against 144,151; limit 148,151; the estimate was about +1,500) | PASS |
+
+Key 2's failure branch (a loop member named cm_*, csmint_*, dsw_* ...) has nothing to act on: no probe found a loop.
+
+**Reported, not graded:**
+- **Core FF** 55,117 (+770; the prediction was +600 to +1,000). load_store_unit's own FF is +927.
+- **LUTRAM** +0 at core and at top.
+- **load_store_unit** 24,089 LUT (+635), FF 13,415 (+927). **i_scoreboard** 16,591 LUT (-598), FF 8,436 (+11).
+  i_pmp_data_if 351 (+0).
+- **The unit** is still module capstone_sublet_life (sublet_life.sv a98712720994b7d6). Its LUT is 3,235 against 2b's
+  7,882 (-4,647); its FF is 1,410 (+0). The .vds names it in no ERROR, CRITICAL or WARNING line, with the
+  load_store_unit control at WARNING 5; that zero is blind on the ids at the .vds's 100-per-id cap, as before.
+- **Module rows beyond ±2,500:**
+  - dyn_unit +7,540 (15,135), its _spawn_0 +7,615;
+  - rev_node -4,647;
+  - issue_stage_i -4,886, of which i_issue_read_operands -4,288 (29,406);
+  - ex_stage_i +4,600.
+  - Also: dom_switcher +1,058, the metadata register file -2 (2,646).
+- **The worst-path family is not read by this gate.** The synthesis checkpoint carries no timing constraints, so
+  whether it moves into load_store_unit is a full-build reading.
+
+**The unit's cell census, 2b -> 3** (`twc/b5b2b/ul/unitluts.tcl` 438d040c4ca5a9d7, unchanged; 8 GB guard, peak
+2.28 GB). Counts are LUT cells.
+
+| rev_node LUT cells | 2a | 2b | 3 |
+|---|---|---|---|
+| total | 3,956 | 9,701 | 4,131 |
+| in the fan-in of the unit's own sequential cells (1,390 / 1,410 / 1,410) | 3,722 | 3,609 | 3,801 |
+| in no own cone | 234 | 6,092 | 330 |
+| with a leaf load in i_scoreboard | 2 | 5,328 | 2 |
+| named for the scoreboard's `mem_q[][sbe]` | 5 | 5,726 | 4 |
+
+- **Own-cone growth is +192 cells, against the rtl lane's ≤ +400 for the create op.** The largest own-cone moves are
+  rid_q +75, wr_q +71, wr_v_q +49, FSM_sequential_st_q +33 and rd_v_q +23; pw1_q fell 33.
+- **The scoreboard's write-back logic left the unit.** The mem_q stems fell from 5,726 cells to 4, and the unit's
+  cells with a load in i_scoreboard from 5,328 to 2, which is 2a's count. The unit's -4,647 row is 2b's boundary move
+  undone, not a shrinking of the unit.
+- 89 cells in the unit's hierarchy are named for load_store_unit's sequencer registers (`cm_wb_res_q` 64,
+  `FSM_sequential_cm_q` 22, `cm_id_q` 2, `cm_wb_ex_q` 1; load_store_unit.sv:2010-2018). That is the same kind of
+  cross-boundary placement on a small scale.
+
+**Where the write-back logic went** (`pins.tcl` addeb3a5808de4eb, far-side leaf pins, 2b -> 3; bad=0 on both):
+- i_scoreboard's inputs from rev_node 5,330 -> 4, and from dyn_unit 210 -> 5,809;
+- i_issue_read_operands' outputs into dyn_unit 9,132 -> 3,844, into rev_node 1,877 -> 12, and into i_scoreboard
+  3,777 -> 1,908;
+- the metadata register file's inputs from dom_switcher 2,575 -> 3,049, and from i_scoreboard 515 -> 25.
+
+So the logic that 2b placed in rev_node now sits on dyn_unit's side of the scoreboard boundary, beside dyn_unit's
++7,540 and the operand stage's -4,288. That is a pin count, not a LUT attribution: the same cell census on dyn_unit
+(`twc/b5b3/dl/dynluts.tcl`, unitluts.tcl with only the unit path changed) was still running on the 2a, 2b and step 3
+checkpoints when this section was written.
+
+No full build has been run. The rtl lane pre-registered one to follow a pass, batched, and pre-registers it separately.
