@@ -4560,7 +4560,7 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
-### R-79 — the PMP and CPMP judged a load or store with the NEIGHBOURING cycle's access type: a lone S/U store passed a region without W, and a load followed at once by a store was refused 7 `CONFIRMED ON SILICON 2026-11-23, N=2 (the r79-pmp-bare-2026-11-23 kit's pre-fix vector word for word on both: board 2 on R-75 (d) 1c5d31474, board/meas-pw 7eb67baa00a1; board 1 on P1 d83d3a633, 6f012b18b7ca); DEMONSTRATED IN SIMULATION (capstone-ariane b5b1-step3, csmint-pmp.S, both branches pre-registered, and under Sv39); FIX IN RTL (09b9cf9fd, claim-audited: the defect and the fix SUPPORTED), synthesized in the first B5b-1 bitstream (d0afdb40f, sealed), not yet read on silicon; upstream CVA6 wiring (the PMP extraction, 23355d29f), so on every bitstream since`
+### R-79 — the PMP and CPMP judged a load or store with the NEIGHBOURING cycle's access type: a lone S/U store passed a region without W, and a load followed at once by a store was refused 7 `CONFIRMED ON SILICON 2026-11-23, N=2 (the r79-pmp-bare-2026-11-23 kit's pre-fix vector word for word on both: board 2 on R-75 (d) 1c5d31474, board/meas-pw 7eb67baa00a1; board 1 on P1 d83d3a633, 6f012b18b7ca); DEMONSTRATED IN SIMULATION (capstone-ariane b5b1-step3, csmint-pmp.S, both branches pre-registered, and under Sv39); FIXED ON SILICON 2026-11-23, the PMP side, board 2, N=1 (fix 09b9cf9fd, claim-audited: the defect and the fix SUPPORTED; the first B5b-1 bitstream d0afdb40f reads the kit's fixed row word for word, board/meas-pw f90b3692e7b6); the CPMP side not read on silicon; upstream CVA6 wiring (the PMP extraction, 23355d29f), so on every bitstream since`
 
 Siblings: none in the registry. Found by the claim-auditor's pass over CSMINT's sequencer (step 3), whose
 store-permission probe is always a lone store.
@@ -4663,8 +4663,9 @@ a read is a separate change, with a spec question for the lead.
 **Owed:**
 - a capability-mode CPMP arm with perm-4 and perm-2 entries (an ids55 build, where CAPENTER is legal; on the B5b-1
   bitstream no CPMP entry allows, so it cannot carry this arm);
-- the fixed vector on silicon: the CSMINT kit (dev 4b02223df217) carries r79-pmp as its image 6 for the d0afdb40f
-  seal.
+- the fixed vector at N=2 (board 1 on d0afdb40f);
+- the CPMP side on silicon needs a non-Sublet ids55 bitstream carrying 09b9cf9fd. d0afdb40f cannot carry it: CAPENTER
+  is illegal there (decoder.sv:1456-1459 under CAPSTONE_SUBLET_FMT) and no CPMP entry allows.
 
 **On silicon** (2026-11-23, board 2, booking 1438, resident read back as `…-pagedtbl-r76-r75d_1c5d31474.bit`, name
 only; the board lane's grader rc 0; board/meas-pw 7eb67baa00a1):
@@ -4681,6 +4682,23 @@ board/meas-pw 6f012b18b7ca) read the same: the control SR 15 with its 15 values,
 word for word, position for position with board 2 (checked here by script against the committed PREREG, with the
 fixed row as the negative). N=2, on two boards and two residents. Both residents predate the fix, so the pair does
 not separate bitstreams that differ in pmp_data_if.
+
+**Fixed on silicon** (2026-11-23, board 2, booking 1457, run run-b2d-20261123T1407; board/meas-pw f90b3692e7b6). The
+board lane flashed the B5b-1 seal `…-pagedtbl-r76-r75d-b5b1_d0afdb40f.bit` with its sha256 checked; the resident read
+back after the power cycle names it. The CSMINT kit (`tests/rtl-smoke/csmint-bare-2026-11-23`, PREREG as amended at
+land/rtl-csmkit-amend d919aa1316e3) ran r79-pmp as its image 6, after the Sublet control and the four CSMINT images,
+all exact. r79-pmp (8eb72553965cfc1c) read SR 17
+`0x0 0x0 0x0 0x5a5a5a5a5a5a5a5a 0x7 0x80002000 0x5a5a5a5a5a5a5a5a 0x7 0x80002008 0x5a5a5a5a5a5a5a5a 0x7 0x80002000 0x77 0x77 0x77 0x77 0x3`,
+the PREREG's fixed row word for word: the legal load with a store behind it is allowed, the lone store to the W-less
+page is refused 7 with its own address as tval, a store followed at once by another store reports its own address
+(0x80002008), and the
+lr.d is refused 7. Checked here by script from the raw UART
+against the PREREG read from git, with the image hashes recomputed; the checker fired on a changed r79 position (first
+failure), a changed control position (VOID), a P1 readback (VOID) and the un-amended PREREG (refused).
+- The silicon pair (pre-fix row on 1c5d31474 and d83d3a633, fixed row on d0afdb40f) differs in more than pmp_data_if.
+  The one-variable separation is the simulation pair, b5b1-step3 f4ef2b565 against 09b9cf9fd. Silicon reads the
+  predicted vector on each side.
+- The PMP side only: the kit runs integer S, and under Sublet no CPMP entry allows.
 
 **Silicon kit:** `capstone/tests/rtl-smoke/r79-pmp-bare-2026-11-23` (PREREG.md, pre-registered before any board run).
 It is one bare image, with the pre-fix vector for every Capstone tree resident today and the fixed vector for step 3's

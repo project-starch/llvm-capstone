@@ -33,3 +33,26 @@ the LSU. Its design, rulings and simulation readings are in llvm-capstone capsto
 `PREREG.md` holds the vectors, simulated from THESE images on d0afdb40f's RTL, and the grading rule.
 Runner: `sup-bare-2026-10-03-ladder/run_sup_bare.py` (`SUP_IMG`, `SUP_REC_ADDR` from each `.rec`), the bare-boot
 path only.
+
+## Silicon readings
+
+- **Board 2, boot 1450 (2026-11-23; board/meas-pw 106a48212e4e): VOID.** The control's positions 24-33 (pool slots
+  5-9, which nothing in the boot writes) read non-zero words where the PREREG had registered 0x0: the simulator zeroes
+  memory, DRAM does not. The amendment in PREREG.md, written before any re-run, grades the control on 25 values; boot
+  1450 stays VOID.
+- **Board 2, booking 1457 (2026-11-23, run run-b2d-20261123T1407; board/meas-pw f90b3692e7b6): CSMINT CONFIRMED ON
+  SILICON, and R-79's fixed row.** The seal `…-pagedtbl-r76-r75d-b5b1_d0afdb40f.bit` was flashed with its sha256
+  checked and read back after the power cycle. Every image hash and board_rec matches the table above.
+  - sublet-life: SR 35, the 25 graded positions exact;
+  - csmint SR 51, csmint-vm SR 30, csmint-vm-nc SR 30, csmint-pmp SR 16: each exact;
+  - r79-pmp SR 17: the fixed row exact.
+  The board lane's grader (grade-csmintkit2.py, rc 0) and a separate script here, reading the PREREG from git and the raw
+  UART, agree. The script's negatives fired: a changed r79 position, a changed control position, a P1 readback, and
+  the un-amended PREREG.
+  The ungraded positions 24-33 read `0xff000300ff010003 0x90004000800000 0xff000380ff014006 0x4000040000
+  0xff000400ff018006 0x14004000040000 0xff000480ff014006 0x80004000380001 0xff000500ff000006 0x20440009a0000`; eight
+  of the ten differ from boot 1450's.
+- N=1. Board 1 on d0afdb40f would be N=2.
+- d0afdb40f runs bare kits only: it makes CAPENTER illegal (CAPSTONE_SUBLET_FMT), and the current monitor executes
+  CAPENTER at init (caplifive-buildroot components/opensbi/lib/sbi/sbi_capstone_init.S:34), so a Linux-booting kit
+  cannot run on it until the integer-M monitor exists.
