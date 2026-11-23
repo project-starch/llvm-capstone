@@ -4756,6 +4756,25 @@ gate, the budgets each boot gets and the sources of those budgets, and two facts
   - In PHP, `platform.json` hashes the `--qemu` and `--images` inputs, which the board does not run. The board's
     identity is the `board` field of each `<arm>-run.json`.
 
+### Amendment 4 to the item 5 board pre-registration (written 2026-11-23 20:26, before any board kit has booted)
+
+This amendment corrects one statement in Amendment 3 and records malloc's QEMU session control.
+
+- **Correction: what Amendment 3 says about case 11 holds for pools only.**
+  - On malloc (stock), case 11 does not fault.
+    - The P1-geometry twin reads it `NO-READING:infra` (runner timeout).
+    - In the QEMU session control, the step began and never ended. The QEMU gate has no per-step bound, so the boot
+      ran to its overall timeout (`boot DID NOT COMPLETE`).
+  - On the board, the step is bounded by the gate's watcher, at min(remaining − 60, 6,000) s. If a spinning domain
+    starves the watcher and the heartbeat, the driver's 200 s idle limit ends the rung instead.
+  - Case 11 runs last, so the spin costs no other cell. The board's malloc boot is still expected to fit its 240-minute
+    booking, with up to about 100 minutes of that spent in case 11.
+  - The prediction for malloc's case 11 is the twin's `NO-READING:infra`. A board boot that does not complete because
+    of this last step is not void for its other cells. Their readings are read from the rung segment, as the QEMU
+    control's were.
+- **Malloc's QEMU session control** equals the P1-geometry twin in 33 of 33 cells on verdict, reason, cause, symbol and
+  offset. Its case 11 matches the twin's `NO-READING:infra`.
+
 ## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
 
 The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
