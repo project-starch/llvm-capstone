@@ -4560,7 +4560,7 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
-### R-79 — the PMP and CPMP judged a load or store with the NEIGHBOURING cycle's access type: a lone S/U store passed a region without W, and a load followed at once by a store was refused 7 `CONFIRMED ON SILICON 2026-11-23, N=2 (the r79-pmp-bare-2026-11-23 kit's pre-fix vector word for word on both: board 2 on R-75 (d) 1c5d31474, board/meas-pw 7eb67baa00a1; board 1 on P1 d83d3a633, 6f012b18b7ca); DEMONSTRATED IN SIMULATION (capstone-ariane b5b1-step3, csmint-pmp.S, both branches pre-registered, and under Sv39); FIXED ON SILICON 2026-11-23, the PMP side, board 2, N=1 (fix 09b9cf9fd, claim-audited: the defect and the fix SUPPORTED; the first B5b-1 bitstream d0afdb40f reads the kit's fixed row word for word, board/meas-pw f90b3692e7b6); the CPMP side not read on silicon; upstream CVA6 wiring (the PMP extraction, 23355d29f), so on every bitstream since`
+### R-79 — the PMP and CPMP judged a load or store with the NEIGHBOURING cycle's access type: a lone S/U store passed a region without W, and a load followed at once by a store was refused 7 `CONFIRMED ON SILICON 2026-11-23, N=2 (the r79-pmp-bare-2026-11-23 kit's pre-fix vector word for word on both: board 2 on R-75 (d) 1c5d31474, board/meas-pw 7eb67baa00a1; board 1 on P1 d83d3a633, 6f012b18b7ca); DEMONSTRATED IN SIMULATION (capstone-ariane b5b1-step3, csmint-pmp.S, both branches pre-registered, and under Sv39); FIXED ON SILICON 2026-11-23, the PMP side, board 2, N=1 (fix 09b9cf9fd, claim-audited: the defect and the fix SUPPORTED; the first B5b-1 bitstream d0afdb40f reads the kit's fixed row word for word, board/meas-pw f90b3692e7b6); the CPMP side DEMONSTRATED IN SIMULATION and fixed there (r79-cpmp, the ids55 build, capstone-ariane 27e75c38a), not read on silicon; upstream CVA6 wiring (the PMP extraction, 23355d29f), so on every bitstream since`
 
 Siblings: none in the registry. Found by the claim-auditor's pass over CSMINT's sequencer (step 3), whose
 store-permission probe is always a lone store.
@@ -4637,6 +4637,9 @@ address as tval.
   - The receiving SBI installs shared regions tightened to R-only (PERM_IN, `__tighten(r,4)`) or W-only (PERM_OUT):
     the null-blk split, miniweb and dpdk-multip.
   - Through a PERM_IN entry a lone store was allowed: write authority the borrower does not hold.
+  - Through a PERM_OUT entry a load with an independent store right behind it was allowed: read authority the
+    borrower does not hold (r79-cpmp p6, in simulation); and a legal store with no store translated in the next cycle
+    was refused 5 as a read (p7, p8).
   - No recorded silicon run of those three was found.
 - **Not in reach:**
   - The capability-operand permission check (load_store_unit.sv:1466-1470, :1536-1538) is computed from the request's
@@ -4661,11 +4664,10 @@ pre-fix. The Sublet differential must not include an LR-on-R-only case, or must 
 a read is a separate change, with a spec question for the lead.
 
 **Owed:**
-- a capability-mode CPMP arm with perm-4 and perm-2 entries (an ids55 build, where CAPENTER is legal; on the B5b-1
-  bitstream no CPMP entry allows, so it cannot carry this arm);
 - the fixed vector at N=2 (board 1 on d0afdb40f);
 - the CPMP side on silicon needs a non-Sublet ids55 bitstream carrying 09b9cf9fd. d0afdb40f cannot carry it: CAPENTER
-  is illegal there (decoder.sv:1456-1459 under CAPSTONE_SUBLET_FMT) and no CPMP entry allows.
+  is illegal there (decoder.sv:1456-1459 under CAPSTONE_SUBLET_FMT) and no CPMP entry allows. r79-cpmp's simulation is
+  the CPMP side's evidence until then.
 
 **On silicon** (2026-11-23, board 2, booking 1438, resident read back as `…-pagedtbl-r76-r75d_1c5d31474.bit`, name
 only; the board lane's grader rc 0; board/meas-pw 7eb67baa00a1):
@@ -4699,6 +4701,20 @@ failure), a changed control position (VOID), a P1 readback (VOID) and the un-ame
   The one-variable separation is the simulation pair, b5b1-step3 f4ef2b565 against 09b9cf9fd. Silicon reads the
   predicted vector on each side.
 - The PMP side only: the kit runs integer S, and under Sublet no CPMP entry allows.
+
+**The CPMP side, in simulation** (2026-11-24, capstone-ariane b5b1-step3 `r79-cpmp.S`, pre-registered at 71c593ddc
+before its first run, read at 27e75c38a). It runs on the ids55 build of the same tree (XDEF +CAPSTONE_IDS55_FMT, read
+back from verFiles.dat), where CAPENTER is legal and the CPMP trackers are live. Four NONLIN CPMP entries: RO r_page, WO
+wo_page, RW w_page, XO for S's code. S runs r79-pmp.S's instruction sequences against them, plus two W-only arms.
+- The fixed tree (71c593ddc, dirty=no) reads its pre-registered row exactly, 21/21: every access judged by its own type.
+- The fix's parent f4ef2b565 (core = the fix only, the tests added) is VOID by the arm's own rule: p8, registered as a
+  store-then-store control, was itself re-typed. 18 of its 21 values equal the pre-fix prediction; recorded as
+  information. Through the RO entry: a legal read refused 7 (p2), a write landing (p3/p4, 0x1234), lr.d allowed (p5).
+  Through the WO entry: a READ allowed, returning the page's fill (p6), and legal stores refused 5 as reads (p7, p8).
+- Why p8 missed, from the fix's sim-only judgement display applied to the pre-fix tree for one re-run (same 21 values)
+  and reverted: p8's following store was not translated in the next cycle (judgements at t=9907, then 9985 after the
+  trap), while p9's was (10307, 10308). A store with an independent store behind it is typed a store only when the
+  second translation lands in the very next cycle. The prediction assumed it always did.
 
 **Silicon kit:** `capstone/tests/rtl-smoke/r79-pmp-bare-2026-11-23` (PREREG.md, pre-registered before any board run).
 It is one bare image, with the pre-fix vector for every Capstone tree resident today and the fixed vector for step 3's
