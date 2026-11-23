@@ -53,3 +53,29 @@ The order puts the Sublet control first. Every image is expected to RETURN.
   - A non-return is a wedge: read no further.
 - N=2 across boards is welcome. The simulation is cycle-deterministic, so the boards should agree exactly.
 - The default bitstream stays bitstream 1 until this kit reads (the delegated rule, agreed with the runtime lane).
+
+## Amendment (2026-11-23, after board 2's VOID boot 1450 and before any re-run)
+
+**Boot 1450 stays VOID by the rule as written** (board/meas-pw 106a48212e4e). sublet-life read SR 35. Positions 0-23
+and 34 equal the vector above; positions 24-33 read non-zero words where 0x0 was registered. The five later loads read
+their vectors exactly, but under the ordering rule they are readings, not verdicts.
+
+**Why the ten words were never a prediction.** sublet-life's dump reads 20 quadwords from 0xbff00000. Pool slot s sits at
+base + 16 s (ex_stage.sv:2323-2324, index bits [15:0]), and the header quadwords hidx(0) and hidx(1) are slots 0 and 1. So
+positions 14-23 are slots 0-4, and positions 24-33 are slots 5-9, all at or above the header's next = 5 (position 15).
+The test header's "records 2..6" is wrong: the dump covers slots 0-9. Read at d0afdb40f, nothing writes a flat-table
+slot at or above next:
+- At reset the unit writes only hidx 0, hidx 1 and slot 2 (capstone_sublet_life.sv:300-302).
+- An allocation writes the slot it takes: the free list's head, or next, which then advances (:445, :474).
+- Every other write goes to a record already reached through a link, or to the header (:456-617).
+- It reads a fresh candidate at next only when paged_q is set (:387-390), and header word 0 bit 62 is 0 here.
+- The test itself stores nothing to the pool.
+The registered zeros at positions 24-33 were therefore the simulator's zeroed memory, and the reference's harness
+matched them for the same reason. On silicon those words are whatever DRAM held after the power cycle. The
+instrument failed here, not the unit: the PREREG registered words that nothing in the boot writes.
+
+**The rule for every re-run of this kit (the images, hashes and other vectors are unchanged):**
+- the control is VOID unless the readback names the sealed bitstream, sublet-life reads SR 35, and positions 0-23 and
+  34 equal the vector above (25 values);
+- positions 24-33 are recorded but not graded: they are memory above the pool's next, which this test does not write;
+- every other rule above stands as written.
