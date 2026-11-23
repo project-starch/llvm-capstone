@@ -1,0 +1,44 @@
+{
+  "arm": "virtual-nested-exact",
+  "build": {
+    "allocator": "nested",
+    "application": "php",
+    "image_sha256": "6321dcc8993ac0afcb57abfe6b2c7d45889bac6f35bfa587ff38a619dcb8c690",
+    "mode": 7,
+    "profile": "virtual"
+  },
+  "cases": 31,
+  "configuration": "php-real-exact",
+  "contract": "verdicts-v1",
+  "corpus": "php/engine-repros",
+  "platform": {
+    "compiler": "clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git d9fa11a409d21c33fa1355388c26d23fc1a287dd)",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb  <hdd>/perf/p1v/kit-p1v/images/fw_jump.elf",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a  <hdd>/perf/p1v/kit-p1v/images/Image",
+    "launcher": "2488e5d2f88169e49d9ea442ce53d1dce299c3bde4928a42a6e4a46763cf5db2  <hdd>/perf/p1v/kit-p1v/adapter/capstone-vexec",
+    "module": "0d5a7d627787af56eb12408fdb4aecb2ab4ac7924c79077488b51c7293179b79  <hdd>/perf/p1v/kit-p1v/adapter/module/capstone_vm.ko",
+    "module_args": "node_initial_pages=1024 supervisor_slots=32",
+    "platform_probes": {
+      "putenv": "7367104ffe1552bb81ab626fd46facf3d4d86d817a6692265b57f8a7dfda8e63  <hdd>/nested/corpus5/php/vr/probe-putenv.dom"
+    },
+    "qemu": "e3badf60946cedbfc59a05e2cde26ec7483d9f77f17cbcd751f6b9d2186f2b0d  <hdd>/nested/corpus5/qemu-p1v-cma.sh",
+    "qemu_cpu": "rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true,x-capstone-test-csrs=true,x-capstone-supervisor-slots=32,x-capstone-addr=sv39",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661  <hdd>/perf/p1v/kit-p1v/images/rootfs.ext2",
+    "runner": "ports/php/app/run-realphp.py"
+  },
+  "population": "temporal-asan-visible",
+  "pre_registration": "",
+  "scoring": {
+    "attribution": "declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes); own fault licenses own reach; 2026-10-27; a catch through a forwarding routine's call path is the chain class, counted apart; 2026-10-28",
+    "protective_causes": [
+      25,
+      28
+    ],
+    "score_oracle_crashes": false
+  },
+  "tally": {
+    "CAUGHT": 5,
+    "NO-READING:infra": 1,
+    "NO-READING:out-of-denominator": 25
+  }
+}
