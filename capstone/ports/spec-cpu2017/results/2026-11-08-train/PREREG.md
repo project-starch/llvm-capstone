@@ -7061,3 +7061,27 @@ It was restored at about 13:16 from the cleanup's salvage (sha256 fbfcd4e3440a1e
   the other three chains' were moved aside, unread.
 - The four chains were re-armed in their pre-registered ABBA order behind the re-armed s100 chain: b1c 484407, b1l
   484450, b1l2 484479, b1c2 484500. Nothing else changed.
+
+## Addendum 228 (2026-11-23 17:14 +08, outcome): Addendum 201's +Spatial half (lbm, nab train), and board 2's order
+
+### Addendum 201, the +Spatial half
+
+t201s2-b1 (board 1, P1, bkit91) ended at 17:09:33. Both boots passed smoke 9/9. Each row is read by run-stage.py read
+from its board.txt. As in Addendum 224, the kit's spec-verdict printed "NO RESULT" for both, because bkit91's
+spec-classify.py:29 matches only `@@SPEC-DONE <digits>`. Both transcripts end `@@SPEC-DONE <benchmark> train`.
+
+| Row | +Spatial s (P1, bkit91) | Full s | Plain s | +Spatial vs Full | +Spatial vs Plain |
+|---|---|---|---|---|---|
+| lbm | 12,959.25, PASS 1/1 (1e05ce7680f55d3d) | 12,958.04 | 13,541.61 | +0.009 % | -4.30 % |
+| nab (2 commands) | 49,952.93 (4,017.70 + 45,935.23), PASS 2/2 (d7fad8626dfa5893) | 49,980.50 | 48,158.68 | -0.055 % | +3.73 % |
+
+nab's smoke step `task` read FAIL 70 (the two accounting checks) and was WAIVED (K-min), as on earlier native boots.
+So the vbatch retval is 70, which ctl.sh admits to spec.sh.
+
+N = 1 per row. +Spatial mcf train is in Addendum 222 (h16s).
+
+### Board 2's order after h16f
+
+Addendum 222 put h16s after h16f. The nested lane's item-5 bug corpora (kit bkit109) now take board 2 first, at h16f's
+exit. The board lane's CSMINT kit then waits for the corpus marker. h16s waits for the CSMINT kit's end marker
+(`perf/natstage/csmint-b2.DONE`, waiter pid 813474). The order changes; h16s's images, kit and list do not.
