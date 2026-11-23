@@ -105,3 +105,21 @@ virtual-profile. So the kit runs the images' own adapter.
 - Gate before any kit: on the twin, the module's index_bits and ids parameters read 25 and 55, and control_uaf_mem5,
   control_bounds_mem5 and case 25 read 25, 28 and 28 through this adapter. Then the nested lane re-reads both corpora on
   that twin, and the board pre-registration comes from that reading.
+
+## The twin gate on kit-p1v (2026-11-23)
+
+Kit `perf/p1v/kit-p1v`:
+- capstone-qemu 0542c5556c behind a wrapper that adds x-capstone-ids=55 and x-capstone-addr=sv39 and strips exact
+  bounds and test CSRs;
+- kit-devq's Image, firmware and rootfs;
+- dev 1a051da6e82b's launcher (2488e5d2f88169e4, the same bytes as kit-devq's) and its module built flat for ids55
+  (0d5a7d627787af56, perf/p1v/buildq.sh).
+
+The nested lane ran the gate behind the VM-lock turnstile, 11:12:04-11:12:27:
+- applied -cpu `rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,svadu=false,x-capstone-ids=55,x-capstone-addr=sv39`;
+- module parameters ids=55, index_bits=25, node_flat_records=1048576;
+- the pools arm's controls read 25 (uaf) and 28 (bounds), and case 25 is CAUGHT with 28 in sqlite3Fts5GetVarint:
+  25/28/28, as predicted.
+
+The board's predictions come from the nested lane's full re-read of both corpora on this kit, not from the 0542c5556c
+exact-bounds readings.
