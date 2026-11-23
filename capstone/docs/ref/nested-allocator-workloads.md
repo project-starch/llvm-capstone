@@ -5233,6 +5233,35 @@ All six predictions hold.
 - **Memory** was not measured in this chain: oneop's runner reads instructions only. Stock's peak for this workload
   is not on record either, so the memory condition is open for this variant.
 
+### Pre-registration: Perl's peak memory on suns.pl in oneop, stock, prot and p0002 (written 2026-11-24 05:28, before the runs)
+
+- **Method.** `fig10/run-app-mem.sh` is `run-app-zones3.sh` without the plugin. It runs the image under busybox
+  `time -v` and reads `Maximum resident set size`, the vexec process's `ru_maxrss`.
+  - busybox 1.36.1 prints `%M` as `ptok(pagesize, ru_maxrss)` (`miscutils/time.c:283-284`), which multiplies by
+    pagesize/1024. Linux already reports `ru_maxrss` in kB, so the printed value is 4 times the peak. Every figure
+    below is the printed value divided by 4.
+  - The script also samples MemTotal − MemAvailable once a second. That is the census's "peak used", but it is too
+    coarse for a run of about 3 s, so it is recorded and not judged.
+- **Controls of the method** (stock image, one boot each, 05:25-05:27):
+  - positive: a script that builds a 50,000,000-byte string reads 107,036 kB;
+  - negative: a one-line script reads 8,896 kB.
+  - The difference, 98,140 kB, matches the two copies of the string that `x` produces (97,656 kB). So the peak
+    includes the domain's heap.
+  - The 1 s sampler saw only +40,572 kB of the same run, which is why it is not judged.
+- **Runs.** `fig10/chain-perl-mem.sh`: stock, prot and p0002, interleaved, two boots each. The workload and answer
+  are `chain-perl.sh`'s (suns.pl, `PERL_HASH_SEED=0`). The images are the chains' own: stock `9ebe0d04…`, prot
+  `3c1962c6…` and p0002 `528d7f1e…`.
+- **Predictions.**
+  - SPEC's `suns.out` in every boot, status 0.
+  - Repeats of an arm within 64 kB.
+  - **prot against stock: +4,000 to +12,000 kB.** The counted arenas give 2,536 against 1,590 (`Perl_more_sv`
+    entries, above). prot's arena is 4,080 + 84 × 16 = 5,424 bytes (`SV_ARENA_HEADS` = 4080/48 − 1, plus one
+    capability per head, `sv.c:367`), and stock's is 4,080. That is +7,268,064 bytes, before allocator overhead.
+  - **p0002 against prot: −64 to +256 kB.** The index holds one 16-byte entry per arena, 2,536 entries, and grows
+    by at most double.
+- **Branches.** A peak outside a band is reported with both arms' readings before any reading of why. A mismatch
+  in the answer stops the comparison for that arm.
+
 ### Result: the CPython chain is void: the environment refuses `ioctl(FIOCLEX)`, so no script can be run by path (01:26-01:28)
 
 - Every boot exited with status 2 in 0.8 s and printed only `./app: can't open file
