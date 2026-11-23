@@ -29,9 +29,12 @@ The full names are the seal records' (the feature prefix `caplifive_ids55-native
 - R-75 FIXED ON SILICON on (d): board 2, booking 1437, `docs/plans/2026-11-22-r75kit-board2.md`; ISSUES at dev
   819780239744.
 - Its seal PASS on every key against bitstream 1's (`2026-11-22-r75d-gate.md`).
-- The runtime lane's perf null on (d) in bitstream 1's band on all three rows (its Train PREREG Addendum 219 part 2;
-  smoke 9/9; specdiff PASS). The board lane has not read that reading: the addendum's pre-registration is on
-  spec-silicon (612b946c6883), and the part 2 reading was not on a pushed branch when this was written.
+- The runtime lane's perf null on (d): Addendum 219 part 2, read in Addendum 227 (spec-silicon cd8148f9554e,
+  `ports/spec-cpu2017/results/2026-11-08-train/PREREG.md`), chain r75n-b2, kit bkit106, board 2. Smoke 9/9 on every
+  boot and specdiff PASS on every row. Each row is inside bitstream 1's band (Addendum 204):
+  - perlbench makerand 275.30 s (273.74-276.50);
+  - gcc train01 1,762.22 s (1,759.78-1,766.84);
+  - mcf 5,943.91 s (5,931.77-5,955.55).
 
 ## History
 
