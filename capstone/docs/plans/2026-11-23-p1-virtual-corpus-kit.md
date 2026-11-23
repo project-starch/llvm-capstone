@@ -215,3 +215,16 @@ Open, before the kit is cut:
 - Still to do: the board and queue slot, and the nested lane's stage split.
   - At three images a boot, SQLite needs about 23 boots.
   - The second-JTAG-load initrd (programme, firmware cap) would cut that.
+- BOARD_STAGE_XZ=1, added to bkit109's board-run.sh after the cut. The recipe is bkit14's apart from this block.
+  - The stage's images travel as one doms.tar.xz (CRC32, 8 MiB dictionary) with doms.sha256. The wrapped gate.sh
+    unpacks in place, checks every hash, then runs the original.
+  - A failure prints @@XZSTAGE FAILED and no VIRTUAL_STAGED_DONE.
+  - Host test: positive run, plus a corrupted hash and a truncated archive (both rc 1).
+  - Board-free real bake of the whole pools arm: 35 images, 102 MB, become a 2.82 MB stage. Firmware 19.57 MB, gate
+    PASS.
+  - So a SQLite arm fits one boot, as the twin's one VM per arm.
+  - Not yet shown on silicon: busybox's unpack, and the memory. The board has 962 MiB, of which 256 MiB is CMA, and
+    an unpacked arm takes about 100 MB.
+  - This replaces the second-JTAG-load initrd for the corpus; the initrd stays open for SPEC's xz train.
+- Stage split: the nested lane's, 31 baked boots, in the order gate, PHP, pools, malloc. Offered instead: pools and
+  malloc as xz boots. The nested lane decides, one route per arm.
