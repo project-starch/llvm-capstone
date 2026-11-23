@@ -63,3 +63,35 @@ row (the full test input) has no silicon point: board 2's perl row is makerand o
 
 `table.txt`: every organisation per trace, record-path reads and writes per 1k protected instructions, with each trace's
 image hash. Traces: the nested lane's `rectrace/traces/` (INDEX.md there names each by its image's sha256).
+
+## Out-of-sample test: REFUTED (2026-11-23)
+
+The fit above has two parameters on two programs, so it is exactly determined, and its one held-out point sits at
+noise level. Its first real out-of-sample prediction was the demand-only record cache: capstone-ariane b5a-demand-only
+2ca17ad2a, which removes the background fill from 7180a83b6. That prediction was pre-registered in that commit's
+message before lint, sweep, synthesis or any board run.
+- **gcc train01:** predicted -1.68 % (-705 M in-context cycles) against 7180a83b6. The decisive refutation criterion
+  was "not below -0.5 %". Read: **41,874,434,751, -0.391 %**; against P1 it is -0.035 %.
+- **mcf test:** predicted +0.40 %. Read: **144,919,108,858, +0.672 %**, which is slower than P1.
+- **HPM:** ev37 is 0 on both, so the change is present.
+  - ev34: gcc 8,520,989 against the model's 9.61 M (-11.3 %); mcf 2,756,098 against 2.98 M (-7.5 %).
+  - ev35: gcc 7,143,248 (+4.4 %); mcf 178,364,955 (+0.04 %).
+  - The count criterion (more than 5 % off) also fires, though the commit said it could fire on calibration alone.
+
+The run lines were re-read by the rtl lane from the board transcripts: the last `@@NATIVE-CNT 0 end` line, with
+counters hpm3..hpm8 = ev34, 35, 31, 37, 36, 2, in
+`/mnt/hdd/<user>/capstone/spec/board/out-nat-b5adem-hpmrc-frcdkms-b2/{505.mcf_r-native,502.gcc_r-train01-native}/board.txt`.
+The outcome is in llvm-capstone spec-silicon 5c5b00610a4d (results/2026-11-08-train/PREREG.md, Addendum 226; the
+pre-registration is Addendum 214).
+
+**What is retracted:**
+- the model as a tool for choosing levers;
+- its reading that B5a's mcf gain (-0.49 %) is read hits minus fill cost.
+The fill term (48.6 cycles per fill read) overstates what removing the fill gains on gcc. mcf moved the predicted way,
+but further.
+
+**What stands:** the reader's event calibration (mcf within 0.6 % on every event) is a property of the trace replay,
+not of the cost fit. B5a's mcf mechanism is open.
+
+**Do not use the cost model for a lever choice until it is refitted on more than two programs, with a held-out point
+outside run-to-run noise (which is not measured).**
