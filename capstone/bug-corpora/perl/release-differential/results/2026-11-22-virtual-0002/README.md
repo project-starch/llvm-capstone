@@ -15,6 +15,16 @@ silicon (bitstream P1, `suns.pl`) the protected interpreter costs +16.05 % in-co
   `f2edeb54c0da05cf…`, p0002 `140c747371415b07…`.
 - Platform: kit-devq (QEMU `59f553ef2968dc2a…`, module `af7484e5e39019a6…`), the same in all three bundles. One VM
   per arm, 2026-11-23 07:47-08:24; each runner exited 0.
+- **Correction (2026-11-23, after this README was first pushed in 408ffbcd52de): the guest had no exact bounds.**
+  PREDICTIONS.md has the VMs brought up with `--exact-bounds`, and every `inputs.json` here records
+  `"exact_bounds": true`. But kit-devq's QEMU is kit-profq's wrapper, which strips `x-capstone-exact-bounds=true`
+  on purpose: that twin is RTL-pinned, and the silicon has no exact bounds. Its `applied.log` shows the applied
+  line at this run's three boots (07:47:02, 08:02:09, 08:12:18) as
+  `-cpu rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,svadu=false`. The record copies the
+  requested `-cpu`, not the applied one (the runtime lane's kit, which it is fixing). Read the field as false. All
+  three arms ran on that same platform, so the landing criterion, p0001 against p0002, is unaffected. Predictions
+  3 and 4 compare with 2026-11-11, whose platform record also says true; whether that run's kit applied it is not
+  checked here.
 - Per arm: `<arm>/` is `run-virtual.py`'s bundle (11 cases), `<arm>-qualify/` is `qualify.py`'s (47 core test files).
   Raw guest output is not committed.
 

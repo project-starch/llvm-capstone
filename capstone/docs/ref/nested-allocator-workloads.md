@@ -4389,6 +4389,71 @@ prediction will be the QEMU verdict on the same image bytes (Tier 3's rule).
     compared with the 2026-10-29 (SQLite) and 2026-10-28 run18 (PHP) bundles. A cell that differs from those
     bundles is reported as a difference of the newer toolchain and runtime before any board pre-registration.
 
+### QEMU readings (2026-11-23 07:47-08:46)
+
+Three kit-devq defects came out of these runs. The runtime lane owns kit-devq and is fixing all three. Until then,
+every reading below says which QEMU ran it and which `-cpu` it applied.
+- **The QEMU drops two properties.** kit-devq's `qemu-system-riscv64` execs kit-profq's wrapper around a Q-34
+  binary (capstone-qemu 46b69c03a4).
+  - It refuses `x-capstone-addr`, which `ports/php/app/run-realphp.py` sets, so on it no PHP arm booted.
+  - It strips `x-capstone-exact-bounds=true` on purpose: that twin is RTL-pinned, and the silicon has no exact bounds.
+    The bundle's platform record copies the requested `-cpu`, so every kit-devq bundle says `"exact_bounds": true`.
+    The applied line is in kit-profq's `applied.log`; read the field as false.
+- **A timeout does not end the guest job.** `appvm.run_app`'s 300 s timeout ends the host side only. SQLite case 11
+  (fts3_zterm) spins on in the 1-CPU guest on the malloc arm. Every later case on that VM then read "runner timeout"
+  with an empty output (cases 11-25 of the first attempt, discarded as no data). In the 2026-10-29 bundle, case 11 is
+  the only timeout, and all 21 later cases began and completed or faulted. Its pools arm caught 11.
+- **So the readings below are on capstone-qemu 0542c5556c, run directly.** That is the pin of dev 1a051da6e82b, which
+  kit-devq's adapter comes from: binary `52f3daa98e3a487e…`, from a clean worktree. They use kit-devq's images and
+  adapter (module `af7484e5e39019a6…`), and SQLite's case 11 runs alone and last on each arm.
+
+**SQLite engine-repros, against 2026-10-29-virtual.**
+- **Exact bounds on, 66 of 66 cells the same.** The `-cpu` applied was
+  `rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true`. Same means
+  verdict and reason; the controls read as expected on both arms.
+  - virtual-malloc: MISSED 29, NO-READING inconclusive 1 (06), unattributed 2 (02, 20), infra 1 (11, the timeout).
+  - virtual-nested-pools: CAUGHT 29, MISSED 4.
+- **Exact bounds off (kit-devq): 64 of 66.** The two other cells are both pools-arm overreads:
+  - 29 (`sqlite3Get4byte`) reads cause 24 where 10-29 read cause 28 CAUGHT;
+  - 31 (`statDecodePage`) does the same.
+- **The pair that differs in the property alone.** Same binary 0542c5556c, same images, pools arm, cases 25, 29 and
+  31:
+  - `x-capstone-exact-bounds=true`: 25, 29 and 31 all cause 28 (`RISCV_EXCP_CAP_OOB`, 0x1c), CAUGHT;
+  - the property absent: 25 cause 28 CAUGHT; 29 and 31 cause 24 (`RISCV_EXCP_UNEXP_OP_TYPE`, 0x18, `cpu_bits.h:699`)
+    in the same function, which the arm's judge does not count as its mechanism, so MISSED.
+- **Reading.** The property explains the two cells. Under compact bounds, the profile the silicon has, the two
+  overreads still fault in the function ASan names, but with a cause the judge does not score. This is a finding
+  about the judge and the compact profile against the 10-29 bundle's exact-bounds verdicts. It goes to the lead with
+  this evidence. Which cause the board will read is the board's question, and no paper text changes here.
+
+**PHP engine-repros, against 2026-10-28-run18.** Both populations, the four arms each.
+- Every arm booted.
+- "all cross-arm gates pass" in both logs (image capability instructions derive=8 revoke=4).
+- The `-cpu` was run-realphp.py's own, with `x-capstone-exact-bounds=true` and `x-capstone-addr=sv39`, applied
+  unchanged by the bare binary.
+
+| arm | asan-blind (39): CAUGHT / MISSED | temporal-asan-visible (31, 25 out of denominator): CAUGHT / MISSED |
+|---|---|---|
+| stock | 5 / 29 | 1 / 4 |
+| system allocator (block) | 12 / 21 | 5 / 0 |
+| nested (object) | 26 / 10 | 5 / 0 |
+| nested exact | 31 / 4 | 5 / 0 |
+
+- 274 of 280 cells equal run18's in verdict and reason. The six that differ are two cases:
+  - **30 (crash-092): the per-run watchdog moved.** In run18 it killed the two nested arms (infra), and stock and
+    block read not-reached. Today it kills stock and block (infra), and both nested arms read CAUGHT (cause 25 in
+    `_zval_ptr_dtor`). A timing case, on a different QEMU.
+  - **41 (crash-139, an `efree` of the `.rodata` literal "message").** In run18 the nested layer refused the free
+    (NO-READING unattributed, code=3). Today both nested arms read MISSED. But in today's image no arm performs that
+    free: `blocks=342 frees=342` in all four, which read the same. So the MISSED is a non-reach the judge cannot see,
+    not a free the layer accepted.
+    - Not attributed. A candidate: the trigger's member zval is never refcount-initialised (its header), so whether
+      `zval_ptr_dtor` frees depends on stack contents. Those can move with the image: dev's nested layer since
+      bbedfbd40c6c, `php-real-nested.dom` `6321dcc8…` against run18's `101c6524…`.
+    - So today's nested arm has one temporal MISSED where run18's has none, and that cell is a difference of reach.
+- These verdicts are the QEMU side of the board's predictions. The board pre-registration still waits for the P1
+  virtual kit above.
+
 ## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
 
 The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
