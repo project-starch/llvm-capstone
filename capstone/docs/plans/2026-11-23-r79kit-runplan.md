@@ -38,3 +38,24 @@ loads va-runv and r79-pmp, one JTAG load each with a 150 s timeout, and always u
 - a missing url file;
 - the pid wait, run for real, both ending and timing out.
 The board 2 orchestrator ran on fake logs for all three R-75 outcomes, against a scratch marker.
+
+## Reading (2026-11-23), board 2: R-79 CONFIRMED ON SILICON on R-75 (d)
+
+Run `r79kit/run-b2-20261123T0130`, board 2, booking 1438 (booked 02:41:47Z, right after the R-75 kit's booking 1437
+was released; unbooked 02:43:33Z). No flash. The resident read back as `…-pagedtbl-r76-r75d_1c5d31474.bit`, name only
+(rc 3), before any load. `grade-r79kit.py` rc 0.
+
+| load | image | reading |
+|---|---|---|
+| 1 va-runv | f0ed3fac351b60f3 | SR 15, its 15 values: control PASS |
+| 2 r79-pmp | 8eb72553965cfc1c | SR 17 `0x0 0x7 0x80007008 0x77 0x0 0x0 0x1234 0x7 0x80003008 0x5a5a5a5a5a5a5a5a 0x0 0x0 0x77 0x77 0x77 0x77 0x2` |
+
+**R-79 CONFIRMED ON SILICON.** The vector is the PREREG's pre-fix row word for word (PREREG.md:31), and positions 0 and
+12-15 hold their kit checks. Read per position against the PREREG:
+- a legal load with a store behind it is refused 7, with tval 0x80007008, the store's address;
+- a lone sd to the W-less r_page is not refused, and the write lands (0x1234 read back);
+- the mixed case faults with the following store's tval 0x80003008;
+- an lr.d with nothing behind it is judged a read and allowed.
+
+The orchestrator then touched the runtime lane's marker `r75kit2-b2.DONE` at 02:43:33Z, after both bookings (1437,
+1438) read BOOKED and UNBOOKED. At 02:43Z board 1's run on P1 d83d3a633, the second of N=2, was still waiting at its boundary.
