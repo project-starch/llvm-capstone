@@ -79,7 +79,7 @@ Specification: `capstone/docs/design/sublet-reference-model.md` at 32dde56a6b42.
 | virtual-profile threads | need a kit with matched supervisor slots above 1 (Q-32); on a 1/1 kit the module refuses the second context with EBUSY (capstone_vm.c:3271), which musl's pthread_create returns as EAGAIN. Measured 22 Nov by the compiler lane: with 32 slots on both sides, pthread_create, tls_local_exec, pthread_tsd and pthread_cond pass (lane compiler/virtual-thread-slots) |
 | virtual-launcher thread gaps | at 32 slots two libc-tests still fail past pthread_create (compiler lane, dev 891610c248c1; read from source, not traced): PRIO_INHERIT mutexes get ENOSYS, because the virtual futex filters admit only WAIT/WAKE(_BITSET) (runtime/virtual/pthread.c:175, exec.c:1218-1220), while the delegated runtime has PI; pthread_cancel gets ESRCH, because the virtual launcher sets no host->tkill (delegate-service.c:701-709). Also: run-libc-test-delegated.py should skip pthread tests with a reason on a 1-slot kit instead of reporting faults |
 | kernel and module | kfast and NO_HZ never run on a board; huge pages refused (mcf's only lever); Plain's ticks are corrected by an estimate |
-| record table | default 262,144 records too small for Perl and gcc; a subtree above 65,532 records cannot be built, cause unknown |
+| record table | default 262,144 records too small for Perl and gcc; a subtree above 65,532 records cannot be built, cause unknown (resolved 24 Nov: not a limit of the native route, see 7.5 item 4) |
 | QEMU twin | models neither P1's paged table nor code placement; Zcb off; runtime cases 29-31 fail |
 | tooling | `spec-classify.py` misreads native transcripts (fix only in `kitfix-next`); kits cap firmware at 26 MB; the board watchdog reminds and queues nothing |
 | measurements | SPEC train and ref never run on the final configuration; rows have 1-2 runs, no intervals; SQLite and PHP bug corpora never rerun on the board |
@@ -353,4 +353,14 @@ In this order; items 1 to 3 are independent of each other and can overlap.
    hours per arm; then three runs per arm with intervals.
 4. Kernel and module levers: board readings for kfast and NO_HZ; huge pages in the module; a record table that
    grows on demand; the cause of the 65,532-record subtree limit.
+   State, 24 Nov: the 65,532 limit is understood, and it does not bind the native route.
+   - It belongs to the core's physical record pool. That pool is used when no table is set at `srevroot`, as in
+     bare-metal tests.
+   - Its 16-bit head starts at 3, and 65,535 means full. 65,535 - 3 = 65,532. At d83d3a633,
+     `capstone_rev_node.anvil:397,840,849` hold the head, and `csr_regfile.sv:1088` reads it as `csnodefree`.
+   - The RTL simulation that read 65,532 (`crevoke-cap.S`) is such a bare-metal test.
+   - The native route keeps its records in the table at `srevroot`. On silicon F, through that route, a
+     100,000-node subtree builds and revokes. The 10^6 probe dies between 196,609 and 262,145 nodes, at the table's
+     262,144 records (nested-workloads doc, 54b5fb9b7578).
+   - So the limit to remove is the table's fixed size: the record table that grows on demand, above.
 5. The silicon check of the `ccsrrw` defect, run last in its boot.
