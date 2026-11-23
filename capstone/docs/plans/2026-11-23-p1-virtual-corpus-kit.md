@@ -160,3 +160,21 @@ Open, before the kit is cut:
     on the board and x-capstone-supervisor-slots=1 on the twin. The PHP twin read at 32 slots must be redone at 1.
   - The causes are unrenumbered mcause values: stale 25, out of bounds 28, as on QEMU's twin. In the capmode-M load check
     bounds precede lifetime (load_store_unit.sv:1413-1465), so a stale capability used out of bounds reads 28.
+
+## Board kit build, state at 2026-11-23 14:xx
+
+- Board module built: perf/p1v/b55dev (perf/p1v/buildb.sh), capstone_vm.ko sha256
+  74b4cceb69d159c14c234d88eb411b17ff3789de9153e86dbdd8b6e04f1b9b2f, vermagic `6.4.14 SMP riscv` (the twin's is `6.1.0 SMP
+  mod_unload riscv`), 8,071 instructions with 0 compressed. Source, defines and build line are the twin's (f55dev); only
+  KERNEL_BUILD and CROSS_COMPILE point at build-fpga's linux-6.4.14, whose .config equals the kits' board-stock.config.
+- The kit carries the twin's launcher, 2488e5d2f88169e4, not b55dev's rebuild (a8a4dbe637ac758a). Both are static, so
+  the launcher stays byte-identical to the twin's.
+- **Blocker:** the vp2 virtual-profile recipe (bkit14's board-run.sh) replaces /capstone.ko with the process-ABI control
+  module, /tmp/capstone/r55-table/fpga-pkg-127/module/capstone.ko. That file was deleted in the 2026-11-23 cleanup: it is
+  a binary, and the salvage kept scripts only. build-fpga's target/capstone.ko is the stock module (its sections equal
+  bkit91's capstone-stock.ko), not the process-ABI one. The native kits' adapter/control/capstone.ko has equal
+  sections but was built against the native kernels.
+  Options:
+  - rebuild the process-ABI module from its source against build-fpga;
+  - or run this kit without the b0 process-ABI controls, with the corpus's own memsys5 controls as the first steps of
+    the batch rung. That would be a recorded deviation from the Tier 1 recipe.
