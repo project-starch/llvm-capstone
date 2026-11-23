@@ -71,3 +71,68 @@ requires each SR to equal its vector's length (35, 51, 30, 30, 16, 17). The rule
 - Afterwards the seal stays resident. h16s reads the resident name and flashes P1 itself on the mismatch.
 - The orchestrator was dry-run against a stub kit through each branch: a failing grade, a wrong seal name, a clean
   boundary A, A busy falling to B, a recycled pid, and neither boundary alive.
+
+**Re-slotted (2026-11-23 09:17Z), at the runtime lane's order.** The orchestrator above (re-armed 04:13Z on the v2
+grade) never booked. At h16f's exit board 2 goes to the nested lane's item-5 corpus first: SQLite and PHP bug corpora,
+several boots, `nested/corpus5/board/item5-chain.sh`. That chain unbooks and then writes `ITEM5-BOARD-DONE` on every
+exit path. Boundary A would have raced it, and boundary B was gone: the runtime lane had stopped the original h16s by
+hand before it booked. The boundary-A wait was stopped in its pid-poll loop with no booking (chain.log: no BOOKED, then
+END), and the old orchestrator ended on its "no booking" branch. The run is now `csmintkit/orch-csm2.sh`, in tmux
+csm-b2c, run `run-b2c-20261123T0917`:
+- it waits up to 68 h for ITEM5-BOARD-DONE, newer than its own start, which is inside the 72 h bound of h16s's waiter;
+- it re-checks the grade and the seal exactly as before, then runs the same kit with no pid wait, and the board must
+  read free within 1,800 s;
+- on every outcome, including a timeout, a failing grade, no booking and a signal, it writes the runtime lane's
+  `perf/natstage/csmint-b2.DONE` with that outcome. h16s now waits on that file (the runtime lane's wait-marker.sh).
+- It was dry-run with every path pointed at scratch: a fresh marker (DRY kit, all six loads stubbed), a stale marker
+  (no trigger), a timeout, a failing grade and a TERM. Each wrote its scratch DONE with the matching outcome, and the
+  real markers were checked absent afterwards.
+
+## Reading (2026-11-23), board 2: CSMINT KIT VOID by its PREREG (the control's last ten words)
+
+Run `csmintkit/run-b2c-20261123T0917`, board 2, booking 1450. It booked at 13:51:43Z, 38 s after the nested lane's
+ITEM5-BOARD-DONE ("pools:0 STOP-GATE1"), and was unbooked at 13:59:17Z.
+- **Before the flash:** the resident read back as P1 `…_d83d3a633.bit`, not the seal (rc 1).
+- **Flash:** `flash-bitstream.py` matched the local sha256 to the seal, uploaded the bitstream (HTTP 201), flashed it
+  and power-cycled the board. The resident after the power cycle was `…-r75d-b5b1_d0afdb40f.bit`.
+- **Readback after the flash:** the same name, name only (rc 3).
+- **Loads:** all six returned, each with its full SR count and SUPTEST END.
+- **Marker:** csmint-b2.DONE was written at 13:59:17Z. The seal is left resident; the default stays R-75 (d), with
+  bitstream 1 the fallback.
+
+| load | image | reading against the PREREG |
+|---|---|---|
+| 1 sublet-life (control) | eb281996594bcec1 | SR 35, 35 values: positions 0-23 and 34 exact, 24-33 DIFFER |
+| 2 csmint | e9ba3863d3bc8f70 | SR 51, exact |
+| 3 csmint-vm | 74f4c5896d0d2dd1 | SR 30, exact |
+| 4 csmint-vm-nc | d73ceff87be78e06 | SR 30, exact |
+| 5 csmint-pmp | 7d672a84e8d8dda5 | SR 16, exact |
+| 6 r79-pmp | 8eb72553965cfc1c | SR 17, exact (R-79's fixed row) |
+
+**Verdict: VOID, by the PREREG's own rule.** The PREREG voids the boot unless sublet-life reads "SR 35 and its 35
+values", and `grade-csmintkit.py` printed "CSMINT KIT VOID: the sublet-life control is DIFFERS" (rc 1). So loads 2-6
+are recorded as readings, not verdicts. They read the PREREG's vectors exactly, but this boot neither confirms CSMINT
+nor shows R-79 fixed. Deciding that is the PREREG owner's call, not this record's.
+
+**What differs.** The differing words are sublet-life's pool dump p11..p20. Each was pre-registered as 0x0 and read:
+`0xff000100ff010003 0x94004000848882 0xff000380ff014006 0x41104000051402 0xff000400ff010006 0x14154100248810
+0xff000400ff014006 0x80004000788801 0xff000500ff000006 0xa04d000fb1181`.
+
+**Where they sit, from the source** (capstone-ariane d0afdb40f):
+- The dump reads 20 quadwords from 0xbff00000 (`sublet-life.S`, the pool loop).
+- The physical pool is `CAP_REVNODE_MEM_BASE + slot * 16` (`ex_stage.sv:2323`). The header quadwords are slots 0
+  and 1 (`ridx`/`hidx`, `capstone_sublet_life.sv:111-116`). So p11..p20 are records 5 to 9.
+- The header read on silicon, p1 = 0x8000000000010000 and p2 = 0x5, matches the PREREG and gives next = 5. Records 5
+  to 9 have never been allocated.
+- At reset the unit writes only the two header quadwords and slot 2's record (`capstone_sublet_life.sv:300-302`).
+- The unit reads fresh candidates ahead of next only in a paged pool (S_O_N, `:386`). The physical pool is not paged
+  (header word 0 bit 62 = 0).
+
+Read that way, nothing in this boot wrote 0xbff00050..0xbff00098. The PREREG's zeros there would then be simulation's
+zero-initialised memory, and the reference's zeroed table, rather than an output of the unit; silicon returns whatever
+the DRAM held. This is an inference from the source, NOT a result. Two things would test it: rtl's check that no path
+writes a Sublet slot at or above next, and the same image on silicon with those words cleared first, or with its dump
+cut to records below next.
+
+The part of the control the unit writes reads exactly: the fourteen trap causes, both header quadwords, records 2 to
+4, and the trap count (6).
