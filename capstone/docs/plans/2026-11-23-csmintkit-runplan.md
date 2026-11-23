@@ -56,3 +56,18 @@ requires each SR to equal its vector's length (35, 51, 30, 30, 16, 17). The rule
   - a wrong seal name, a bad control and a missing control each read VOID;
   - a wedge at csmint-vm, a differing value at csmint position 5, and R-79's pre-fix row at load 6 each name their
     first failure, with every later load collateral.
+
+**The slot** (the runtime lane's grant, 2026-11-23, its option b: nobody waits behind a peer). Board 2, armed 03:17Z as
+`csmintkit/orch-csm.sh` in tmux:
+- It waits for the full build's grade, and continues only if grade-b5b3-full prints "B5B3-FULL PASS" and the chain's
+  verdict is SEALED with the d0afdb40f name. The seal sha comes from that verdict line, and the kit checks it against
+  the file again.
+- Boundary A is the runtime lane's h16f exit. The kit polls its pid at 5 s, and the board must read free within 40 s.
+- Boundary B is h16s's exit. It is used if h16f had already exited at the grade, or if A found the board busy before
+  booking. Nothing is queued on board 2 after h16s.
+- A pid counts only while its /proc start time equals the one recorded at arming, so a recycled pid cannot trigger a
+  booking.
+- Neither boundary alive at the grade: no booking, and the runtime lane is asked.
+- Afterwards the seal stays resident. h16s reads the resident name and flashes P1 itself on the mismatch.
+- The orchestrator was dry-run against a stub kit through each branch: a failing grade, a wrong seal name, a clean
+  boundary A, A busy falling to B, a recycled pid, and neither boundary alive.

@@ -345,7 +345,33 @@ Key 2's failure branch (a loop member named cm_*, csmint_*, dsw_* ...) has nothi
 
 So the logic that 2b placed in rev_node now sits on dyn_unit's side of the scoreboard boundary, beside dyn_unit's
 +7,540 and the operand stage's -4,288. That is a pin count, not a LUT attribution: the same cell census on dyn_unit
-(`twc/b5b3/dl/dynluts.tcl`, unitluts.tcl with only the unit path changed) was still running on the 2a, 2b and step 3
-checkpoints when this section was written.
+(`twc/b5b3/dl/dynluts.tcl`, unitluts.tcl with only the unit path changed) ran on the 2a, 2b and step 3
+checkpoints; its reading follows.
 
-No full build has been run. The rtl lane pre-registered one to follow a pass, batched, and pre-registers it separately.
+The full build that follows the pass was pre-registered by the rtl lane (land/rtl-b5b1 507463601fa3) and launched
+2026-11-23 02:45Z; its reading is recorded separately.
+
+**dyn_unit's cell census, 2a -> 2b -> 3** (`twc/b5b3/dl/dynluts.tcl` e4c8ec0194a6781f: unitluts.tcl with only the unit
+path set to ex_stage_i/dyn_unit; 8 GB guard, peak 2.31 GB, rc 0 on all three checkpoints). LUT cells:
+
+| dyn_unit LUT cells | 2a | 2b | 3 |
+|---|---|---|---|
+| total | 11,947 | 8,439 | 17,415 |
+| in the fan-in of the unit's own sequential cells (1,234 / 1,274 / 1,270) | 712 | 711 | 713 |
+| named for the scoreboard's `mem_q[][sbe]` | 10,851 | 7,403 | 16,101 |
+| with a leaf load in i_scoreboard | 1,800 | 204 | 5,809 |
+| with a leaf load in i_issue_read_operands | 704 | 1,022 | 278 |
+| with a leaf load in rev_node | 90 | 612 | 90 |
+
+- **dyn_unit's own logic did not move** in either step: 712 -> 711 -> 713 cells.
+- **Most of dyn_unit's row is the scoreboard's write-back logic,** even on 2a: about 90 % of its cells are named for
+  `mem_q[][sbe]`. The largest stems on step 3 are cap_result.rs1_metadata 3,594, ra_data 3,278, result_metadata 3,160,
+  result 1,331, ex.tval 1,138 and rs1_cursor 1,044.
+- So **step 3's dyn_unit +7,540 is the same boundary move as 2b's rev_node +4,828,** in the other direction. Between
+  2b and 3, the mem_q cells in rev_node fell by 5,722 and those in dyn_unit rose by 8,698.
+- Across the two units together, the mem_q cells are 10,856 (2a), 13,129 (2b) and 16,105 (3). That is +5,249 since 2a
+  in these two hierarchies, beside the operand stage's -3,268 (2b) and -4,288 (3). Those cells may have moved in from
+  the operand stage or grown with the widening. This census covers only the two units, so it does not separate the
+  two.
+- So a per-module LUT row in ex_stage_i is not a measure of the unit named in it while this logic floats. The units'
+  own cones are, and they moved by -113 (rev_node, 2b), +192 (rev_node, 3), -1 and +2 (dyn_unit).
