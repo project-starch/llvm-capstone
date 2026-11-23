@@ -26,6 +26,14 @@ The measured mapping is `mcause = 24 + exception_code`: `UNEXPECTED_OPERAND 25`,
 (`28` is `INSUFFICIENT_PERMISSION`, not `OUT_OF_BOUNDS`). Both are annotated in place. **Check any
 capability `mcause` in either file against that table before acting on it** — assume more remain.
 
+**That table predates the RTL's renumbering, so it is wrong for any bitstream whose RTL contains it.** capstone-ariane
+c77c65324 (2026-09-15, R-34 and R-24) put the capability causes on the spec's base 23 + ordinal:
+`UNEXPECTED_OPERAND_TYPE 24`, `INVALID_CAPABILITY 25`, `UNEXPECTED_CAPABILITY_TYPE 26`, `INSUFFICIENT_PERMISSION 27`,
+`OUT_OF_BOUNDS 28` and `ILLEGAL_OPERAND_VALUE 29`. On P1 (d83d3a633, `core/include/riscv_pkg.sv:358-363`) a stale
+access reads 25 and an out-of-bounds one 28, the same numbers as QEMU's `cpu_bits.h`. Name a silicon cause from the
+`riscv_pkg.sv` of the bitstream that raised it, not from either table here. Read with the table above, the P1 numbers
+led to a wrong pre-registered prediction (26 and 29) on 2026-11-23.
+
 ## Procedures
 
 | doc | use it for |
