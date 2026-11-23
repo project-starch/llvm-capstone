@@ -85,3 +85,23 @@ five `.dom` files exec'd directly from a read-only ext4 stage.
     same module.
   (b) keeps the tree's own route, but it changes the corpus's images from the ones its QEMU verdicts were read on. So it
   needs a twin re-read of the corpus before any board kit.
+
+## The launcher route, decided (2026-11-23)
+
+The nested lane keeps the image bytes: the corpus references (the 10-29 bundle, run18) and the arms' allocators are all
+virtual-profile. So the kit runs the images' own adapter.
+- (a), table-tree's exec.c, is infeasible. table-tree's module has no ioctl interface: "ioctl" occurs only in comments,
+  and the module registers only a binfmt. exec.c's CV_ADD and CV_IMAGE have nothing to talk to.
+- A second capstone_vm.ko cannot load beside the built-in one.
+- **(c), taken:** dev's own module and launcher (1a051da6e82b, the adapter the images ran under) built FLAT for ids55
+  with `-DCAPSTONE_VM_FLAT_TABLE=1 -DCAPSTONE_VM_IDS=55 -DCAPSTONE_VM_INDEX_BITS=25` and the ids-55
+  cap_rev_table_abi.h, on a board kernel without the built-in module. Prior art is dev
+  capstone/tests/rtl-smoke/ids55-flat-module/ (PREREG 2026-10-30, RESULTS-twin.md). P1 runs flat tables on silicon
+  (bkit88/89, 2026-11-16). This is P1's flat table, not its paged tree.
+- Withdrawn on the way, never acted on:
+  - "bkit40 carries such an adapter": it is a native kit with the adapter built in;
+  - "dev's module has no ids55 knobs": the width is a source define, not a Makefile variable, and only the Makefile was
+    grepped.
+- Gate before any kit: on the twin, the module's index_bits and ids parameters read 25 and 55, and control_uaf_mem5,
+  control_bounds_mem5 and case 25 read 25, 28 and 28 through this adapter. Then the nested lane re-reads both corpora on
+  that twin, and the board pre-registration comes from that reading.
