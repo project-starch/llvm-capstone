@@ -4750,6 +4750,39 @@ phases equal to the native reference (`cmp-sq.py`: none differ, none missing, no
   - above +12 %: attributed per function before anything else is said;
   - below +2 %: it is reported as it stands, with the per-function deltas.
 
+### Result: Perl, Fig. 10's revision plus 0002 (08:45-09:07)
+
+All six predictions hold.
+
+- **The runs.** The chain first started at 08:33 and was stopped four minutes into its first boot, to let three short
+  SQLite corpus runs take the QEMU lock first. That partial boot is kept apart (`fig10/runs-aborted/`). The chain
+  then ran 08:45-09:07, four boots, rc 0.
+- **Answer.** `suns.out` in every boot: stdout sha256 `01688ea0…`, MATCH, status 0.
+- **Stock control.** `fig10-perl02-u3` reads 2,082,931,984 against 2,082,932,016-020, which is -32 to -36 (0.000002 %).
+- **Lifetimes unchanged.** opcount p0002: CDERIVE (funct7 0x51) 2,064,278 and CREVOKE (0x52) 1,684,011, against
+  prot's 2,064,268 and 1,684,005, so +0.0005 % and +0.0004 %. No CRENEW (0x54) line.
+- **Image instructions: +174,659,199 (+8.385 %) against stock, inside the band.** p0002 reads 2,257,591,183 and
+  2,257,591,178 (zones3 p1, p2) and 2,257,591,179 (opcount). That is 551,897,493 below prot's 2,809,488,676, against
+  the predicted 400 M. So 0002 removes 76 % of Fig. 10's revision's +726.6 M.
+- **`Perl_sv_arena_head`: 147.1 instructions per call** (11,782,336 at the same 80,084 entries), against prot's
+  5,421.
+- **Repeats:** p1 and p2 within 5 instructions.
+- **Per function, against stock** (`fig10-perl02-p1` against `-u3`, each with its own symbols). The named functions
+  sum to +169,111,580 of the zone's +174,659,199, so 5,547,619 falls outside every FN range.
+  - `Perl_sv_arena_issue` +77,477,237 at 1,077,570 entries (absent from stock). That is 71.9 per call; prot had
+    87,051,697 at 238,418 entries;
+  - `Perl_sv_free2` +44,139,039 at the same 864,579 entries;
+  - `memmove` +24,696,528 (entries 877,558 against 875,022);
+  - `Perl_sv_arena_head` +11,782,336;
+  - `Perl_newSVpvn_flags` +5,842,025 at the same entries;
+  - `memset` +2,395,488, `calloc` +1,625,273, `Perl_more_sv` +1,058,115 (2,536 arenas against stock's 1,590), and
+    `aligned_alloc` +765,647;
+  - against these, `Perl_vivify_ref` -2,750,681 and `Perl_sv_clear` -864,273 at the same entries.
+  - `Perl_sv_arena_issue` is entered 4.5 times as often as in prot. Read as inlining moved by the lookup's growth,
+    which fits `sv.o`'s CDERIVE words falling from 28 to 2. That is inferred, not read from the disassembly.
+- **Memory** was not measured in this chain: oneop's runner reads instructions only. Stock's peak for this workload
+  is not on record either, so the memory condition is open for this variant.
+
 ### Result: the CPython chain is void: the environment refuses `ioctl(FIOCLEX)`, so no script can be run by path (01:26-01:28)
 
 - Every boot exited with status 2 in 0.8 s and printed only `./app: can't open file
