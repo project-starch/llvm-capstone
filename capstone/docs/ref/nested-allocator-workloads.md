@@ -4630,8 +4630,10 @@ phases equal to the native reference (`cmp-sq.py`: none differ, none missing, no
   size that fits a walk, and the patch's source has the walk (`S_sv_arena_of` over `PL_sv_arenaroot`). That the
   other increases are the same walk inlined elsewhere is inferred from the entries, and was not read from the
   disassembly. Fig. 10's revision predates the repair in pending patch 0002, so on silicon this revision would carry
-  the walk too. The variant worth pricing is 0001 plus 0002. Its landing is under way (`perl0002`, queued on the
-  twin).
+  the walk too. The variant worth pricing is 0001 plus 0002. 0002 has since landed (2026-11-23): on the perl
+  corpus, 0001 and 0001+0002 agree in all 11 cases and all 47 qualify files
+  (`bug-corpora/perl/release-differential/results/2026-11-22-virtual-0002/README.md`), and it is now
+  `ports/perl/sublet/patches/5.36.3/0002`.
 
 ### Pre-registration: Perl, Fig. 10's revision plus 0002, the variant worth pricing (written 2026-11-23 06:37, before the runs)
 

@@ -64,7 +64,9 @@ two adjacent arms is that one thing and nothing else.
 `sysalloc-sublet` and `sublet-svheads` ran on the physical Sublet heap, which was removed on
 2026-10-11 with `PERLD_HEAP=sublet` and `sublet-svheads`; their readings below stay as recorded
 (2026-10-06), and the arms measured since are on the virtual profile
-([`results/2026-10-11-virtual`](results/2026-10-11-virtual/README.md)).
+([`results/2026-10-11-virtual`](results/2026-10-11-virtual/README.md)). PERLD_SUBLET=1 builds apply
+`ports/perl/sublet/patches/5.36.3/0001` and, since 2026-11-23, `0002` (the arena lookup by index), which reads the same
+in every cell ([`results/2026-11-22-virtual-0002`](results/2026-11-22-virtual-0002/README.md)).
 
 | arm | protection | catches |
 |---|---|---:|
