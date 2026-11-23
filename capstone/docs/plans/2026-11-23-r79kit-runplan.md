@@ -58,4 +58,21 @@ was released; unbooked 02:43:33Z). No flash. The resident read back as `…-page
 - an lr.d with nothing behind it is judged a read and allowed.
 
 The orchestrator then touched the runtime lane's marker `r75kit2-b2.DONE` at 02:43:33Z, after both bookings (1437,
-1438) read BOOKED and UNBOOKED. At 02:43Z board 1's run on P1 d83d3a633, the second of N=2, was still waiting at its boundary.
+1438) read BOOKED and UNBOOKED.
+
+## Reading (2026-11-23), board 1: R-79 CONFIRMED ON SILICON on P1, N=2 agree
+
+Run `r79kit/run-b1-20261123T0130`, board 1, booking 1447. The runtime lane's t201s2 (pid 2038343) ended at 09:09:35Z
+after a 27,550 s wait; the run booked in the same second, so t202fp did not take the board first and the board 2
+fallback did not run. Unbooked 09:11:00Z. No flash. The resident read back as `…_d83d3a633.bit` (P1), name only
+(rc 3), before any load. `grade-r79kit.py` rc 0.
+
+| load | image | reading |
+|---|---|---|
+| 1 va-runv | f0ed3fac351b60f3 | SR 15, its 15 values: control PASS |
+| 2 r79-pmp | 8eb72553965cfc1c | SR 17 `0x0 0x7 0x80007008 0x77 0x0 0x0 0x1234 0x7 0x80003008 0x5a5a5a5a5a5a5a5a 0x0 0x0 0x77 0x77 0x77 0x77 0x2` |
+
+**R-79 CONFIRMED ON SILICON, N=2.** The vector is the PREREG's pre-fix row exactly, and it equals board 2's reading
+position for position. The two runs are on different bitstreams, P1 d83d3a633 and R-75 (d) 1c5d31474, so the
+agreement covers both boards and both residents. It does not separate bitstreams that differ in pmp_data_if: both
+residents predate the fix.
