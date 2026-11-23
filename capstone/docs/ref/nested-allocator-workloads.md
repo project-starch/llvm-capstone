@@ -4294,6 +4294,34 @@ Every prediction held, so the first branch applies.
 - **Board time:** about 13 h for u1 + p1, plus about 10 min for c0 and the controls. The board slot is asked of the
   runtime lane. Nothing runs before this text is pushed.
 
+### Result: c0 passes; u1 was cut by this lane's idle limit before it could have finished, so no `--size 100` reading (board 3, 2026-11-23 13:38 - 11-24 06:25)
+
+Transcript `spec/board/out-nat-p1s100-b3r2/s100/board.txt` (`bfc1dc01c6b6be48…`).
+
+- **Controls pass.**
+  - `b0-stats` and `b0-hello` return 0, and the native smoke passes all 9 steps.
+  - c0 (`--size 1`) returns rc 0 in 229.06 s (uptime 125.04 to 354.10). All 32 phases equal the host's native
+    `--size 1` reference (`ports/sqlite/app/results/2026-10-11-same-answers/phases.json`).
+  - The comparison fires: against the `--size 100` reference the same output equals only 18 of 32 phases.
+  - So the new kernel (bkit107's facc tree) boots and runs speedtest1 on P1. This boot is its Tier 1.
+- **u1 did not return.** It began at 354 s. The driver ended the rung after its idle limit of 60,000 s without
+  console output (`idle limit 60000 s`, SEQ), at 06:25:20. p1 never started, and the board was unbooked.
+- **That is not a hang. u1 could not have finished inside the limit.**
+  - On the twin, `--size 1` takes 2.26 guest seconds (`nst1-q5`, command u). The `--size 100` commands of
+    `nst1-s100c` take 658.27, a ratio of 291.
+  - At that ratio, c0's 229.06 s on P1 gives about 66,700 s, or 18.5 h, for u1, above the 60,000 s limit.
+  - The apertures read after the cut changed between two reads (`UNSTABLE`, 5 switches), so the core was still
+    running.
+  - The pre-registration sized its limits from the SPEC lane's "about 6.5 h per command". This lane had a measured
+    P1 `--size 1` time (bkit91, 2026-11-17) and the twin's size ratio, and did not compute from them.
+  - The estimate assumes board time scales with the twin's guest time. The twin's commands are dominated by kernel
+    instructions (+0.265 % being 1.66 G means about 625 G), so this is an estimate, not a reading.
+- **No cost or answer for `--size 100` on silicon.** About 16.8 h of board 3 were spent on this.
+- **What a measured run would take:**
+  - about 18.5 h for u1 and about the same for p1, so about 37 h, or two boots of about 19 h, one command each;
+  - an idle limit above the command, or a heartbeat line with the bytes written;
+  - before that, the board-time cost is put to the runtime lane, which owns the queue.
+
 ## PHP against a pristine second binary (2026-11-22)
 
 Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
