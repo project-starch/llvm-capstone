@@ -4560,6 +4560,90 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
+### R-79 — the PMP and CPMP judged a load or store with the NEIGHBOURING cycle's access type: a lone S/U store passed a region without W, and a load followed at once by a store was refused 7 `OPEN 2026-11-23 — DEMONSTRATED IN SIMULATION (capstone-ariane b5b1-step3, csmint-pmp.S, both branches pre-registered); FIX IN RTL, sim only (09b9cf9fd, claim-audited: the defect and the fix SUPPORTED); NOT MEASURED ON SILICON; upstream CVA6 wiring (the PMP extraction, 23355d29f), so on every bitstream since`
+
+Siblings: none in the registry. Found by the claim-auditor's pass over CSMINT's sequencer (step 3), whose
+store-permission probe is always a lone store.
+
+**Mechanism** (capstone-ariane, read at f4ef2b565 and at the five bitstream hashes below):
+- pmp_data_if judges the REGISTERED request. Its lsu_valid_i is pmp_translation_valid, the MMU's lsu_req_q
+  (cva6_mmu.sv:534, :595, registered at :774), or translation_req delayed one cycle without an MMU
+  (load_store_unit.sv:662).
+- But it took the access type from lsu_is_store_i = st_translation_req of the CURRENT cycle (load_store_unit.sv:702 at
+  f4ef2b565). That is the store unit's combinational request (store_unit.sv:282-369), i.e. whatever the LSU's head
+  requests next.
+- The PMP fault's tval likewise came from the current cycle's mmu_vaddr (the which_op mux: the next head's address,
+  or 0).
+- The type feeds both checks: PMP (pmp_data_if.sv:371 access type, :381 cause) and CPMP (:229-230 cpmp_perm_ok,
+  perm[1] for a store and perm[2] for a load; :401 cause).
+- Origin: upstream CVA6's PMP extraction, 23355d29f (PR #2528). Before it, the MMU judged with its own registered
+  lsu_is_store_q (23355d29f^ cva6_mmu.sv:571). The MMU still keeps lsu_is_store_q for its own faults and was right.
+
+**Demonstrated** (Verilator, S12_MEM_DELAY 12). csmint-pmp.S runs S bare with PMP entry 0 R-only NAPOT over one page,
+and entry 1 NAPOT RWX over everything. Both branches were written before the run (capstone-ariane bbe48a9db, revised
+at 575c9a343). A sim-only PMPCHK line gives each judgement's type:
+- A lone sd to the R-only page LANDED: judged is_store=0.
+- A legal ld from it, followed at once by a store, faulted 7: judged is_store=1.
+- CSMINT's store-permission probe, always a lone store, was judged is_store=0, so CSMINT minted into the
+  write-protected page.
+- Systematically: every store followed by another store read is_store=1, and every one followed by anything else
+  read 0.
+- The reading matched neither pre-registered branch, because the misjudged load was not predicted. It is recorded in
+  csmint-pmp.expect.
+
+**Fix** (capstone-ariane 09b9cf9fd, on b5b1-step3):
+- With each request, the LSU registers the type which_op selected for it (the head's fu STORE, or a DYN STC) and the
+  virtual address. It does not take the raw st_translation_req, which the store unit also raises for a switcher write
+  beside a load at the head.
+- Both HOLD while nothing is requested, so a judgement after a D-TLB walk sees its own request's pair. The load unit
+  drops its request during a walk, and no other unit can take the head meanwhile.
+- After the fix, csmint-pmp reads its RIGHT branch 16/16: the sd and the probe fault 7 with tval the address, the page
+  is unchanged, the legal load is clean, and there is one mint.
+- The CSMINT and Sublet arms are unchanged. They run RWX PMP and CPMP, so they are no-regression checks, not tests of
+  the fix.
+- Lint is at reference, with the loop names, unused signals and WIDTH unchanged.
+- The decisive runs were repeated from clean checkouts, with each run's header naming its commit and dirty=no:
+  - f4ef2b565, pre-fix: the recorded pre-fix line exactly;
+  - d0afdb40f, the branch tip with the fix: RIGHT 16/16, with every other arm unchanged and the Sublet lint PASS.
+- Not synthesized yet. It lands with B5b-1 step 3, and goes on bitstream 3's fix list (the semantics owner, 2026-11-23).
+
+**What is by source only:**
+- The PMP tval defect. Before the fix no arm recorded the faulting access's tval: the faulting load's was not saved,
+  and the other zeros were a cleared register.
+- The CPMP's own tval, cpmp_paddr_x from the registered paddr, was right.
+
+**Reach** (claim-audited). The defective wiring is at e7af48457, dcc6daf6e, c721c1a2a, 325966ee4 and 603528b8b.
+- **PMP:**
+  - OpenSBI's layout gives S/U RWX over everything; the firmware entries and the mtimer/mswi adds are M-only, and the
+    uart is SURW (components/opensbi lib/sbi/sbi_domain.c:757-781).
+  - No S/U region has R without W, so the wrong-allow outcome cannot happen on recorded runs.
+  - A denied S/U access to an M-only region still gets the right decision, but possibly the wrong cause (5 against
+    7) and tval.
+- **CPMP** (capability mode, S/U, or M with MPRV and an S/U MPP): only entries missing W or missing R are affected.
+  - The monitor installs RWX for its own regions (every write_cpmp site in sbi_capstone.c).
+  - The receiving SBI installs shared regions tightened to R-only (PERM_IN, `__tighten(r,4)`) or W-only (PERM_OUT):
+    the null-blk split, miniweb and dpdk-multip.
+  - Through a PERM_IN entry a lone store was allowed: write authority the borrower does not hold.
+  - No recorded silicon run of those three was found.
+- **Not in reach:**
+  - The capability-operand permission check (load_store_unit.sv:1466-1470, :1536-1538) is computed from the request's
+    own lsu_ctrl and registered with it.
+  - The 2026-09-08 r26 side observation (a non-standard cause, where R-79 gives 7 or nothing; cause 24 is a likely,
+    unproven reading).
+- The board lane's read-only sweep of silicon records (2026-11-23) found no reading in the exposed classes: relying on
+  a write denial, an unattributed cause 7 on a load, or a PMP fault read with tval 0.
+
+**Behaviour change to pin:** every AMO, LR included, goes through fu STORE. So after the fix it is always judged as a
+WRITE, as the MMU's own lsu_is_store_q judges it; before, it depended on the next instruction. An lr.d to an R-only
+region now faults 7. That arm against the reference is OWED.
+
+**Owed:**
+- a capability-mode CPMP arm with perm-4 and perm-2 entries (an ids55 build, where CAPENTER is legal);
+- an Sv39 arm with a D-TLB miss on the R-only page;
+- the lr.d arm;
+- synthesis;
+- a silicon kit of the PMP-only arms on today's bitstream (before) and on step 3's (after).
+
 ### R-78 — no RTL assertion had ever run in simulation: the Verilator build never passed --assert, and Verilator 5.008 cannot build the model with it `RESOLVED AS AN INSTRUMENT 2026-11-20 — 101 assertion sites compiled in, 0 fired on P1's 95-test set, on a SIDE instrument (Verilator 5.038 with --assert); gating sweeps stay on 5.008`
 
 **The gap.** The simulation flow's Verilator command (`Makefile` verilate_command, :645-668) has no `--assert`, and
