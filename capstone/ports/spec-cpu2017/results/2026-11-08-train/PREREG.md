@@ -7021,3 +7021,43 @@ Chain dem-b2, kit bkit104. Every boot's smoke read 9/9 and every row specdiff PA
 - What this does not establish is why B5a's background fill helped mcf. The readings show only that removing it made
   mcf slower, and that gcc gained less than the model said.
 - N = 1 per row.
+
+## Addendum 227 (2026-11-23 13:32 +08, outcomes): Addendum 219 (R-75 (d) on silicon), the Plain half of Addendum 222, and a deviation in Addendum 225's order
+
+### Addendum 219
+
+**Part 1, the reproducer kit** (the board lane's run, recorded at board/meas-pw 7eb67baa00a1; registered by the rtl lane
+on dev 819780239744). Booking 1437 flashed bitstream 1, then R-75 (d). Each flash was checked against its seal, and the
+name was read back after it.
+- On bitstream 1, R-75 REPRODUCED: r75-trap (73ce33d96fac8e91) printed no SR line; its matched control r75-trapz read SR 3;
+  va-runv passed before and after.
+- On (d), FIXED: both r75-trap loads read SR 3.
+- N = 1 per bitstream.
+
+**Part 2, the perf null** (chain r75n-b2, kit bkit106, board 2). Smoke 9/9 on every boot, specdiff PASS on every row.
+
+| Row | R-75 (d) (board.txt) | Bitstream 1 band (Addendum 204) | |
+|---|---|---|---|
+| perlbench makerand | 275.30 s (5aaf228a5260c3fc) | 273.74-276.50 | in |
+| gcc train01 | 1,762.22 s, run_cycles 41,866,805,127 (633e89287e8083c0) | 1,759.78-1,766.84 | in |
+| mcf | 5,943.91 s, run_cycles 144,682,534,531 (f64af250ad5d9a28) | 5,931.77-5,955.55 | in |
+
+The prediction held. By 219's rule, (d) is a candidate for the board default. Runtime and rtl agreed under the delegated
+rule: R-75 (d) 1c5d31474 is the registered default for new work, with bitstream 1 as the fallback. The registry is
+board/meas-pw b8e4493b013d (`capstone/docs/ref/board-bitstream-default.md`). Paper chains stay on P1.
+
+### Addendum 222, the Plain half
+
+h16rvm, board 3, matched Plain 8db8f9cda, bkit95: mcf train 23,841.43 s, specdiff 2/2 PASS (667dd0ae1867a59f). Against
+the Plain control's 23,841.61 s that is -0.001 %, inside the predicted ±0.5 %. maxrss 572,928 kB; the twin's H16 VmHWM
+was 573,108 kB and the control's 619,900 kB. The Full and +Spatial halves (h16f, h16s) are queued on board 2.
+
+### Addendum 225, order deviation
+
+The runtime lane's /tmp cleanup deleted /tmp/capstone/r55-table/build-fpga-fw.sh, every native kit's BOARD_FW_RECIPE.
+It was restored at about 13:16 from the cleanup's salvage (sha256 fbfcd4e3440a1ee0).
+- The nested lane's s100 chain stopped at its firmware step at 13:11, and Addendum 225's b1c at 13:14. No domain ran.
+- b1l then started out of order on 6438348ec. It was stopped by hand, and booking 1444 was released. Its output and
+  the other three chains' were moved aside, unread.
+- The four chains were re-armed in their pre-registered ABBA order behind the re-armed s100 chain: b1c 484407, b1l
+  484450, b1l2 484479, b1c2 484500. Nothing else changed.
