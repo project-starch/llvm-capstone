@@ -5716,3 +5716,63 @@ P1. For each boot that does not return, it also records where the core stopped, 
   no stock arm in this run, and the kernels may differ.
 
 **Prediction.** Intermittent: between 2 and 4 returns of 5, and every non-return at tsu-p1's commit pc.
+
+## perlbench item 3: the CRENEW variant, Perl 5.36's SV heads in the one-operand environment (2026-11-24)
+
+### Pre-registration: Fig. 10's Perl revision plus 0002, with heads renewed instead of released, in oneop (written 2026-11-24 08:37, before the runs)
+
+**Question.** The programme (item 3) asks for a variant with CRENEW and the liveness test.
+- **The liveness half needs no run.** As "The CRENEW and liveness-test variant" records, no QEMU decodes a liveness
+  test. Its instruction case is one probe replaced by one instruction, 0.032 % of Perl's instructions. So the variant
+  has no instruction saving to measure, and its case is semantic.
+- **The CRENEW half** runs here, on Perl 5.36's SV heads with suns.pl, where Fig. 10's revision and 0002 already have
+  oneop readings. perlbench's bodies port does not build in oneop yet (its SPEC build covers gcc only), so the
+  bodies half stays the open line of this item.
+- What a renew saves: when a head is freed, p0002 releases its lifetime (CREVOKE), and the next issue of that head
+  derives a new one (CDERIVE).
+- This variant renews the lifetime at the free (CRENEW). Every old copy goes stale as before, and the arena keeps the
+  new lifetime, so the head's next issue hands it out with no CDERIVE.
+
+**The arm.**
+- `fig10/perl/renew`, built by `fig10/build-perlrenew.sh` on `fig10/wt3`: a worktree at 71ce199d8fea with wt2's two
+  Perl patches (0001 `83501a59…`, 0002 `d9330843…`, the p0002 build's) plus
+  `fig10/renew/0003-sv-heads-renewed.patch` (`4b502316…`). The tarball is `f2a1ad88…` and the compiler is the
+  environment's.
+- The patch changes two functions in `sv.c`:
+  - `S_sv_arena_retire` sets `*issued = capstone_cap_renew(*issued)` where p0002 released and cleared;
+  - `Perl_sv_arena_issue` returns a non-NULL `issued` entry as it is, and derives only for a head never issued.
+  - `SVf_BREAK` heads are untouched, as before.
+  - Arena teardown stays `Safefree` of the arena. If that frees the arena with a release, the release ends every
+    lifetime derived inside it, renewed ones included. Whether mallocng's free releases it is not checked here, and a
+    lifetime left live at exit costs nothing these runs read.
+- Static census (`fig10/tools/census-lifetime.py`), p0002 to renew:
+  - one-operand CREVOKE 6 → 3, CRENEW 0 → 3, CDERIVE 8 → 8;
+  - 1,753,484 → 1,753,486 instructions.
+- **This image never goes to P1.** P1 decodes funct7 0x54 as CSNODE.
+
+**Runs.** `fig10/chain-perlrenew.sh`, chain-perl0002.sh's four oneop boots with `suns.pl` and `PERL_HASH_SEED=0`:
+- opcount renew;
+- zones3 renew twice (symbols `fig10/syms/perl-renew.syms`);
+- zones3 p0002 as the same-day control.
+A dry run with an echo runner reaches `CHAIN-PERLRN-DONE` through all four.
+
+**What is read: image-zone instructions only.**
+- oneop's table has no generations. CRENEW cannot renew in place there, and the table's cost of a renew falls in the
+  kit's sweeps, outside the zone.
+- So this reads what renewing saves in the program's own instructions, not its cost on a record table.
+- Cycles need a bitstream with CRENEW, and none is written.
+
+**Predictions.**
+1. **Answers:** `suns.out` in every boot.
+2. **Control:** q3 reads p0002's 2,257,591,178-183 within ±40.
+3. **Lifetime instructions** (opcount renew against p0002's 2,064,278 CDERIVE and 1,684,011 CREVOKE):
+   - CRENEW (0x54) equals CREVOKE's fall exactly, because each retire that released now renews.
+   - CDERIVE falls by 600,000 to 1,077,570. The upper bound is p0002's issue count. Only first issues still derive,
+     and those are bounded by the heads in its 2,536 arenas.
+4. **Image instructions: renew minus p0002 between −20 M and −2 M.** The derive path skipped on a reissue is about
+   12 instructions, against a load and a branch added.
+5. **Repeats:** r1 and r2 within 10 instructions.
+
+**What follows.**
+- If held, the saving per reissue (zone delta ÷ CDERIVE fall) is what a renew is worth in the port's code.
+- The bodies half is the same change on perlbench's body free lists, once perlbench builds in oneop.
