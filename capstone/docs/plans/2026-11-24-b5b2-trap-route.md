@@ -431,6 +431,75 @@ f4890ec7f, graded against the pre-registration above (20d7cda0d031). Base: 94cbc
   R43_TRACE runs (a probe dropped while pending), 1 on a hand-made all-resolved trace, and 2 on a run with no R43
   lines.
 
+## Step 4: sscratch and mscratch hold a reference (2026-11-24)
+
+capstone-ariane b5b2-step4 eb03e7c99 = 7c8550cf8 (the change) + its fix. Both tests were pushed with their pre-registrations
+before any run.
+- **The rule** (capstone-qemu 9289114e06 helper_capstone_scratch_swap / _rmw; route.S cases 2, 3, 4 and 5).
+  - csrrw (the register form) moves the whole register both ways, also when rd = rs1.
+  - csrr reads the address untagged and keeps the tag.
+  - Every other write clears the tag: csrrs / csrrc with a source register (even one holding 0), csrrwi, the nonzero
+    immediate forms, and csrw of an integer.
+  - csrrs / csrrc with x0 and the zero-immediate forms write nothing.
+  - U access and scapctl (0x5C0) were already illegal (the default arms and the privilege check); they are tested,
+    not built. So is masked_write (the srevroot write masks; protection keys on srevroot_q).
+- **How it is built, with no signal on the standing loop list taking a new term:**
+  - issue: under Sublet, the metadata file's read port 0 also addresses rs1 for a CSR_WRITE without use_zimm.
+  - ex_stage puts a plain CSR op's rs1 lane on writeback port 0 with cap_result.valid = 0, so neither the rs1 write
+    lane nor rs1 forwarding moves.
+  - commit's csr_scr_swap (CSR_WRITE, not use_zimm) sends that lane to the CSR file and writes rd's lane from a new
+    port, csr_scr_rmetadata, keyed on the CSR buffer's registered address (not ccsr_en, csr_read or conv_csr_addr).
+  - sscratch gains a 98-bit lane; mscratch's lane is the existing cscratch triple, so a CCSRRW of CSCRATCH and a csrrw
+    of mscratch see one register. The switcher's sscratch write (id 65) and the context init clear the tag.
+- **First run VOID (7c8550cf8).** b5b2-scratch read the base vector on both trees, value for value, at the same 39,529
+  cycles. The metadata file's read port 0 addressed rs1 only for capability ops and loads/stores, so every csrrw
+  carried x0's lane. The run also exposed a test defect: two arms copied a capability with mv, an integer op. Both
+  were fixed in eb03e7c99, and the test header records the void run. The pre-registered vector is what made the no-op
+  visible: lint, the preprocess identity and every regression arm were clean on it.
+- **Readings (eb03e7c99), checked by script against the headers:**
+  - b5b2-scratch, step 4: all 53 as pre-registered (route.S checks 1-26, 30-37, 8-9). This includes the end-to-end
+    controls: a capability fetched back through sscratch faults 28 on an S load one past its bounds, and one that went
+    through mscratch, stc, then ldc does the same.
+  - b5b2-scratch, base (b2f27b3b3's core): all 53 as pre-registered. The two trees differ at 18 positions. The grader's
+    negative control (base readings against step 4's vector) shows 18 mismatches.
+  - b5b2-mwrite: 1 0x19 0x18 1 0 0x77 2 on both trees, as pre-registered.
+  - Regression: the other 25 tests (8 B5b-2 arms, 15 Sublet tests, 2 context arms) read the same values at the same
+    cycle counts as step 2b's own runs.
+- **Static checks on eb03e7c99:**
+  - ids55 is token-identical to step 2b: 359,790 tokens, one line break moved.
+  - Lint at REF: LATCH 44, MULTIDRIVEN 3, UNOPTFLAT 39 (the 39 reference names), UNDRIVEN 25, UNUSEDSIGNAL 1567.
+  - By name against step 2b: 0 lines in both builds, WIDTH included.
+- **claim-auditor** (over 7c8550cf8, then eb03e7c99). It found the read-port cause independently. With the fix, no
+  defect in eight items: every reader of a valid = 0 cap_result; csrrwi through use_zimm; CCSRRW and the mscratch
+  arms; port 0 shared with mult; latches and loops; the read port for the switcher and the hazard logic; forwarded rs1.
+  Residuals:
+  - (a) Inherited: a csrrw at the commit head with a PC-capability exception still writes the CSR (csr_op_o stays
+    CSR_WRITE while commit_csr_o is cleared). Before this change that was the integer only; now it is the lane too.
+  - (b) Latent, RVH = 0: the read lane is keyed on the raw address while writes go through conv_csr_addr. Under V = 1 a
+    csrrw of sscratch would return HS sscratch's lane.
+  - (c) A tagged linear rs1 is copied, not moved, as in the reference.
+  - (d) A CSRUNV context's save and restore moves sscratch as an integer, so the tag does not survive it.
+
+### Synthesis-only gate on step 4: pre-registration (written before the request)
+
+Hash eb03e7c99. Base: f4890ec7f's gate (b5b2s3-f4890ec7f-gate-out, dcp sha16 8baaa42e6fee767e). No loop-listed signal takes
+a new term, but csr_regfile, commit and issue_read_operands are where the list lives, so step 4 gets its own gate.
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within +/-505 MB of 5,065.6 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires), LUTLP-1 0 (the toy fires) |
+| 3 core LUT | at most the base + 2,500 (146,206 -> 148,706) |
+
+Reported, graded nothing (bands at the recorded ±2,500 per-module floor, not tighter):
+- core FF: predicted +98 (sscratch's lane: 64 metadata + 1 tag + 33 slot), within ±300;
+- csr_regfile_i (base 6,900 LUT): the lane's write muxes and a 98-bit 2:1 read mux by address, a few hundred LUT;
+- commit and the regfile write data: one more 98-bit 2:1 mux on rd's lane;
+- issue_read_operands: one more term in port 0's read address; scoreboard: no new flops (port 0's rs1 lane fields
+  exist), possibly LUT on the port-0 cap write;
+- the dyn_unit / rev_node pair (f4890ec7f: 10,714 / 7,690): if either moves beyond ±2,500 again, a cell-level diff of
+  ab9efe547bd4b481, 8baaa42e6fee767e and this gate's dcp is asked for before step 5.
+
 ## Silicon acceptance: bare kits
 
 No Linux kit can run until the runtime lane's integer-M monitor exists: the current one executes CAPENTER at init. So
