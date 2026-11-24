@@ -1091,9 +1091,550 @@ The kit b5b2-bare-2026-11-24 on the seal `…-r75d-b5b2_0c0458149.bit`, board 1 
 - Graded twice from the raw UART: by the board lane's grade-b5b2kit.py and by a separate script here, which reads the
   PREREG's JSON from git and whose negatives fired before the run.
 - The flash checked the seal's local sha256; the resident name was read back after the power cycle and after the loads.
+- **N=2 (board 3, booking 1490, board/meas-pw cc868076e8bb):** 15/15 AS PREDICTED, the control exact, the seal resident
+  (read back three times). Graded here from the raw captures too.
+  - The control's ungraded positions 25-34 read NONZERO DRAM there, where board 1 read zeros, so their exclusion was
+    right.
+  - Attempt 1 (booking 1489) was VOID: the kit tree's console driver had no board 3, and the runner still exited 0. The
+    board lane fixed both: the runner now exits 3 when a load does not reach the console, and a precheck asks the
+    driver to accept the board.
 - **Which bitstream is the default stays unchanged** (R-75 (d), fallback bitstream 1). B5b-2's seal runs bare kits
   only: CAPENTER is illegal under the Sublet format, and the current monitor executes it at init. It becomes a
   default candidate with the integer-M monitor.
+
+## What the integer-M monitor needs from the RTL (2026-11-25, sent to the semantics owner)
+
+That monitor is what turns the B5b-2 seal from a bare-kit bitstream into one that runs workloads. Each primitive below
+is already in B5b-2 and read on silicon.
+- **Integer M.** capmode is 0 from reset, and mtvec/mepc/mtval are integer.
+  - The monitor must not use CAPENTER, CCSRRW, CALL/RETURN/CJALR, CSRUNV, the supervisor ops, the deleted mints or the
+    CAPCREATE debug family.
+  - Today's fw_jump (build-fpga) executes CAPENTER 1, CCSRRW 342, CALL 7 and RETURN 5, plus the deleted
+    DELIN/SPLIT/SEAL/MREV/INIT/TIGHTEN/REVOKE, by encoding. So the monitor is a rewrite.
+- **A tag-keeping save of the trapped mode's registers.** It branches on LCC selector 1:
+  - tagged registers go through STC and LDC, which keep the tag through a plain base in M (step 2b);
+  - all other registers go through CSTRAW and CLDRAW (step 5). CSTRAW of a tagged register raises 24, as in the
+    reference, op_helper.c:3546.
+  - The restore follows the state saved with each register. An LDC of a CSTRAW'd raw granule would come back tagged.
+  - The save area must be taggable DRAM.
+- **The trap-entry swap:** csrrw mscratch moves the tag (step 4).
+- **The remaining primitives:** CSMINT is the only mint; srevroot is written by M and S; medeleg 24-30 (Q-24); PMP
+  only.
+- **The trap route's own code, by encoding** (scripts in the RTL lane's scratch: census.py, crevoke.py, csrscan.py),
+  checked against the tip's decoder: every instruction is legal in its mode.
+  - The kernel rebuild executes LDC, STC, LCC, CINCOFFSET, CSMINT (S), CDERIVE, CREVOKE (one-operand) and SHRINK.
+  - The -capstone-image-gp userland executes SHRINKTO, SHRINK, LCC, SCC, MOVC, CINCOFFSET(IMM), LDC/STC, CDERIVE,
+    CREVOKE (one-operand) and CRENEW (rs2 = x0).
+  - **The dev-clang userland (no -capstone-image-gp) executed DELIN at 876 sites,** and DELIN is illegal under Sublet
+    and absent from the reference. The rebuild with -capstone-image-gp has 0 (the runtime lane's build, scanned here).
+    That closes the blocker; the board's trap-route images must come from that compiler.
+- **Unknown:** what f-keep does on an M trap; it has no source. The semantics owner is asking for it through the lead.
+
+## Step 8: the design (2026-11-25, before any code; to the semantics owner before synthesis)
+
+**Survey.** A read-only survey of 7997b51a2 enumerated every port of the switcher, the CPMP state and the supervisor
+signals and their consumers. Its load-bearing claims were checked at source here.
+
+**The finding that orders the step: CSRUNV is still legal under Sublet.**
+- decoder.sv:1483-1495 makes it illegal only from U, from M with capmode, and inside a running context. There is no
+  Sublet term. b5b2-illegal-runv reads 0xff (retired) in simulation and on silicon.
+- From scalar S or M it enters the switcher: the dyn unit's CSRUNV produces the request, commit raises
+  dom_switch_valid, and csr_regfile.sv:2207-2216 sets sup_active and sup_runv.
+- Under Sublet, CSRUNV is the ONLY route into the supervisor:
+  - CSSUPERVISE is illegal (:1476);
+  - an armed CALL is impossible, because CALL is illegal (:1447);
+  - the CSU* CSRs only configure.
+- The reference deleted CSRUNV, the supervisor and virtual C in one commit (capstone-qemu 35de150cef, an ancestor of
+  9289114e06). Its only Capstone CSR is srevroot (csr.c:4897).
+
+**8a: decode only, reference-exact (its own synthesis-only gate).** Under CAPSTONE_SUBLET_FMT:
+- CSRUNV (custom-2 funct7 0x24) is illegal, in the style of :1447.
+- CSUPQUANTUM (0x7C3), CSUPCTL (0x7C4) and CSUPSTATUS/CAUSE/EPC/TVAL (0xFC0-0xFC3) are illegal CSRs: cause 2 on any
+  access.
+- **Boot set, by encoding:** 0 CSRUNV (funct7 0x24) and 0 accesses to those CSR numbers in:
+  - the trap-route kernel rebuild (which does access srevroot 22 times: the scanner's control);
+  - the -capstone-image-gp userland;
+  - today's fw_jump.
+- **Arms, pre-registered with the code:**
+  - b5b2-illegal-runv's first reading moves 0xff -> 2;
+  - a new arm reads each supervisor CSR (csrr and csrw) from M and from S and expects 2;
+  - the 29-test regression and the kit's tests are otherwise unchanged.
+- After 8a, sup_armed, sup_active, sup_runv, vctx, the quantum and the escape are unreachable under Sublet, and so is
+  every switcher request: CALL, RETURN and CSRUNV are all illegal, and the escape needs sup_active.
+
+**8b: the physical removal (its own gate, after 8a's).** The goal is that the synthesised netlist no longer carries
+the switcher, the supervisor or the CPMP state. Unreachable at decode is not the same as constant to synthesis: the
+dyn unit's CSRUNV is Anvil code with no Sublet variant, and an illegal instruction still flows to commit. So 8b ties
+the SOURCES to constants under CAPSTONE_SUBLET_FMT and leaves the consumers to fold away.
+- **cva6.sv:** the switcher instance (:2374-2394) goes under `ifndef`. Its outputs are tied off: commit ack, busy, idx,
+  data_valid, reg_valid and resp_ack are all 0, so dom_switch_active_q is 0 and the frontend, commit, CSR and
+  controller consumers fold.
+- **csr_regfile.sv:**
+  - sup_armed_q, sup_active_q, sup_runv_q, the quantum and csupctl are constant 0;
+  - the CSU* read and write cases are compiled out;
+  - cpmp_q / cpmp_tag_q are removed (writers: CCSRRW, illegal, and the switcher's ids 9-24, gone);
+  - capmode_q is tied to 0 explicitly, so the CPMP checks (pmp_data_if.sv:247-283, :225-241) and the PC checks
+    (commit_stage.sv:392, :487) fold;
+  - vctx_table_o / cap_data_ctx_o keep their srevroot terms without the sup_active and csupctl.table disjuncts.
+- **ex_stage.sv:** the dyn unit's runv_en (:2826) is tied to 0 before commit.
+- **Kept, shared with Sublet:**
+  - srevroot (CSR write :2064, srevroot_o, its flush and the ex_stage namespace hold);
+  - **CSMINT's use of the switcher's LSU data channel.** load_store_unit.sv:2227-2228 merges cm_dsw_v into
+    dsw_valid, so store_unit's sel_dom_switch, the store buffer's is_dom_switch, dom_switch_data_req_t and the
+    response FIFO all stay. Only the top-level dom_switch_data_valid_i is tied to 0;
+  - SHRINK, which reads no supervisor state (flu.anvil:258-299);
+  - the decoder's CLDRAW/CSTRAW/CPTAG gates on sup_active/vctx (:537, :553) and the LSU's cap_data_ctx[2]: these
+    Sublet-only sites fold from the tied sources, and the step writes them as constants.
+- **Not yet surveyed, to read before 8b is coded:** commit_stage's PC tracker (:264/:456/:509), the store_unit snap
+  path (:178-197), the load_unit's dom-switch path (CSMINT never sets write_en there, so it looks removable;
+  UNRESOLVED), and ariane_pkg's and wt_axi_adapter's Sublet sites.
+- **Questions for the semantics owner:** CSUPCTL bit 2 (ns_flush_strobe -> revnode_ns_flush) and bit 3 (table, M's
+  namespace term) go with CSUPCTL. Does the integer-M monitor need an M table namespace or a namespace flush other
+  than an srevroot write? The reference has neither.
+- **Each half's checks:**
+  - ids55 token-identical;
+  - lint by name;
+  - the 29-test regression, the kit's 16 tests and step 7's must-pass;
+  - 8b only: every simulation reading identical to 8a's, since removing unreachable logic must change no value.
+- **Predicted area:** from 8b's gate rows. dom_switcher, the CSR file's supervisor and CPMP state, and the trackers
+  are the removable cones. A number is written before the request.
+
+**Not in step 8:** the CAPCREATE family's deletion. Every B5b-2 test and the bare wrapper's recorder still use it, so it
+comes after the tests are ported to CSMINT.
+
+**Batching:** 8a, 8b and the CCSRRW deletion (7997b51a2) go into the next bitstream together, each gated alone first.
+
+## Step 8: the semantics owner's rulings, the CCSRRW gate, and step 8a built and read (2026-11-25)
+
+**Rulings** (the runtime lane):
+1. CSUPCTL bits 2 and 3 go with CSUPCTL. Under the evaluated configuration M is never checked, so the integer-M monitor
+   needs no M table namespace. The only flush it needs is the one an srevroot write gives: table changes go through
+   CREVOKE/CDERIVE/CSMINT/CRENEW, whose invalidations are the hardware's.
+2. 8a is reference-exact. Its boot-set condition: the encoding scan for CSRUNV and every CSU* access, with a planted
+   CSRUNV and a planted CSUPCTL access as positive controls. It covers the kernel rebuild, the image-gp userland and
+   today's fw_jump, and later the board's trap-route firmware before its first boot.
+3. CAPCREATE becomes **step 9**, in the same next bitstream: the tests and the bare wrapper's recorder move to CSMINT
+   first. If it misses that bitstream, it is recorded as a dated divergence with the reason. The lead's rule is no
+   divergences.
+4. CSNODEFREE (0xFC4) is deleted with the rest: it was never in the reference.
+
+**The CCSRRW gate (7997b51a2, against 6b): PASS 3/3** (board lane; grade-b5b2cc.txt read here).
+- TM 5,066.3 MB (+2.4); loops 0 with the toys firing (Synth 8-326 keyed for the first time); core LUT 148,024 (+131;
+  limit 150,393).
+- decoder 448 -> 467 (+19), id_stage +19, core FF +56, commit_stage +68 LUT, the cone sum +29; dcp sha16
+  1a6edf7848a30e29.
+- **Wording correction for steps 1-6b's gates:** their graders read and printed Synth 8-326 but did not key it. It
+  read 0 in every .vds (re-counted by the board lane), so no verdict moves.
+
+**Step 8a: capstone-ariane b5b2-step8a 0ef489f1d** (decoder +3, csr_regfile +10, all under CAPSTONE_SUBLET_FMT), and
+fbb60c546 (its readings' follow-ups).
+- **Boot set, by encoding:**
+  - 0 CSRUNV and 0 accesses to 0x7C3/0x7C4/0xFC0-0xFC4 in the kernel rebuild, the image-gp userland and today's
+    fw_jump;
+  - a planted CSRUNV and planted CSUPCTL/CSUPSTATUS accesses after a c.nop each read 1;
+  - the kernel's 22 srevroot accesses are the control.
+- **The pre-registered arms read exactly**, script-checked, on the base (core = 7997b51a2) and on 8a:
+  - RUNV: 0xff / 2 / 0, count 0 -> 2 / 1 / 1, count 1;
+  - CSUP (M):
+    - the reads of all seven CSRs and the writes of 0x7C3 and 0x7C4 move from retire to 2;
+    - the read-only writes trap 2 on both trees, and the srevroot read retires on both (the controls);
+    - the count moves 5 -> 14.
+- **Every other B5b-2 test** reads the same as the CCSRRW tip.
+- **MISSED: the regression.** The design said it would be "otherwise unchanged". It was not:
+  - 9 of 29 regression tests moved: va-runv-snap and sublet-ns with its seven arms. Each enters a context with CSRUNV.
+  - On 8a each takes ILLEGAL_INSTR there. Traced: sublet-ns at 0x8000100c, S mode, mcause 2; its handler skips the
+    site.
+  - The tests that do not execute CSRUNV read the same.
+  - These nine test the deleted feature, so they are retired from the Sublet regression and stay runnable.
+    b5b2-illegal-runv is the deletion's control, and b5b2-nsedge covers the namespace outside contexts.
+  - What would have caught it: grepping every test the gate runs for the op before pre-registering, as was done for
+    CCSRRW.
+- **sup-mswap.S** reads CSNODEFREE. It runs only in testlist_sup.yaml (the ids55 sweep), and its header now says so.
+- **ids55** is token-identical (359,790).
+- **Lint:** the Sublet gate passes at a moved reference, UNUSEDSIGNAL 1567 -> 1569. The two names are CSNODEFREE's
+  inputs, rev_node_head_i and rev_node_free_len_i, now unread under Sublet. ids55's by-name list is unchanged.
+
+### Synthesis-only gate on step 8a: pre-registration (written before the request)
+
+Hash fbb60c546. Its core/ equals 0ef489f1d's; the rest is the lint reference and tests. Base: the CCSRRW gate
+(b5b2cc-7997b51a2, dcp sha16 1a6edf7848a30e29).
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within ±505 MB of 5,066.3 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires), LUTLP-1 0 (the toy fires) |
+| 3 core LUT | at most the base + 2,500 (148,024 -> 150,524) |
+
+**Reported, graded nothing:**
+- decoder: tens of LUT.
+- csr_regfile_i (7,439 / 6,603): the CSU* read mux and write cases go, so down by tens to a few hundred LUT. The
+  supervisor FFs stay, because 8a removes no writer.
+- **dom_switcher (11,517 / 1,323): predicted UNCHANGED, within ±500.** A decode-illegal CSRUNV still flows through the
+  issue pipeline's registers as an op, so synthesis cannot prove the switcher's request constant. Folding it is 8b's
+  job. A large drop here would mean 8a already does part of 8b, and it would be reported as such.
+- Core FF 0 ± 300; no row beyond ±2,500.
+
+**Step 8b (sizing from the CCSRRW gate, board lane):**
+- The removable cones: dom_switcher 11,517 LUT / 1,323 FF; the supervisor and CPMP state inside csr_regfile_i
+  (7,439 / 6,603); the PC check inside commit_stage_i (own 399 / 336); i_pmp_data_if 351 / 0.
+- controller_i is already absent from the checkpoint (the board lane's reading: its logic is absorbed), so nothing is
+  saved there.
+- 8b's prediction is written with its code, before its request.
+
+### The gate on step 8a: read (board lane, 2026-11-25), PASS 3/3
+
+fbb60c546, against the CCSRRW gate. dcp sha16 af5f2753cf7e8704; grade file sha16 e170f724431fa9e8.
+- Key 1: TM 5,322.9 MB (+256.6; ±505); whole-run guard peak 25.44 GB.
+- Key 2: loops 0 everywhere, each toy firing; 8-326 0.
+- Key 3: core LUT 145,785 (-2,239; limit 150,524).
+- **Three reported-row predictions MISSED**, all inside the ±2,500 per-module floor, so none moves a key:
+  - dom_switcher 10,897 LUT (-620; predicted unchanged ±500), FF 1,323 (+0);
+  - csr_regfile_i 7,651 (+212; predicted down by tens to a few hundred), FF 6,532 (-71);
+  - id_stage_i 1,209 (+132; predicted tens).
+  - A candidate mechanism for the switcher's -620 (the board lane's, not a census): csupctl_resume_q, csupctl_virt_q,
+    csupctl_table_q and ns_flush_strobe can only hold their reset 0 once the CSUPCTL write arm is compiled out.
+    Their cones (sup_resume_o, vctx_o, vctx_table_o) can then fold.
+  - No census was taken: 8b removes the switcher whole, so no decision depends on attributing the -620.
+- Other rows:
+  - ex_stage_i -3,442 against issue_stage_i +1,941 (i_scoreboard +2,091); ex + issue -1,501, inside the floor, so
+    redistribution across that boundary;
+  - dyn_unit -662 (CSRUNV illegal);
+  - the cone sum 64,771 (+1,314);
+  - commit_stage_i -88;
+  - RAMB36 and LUTRAM unchanged;
+  - core FF 55,572 (-73).
+
+## Step 8b: built and read (2026-11-25)
+
+capstone-ariane b5b2-step8b 36fbc9e7c, on 8a. All of it is under CAPSTONE_SUBLET_FMT; ids55 is token-identical.
+- **The change:**
+  - cva6.sv +16: the switcher is not instantiated, and its 9 output nets are constants;
+  - csr_regfile.sv +4: capmode_d = 0, so the CCSR write block (under capmode_q, :2713), the PC check and the CPMP
+    checks fold;
+  - ex_stage.sv +5: the dyn unit's sup_arm_en and runv_en are 0;
+  - load_store_unit.sv +4: the load unit's dom-switch valid is 0.
+  - Kept: srevroot and its flush, CSMINT's LSU channel, SHRINK.
+- **The five sites, read at 8a before coding** (the semantics owner's list):
+  - commit_stage's PC tracker FOLDS via capmode (:419-428, :518);
+  - store_unit's snap path FOLDS: snap is constant 0, since CSMINT's request has snap = 0 and the switcher's side is
+    '0. Its sel_dom_switch is KEPT, because it is CSMINT's store path;
+  - load_unit's dom-switch path FOLDS via the explicit tie (CSMINT only writes, :2218);
+  - ariane_pkg's Sublet sites are UNTOUCHED: types and enums, no state. dom_switch_data_req_t is kept for CSMINT;
+  - wt_axi_adapter: 0 supervisor or capmode references; its Sublet sites are step 6's.
+- **csr_regfile's supervisor writers:**
+  - sup_runv_enter, sup_call and sup_clear need the switcher's ack, which is now 0;
+  - the reg-channel writes need reg_valid, which is now 0;
+  - 8a removed the CSU* writes;
+  - the quantum countdown and the escape need sup_active, which has no live setter left.
+- **Readings:** all 33 tests (every B5b-2 arm and the Sublet regression, the retired context tests included) are
+  IDENTICAL to 8a in value and in retired-instruction count.
+- **Lint:** the Sublet gate passes. The by-name diff against 8a adds five UNUSEDSIGNAL, each a tie's consequence:
+  capmode_set_i, commit_dom_switch_req, dom_switch_reg_resp, dom_switch_data_resp[161:64] and
+  capstone_dyn_res[1:0]. Everything removed is the switcher's own generated file. The reference tightens from
+  UNUSEDSIGNAL 1569 to 831.
+
+### Synthesis-only gate on step 8b: pre-registration (written before the request)
+
+Hash 36fbc9e7c. Base: step 8a's gate (b5b2s8a-fbb60c546, dcp sha16 af5f2753cf7e8704). The semantics owner approved
+the keys, key 4 included.
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within ±505 MB of 5,322.9 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires), LUTLP-1 0 (the toy fires) |
+| 3 core LUT | at most the base + 2,500 (145,785 -> 148,285) |
+| 4 removal | dom_switcher has 0 cells AND core LUT at most the base - 10,000 (135,785) |
+
+**Key 4's failure branch:** the ties did not fold the switcher. Take a census by name before anything else.
+
+**Reported, graded nothing** (against 8a's rows):
+- csr_regfile_i (7,651 / 6,532): -1,000 to -3,000 LUT and -1,500 to -3,000 FF (the 16 cpmp entries, the CCSR copies,
+  the supervisor event and frame state). **If the LUT drop lands below this band, list csr_regfile_i's surviving FFs
+  by name from the dcp before reading anything into it** (the semantics owner's condition).
+- commit_stage_i (318): -50 to -300;
+- i_pmp_data_if (351 at the CCSRRW gate): -100 to -250;
+- frontend and controller: tens;
+- dyn_unit: a small drop at most, not predicted;
+- core LUT -11,900 to -16,400 (the switcher's 10,897 plus the folds); core FF -2,800 to -4,500.
+Timing is not graded by a gate; the next full build reads it.
+
+**b5b2-ctxport** (fcd75ed94, tests only) carries the three properties of the retired context tests that also exist
+outside a context: F4's live rewrite with its control, -wide at slots 2^26 + 0x103 and 0x7FFFFF03 (the top edge of
+every index), and -edgem's S phase with its trace verdict and mutant. It is pre-registered from sublet-ns.expect's fixed
+rows and runs on the base, 8a and 8b.
+- **First chain VOID, my error:** `git checkout <rev> -- core` replaced the worktree's two symlinked submodule paths,
+  and all 18 runs refused at a missing file list. It is re-running with only the differing files swapped.
+
+**The coverage table** (the semantics owner's request), the retired CSRUNV-context tests:
+
+| test | property | context-only? | cover outside a context |
+|---|---|---|---|
+| va-runv-snap | the caller snapshot keeps the internal format | only | none needed |
+| sublet-ns (F1) | a probe pending while the unit opens a freshly named paged table must not resolve DEAD from header quadword 3 | no | b5b2-nsedge readings 3 and 7 (A = {0,3}, live in T1) |
+| -f4 (F4) | a live rewrite at another generation leaves {0,4} DEAD | no | b5b2-ctxport-f4 (+ -f4ctl) |
+| -edge | the escape as a namespace edge with a probe pending | the escape only | -edgem's port |
+| -edgem | a probe pending across M's srevroot rewrite | no | b5b2-ctxport-edgem (+R43_TRACE, mutant) |
+| -wide | a slot >= 2^26 through every widened path | no | b5b2-ctxport-widelo, -widehi |
+| -snapu | the snapshot backstop for a wide slot | only (its wide cderive rides with -wide) | none needed |
+| -ctxint | an integer-base LDC in a checked mode = 24 | the context only | b5b2-sref U (srevroot = tbl) a0 |
+| -ctxoob | a tagged out-of-bounds LDC in a checked mode = 28 | the context only | b5b2-sref S a5; b5b2-raw reading 30 |
+
+### b5b2-ctxport: read (2026-11-25)
+
+capstone-ariane b5b2-step8b 15b637630; 22abb11ea adds the retired tests' cover lines.
+- **Readings, as pre-registered on all three trees:** the base (core = 7997b51a2, 5 files swapped), 8a (fbb60c546,
+  4 files swapped) and 8b (clean).
+
+  | arm | cause, pc - cp_ldc, data[8], data[16], data[24] \| traps |
+  |---|---|
+  | f4 | 0x19 0 0 0 0 \| 1 |
+  | f4ctl | 0 0 0x77 0 0 \| 0 |
+  | widelo | 0 0 0x80000000 0x8000206 0x8000208 \| 0 |
+  | widehi | 0 0 0x80000000 0xfffffe06 0xfffffe08 \| 0 (slot 0x7FFFFF03) |
+  | edgem | \| 3 |
+
+- **edgem with +R43_TRACE, on each tree:** edgem-r43-check.py exits 0, with EDGE-FLUSHPEND 2 and EDGE-PEND 0. The
+  +EDGE_MUT_KEEP_PEND mutant (on 8b) reads EDGE-PEND 1, so the detector fires.
+- **The model rebuilt per tree:** each run's first test took about 40 s against about 14 s for later ones, the same as
+  the define-change runs.
+- **Two VOID runs first, both mine:**
+  1. `git checkout <rev> -- core` replaced the worktree's symlinked submodule paths, and every run refused to start.
+  2. A port defect, failing on both trees alike: my extraction of sublet-ns.S's page-table block dropped the
+     `li t0, -1` before pmpaddr0, so S had no fetch grant and the handler looped. Fixed in 15b637630, where an
+     unexpected trap now ends the run with its cause.
+- No arm failed on 8a alone, so there is no finding about 8a. All nine retired tests name their covers per arm.
+
+### The gate on step 8b: read (board lane, 2026-11-25; board/meas-pw 28f46c2b80a5), PASS 4/4
+
+36fbc9e7c, against 8a's gate. dcp sha16 198a0c9f68b1eeb6.
+- **Key 1:** TM 4,955.4 MB (-367.5); guard peak 24.77 GB.
+- **Key 2:** loops 0 everywhere, each toy firing; 8-326 0.
+- **Key 3:** core LUT 122,922.
+- **Key 4:** the dom_switcher census reads 0 instances and 0 primitives (the base reads 1 and 14,333); there is no
+  utilization row; core LUT 122,922 against the 135,785 limit.
+- **MISSED bands** (reported rows; no key moves):
+  - core LUT -22,863 (predicted -11,900..-16,400) and core FF -9,786 (predicted -2,800..-4,500);
+  - csr_regfile_i -3,360 LUT / -3,763 FF, a LARGER drop, so the semantics owner's "below band" condition did not fire;
+  - commit_stage_i -313 (318 -> 5; predicted -50..-300);
+  - i_pmp_data_if +0, where I predicted -100..-250: its 351 is the standard PMP, and the CPMP checks were already
+    gone.
+- **Where the FFs went** (the board lane's census by name, each total equal to the utilization report's):
+  - csr_regfile_i loses 54 stems whole (3,539 FF): the 16 cpmp entries (2,592), the supervisor's seal, base,
+    save_base and event set, the CCSR copies (cepc, cih, ctvec), runv_frame and capmode.
+  - csr_regfile_i's partial shrinks are each CSR's writable mask. medeleg 64 -> 19 is csr_regfile.sv:1693-1721's mask
+    exactly: the 12 standard delegable causes plus Q-24's 24-30, which survive. Before 8b the switcher's register
+    channel could write all 64 bits (:2114). mideleg is 3 and mie/mip 6, likewise.
+  - i_scoreboard: the dom_switch_req payload in all 8 entries (3,144 FF), which my band never counted. Also 31 of 97
+    pc_metadata bits per entry are now constant.
+  - commit_stage_i: the escape state and pc_revnode_valid/unk.
+  - lsu_i: the switcher response FIFO data, the load unit's dom-switch fields, and the PCC verdict tracking
+    (pcc_id_q, pcc_v_q, pcc_live_q).
+- **The three removed groups** the board lane flagged (facts theirs; reading mine; confirmation asked of the semantics
+  owner):
+  1. pc_metadata and IRO's pc_metadata_o: written only by deleted ops and the switcher; read by the PC check (M and
+     capmode) and the switch request.
+  2. The PCC tracking: served only commit's pcc_chk_o, gated on (M and capmode). The board lane confirmed this at
+     36fbc9e7c: commit_stage.sv:518, and capmode_d = 0 at csr_regfile.sv:349.
+  3. The escape state is the supervisor's, deleted in 35de150cef; pc_revnode is the PC tracker's.
+  The reference has no fetch or PC check. 8b's simulation reads identically to 8a.
+- **The semantics owner's rulings (2026-11-25): all three groups are reference-exact.** Protected U checks data
+  accesses only (translate.c:130-135, op_helper.c:1387-1390); the writers and the M && capmode consumers are deleted
+  under Sublet; the escape and the PC tracker went with the supervisor (35de150cef). Confirmed to the board lane.
+- **medeleg against the reference:**
+  - The seven Capstone bits are causes 24-30 by number on both sides (QEMU cpu_bits.h:694-700, 0x18-0x1e;
+    riscv_pkg.sv:358-370).
+  - CVA6's 12 standard bits (0-8, 12, 13, 15) are a subset of QEMU's DELEGABLE_EXCPS (csr.c:1149-1167). QEMU also
+    delegates S_ECALL (9), VS_ECALL (10), M_ECALL (11) and the guest faults 20-23.
+  - That is a CVA6-vs-QEMU platform difference that predates Capstone, not a semantic divergence.
+- **Bitstream: HOLD** (the semantics owner). One full build carries 8a, 8b, the CCSRRW deletion and step 9: the B5b-2
+  family runs bare kits only until the integer-M monitor exists, so nothing waits on an earlier build.
+
+## Step 9: the custom-3 debug family (2026-11-25)
+
+**The scope finding.**
+- 13 test files mint through a MINT macro built on CAPCREATE, CAPTYPE, CAPBOUND and CAPPERM; sublet-fmt, sublet-life
+  and csmint call the family directly; the bare recorder used it too.
+- CSMINT always allocates a fresh record at the physical pool's next, which is 3 at reset; the debug root is slot 2.
+  So a CSMINT-based MINT shifts every later pool id by one, along with every table and prediction keyed to them.
+
+**The semantics owner's ruling: option B**, a simulation-only scaffold. The lead's no-divergence rule binds the ISA a
+bitstream decodes, and under B no bitstream decodes the family. Re-deriving the tables (option A) would take days on
+tables whose subject is not minting. The ruling's four conditions:
+1. **The scaffold cannot reach synthesis,** and a negative control shows it.
+2. **The deletion is tested where it applies:** one arm per family op expecting 2, in a build without the define and
+   on silicon; the same arms read the old values with the define.
+3. **Kit cross-check differences are predicted** from the image sims before the board run. Any other difference is a
+   finding.
+4. **No new test uses the scaffold.** From step 9 on, every new test mints with CSMINT; the legacy files are marked
+   in their headers.
+
+**Step 9, capstone-ariane b5b2-step9 904cd9c6b** (on 8b's tip 22abb11ea):
+- **The deletion:** under CAPSTONE_SUBLET_FMT the whole custom-3 block is illegal unless CAPSTONE_SIM_DEBUG_MINT is
+  set. By encoding that is CAPCREATE (4), CAPTYPE (5), CAPNODE (6), CAPPERM (7), CAPBOUND (8) and CAPPRINT (9); the
+  reference decodes no custom-3 at all.
+- **The guard:** with CAPSTONE_SIM_DEBUG_MINT and SYNTHESIS (Vivado), GENESYSII or KINTEX7 (the board header),
+  decoder instantiates a module that does not exist. The lint gate's own elaboration (top cva6):
+  - no define: 0 errors;
+  - the scaffold alone: 0 errors;
+  - the scaffold with SYNTHESIS, and with GENESYSII: fail, "Cannot find file containing module:
+    capstone_sim_debug_mint_is_simulation_only".
+  - **The first guard did not fire:** a reference to an undefined macro, which Verilator's preprocessor accepts
+    silently. The negative control caught it.
+- **b5b2-illegal gains site 25** (capprint's raw encoding). Pre-registered for both builds:
+  - with the scaffold: as before, plus site 25 retiring;
+  - without it (the kit image, silicon): sites 19-23 and 25 trap 2, and the count moves 0x13 -> 0x19.
+- **The kit mint:** the 11 tests sharing MINT, and sublet-life, get -DCAP_MINT_CSMINT: a descriptor and a granule
+  private to each use, CSMINT, then an M ldc. The legacy default is unchanged. 15 files carry a LEGACY SCAFFOLD header.
+- **The runner** adds the scaffold by default for in-tree runs; NO_SIM_MINT=1 builds as silicon does.
+- **Checks:**
+  - ids55 is token-identical (359,790);
+  - Sublet lint passes, with 0 lines by name against 8b in either build;
+  - with the scaffold, 37 tests (every B5b-2 arm, b5b2-ctxport's five, the Sublet regression) read identically to
+    8b in value and retired count;
+  - b5b2-illegal reads its pre-registered vector, site 25's capprint line (a0 = 0x1000) included.
+- **Recorded beside it, as condition 4 requires:** NO NEW TEST USES THE SCAFFOLD. Every test written from step 9 on
+  mints with CSMINT.
+
+### Synthesis-only gate on step 9: pre-registration (written before the request)
+
+Hash 904cd9c6b. Base: step 8b's gate (b5b2s8b-36fbc9e7c, dcp sha16 198a0c9f68b1eeb6).
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within ±505 MB of 4,955.4 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires), LUTLP-1 0 (the toy fires) |
+| 3 core LUT | at most the base + 2,500 (122,922 -> 125,422) |
+
+**Reported, graded nothing:**
+- decoder: tens of LUT down.
+- The family's execution logic (the FLU's capcreate/captype/capnode/capperm/capbound/capprint ops) can fold now that
+  decode never issues them. I predict a drop of 0 to 3,000 LUT across ex_stage, with no tighter claim; it is reported
+  by module.
+- Core FF 0 ± 300.
+- Also reported: that the synthesised build carries no CAPSTONE_SIM_DEBUG_MINT, read from the synthesis log's
+  define list or by the guard instance's absence. The guard makes a scaffolded synthesis fail outright.
+
+### The gate on step 9: read (board lane, 2026-11-25), PASS 3/3
+
+904cd9c6b, against 8b's gate. dcp sha16 1eebdc9602d3f0bf.
+- Keys: TM 4,954.8 MB (-0.6); loops 0, each toy firing; core LUT 122,911 (-11).
+- **No scaffold:** synth_design completed, and the trial .vds names the guard's module 0 times (Synth 8-439: 0).
+  - The real flow sets the guard's keys. The 8b gate's synth_1/ariane_xilinx.tcl:93-98 reads
+    corev_apu/fpga/src/genesysii.svh as a global include (GENESYSII, KINTEX7, run.tcl:57-58 and :77-78), and that
+    build's .vds carries the GENESYSII-only ddr3_dq ports 64 times.
+- **MISSED reported bands:** decoder +0, where I predicted tens down; ex_stage -28, so no fold.
+  - Consistent with the mechanism recorded at 8a: an illegal instruction keeps its op and fu fields beside the flag,
+    so synthesis cannot prove the FLU never sees those ops. Not attributed.
+  - Step 9's job is the decoded ISA, which the deletion arms test, not area.
+- **The family census by name cannot fire:** 8b's dcp carries no cell or net named for the family's ops, while the
+  query form is proven on csr_buffer. Its zero on step 9 carries no information and is reported as "cannot fire".
+
+## The next full build: 8a + 8b + the CCSRRW deletion + step 9, pre-registered (2026-11-25, before the request)
+
+- **Hash:** capstone-ariane b5b2-step9 904cd9c6b, the same hash as the new kit's image sims.
+- **The base:** B5b-2's seal (0c0458149, sha256 b44291ba...b53b9a). Readings: placed LUT 172,682, FF 78,043, routed
+  clean, congestion 4, clk_out1 WNS +0.286, RAMB36 115.
+- **The synthesis deltas along the gate chain** (6b -> CCSRRW -> 8a -> 8b -> 9): core LUT 147,893 -> 122,911
+  (-24,982), core FF 55,589 -> 45,777 (-9,812).
+
+| key | prediction | the failure branch |
+|---|---|---|
+| placed LUT | 147,700 +- 3,000 (172,682 - 24,982) | outside: per-module placed rows against B5b-2's seal |
+| placed FF | 68,231 +- 2,000 (78,043 - 9,812) | the same |
+| routed | 0 errors, 0 unrouted, 0 partial | a routing failure: placed area, congestion windows by module, the census; NO WNS |
+| congestion | <= 5, placed and router | above: the windows' modules |
+| loops | check_timing 0, LUTLP-1 0, TIMING-23 0, each with its toy firing | any loop: its members by stem |
+| removal | the dom_switcher census on the routed dcp reads 0 instances and 0 primitives, with B5b-2's routed dcp as the census's positive control | a nonzero: a census before anything else |
+| WNS (clk_out1) | inside B5b-2's null band, [-3.45, +4.03] (+0.286 +- 3.74) | outside on the BAD side: worst-path family and per-stage depth before any board use; outside on the good side: reported |
+
+**Reported, not graded:**
+- design WNS, TNS, WHS, failing endpoints, slices, RAMB36 (115 expected);
+- the clk_out1 worst-20 family;
+- the family census by name, reported as "cannot fire" unless the base shows names;
+- per-module LUT and FF against 8b's and step 9's gates;
+- the sha256.
+
+**Flash:** the delegated rule, board 2 or 3. It waits for the bitstream to be sealed and the new kit pushed with its
+pre-registration. Board 1 stays on the nested lane's work.
+
+**The new kit, b5b2n-bare-2026-11-25: three findings from its first image sims, about the KIT, not the RTL.**
+- Tables keyed to CAPCREATE-era slots: CSMINT's root takes pool slot 3, so every pool id after it moves up.
+  - **b5b2-nsedge read exactly its mutant vector:** A and B land on {0,4} and {0,5}, which the T1/T2 records do not
+    describe.
+  - **ctxport-f4 and f4ctl both faulted 25 at the cderive** (x19 = {0,6}, a retired record), so F4 was never reached.
+  - **sref and sref-gen's a6 arm read 0 / 0xffffffff** with its cross-check flag 0.
+- **The semantics owner's ruling: re-key all three, with four conditions:**
+  1. Each re-keyed test checks the root CSMINT returned against its table's assumption before any table use, and ends
+     with its own sentinel on a mismatch. A deliberately off-by-one sim must read the sentinel.
+  2. Discrimination is shown again:
+     - nsedge's pass vector, and its NS-flush mutant reading the mutant vector;
+     - sref-gen's a6 at a non-zero generation with the flag at 1;
+     - ctxport-f4 with a reached-F4 marker.
+  3. A PREREG per test.
+  4. The full build on the kit sims' hash.
+  If a re-keyed sim turns up anything RTL-side before synthesis ends, the build stops.
+- Read as predicted: b5b2-illegal (sites 19-23 and 25 trap 2/1/1, count 0x19: step 9's deletion with no scaffold),
+  raw position 16 (layout), ctxport-wide data[8] (_start at 0x80001000), sublet-life's pool dump (the shift). Eleven
+  images read identically to their in-tree runs.
+
+**The full build: read (board lane, 2026-11-25), PASS 11/11, sealed.** Graded from the board lane's
+grade-b5b2n-full.txt, read here; the seal re-hashed here.
+- **Seal:** `…-r75d-b5b2n_904cd9c6b.bit`, 11,443,722 B, sha256
+  36e70855a55de3692a359817b5043cc6f6f2cc92d4f41f0317df7861223a1b08. Guard exit 0, 1h13m, peak 24.83 GB.
+- **Keys:**
+  - placed LUT 148,038 (+338 on 147,700) and FF 68,231 (exactly the prediction);
+  - routed clean, 197,012 / 197,012;
+  - placed congestion 3, and the router reported no hotspot;
+  - check_timing, TIMING-23 and LUTLP-1 all 0, each toy firing;
+  - **removal:** dom_switcher 0 instances and 0 primitives (B5b-2's routed dcp: 1 and 15,303);
+  - **clk_out1 WNS +2.266** (B5b-2 +0.286, so +1.980), in the band, meeting timing.
+- **The worst 20** sit in i_issue_read_operands fu_data_q cap_metadata -> rd_metadata / the scoreboard's result
+  metadata, 82-104 levels: B5b-2's family.
+- **Reported:** design WNS +0.177 (a MIG path), TNS 0, WHS +0.054; slices 43,912 (86.19 %, B5b-2 95.67 %); RAMB36 115.
+  - The full build's synthesis reproduces step 9's gate on all 13 module rows.
+  - Routed, against B5b-2: core -24,656 LUT. dom_switcher -11,487, csr_regfile_i -3,139 / -3,797 FF, csr_buffer_i
+    -5,141, dyn_unit -7,442, and rev_node +5,069.
+  - The family census cannot fire, as on the base.
+
+**The re-key, read (2026-11-25; capstone-ariane 2bed0dfe7, tests only; kit b5b2n-bare-2026-11-25):**
+- **In-tree, with the scaffold:** nsedge, sref and sref-gen are unchanged; ctxport's F4 arms gain their marker
+  (data[16] = 1), as pre-registered; its wide and edgem arms are unchanged.
+- **Kit images, without the scaffold, every value as pre-registered:**
+  - nsedge reads the pass vector;
+  - sref's ids are 5 and 4, a6 is slot 7, and the flag is 1;
+  - sref-gen's a6 reads 0x6000000080000007 (generation 0xc0000001) with the flag at 1;
+  - f4 reads 0x19 with the reached-F4 marker at 1; f4ctl passes, marker 1.
+- **The key check's skews** (root assumed at slot 4) each read the sentinel alone: nsedge, sref and ctxport.
+- **nsedge's kit image under NS_SIM_NOFLUSH** reads the mutant vector, so the re-keyed test still discriminates.
+  - My first mutant run never started, a runner error: docker's `-e` landed after the image name. It was re-run.
+- **The rebuild changed exactly the 8 images of the three re-keyed tests.** The other 14 are identical by sha256
+  across both builds, and their first readings stand. For every image the simulated bytes equal the board image.
+- Every image's UART output is exact: 59 + 21·SR characters.
+- **The kit's PREREG lists every difference from the in-tree runs, attributed:**
+  - step 9's deletion arms in b5b2-illegal (sites 19-23 and 25: 2 / 1 / 1, count 0x19);
+  - the CSMINT id shift (sublet-life's pool dump; sref's ids);
+  - the link layout (raw 16; the wide arms' data[8]).
+
+## The next bitstream on silicon (8a + 8b + CCSRRW + 9, 904cd9c6b): board 2, N=1, 2026-11-24
+
+The kit b5b2n-bare-2026-11-25, pinned at ac0429080d36, run on board 2 (booking 1493). **21 of 22 graded images AS
+PREDICTED, with the control exact.**
+- No key-check failure. Step 9's deletion reads on silicon: b5b2-illegal's sites 19-23 and 25 trap 2.
+- The re-keyed nsedge, sref and ctxport read as predicted, the reached-F4 marker included.
+- The board lane's grader and a separate script here agree.
+
+**The one MISS:** b5b2-cptag reading 21, a cycle comparison of a load before and after CPTAG, read 0.
+- It is intermittent on both bitstreams: about 2 zeros in 8 loads on 904cd9c6b (board 2) and about 2 in 7 on
+  0c0458149 (board 3), so it predates 8a, 8b and 9.
+- In the image sims each of its windows holds a first-time I$ fetch (70 / 54 cycles, against a ~4-cycle D$ hit), so
+  the reading compares fetch misses more than the D$ line it names.
+- **The pre-registered diagnostic** (b5b2-cptag-diag; capstone-ariane c6195bea5; kit amendment 70dbac168818) reads
+  **H-fetch on all six loads**, three on each board: warm 4 / 4 with flag 1, against each board's own miss scale of
+  43-47 cycles. With the code warm, CPTAG never changed the load's cost.
+- **Classification: an instrument artifact** of reading 21's cold fetch window, not an RTL reading. Proposed to the
+  semantics owner: replace reading 21's cold-window boolean by the warm-pass flag and record the raw deltas.
+- Diagnostic slips of mine, all caught before any run: a `# line` comment read as a #line directive; a first miss
+  scale on a .data line, which the bare prologue had already cached.
 
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
