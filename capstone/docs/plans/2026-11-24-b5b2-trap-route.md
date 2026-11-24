@@ -1615,6 +1615,27 @@ grade-b5b2n-full.txt, read here; the seal re-hashed here.
   - the CSMINT id shift (sublet-life's pool dump; sref's ids);
   - the link layout (raw 16; the wide arms' data[8]).
 
+## The next bitstream on silicon (8a + 8b + CCSRRW + 9, 904cd9c6b): board 2, N=1, 2026-11-24
+
+The kit b5b2n-bare-2026-11-25, pinned at ac0429080d36, run on board 2 (booking 1493). **21 of 22 graded images AS
+PREDICTED, with the control exact.**
+- No key-check failure. Step 9's deletion reads on silicon: b5b2-illegal's sites 19-23 and 25 trap 2.
+- The re-keyed nsedge, sref and ctxport read as predicted, the reached-F4 marker included.
+- The board lane's grader and a separate script here agree.
+
+**The one MISS:** b5b2-cptag reading 21, a cycle comparison of a load before and after CPTAG, read 0.
+- It is intermittent on both bitstreams: about 2 zeros in 8 loads on 904cd9c6b (board 2) and about 2 in 7 on
+  0c0458149 (board 3), so it predates 8a, 8b and 9.
+- In the image sims each of its windows holds a first-time I$ fetch (70 / 54 cycles, against a ~4-cycle D$ hit), so
+  the reading compares fetch misses more than the D$ line it names.
+- **The pre-registered diagnostic** (b5b2-cptag-diag; capstone-ariane c6195bea5; kit amendment 70dbac168818) reads
+  **H-fetch on all six loads**, three on each board: warm 4 / 4 with flag 1, against each board's own miss scale of
+  43-47 cycles. With the code warm, CPTAG never changed the load's cost.
+- **Classification: an instrument artifact** of reading 21's cold fetch window, not an RTL reading. Proposed to the
+  semantics owner: replace reading 21's cold-window boolean by the warm-pass flag and record the raw deltas.
+- Diagnostic slips of mine, all caught before any run: a `# line` comment read as a #line directive; a first miss
+  scale on a .data line, which the bare prologue had already cached.
+
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
 - **Interruptible CREVOKE** (Line B step 4(b)): spec-silicon 24ecb7b4daa4. Read at source on b5b1-step3:
