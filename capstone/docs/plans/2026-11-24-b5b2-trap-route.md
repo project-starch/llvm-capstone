@@ -344,6 +344,59 @@ their runs; the test fixes 882fc699e and 223a6db2a are recorded in the test's he
   - Phase D inherited SUM from phase E.
   - Both are fixed and the record holds the fixed test's readings.
 
+## Step 2b: supervisor references (2026-11-24, the semantics owner's ruling)
+
+capstone-ariane b5b2-step2b 95644ee8b, on step 3. The test commits e68d49a9c, cfff477d5 and f4890ec7f were each pushed
+before their runs.
+- **The configuration.** The evaluated configuration runs x-capstone-supervisor-refs=true (the kernel boots' cpu
+  strings). The reference is trans_capstone.c.inc plain_base_refs / gen_csldc_body.
+- **LDC/STC are checked only in a capability context:**
+  - protected U;
+  - S with srevroot != 0 and a tagged base;
+  - inside a supervised context, cap_data_ctx[2] = sup_active. That is CSRUNV's under Sublet, where CALL is illegal;
+    the reference has no contexts, and B5b-1's checks stay there while CSRUNV lives.
+- **Any other S or M LDC/STC is plain and keeps the tag:** alignment only, tval the address, no lifetime verdict.
+  Unprotected U has no LDC/STC (2).
+- **LCC selector 8 in S** answers the id, generation << 31 | slot.
+- **Readings (b5b2-sref), as pre-registered:**
+  - the base reads its vector (traps 10);
+  - step 2b reads M 0 0 1 1 0 | S 0 0 1 4 3 0x1c 6 | 6 0 1 | S0 0 | U0 2 | U1 0x18 0 | traps 3;
+  - -DSR_GEN (a free record at generation 0xC0000001): LCC 8 = 0x6000000080000006, the record's generation, flag 1.
+- **First cut, fixed:**
+  - LCC 8 read 0: the override was registered, and LCC answers in its dispatch cycle.
+  - The context tests lost their LDC checks (contexts run at M).
+  - The test's counter was clobbered (memory each-phase-sets-its-own-preconditions, sharpened with a grep).
+- **Regression.** The other B5b-2 arms are byte-identical. Of the 15 Sublet tests, 29 of 30 files are byte-identical;
+  sublet-ns-edgem's .iss is not.
+  - Its re-executed S LDC after the edge (srevroot 0) is now plain and no longer replays: 45 cycles fewer.
+  - R43_TRACE shows the arm still creates its condition: one probe sent and never resolved, i.e. pending across the
+    edge, on both trees.
+  - The base's other probes came from the re-executed, then-checked LDC.
+- **Lint:** at REF, by name 0 lines.
+- **claim-auditor:** nothing refuted. The plain path is plain end to end, the partition equals the reference's in every
+  reachable combination, and the id is right bit for bit. Residuals:
+  - (a) STC's bypass record still reads the base (a tagged UNINIT rs1 moves +16; rd is cleared for a non-NONLIN rs2).
+    This is reachable only through the custom-3 debug mints, which are to be deleted.
+  - (b) Under +define+CAPSTONE_NO_DYN_BYPASS, the A/B control, the DYN unit would still raise 24 on an integer base.
+  - (c) A plain LDC/STC to a device range is untraced (the reference: 5 / 7).
+  - (d) R43_TRACE's verdict line is blind to LDC/STC under the bypass.
+
+### Synthesis-only gate on steps 3 and 2b: pre-registration (written before the request)
+
+Hash f4890ec7f (core/ = 95644ee8b). Base: 94cbc880e's gate (b5b2s2-94cbc880e-gate-out).
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within +/-505 MB of 5,368.5 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires) |
+| 3 core LUT | at most the base + 2,500 (144,583 -> 147,083) |
+
+Reported, predicted within the per-module floor:
+- lsu_i ±500 of 23,818 (the LDC/STC plain branch);
+- csr_regfile_i ±200 of 7,409;
+- the MMU (cva6_mmu inside lsu_i: one 2:1 mux on daccess_err plus a flop);
+- ex_stage + issue summed: a 64-bit 2:1 mux on the DYN result, plus the LCC 8 record.
+
 ## Silicon acceptance: bare kits
 
 No Linux kit can run until the runtime lane's integer-M monitor exists: the current one executes CAPENTER at init. So
