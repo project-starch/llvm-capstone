@@ -158,8 +158,10 @@ The interruptible CREVOKE (Line B step 4(b), spec-silicon 24ecb7b4daa4) moves th
      - The acknowledge does NOT clear the bitmap bit in the first cut. The result is exact without it, and clearing it
        would break the TWC's invariant that no page is unmarked except at reset (:183-184; F2's targeted fill
        invalidation relies on it). Clearing it is an optimisation that needs its own TWC invalidation.
-   - **Binding condition:** the OR must see tags not yet written back. It reads through the tag cache, or drains the
-     tag cache for that page first; a dirty tag missed is a false negative, the one forbidden outcome.
+   - **Binding condition** (SUPERSEDED, see "Step 6 part 1" below: the TWC never holds a dirty tag; the condition is
+     ordering behind every older tag write): the OR must see tags not yet written back. It reads through the tag
+     cache, or drains the tag cache for that page first; a dirty tag missed is a false negative, the one forbidden
+     outcome.
    - Faults as the reference: not 4 KiB-aligned or outside tagged RAM gives a load access fault, tval = rs1.
    - Arms: a page with one tag published reads 1; after a scalar store clears it, 0; a tag still dirty in the tag
      cache reads 1 (the positive control for the binding condition); a raw copy (CSTRAW with raw_tag) sets it; an
@@ -715,6 +717,99 @@ The semantics owner's branches, fixed before the run:
 - Loop growth (key 2) or core LUT beyond key 3: fall back to (b). Fix 2 comes out; the divergence (an FLU/DYN
   instruction with a raw rs1 drops raw_tag) is recorded; b5b2-rawlcc stays a committed arm reading 7 1 7 7; (a)
   becomes a later item.
+
+### The gate on step 5: read (board lane, 2026-11-24), PASS 3/3
+
+4457a77a7, graded against a37873a76ed7. Base: step 4's gate. Grade file
+`/mnt/hdd/<user>/synth/b5b2s5-4457a77a7-gate-out/grade-b5b2s5.txt`.
+- Key 1 (memory): TM peak 5,244.6 MB, against 5,066.5 (+178.2; ±505). PASS.
+- Key 2 (loops): 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy 1), LUTLP-1 0 (toy 1); the in-flight
+  loops-only gate PASS.
+- Key 3 (core LUT): 146,277, against 145,169 (+1,108; limit 147,669). PASS.
+- **The semantics owner's branch:** neither fallback condition holds, so fix 2 stays.
+- Reported:
+  - **Core FF 55,396 (+426): OUTSIDE my +16 ±300.** ex_stage +361, csr +37, commit +15, scoreboard +10. Step 5 added
+    only byp_raw_q (8 flops) to ex_stage; the rest is unattributed. A census is asked.
+  - **dyn_unit + rev_node + i_scoreboard summed:** 33,165 (-2,990; ±2,500: OUTSIDE), while i_issue_read_operands rose
+    3,916 (30,527). With IRO added the four read 63,692 against 62,766 (+926). So the rule written after step 4's
+    census (grade the pair as a sum with i_scoreboard) was too narrow: the scoreboard-entry cone can also land in IRO,
+    where fix 2's own logic sits too. The census on this dcp separates the two (cone stems by module; fix 2's cells).
+    Until it reads, the sum is graded with IRO included.
+  - lsu_i 25,495 (+1,498), i_load_unit 716 (+15), i_store_unit 5,349 (+407), commit_stage_i 278 (-8); issue_stage_i
+    48,186 (+4,331), id_stage_i -521, csr_regfile_i 7,269 (-222), ex_stage_i 57,706 (-2,157).
+  - Guard peak RSS 30.24 GB (step 4: 24.59), under the 40 GB ceiling; 52m43s. The dcp is kept as
+    twc/gate-synth-b5b2s5-4457a77a7.dcp (sha16 88f79e9f72d2c792).
+
+## Step 6 part 1: CPTAG's ordering and the page bitmap (2026-11-24)
+
+**Correction to the step 6 design above** (its "binding condition" bullet, written before the adapter was read). The TWC
+never holds a dirty tag. It is a read cache whose valid entries show what DRAM will hold (wt_axi_adapter.sv:155-156),
+and every tagged store issues its own AXI tag write. A tag can be newer than DRAM in six places:
+- the store buffer;
+- the dcache wbuffer;
+- the adapter's 2-deep request FIFO;
+- the latched TAG_FILL / TAG_WR (tag_wr_value_q);
+- writes issued with B pending (the twl, tag_wr_pend).
+- The TWC is never ahead.
+The concrete false-negative hazard: a page's bitmap bit is set only at the END of its TAG_FILL, while the data write's
+B returns earlier. So the condition is ORDERING behind every older tag write, not draining a cache.
+Side note (not this step's): ariane_pkg.sv:663's comment says tag = base + (paddr >> 4); the RTL subtracts DATA_MEM_BASE
+first (wt_axi_adapter.sv:271-273).
+
+**The semantics owner's rulings:**
+- 6b, in two gated parts: part 1 is the ordering + bitmap; part 2 is the acknowledge's exact OR, with its own gate and
+  a fallback to part 1 alone.
+- The AMO port as the carrier.
+- The core half as a CSR-class op (no translation, no PMP: rs1 is physical).
+- The region: the reference's rule (page-aligned, wholly inside the tagged region, cap_mem_map.c:504-522) on silicon's
+  values [0x8000_0000, 0xBC2D_2D2D), so the last page inside is 0xBC2D_1000. A QEMU machine's region is its main RAM
+  (cpu.c:1520-1539, -m), recorded as a machine-configuration difference.
+
+**Built:** capstone-ariane b5b2-step6 eff52e152, on step 5 (4457a77a7).
+- **Decode:** custom-0 funct3 6, I, mode = the immediate. Others: 2. U, protected U, contexts: 2.
+- **Execute:** fu CSR, op CPTAG; the result is rs1 with the mode in bit 0; the fault is 5 with tval = rs1.
+- **Commit:** as an AMO (it waits for amo_resp, which carries rd; the CSR buffer is freed on the ack; no CSR is touched).
+- **LSU:** CPTAG on the AMO port in place of the store unit's AMO buffer, sent once no store is pending; the missunit
+  then waits for an empty wbuffer.
+- **Adapter:** at the FIFO head, no AXI transaction and no invalidation. Granted when the tag FSM is idle and
+  tag_wr_pend is 0 and the bitmap lookup is valid; the bitmap bit is latched and returned as an ATOMIC_ACK on the
+  lowest-priority return slot.
+- **Lint on the way:** two false Verilator loops through the missunit's mem_data_o (a standing member), both fixed: a
+  select derived from amo_valid_commit, and a whole-struct amo_req assignment.
+
+**Readings** (b5b2-cptag.S, pre-registered in its header; script-checked):
+- 23/23 on both trees.
+- In the .iss: 7 CPTAG-ANSWER lines with the predicted pages and bits.
+- 48 CPTAG-WAIT cycles (tag_wr_pend 1) ending one cycle before pg_tag's first answer: the hazard window was exercised.
+- The base logged none.
+- 29 regression tests are identical to step 5's run.
+- **My slip:** the first count read 0 / 0 from the .log; the sim's displays go to the .iss.
+- Lint: the Sublet gate passes; 0 lines by name against step 5 in both builds; ids55 is token-identical.
+
+## Step 6 part 2: CPTAG's acknowledge (2026-11-24)
+
+The semantics owner's ruling (ii), against (i) "OR on every query" (a divergence: after the tags are cleared, a
+non-ack reads 0 where the reference reads 1 until an ack) and (iii) a second sticky bitmap: an acknowledge that finds
+the page empty clears its bitmap bit and invalidates the page's TWC entries, and a non-ack answers the bit.
+
+capstone-ariane b5b2-step6 8f83093fc, on part 1 (adapter only):
+- **The walk.** An ack on a marked page reads the page's tag words one at a time (TAG_QRD / TAG_QWT) on AXI read ID 2
+  (icache 0, dcache 1, LR 3). That is 33 words, 32 if the run is word-aligned: the 256 tag bytes start at byte 5 of a
+  word since CAP_TAG_MEM_BASE ends in ...2D, as TAG_FILL's comment at :889-892 counts. The first and last words are
+  masked exactly as TAG_FILL's byte enables.
+- **An empty page:** the last beat clears the page's bit (the bitmap's one write port, read-modify-write of the head's
+  word) and bumps the TWC epoch, as an untargeted fill does. That restores the invariant at :183-184.
+- **The answer:** TAG_QDONE pops the head and latches the result for part 1's return slot.
+- **A tag read of a page whose bit is 0** gets no tag beat (zero without fetching, :1149). After a clear, the next
+  tagged store re-marks the page (TAG_FILL) before any later read.
+- **Lint:** the Sublet gate passes; 0 lines by name against part 1 in both builds.
+
+**Readings** (b5b2-cptag2.S, the semantics owner's seven arms in order, pre-registered; script-checked):
+- 12/12 on part 2: 1 | 1 7 | 0 0 | 1 1 | 0 1 | 1 1 | 0.
+- 12/12 on part 1's adapter, where an ack answers the sticky bit.
+- In the .iss: exactly 3 walks (results 0, 0, 1) and 2 clears, both pg_a.
+- Regression: 29 tests identical in value. b5b2-cptag takes +1,119 cycles: its one acknowledge on a marked page now
+  walks (1 walk against 0 on part 1).
 
 ## Silicon acceptance: bare kits
 
