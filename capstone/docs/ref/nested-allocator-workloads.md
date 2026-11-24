@@ -6063,3 +6063,98 @@ The opcount boots agree with the zone boots to within 8 instructions: bodies 2,6
   any board image would read.
 - Hash entries and op slabs are not built here. Their free paths have the same shape, a revoke at the free and a
   derive at the next issue, so the same change applies. Its saving there is not measured.
+
+## perlbench item 3: test.pl's port code without its lifetime instructions (2026-11-24)
+
+### Pre-registration: perlbench test.pl on P1, u = stock and n = prot6 with its lifetime instructions neutralised, one boot (written 2026-11-24 11:07, before the boot)
+
+**Question.**
+- The brief's attribution item for perlbench is test.pl's cost. prot6's +13,583.8 M in-context cycles (pair6) leave
+  34.4-35.4 % unattributed at the mean instruction price.
+- On suns.pl the N arm settled the same question for Perl 5.36 (result above): the code took 71.6 % at 3.260 cycles per
+  twin instruction, and the lifetimes took 95.5-97.6 cycles per instruction.
+- This boot runs the same instrument on test.pl. N is prot6 with its two lifetime instructions neutralised, so:
+  - N−U is the port's code at its board price;
+  - P−N is the lifetime instructions with their records. P comes from pair6's boot, through the stock check.
+
+**The images.**
+- u: stock `c1744e87…` (the paper's Full image), as in pair6.
+- n: `perlbench_r.protnop.strip.dom` `9acc61bc…` (full `48620b2d…`), built in `nested/perlspec/fx2/protnop`:
+  - a copy of prot6's tree (`fx2/prot6`, the heads port + `fix-lookup.py` + `fix-lookup-pages.py`);
+  - `sv.c` gets the lifenop block of `nested/perl/lifenop/0003` (`caf0cf33…`), inserted after
+    `#include <capstone/capability.h>`. The diff is `fx2/lifenop-522.patch` (`3ef306a8…`);
+  - only `sv.o` is recompiled, with prot6's own compile line, and the image is linked with prot6's link line;
+  - it is stripped as prot6 was: llvm-c4 `llvm-objcopy --strip-all`, keeping `.capstone_virtual`,
+    `.capstone_application` and `.capstone_domreq`. The same command on prot6's full image reproduces `37381b03`.
+- Checks on the build:
+  - **Control.** prot6's `sv.c`, recompiled unchanged with that line, gives a `sv.o` byte-identical to prot6's.
+  - **The header's asm** (`capstone/runtime/include/capstone/capability.h`, unchanged since 2026-10-17) is the asm
+    the 0003 block copies, apart from the two substituted instructions.
+  - **Census, prot6 to N** (`capop-census.py`): CDERIVE 72 → 41 (−31, the live derive at each inlined site), MOVC
+    +31, CREVOKE 9 → 6, ADD-to-x0 0 → 3. Total 4-byte words (407,149) and RVC words (146,562) are equal, and the
+    symbol table is identical (`mksyms.py` output equal to `perl-prot6.syms`). The census of prot6 against stock
+    differs in many classes, so it can fire.
+- **Twin control** (`nested/census/out/zperl-protnop-9acc61bc`, `fx2/stage-ptn`, prot6's twin stage with only the image
+  replaced, run as prot6's: zones4, 2^20 records). makerand.out and test.out equal the stock twin run's (the twin's three
+  known scripts). Image zone: N 86,774,083,025 against prot6's 86,774,090,874, **N−P = −7,849** (0.00001 %). So N executes
+  prot6's instructions apart from the substitutions, and N−U on the twin is +2,440,555,323.
+- **Lifetime instructions:** the port's executed CDERIVEs and CREVOKEs on test.pl, as prot6 minus N in the twin's opcode
+  counts (`nested/p1pn/opc.sh`, `396dd4d1…`: opcount boots of `stage-pt6` and `stage-ptn`, running at this writing). The
+  count is fixed by those two runs before the boot, enters the reader as its fourth argument, and is quoted with its runs
+  in the result.
+
+**Configuration.**
+- Bitstream P1 (`…-pagedtbl_d83d3a633`), kit `nested/kits/bkit91-rec1m` (2^20 records, SHA256SUMS verified). The
+  board is the runtime lane's to choose.
+- Chain: `nested/p1pn/p1pn.conf` and `p1pn.list` on `nested/p1s100/nat-run3p.sh`. The chain reads P1 back by name,
+  and flashes it sha-checked if it is not resident.
+- Stage `nested/p1pn/pairn` (`pairn.SHA256SUMS`, 574 files). It is the kit's `make-train-stage.sh` around
+  `fx2/stage-pairn`, which is `fx2/stage-pair6` with only its prot image replaced. Against pair6's board stage, one
+  file differs, the prot `.xz`. So run.sh, the commands and the u image are pair6's byte for byte.
+  - The stage's second arm is labelled "p" and runs N.
+  - Commands: makerand.pl then test.pl, for u, then for n.
+- List line `pairn 86400 660`, so `BAKED_TIMEOUT=345600` (the dry run prints it), as in pair6. Expected wall time:
+  about 7.5 h of commands.
+- Checked off the board (rule 8, `nested/p1n/recheck-p1k.sh` with `RD=nested/p1pn`):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on pair6's real transcript and on its cut, PASS all 9 steps;
+  - real firmware build 23,760,392 B (`da2a5384…`);
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/p1pn/dry.log`).
+- Read by `nested/p1pn/read-pairn.py` (`732d220d…`): this boot's transcript, pair6's, SPEC's references and the
+  lifetime count.
+  - Tested on pair6's own transcript as both inputs. It reproduces pair6's +13,583.8 M and counters, and its band
+    and record checks fire (N−U "OUT", 100 % of every gap).
+  - On a transcript cut after the first arm it prints NOT READ and exits 1.
+
+**Rules.**
+- Answers: every command rc 0, and both arms' makerand.out and test.out byte-equal to SPEC's references, with empty
+  `.err` files. Otherwise nothing is read.
+- Stock check: u's test.pl in-context cycles within ±1 % of pair6's u (267,219.2 M).
+  - Outside it, N−U is still read within this boot.
+  - P−N is not read: it needs pair6's P.
+
+**Predictions** (test.pl, in-context cycles).
+1. **N−U: 4,000 M to 11,000 M.** The twin counts it at +2,440.6 M instructions (prot6 minus stock).
+   - At suns.pl's measured ratio to the mean (3.260 / 2.838 = 1.149, so 3.640 here) it would be 8,884 M.
+   - At the stock mean (3.169) it would be 7,733 M.
+   - At the lookup pair's 1.67 it would be 4,076 M.
+2. **Records:** N's hpm3, hpm4, hpm5 and hpm7 each within 15 % of pair6's U-to-P gap from U. 15 % because suns.pl's N
+   read hpm4 at 11.1 %. N's L1D misses (hpm8) lie between U's and pair6's P.
+3. **P−N** is the rest of pair6's +13,583.8 M.
+   - From it come the walks (P−N hpm4) and the replays (P−N hpm7 at 17-20 cycles each).
+   - What is left is divided by the lifetime instructions above.
+
+**What each outcome says.**
+- **N−U 8,000-9,770 M** (suns.pl's ratio ±10 %): the code's price ratio carries over from Perl 5.36 to perlbench.
+- **Below 8,000 M:** the code is cheaper here, and the lifetimes cost more per instruction than on suns.pl.
+- **Above 9,770 M:** the code is dearer here.
+- **The per-lifetime-instruction price set against suns.pl's 95.5-97.6:** close means the lifetime cost is a property
+  of the instructions and their records. Far means it depends on the program's record working set (test.pl's record
+  TLB misses are 89 % above stock, suns.pl's 66 %).
+
+**Limits.**
+- One run per arm, u first, not interleaved, as in pair6.
+- P−N is cross-boot (pair6's P against this boot's N), each taken against its own boot's u. pair6's u reproduced st2's
+  u to +0.009 % across boots.
+- N is an instrument: its heads are unprotected copies of their arena's capability.
+- Kernel + other is printed but not part of any prediction.
