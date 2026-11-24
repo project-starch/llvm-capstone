@@ -1281,6 +1281,104 @@ Hash fbb60c546. Its core/ equals 0ef489f1d's; the rest is the lint reference and
   saved there.
 - 8b's prediction is written with its code, before its request.
 
+### The gate on step 8a: read (board lane, 2026-11-25), PASS 3/3
+
+fbb60c546, against the CCSRRW gate. dcp sha16 af5f2753cf7e8704; grade file sha16 e170f724431fa9e8.
+- Key 1: TM 5,322.9 MB (+256.6; ±505); whole-run guard peak 25.44 GB.
+- Key 2: loops 0 everywhere, each toy firing; 8-326 0.
+- Key 3: core LUT 145,785 (-2,239; limit 150,524).
+- **Three reported-row predictions MISSED**, all inside the ±2,500 per-module floor, so none moves a key:
+  - dom_switcher 10,897 LUT (-620; predicted unchanged ±500), FF 1,323 (+0);
+  - csr_regfile_i 7,651 (+212; predicted down by tens to a few hundred), FF 6,532 (-71);
+  - id_stage_i 1,209 (+132; predicted tens).
+  - A candidate mechanism for the switcher's -620 (the board lane's, not a census): csupctl_resume_q, csupctl_virt_q,
+    csupctl_table_q and ns_flush_strobe can only hold their reset 0 once the CSUPCTL write arm is compiled out.
+    Their cones (sup_resume_o, vctx_o, vctx_table_o) can then fold.
+  - No census was taken: 8b removes the switcher whole, so no decision depends on attributing the -620.
+- Other rows:
+  - ex_stage_i -3,442 against issue_stage_i +1,941 (i_scoreboard +2,091); ex + issue -1,501, inside the floor, so
+    redistribution across that boundary;
+  - dyn_unit -662 (CSRUNV illegal);
+  - the cone sum 64,771 (+1,314);
+  - commit_stage_i -88;
+  - RAMB36 and LUTRAM unchanged;
+  - core FF 55,572 (-73).
+
+## Step 8b: built and read (2026-11-25)
+
+capstone-ariane b5b2-step8b 36fbc9e7c, on 8a. All of it is under CAPSTONE_SUBLET_FMT; ids55 is token-identical.
+- **The change:**
+  - cva6.sv +16: the switcher is not instantiated, and its 9 output nets are constants;
+  - csr_regfile.sv +4: capmode_d = 0, so the CCSR write block (under capmode_q, :2713), the PC check and the CPMP
+    checks fold;
+  - ex_stage.sv +5: the dyn unit's sup_arm_en and runv_en are 0;
+  - load_store_unit.sv +4: the load unit's dom-switch valid is 0.
+  - Kept: srevroot and its flush, CSMINT's LSU channel, SHRINK.
+- **The five sites, read at 8a before coding** (the semantics owner's list):
+  - commit_stage's PC tracker FOLDS via capmode (:419-428, :518);
+  - store_unit's snap path FOLDS: snap is constant 0, since CSMINT's request has snap = 0 and the switcher's side is
+    '0. Its sel_dom_switch is KEPT, because it is CSMINT's store path;
+  - load_unit's dom-switch path FOLDS via the explicit tie (CSMINT only writes, :2218);
+  - ariane_pkg's Sublet sites are UNTOUCHED: types and enums, no state. dom_switch_data_req_t is kept for CSMINT;
+  - wt_axi_adapter: 0 supervisor or capmode references; its Sublet sites are step 6's.
+- **csr_regfile's supervisor writers:**
+  - sup_runv_enter, sup_call and sup_clear need the switcher's ack, which is now 0;
+  - the reg-channel writes need reg_valid, which is now 0;
+  - 8a removed the CSU* writes;
+  - the quantum countdown and the escape need sup_active, which has no live setter left.
+- **Readings:** all 33 tests (every B5b-2 arm and the Sublet regression, the retired context tests included) are
+  IDENTICAL to 8a in value and in retired-instruction count.
+- **Lint:** the Sublet gate passes. The by-name diff against 8a adds five UNUSEDSIGNAL, each a tie's consequence:
+  capmode_set_i, commit_dom_switch_req, dom_switch_reg_resp, dom_switch_data_resp[161:64] and
+  capstone_dyn_res[1:0]. Everything removed is the switcher's own generated file. The reference tightens from
+  UNUSEDSIGNAL 1569 to 831.
+
+### Synthesis-only gate on step 8b: pre-registration (written before the request)
+
+Hash 36fbc9e7c. Base: step 8a's gate (b5b2s8a-fbb60c546, dcp sha16 af5f2753cf7e8704). The semantics owner approved
+the keys, key 4 included.
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within ±505 MB of 5,322.9 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires), LUTLP-1 0 (the toy fires) |
+| 3 core LUT | at most the base + 2,500 (145,785 -> 148,285) |
+| 4 removal | dom_switcher has 0 cells AND core LUT at most the base - 10,000 (135,785) |
+
+**Key 4's failure branch:** the ties did not fold the switcher. Take a census by name before anything else.
+
+**Reported, graded nothing** (against 8a's rows):
+- csr_regfile_i (7,651 / 6,532): -1,000 to -3,000 LUT and -1,500 to -3,000 FF (the 16 cpmp entries, the CCSR copies,
+  the supervisor event and frame state). **If the LUT drop lands below this band, list csr_regfile_i's surviving FFs
+  by name from the dcp before reading anything into it** (the semantics owner's condition).
+- commit_stage_i (318): -50 to -300;
+- i_pmp_data_if (351 at the CCSRRW gate): -100 to -250;
+- frontend and controller: tens;
+- dyn_unit: a small drop at most, not predicted;
+- core LUT -11,900 to -16,400 (the switcher's 10,897 plus the folds); core FF -2,800 to -4,500.
+Timing is not graded by a gate; the next full build reads it.
+
+**b5b2-ctxport** (fcd75ed94, tests only) carries the three properties of the retired context tests that also exist
+outside a context: F4's live rewrite with its control, -wide at slots 2^26 + 0x103 and 0x7FFFFF03 (the top edge of
+every index), and -edgem's S phase with its trace verdict and mutant. It is pre-registered from sublet-ns.expect's fixed
+rows and runs on the base, 8a and 8b.
+- **First chain VOID, my error:** `git checkout <rev> -- core` replaced the worktree's two symlinked submodule paths,
+  and all 18 runs refused at a missing file list. It is re-running with only the differing files swapped.
+
+**The coverage table** (the semantics owner's request), the retired CSRUNV-context tests:
+
+| test | property | context-only? | cover outside a context |
+|---|---|---|---|
+| va-runv-snap | the caller snapshot keeps the internal format | only | none needed |
+| sublet-ns (F1) | a probe pending while the unit opens a freshly named paged table must not resolve DEAD from header quadword 3 | no | b5b2-nsedge readings 3 and 7 (A = {0,3}, live in T1) |
+| -f4 (F4) | a live rewrite at another generation leaves {0,4} DEAD | no | b5b2-ctxport-f4 (+ -f4ctl) |
+| -edge | the escape as a namespace edge with a probe pending | the escape only | -edgem's port |
+| -edgem | a probe pending across M's srevroot rewrite | no | b5b2-ctxport-edgem (+R43_TRACE, mutant) |
+| -wide | a slot >= 2^26 through every widened path | no | b5b2-ctxport-widelo, -widehi |
+| -snapu | the snapshot backstop for a wide slot | only (its wide cderive rides with -wide) | none needed |
+| -ctxint | an integer-base LDC in a checked mode = 24 | the context only | b5b2-sref U (srevroot = tbl) a0 |
+| -ctxoob | a tagged out-of-bounds LDC in a checked mode = 28 | the context only | b5b2-sref S a5; b5b2-raw reading 30 |
+
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
 - **Interruptible CREVOKE** (Line B step 4(b)): spec-silicon 24ecb7b4daa4. Read at source on b5b1-step3:
