@@ -5658,6 +5658,87 @@ N P): every command rc 0 with `suns.out`.
 - Item 3's CRENEW and liveness-test variant is no longer deferred behind item 5, which is done. It follows this pair,
   in the one-operand environment ("The CRENEW and liveness-test variant" above).
 
+### Result: U P N N P U on P1 (board 1, 2026-11-24 09:29-10:08, read against d1a4526e5f8e)
+
+**The boot.**
+- Chain `nested/p1n/p1n-b1.*` (pid 2048772) on board 1. It read P1 back by name as resident (no flash) and booked
+  1465, then unbooked.
+- Smoke PASS on all 9 steps. The watchdog sampled throughout (151 ALIVE/QUIET lines).
+- The command line carries `capstone_vm.node_flat_records=1048576`.
+- The staged images decompress to the registered hashes: U `3012f392`, P `09f8b716`, N `d2d79d42`.
+- The chain's generic SPEC classifier logged `SPEC rc=2 MALFORMED: @@SPEC-DONE 6 but 0 commands ended`. It reads
+  SPEC's own per-command markers, which this stage does not print, so this line is not a verdict.
+- The pre-registered reader is `appd/parse-abba.py` (`1d0459d5…`) on `board.txt`, then `nested/p1n/read-upn.py`
+  (`4bec0c0e…`). Its output is `nested/p1n/upn.json` (`647f93bb…`).
+
+**The checks.**
+- Answers: all six commands rc 0, each with `suns.out`.
+- Repeats:
+  - In-context cycles, all three arms: U 0.06 %, P 0.06 %, N 0.02 %, all within 1 %.
+  - Kernel + other: U 2.11 % and P 2.78 %, both over 2 %, so they are not read. N is 0.04 %.
+- Stock control: U 4,915.1 M against the perlfix boot's 4,914.4 M, +0.02 %. Met.
+
+**In-context cycles, means of each arm's two commands:**
+
+| pair | difference | share of P−U |
+|---|---:|---:|
+| P−U | +789.1 M (+16.05 %) | 100 % |
+| N−U, the port's code without its lifetime instructions | +564.9 M (+11.49 %) | 71.6 % |
+| P−N, the lifetime instructions with their records | +224.2 M (+4.09 % of N) | 28.4 % |
+
+**Predictions.**
+1. **Records.**
+   - hpm3, hpm5 and hpm7 met: N−U is 6.1 %, 0.3 % and 4.1 % of the U-to-P gap.
+   - **hpm4 missed:** N's walk cycles are 11.1 % of the gap from U, against the pre-registered 10 % (U 18.51 M,
+     N 19.88 M, P 30.87 M).
+   - hpm8 met: N's L1D misses (19.93 M) lie between U's (14.52 M) and P's (21.98 M).
+   - So N has U's record traffic, as it should with no records of its own. It keeps 72 % of P's added L1D misses
+     (+5.41 M of +7.46 M).
+2. **N−U, +564.9 M, met** (band 250-600 M).
+   - It falls in the outcome range "the mean price holds" (418-565 M), 0.1 M below its upper edge.
+   - The implied price is 3.260 cycles per twin instruction (564.9 M over +173,265,263). Stock's mean is 2.838, so
+     this is 15 % above it.
+   - The reading sits on the boundary between "the mean holds" and "the code is dearer". The repeats (0.06 %, about
+     3 M) cannot place it on either side.
+3. **P−U, +789.1 M, met** (+0.0 % from +788.8 M, band ±5 %).
+
+**The revised attribution of P−U, +789.1 M in-context cycles:**
+
+| part | cycles | share | price and its source |
+|---|---:|---:|---|
+| the port's code, measured | 564.9 M | 71.6 % | N−U on the board. The twin counts it at +173.3 M instructions, so 3.260 cycles each (measured, the replacement for the 2.838 mean) |
+| record-table walks | 11.0 M | 1.4 % | P−N hpm4, read as cycles (measured) |
+| event-23 replays | 23.7-27.9 M | 3.0-3.5 % | P−N hpm7, +1.39 M at 17-20 cycles each (Addendum 1's RTL estimate, from source) |
+| the lifetime instructions and their other record traffic | 185.4-189.5 M | 23.5-24.0 % | P−N less the two rows above |
+| **not attributed** | **none at this resolution** | | The rows add to P−U by construction: N−U + P−N = P−U |
+
+- **A price per lifetime instruction.**
+  - The port's executed CDERIVEs and CREVOKEs come from the one-operand environment's opcode counts of the same
+    patches on suns.pl. Protected minus stock is +1,077,695 CDERIVE and +864,583 CREVOKE, 1,942,278 together
+    (`nested/oneop/fig10/runs/fig10-perl-r2-opc-p` against `-opc-u`). That count is from the one-operand build of the
+    patches, not from the board image's own trace.
+  - That makes 95.5-97.6 cycles per lifetime instruction. N runs a MOVC or an ADD in each one's place, so this price
+    is over a 1-cycle substitute.
+  - It includes each instruction's record traffic beyond the walks and replays. This pair does not split the
+    instruction from its record.
+  - It sits at the top of the 63-100 cycles assumed in the perlfix pre-registration.
+- **Where the previously unattributed 255.7-260.1 M (32.4-33.0 %) goes.**
+  - At the 2.838 mean the code took 491.7 M. Measured, it takes 564.9 M, so 73.2 M of the remainder is the code's.
+  - The lifetime instructions take 185.4-189.5 M, most of it.
+  - The walks (12.3 → 11.0 M) and the replays (24.7-29.0 → 23.7-27.9 M) each move by about 1 M against the earlier
+    table, because P−N leaves out the small part of each that N−U carries.
+- **The L1D misses are not priced.** N−U carries +5.41 M of them, and P−N +2.05 M. They are inside the code's and the
+  lifetimes' rows above, not separate from them.
+- **Context entries are the code's, not the lifetimes'.** N−U is +1,819 entries (+39.7 %) and P−N is +32. What the
+  port's code does that enters the context more often is not examined here.
+- Uptime: N−U +27 s and P−N +10 s.
+
+**Limits.**
+- One run per arm, U first, not interleaved. The two U commands bracket the boot and agree within 0.06 %, so drift
+  over it is no larger than that.
+- Kernel + other is not read: U's and P's repeats fail the 2 % rule.
+- N is an instrument. Its heads are unprotected copies of their arena's capability.
+
 ## M-16 on P1: how often the protected tshark returns (2026-11-24)
 
 ### Pre-registration: the protected tshark stage in five consecutive boots on P1 (written 2026-11-24 08:07, before the boots)
