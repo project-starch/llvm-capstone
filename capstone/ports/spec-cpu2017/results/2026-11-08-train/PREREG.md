@@ -7338,3 +7338,47 @@ Addendum 224's, N = 1):
 - Otherwise the 48K L1D brings the comparison nothing, and it leaves the performance batch.
 - A Δoverhead inside 0.3 pp on a row is read as no change, because N = 1 and the 32K extreme pairings move up to
   0.2 pp.
+
+## Addendum 234 (2026-11-24 14:33 +08, outcome): Addendum 225, bitstream 1 + L1D48 (6438348ec) against bitstream 1 (9e801ab5e), board 3
+
+The four chains ran in their re-armed ABBA order: b1c from 06:26 to 09:12, b1l from 09:12 to 11:55, b1l2 from 11:56
+to 12:13 and b1c2 from 12:14 to 12:34. Each chain flashed or found its bitstream resident and read the name back.
+Every boot's Tier 1 smoke read 9/9 with task 70 waived, and every row passed specdiff. The chain logs print
+`SPEC rc=2 NO RESULT` on every boot. That is bkit100/bkit108's spec-classify.py, which matches only
+`@@SPEC-DONE <digits>` (Addendum 224). The raw and assembled transcripts both carry `@@SPEC-DONE <bench> <size>`.
+The rows are read by run-stage.py read (perf/natstage/read-one.sh), as every native train row has been. The fixed
+classifier (perf/kitfix) reads PASS on all eight boots.
+
+| Row | A: bitstream 1 (board.txt) | B: 6438348ec (board.txt) | Δ seconds | Δ run_cycles | Δ hpm8 |
+|---|---|---|---|---|---|
+| mcf | 5,940.50 s (a40f2fea9ab5caca) | 5,806.69 (aeaa321f289816f0) | -2.25 % | -2.29 % | -3.86 % |
+| gcc train01 | 1,762.97 (65338c26753ff5b5) | 1,736.57 (3f22968b86132bf0) | -1.50 % | -1.54 % | -7.64 % |
+| makerand, run 1 | 275.08 (6352927004039e47, with the probe) | 276.61 (b8ff4ecbe476cf1c, with the probe) | +0.53 % | +0.54 % | -34.5 % |
+| makerand, run 2 | 275.24 (027df7518b2f222e) | 275.94 (23c7fb53744d2e8a) | +0.28 % | +0.30 % | -34.1 % |
+
+The makerand deltas are taken against the mean of the two A runs (275.16 s), which differ by 0.06 %.
+
+- **Prediction 1 held.** On both arms the monitor printed the same two illegal-instruction records after
+  `@@R76PROBE-BEGIN`, as Addendum 204 read on bitstream 1: the control at MEPC 0x1071C with MTVL 0, and the probe
+  word at MEPC 0x1075E with MTVL 0x001072DB. The probe's own verdict line is again lost to the known misaligned read
+  in its handler (cause 4, rc 135). That is the v1 probe's instrument defect.
+- **Prediction 2 held.** mcf -2.25 % against -1.9 to -4.3 %; gcc train01 -1.50 % against -1.2 to -2.6 %. Both are
+  within 0.1 pp of Addendum 224's readings on P1 (-2.36 %, -1.55 %).
+- **Prediction 3 held.** hpm8 fell on every row.
+- **Prediction 4 failed on one run.** B run 1 is 0.53 % slower than the A mean, against a 0.5 % limit. B run 2 is
+  0.28 % slower. run_cycles moves the same way as the seconds, so this is not timer or wall noise. Both B runs are
+  slower, while on board 2 (Addendum 224) the two L1D48 makerand runs read +0.04 % and +0.03 % against P1. Perl's
+  makerand loses a little at 48K on this board, while its L1D misses fall by a third. The 64 KiB pair showed the
+  same shape on full perlbench (Addendum 205).
+- **Prediction 5 held.**
+
+**Decision.** By Addendum 225's rule this is "a single makerand run above 0.5 % with the other inside". It is
+reported here and resolved by a third run on each arm. The default bitstream does not change until then.
+
+**Amendment, by the matched-L1D rule of 24 Nov (Addendum 233).** A 48K default board bitstream on the Capstone
+boards beside a 32K Plain would mix L1Ds in any comparison made on it. So Addendum 225's default switch is now
+subordinate to Addendum 233:
+- If Addendum 233 drops the 48K L1D, 6438348ec does not become the default. Bitstream 1 stays the default, and
+  the third makerand runs are not spent.
+- If Addendum 233 keeps it, the third runs follow on board 3 in the order B, A, continuing the drift-balanced
+  sequence. They are pre-registered with their chain before they run, and Addendum 225's rule decides.
