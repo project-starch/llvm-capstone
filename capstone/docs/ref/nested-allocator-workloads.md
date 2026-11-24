@@ -5801,6 +5801,81 @@ P1. For each boot that does not return, it also records where the core stopped, 
 
 **Prediction.** Intermittent: between 2 and 4 returns of 5, and every non-return at tsu-p1's commit pc.
 
+### Result: 3 returns of 5, and both non-returns at tsu-p1's commit pc (board 1, 10:08-14:19, read against d1a4526e5f8e)
+
+The chain ran all five boots in order on resident P1 (read back by name, no flash). Every bake returned rc 0, and every
+boot passed all 9 smoke steps. `nested/p1tr/read-m16.py` read `…/out-nat-p1tr-m16-b1`. The chain's `SPEC rc=2` lines
+are spec-classify's verdict on a one-arm tshark stage (`NO RESULT` or `MALFORMED: @@SPEC-DONE 1 but 0 commands ended`),
+not a reading. The readings below come from the transcripts.
+
+| boot | transcript sha256 | outcome | board time |
+|---|---|---|---:|
+| tsu-r1 | `ded32bc6…` | no `@@SPEC-END` within 3,600 s | 67.5 min |
+| tsu-r2 | `f621eb0a…` | no `@@SPEC-END` within 3,600 s | 67.5 min |
+| tsu-r3 | `d76782aa…` | rc 0, stock's output | 38.6 min |
+| tsu-r4 | `5c1eceb8…` | rc 0, stock's output | 38.8 min |
+| tsu-r5 | `14af70f1…` | rc 0, stock's output | 38.7 min |
+
+**Returns** (`nested/tshark/parse-ts.py` against `wl/ref1000.out`): each has `056c1f8c…`, 1,140,005 lines and 9,000
+frames, with 25,862 context entries, the same as tsu-p2.
+
+| boot | in-context cycles | against tsu-p2 | `between_cycles` | hpm3-8 |
+|---|---:|---:|---:|---|
+| tsu-r3 | 24,104,428,222 | +0.13 % | 3,830,570,613 | 7,230,615 / 87,340,438 / 98,809,032 / 8 / 11,166,889 / 126,486,217 |
+| tsu-r4 | 24,325,028,579 | +1.04 % | 3,843,566,462 | 8,340,791 / 98,256,595 / 98,602,109 / 8 / 11,061,161 / 126,828,181 |
+| tsu-r5 | 24,350,085,335 | +1.15 % | 3,837,625,730 | 7,202,222 / 87,661,214 / 98,824,174 / 8 / 11,192,682 / 127,482,944 |
+
+These are repeats only, as registered. There is no stock arm in this run, so no cost is read.
+
+**Non-returns.** The runner's apertures after the timeout, verbatim:
+- **tsu-r1:**
+  - trap log `0x89`; sw=224 `0x05`; **sw=225 `0x92`**; sw=226 `0x00`; sw=227 `0x07`; sw=228 `0x9f`; sw=229 `0x00`;
+  - sw=192-195 all `0x00`; sw=219 `0xd7`; sw=220 `0x8c`; sw=221 `0x02`; sw=222 `0x00`;
+  - commit pc `0x0000003ff6780f04`; trap-log mepc `0xffffffff80007376`;
+  - rev_node_debug_ex `0x0000067f40001131`, head `0x0071`, serving index `0x000014b9`.
+- **tsu-r2:**
+  - trap log `0x89`; sw=224 `0x05`; sw=225 `0x96`; sw=226 `0x00`; sw=227 `0x07`; sw=228 `0x9f`; sw=229 `0x00`;
+  - sw=192-195 all `0x00`; sw=219 `0xd7`; sw=220 `0x8c`; sw=221 `0x02`; sw=222 `0x00`;
+  - commit pc `0x0000003ff6780f04`; trap-log mepc `0xffffffff80007376`;
+  - rev_node_debug_ex `0x0000059240001134`, head `0x0071`, serving index `0x000019fb`.
+- **Against tsu-p1:**
+  - Both read tsu-p1's commit pc, sw=220, trap log, mepc, head, and sw=224 and sw=226-229.
+  - tsu-r2 also reads tsu-p1's sw=225.
+  - tsu-r1's sw=225 is `0x92` against `0x96`. The one bit that differs is `stall`.
+  - The serving indices differ in both, as F's two non-returns did.
+
+**Kernels.** All five boots carry the same `CONFIG_CMDLINE` as tsu-p1, and the same dmesg command line.
+- The Image hashes differ in every boot (`2ac5a9f4`, `0d44744f`, `df390e1a`, `ff070840`, `ea4b600f`). Every bake
+  re-embeds its own initramfs (`usr/initramfs_data.o`) and recompiles `init/version-timestamp.o`.
+- **tsu-r2's bake also recompiled the four `CONFIG_CMDLINE` objects**, the same four as tsu-p2's: `setup.o`, `fdt.o`,
+  `cmdline_early.o` and `efi-stub.o`.
+  - The cause is this lane's own perlbench N recheck at 10:24 (`nested/p1pn/pairn-recheck`). It relinked the shared
+    tree with bkit91-rec1m's `node_flat_records=1048576` between tsu-r1's bake (10:09) and tsu-r2's (11:16).
+  - tsu-r2's bake put 262144 back. This is the same mechanism as tsu-p2's.
+- **The recompile does not separate the outcomes:** tsu-r1 did not return without it, and tsu-p2 returned with it.
+
+**Against the pre-registration.**
+- **Return rate:** 3 of 5, Clopper-Pearson 95 % interval **0.147-0.947**. Pooled with tsu-p1, tsu-p2 and the heartbeat
+  boot it is 5 of 8, **0.245-0.915**. Neither registered extreme holds: the stage returns in neither every boot nor no
+  boot.
+- **Where it stops:** every non-return reads tsu-p1's commit pc, `0x3ff6780f04`. That is slot-0 residue at the CDERIVE of
+  `wmem_block_fast_sublet_alloc` (`commit_instr[0].valid` = 0 in all three). So the stops are at one site, now 3 of 3
+  on P1. As registered, the pc names where the core stopped, not why.
+- **Prediction** (2-4 returns of 5, every non-return at tsu-p1's commit pc): **met**.
+
+**Reading.**
+- On P1 the protected tshark's non-return is intermittent across boots of the same bytes and kit. Its rate is
+  between about 9 % and 76 % on the pooled interval (3 non-returns of 8). Whenever it does not return, the core is
+  held at one site.
+- So a reproducer for the hardware side has to be a stress form: many issues of that allocation path in one boot,
+  rather than one tshark run per boot. One tshark run per boot reads this rate at about 40-68 min per sample.
+- **Run order, reported and not read:** the two non-returns are the first two boots and the three returns the last
+  three, as tsu-p1 (no return) came before tsu-p2 (return). Eight boots in three runs cannot test an effect of order or
+  time, and none is claimed.
+- No mechanism is claimed. In particular:
+  - the serving-index differences say only that the record table's state differs between stops;
+  - tsu-r1's clear `stall` bit is one sample of a live signal.
+
 ## perlbench item 3: the CRENEW variant, Perl 5.36's SV heads in the one-operand environment (2026-11-24)
 
 ### Pre-registration: Fig. 10's Perl revision plus 0002, with heads renewed instead of released, in oneop (written 2026-11-24 08:37, before the runs)
