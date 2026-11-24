@@ -89,7 +89,7 @@ Specification: `capstone/docs/design/sublet-reference-model.md` at 32dde56a6b42.
 
 | Program | State |
 |---|---|
-| perlbench | only scalar heads protected (+5.3 %); bodies, hash entries, op slabs not; patch 0002 applied by no build; +788.8 M in-context cycles of Perl 5.36 on suns.pl unattributed (cycles, not perlbench instructions: corrected 20 Nov); on SPEC's test.pl the protected image costs +15,591 M cycles (+5.84 %); timer share 11 % unexplained |
+| perlbench | only scalar heads protected (+5.3 %); bodies, hash entries, op slabs not; patch 0002 applied by no build (landed 24 Nov, dev 0ddf1d90a773: every PERLD_SUBLET=1 build applies it; +8.385 % instructions on suns.pl against +34.88 % without it); +788.8 M in-context cycles of Perl 5.36 on suns.pl unattributed (cycles, not perlbench instructions: corrected 20 Nov); on SPEC's test.pl the protected image costs +15,591 M cycles (+5.84 %); timer share 11 % unexplained |
 | gcc | pools +5.1 %; all three allocators +15.4 % with a 2^22-record table, one boot. SPEC's `ggc_collect` returns at once (v), so "release at collection" cannot help; typed free lists, objects of 4 KiB and more, growing obstack objects unported; the collaborator's port needs one-operand CREVOKE and CRENEW |
 | mcf, lbm, x264, imagick, nab, xz | no allocator of their own (wrappers over `malloc`, or compiled out); the work here is code generation and memory: mcf's 112-byte arc and page-table walks, lbm's seven spills an iteration, imagick's filter loop |
 | applications | every P1 row but SQLite uses a two-operand patch, not Fig. 10's; memcached in-process; PHP one binary in two modes; SQLite `--size 100` deferred; most costs unattributed |
