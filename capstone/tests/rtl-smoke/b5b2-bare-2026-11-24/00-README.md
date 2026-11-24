@@ -63,5 +63,11 @@ Runner: `sup-bare-2026-10-03-ladder/run_sup_bare.py` (`SUP_IMG`, and `SUP_REC_AD
     an ungraded control position still passes.
   - sublet-life's ungraded positions 25-34 read 0x0 on this boot. b5b2-raw position 16 read 0x0, the link-layout
     prediction.
-- N=1. Board 3 holds the same seal (flashed, no image run), so N=2 would need only its kit run.
-
+- N=2: board 3 (booking 1490, board/meas-pw cc868076e8bb) read 15/15 AS PREDICTED with the control exact, recorded
+  in capstone/docs/plans/2026-11-24-b5b2-trap-route.md.
+- **Note (2026-11-25, the semantics owner's ruling; not a retraction, no reading flips):** b5b2-cptag's reading 21 passed
+  in both runs (boards 1 and 3), but its instrument reads 0 in about one load in four on this same seal (board 3: 2 of 7 loads,
+  counting the diagnostic's own copy of the reading), so those passes were not evidence for the property it names.
+  The property, that CPTAG leaves the cache line at rs1 alone, has evidence on this seal from the diagnostic's warm
+  pass on board 3 (diag-b3-20261124T2253: 3 of 3 loads warm 4 / 4, flag 1, miss scale 43-47 cycles).
+  (b5b2n-bare-2026-11-25 carries the diagnostic and its PREREG amendment.)

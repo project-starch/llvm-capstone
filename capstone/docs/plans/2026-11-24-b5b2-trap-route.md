@@ -1098,6 +1098,11 @@ The kit b5b2-bare-2026-11-24 on the seal `…-r75d-b5b2_0c0458149.bit`, board 1 
   - Attempt 1 (booking 1489) was VOID: the kit tree's console driver had no board 3, and the runner still exited 0. The
     board lane fixed both: the runner now exits 3 when a load does not reach the console, and a precheck asks the
     driver to accept the board.
+- **Note (2026-11-25, the semantics owner's ruling; not a retraction, no reading flips):** b5b2-cptag's reading 21 passed
+  in both runs above, but its instrument reads 0 in about one load in four on this same seal (board 3: 2 of 7 loads,
+  counting the diagnostic's own copy of the reading), so those passes were not evidence for the property it names.
+  The property, that CPTAG leaves the cache line at rs1 alone, has evidence on this seal from the diagnostic's warm
+  pass on board 3 (diag-b3-20261124T2253: 3 of 3 loads warm 4 / 4, flag 1, miss scale 43-47 cycles).
 - **Which bitstream is the default stays unchanged** (R-75 (d), fallback bitstream 1). B5b-2's seal runs bare kits
   only: CAPENTER is illegal under the Sublet format, and the current monitor executes it at init. It becomes a
   default candidate with the integer-M monitor.
@@ -1617,8 +1622,10 @@ grade-b5b2n-full.txt, read here; the seal re-hashed here.
 
 ## The next bitstream on silicon (8a + 8b + CCSRRW + 9, 904cd9c6b): board 2, N=1, 2026-11-24
 
-The kit b5b2n-bare-2026-11-25, pinned at ac0429080d36, run on board 2 (booking 1493). **21 of 22 graded images AS
-PREDICTED, with the control exact.**
+The kit b5b2n-bare-2026-11-25, pinned at ac0429080d36, run on board 2 (booking 1493).
+**904cd9c6b CONFIRMED ON SILICON, N=1 (board 2): Tier 1 20/21 as pre-registered, the control exact; b5b2-cptag
+reading 21 MISS, classified by the pre-registered diagnostic (70dbac168818) as an instrument artifact: H-fetch 6/6 on
+both seals, warm delta 0 against a measured miss of 43-47 cycles.** (The semantics owner's wording, 2026-11-25.)
 - No key-check failure. Step 9's deletion reads on silicon: b5b2-illegal's sites 19-23 and 25 trap 2.
 - The re-keyed nsedge, sref and ctxport read as predicted, the reached-F4 marker included.
 - The board lane's grader and a separate script here agree.
@@ -1631,8 +1638,17 @@ PREDICTED, with the control exact.**
 - **The pre-registered diagnostic** (b5b2-cptag-diag; capstone-ariane c6195bea5; kit amendment 70dbac168818) reads
   **H-fetch on all six loads**, three on each board: warm 4 / 4 with flag 1, against each board's own miss scale of
   43-47 cycles. With the code warm, CPTAG never changed the load's cost.
-- **Classification: an instrument artifact** of reading 21's cold fetch window, not an RTL reading. Proposed to the
-  semantics owner: replace reading 21's cold-window boolean by the warm-pass flag and record the raw deltas.
+- **Classification: an instrument artifact** of reading 21's cold fetch window, not an RTL reading.
+- **The instrument, replaced** (the semantics owner's ruling, 2026-11-25; the next kit's vector only, this kit stays
+  pinned): capstone-ariane 4a027ce45 makes reading 21 the warm pass's flag in b5b2-cptag's default build.
+  - The cold before / after, the warm before / after and a warm-code D$ miss's cost are recorded raw beside it, as
+    readings 21a-21e.
+  - A load is VALID only if 21e >= 21c + 10; then 21 must be 1.
+  - Pre-registered in the test header before any run, then read on the seal's core:
+    - the kit-style image: SR 29, sha256/16 020868caf1143904, rec 0x80010240, built as build.sh's b5b2-cptag line.
+      Readings 1-20 and 22 are unchanged, 21 = 1, cold 70 / 54, warm 4 / 4, miss 101;
+    - in-tree, with the scaffold: the same, with cold 4 / 4.
+  - The -DCPT_DIAG build is byte-identical to the image that ran.
 - Diagnostic slips of mine, all caught before any run: a `# line` comment read as a #line directive; a first miss
   scale on a .data line, which the bare prologue had already cached.
 
