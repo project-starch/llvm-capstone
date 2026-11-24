@@ -588,6 +588,31 @@ inert instruction into cause 2. Pre-registered in b5b2-illegal.S's header before
       before its first boot.
   - **Next:** the deletion is carried onto the B5b-2 tip as a new commit, then lint, its arms and a synthesis-only gate.
     It rides the next bitstream.
+- **Carried onto the B5b-2 tip:** capstone-ariane b5b2-ccsrrw2 7997b51a2 (0c0458149 + 87aec16b4's two files,
+  cherry-picked clean).
+  - ids55 is token-identical (359,790).
+  - Lint on the Sublet build is at REF, with 0 lines by name against step 6c in either build.
+  - Readings, script-checked against the tip without the deletion: only the pre-registered positions move.
+    - b5b2-illegal: site 24 goes 0xff -> 2/1/1, and the trap count 18 -> 19.
+    - sublet-ns and its seven arms, and va-runv-snap: one cause-2 print each, inserted.
+    - r79-cpmp: trap count +4.
+    - Every other test, steps 5-7's included, reads the same.
+  - Against the deletion's own run on step 4, all 27 shared tests read the same.
+- **Its synthesis-only gate: pre-registration** (written before the request).
+  - Hash 7997b51a2. Base: gate 6b (0c9992bc6, dcp sha16 3986f0ae821b9832), whose synthesised RTL equals the full
+    build's.
+
+  | key | pass if |
+  |---|---|
+  | 1 memory | technology-mapping peak within ±505 MB of 5,063.9 MB, under the 40 GB guard |
+  | 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires), LUTLP-1 0 (the toy fires) |
+  | 3 core LUT | at most the base + 2,500 (147,893 -> 150,393) |
+
+  - Reported, graded nothing:
+    - id_stage_i / decoder: one OR term into illegal_instr, so tens of LUT at most;
+    - core FF: 0 ± 300 (retiming noise only);
+    - every other row inside the ±2,500 floor.
+  - It enters the next bitstream, which is batched with step 8.
 - **A constraint on step 8:** the trap-route kernel executes SHRINK (funct7 0x01) in S (sublet_store_user_ref). SHRINK
   is legal under Sublet (decoder.sv:1260-1265) and must survive the physical removal.
 
