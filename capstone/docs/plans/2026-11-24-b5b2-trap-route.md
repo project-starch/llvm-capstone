@@ -397,6 +397,40 @@ Reported, predicted within the per-module floor:
 - the MMU (cva6_mmu inside lsu_i: one 2:1 mux on daccess_err plus a flop);
 - ex_stage + issue summed: a 64-bit 2:1 mux on the DYN result, plus the LCC 8 record.
 
+### The gate on steps 3 and 2b: read (board lane, 2026-11-24), PASS 3/3
+
+f4890ec7f, graded against the pre-registration above (20d7cda0d031). Base: 94cbc880e's gate. Grade file
+`/mnt/hdd/<user>/synth/b5b2s3-f4890ec7f-gate-out/grade-b5b2s3.txt`.
+- Key 1 (memory): TM peak 5,065.6 MB, against 5,368.5 (-302.9; ±505). The whole-run peak was 5,206.2 MB. PASS.
+- Key 2 (loops): 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy 1), LUTLP-1 0 (toy 1); the in-flight
+  loops-only gate against 94cbc880e PASS.
+- Key 3 (core LUT): 146,206, against 144,583 (+1,623; limit 147,083). PASS.
+- Reported, OUTSIDE my two module predictions (reported rows, not keys; both bands were written tighter than the
+  recorded ±2,500 per-module redistribution floor, so a miss there grades nothing):
+  - lsu_i 25,365 (+1,547, predicted ±500). Step 3's MMU term and step 2b's plain LDC/STC branch both sit in lsu_i;
+    which of the two carries the growth is not attributed.
+  - csr_regfile_i 6,900 (-509, predicted ±200), after the ctx[2] widening.
+- ex_stage + issue 105,036 (+1,141): ex_stage_i +1,341, issue_stage_i -200 (issue_read_operands +398, scoreboard
+  -598); id_stage_i +238, dom_switcher +365. Core FF 55,175 (+175). LUTRAM and BRAM are unchanged. Top LUT 173,504
+  (+1,638).
+- Three rows beyond ±2,500, as one pair: ex_stage_i/dyn_unit 14,843 -> 10,714 (-4,129; its _spawn_0 -4,183) and
+  ex_stage_i/rev_node (capstone_sublet_life) 3,312 -> 7,690 (+4,378, FF +1). Net +249. Neither module's source changed
+  in 94cbc880e..f4890ec7f; their parent ex_stage gained the LCC 8 block, which muxes dyn_unit's result cursor and
+  metadata. UNATTRIBUTED: no cell-level diff was run. It is recorded as a move between siblings, not explained.
+- The synth dcp is kept as twc/gate-synth-b5b2s3-f4890ec7f.dcp (sha16 8baaa42e6fee767e); vivado-guard peak RSS
+  22.00 GB, 53m43s.
+- This gate's dcp is step 4's base.
+
+### Context arms and the edgem checker (b2f27b3b3, tests only, pushed before the runs)
+
+- sublet-ns -DSL_CTXINT (an LDC inside a CSRUNV context through an integer base) and -DSL_CTXOOB (through a tagged
+  base one past its bound): the full vectors are equal on the base core (99d7ef22c) and on step 2b. The LDC reads 0x18
+  (24) and 0x1c (28) respectively. Contexts run at M, so this is the reading that cap_data_ctx[2] = sup_active keeps
+  them checked.
+- edgem-r43-check.py makes the pending-probe condition part of sublet-ns-edgem's verdict. It exits 0 on both trees'
+  R43_TRACE runs (a probe dropped while pending), 1 on a hand-made all-resolved trace, and 2 on a run with no R43
+  lines.
+
 ## Silicon acceptance: bare kits
 
 No Linux kit can run until the runtime lane's integer-M monitor exists: the current one executes CAPENTER at init. So
