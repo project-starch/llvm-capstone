@@ -92,3 +92,48 @@ guard, and then grades.
 - clk_out1 +6.000 passes as "outside on the good side, reported".
 - These read ERROR, never a grade: the path tool disagreeing with the table, a toy that does not fire, and a loops log
   without its end marker.
+
+## Result: B5B2-FULL PASS (10/10 keys), sealed
+
+The build ran from 13:46:47Z to 14:57:28Z (run.exit 0) and was collected and sealed at 15:00:11Z. The post chain graded it at
+15:04:11Z with rc=0.
+- **Guard:** vivado-guard exit=0 after 01h09m23s, peak RSS 27.48 GB at 3,017 s. Every tmux session ended.
+- **Seal:** `…-pagedtbl-r76-r75d-b5b2_0c0458149.bit`, 11,443,722 B, sha256
+  b44291bacb220b8ae6dd02ff113cb68bcfff231893fae70741261c087bb53b9a. Re-hashed locally, it matches the chain's.
+
+| Key | Reading | B5b-1 |
+|---|---|---|
+| placed LUT 173,100 ± 3,000 | 172,682 (-418) | 170,699 (+1,983) |
+| placed FF 78,033 ± 2,000 | 78,043 (+10) | 77,561 (+482) |
+| routed clean | 0 / 0 / 0, 227,293 of 227,293 | clean |
+| placed congestion ≤ 5 | 4 (N 4, S 2, E 4, W 2) | 4 |
+| router congestion ≤ 5 | no hotspot block, Phase 2 ran; the control log parses to 5 | no hotspot block |
+| check_timing loops, build report | 0 | 0 |
+| check_timing loops, routed dcp | 0 (toy 1) | 0 |
+| TIMING-23 | 0 (toy 1) | 0 |
+| LUTLP-1, routed dcp | 0 (toy 1) | 0 |
+| clk_out1 WNS in [-1.89, +5.59] | +0.286 (-1.565); path tool 0.286, base 1.851 | +1.851 |
+
+**Reported, not graded:**
+- Design WNS is +0.177 (B5b-1 +0.138), TNS 0, with 0 of 237,785 endpoints failing. WHS is +0.056 (B5b-1 +0.050).
+- clk_out1 TNS is 0, with 0 of 149,262 endpoints failing.
+- Slices: 48,746 (95.67 %), against B5b-1's 49,035 (-289).
+- RAMB36/FIFO is 115, against B5b-1's 113 (+2). Gate 6b's twc_ep_mem +2 carried, as predicted.
+- The clk_out1 worst 20 are one family.
+  - Each starts at i_issue_read_operands `fu_data_q[0].cap_metadata_b[1]`; #19 starts at its `[26]_rep`.
+  - Each ends in fu_data_q[0]'s cap_metadata_a, cap_metadata_b or rd_metadata.
+  - They run 90 to 95 levels. The worst is 0.286 to cap_metadata_a[25]; the 20th is 0.960.
+  - B5b-1's worst sits in the same family (cap_metadata_b[14] to a[17], 103 levels), 1.565 ns further from zero.
+- Timing points (worst setup in clk_out1):
+
+| Point | Nets or cells | Worst | Levels | B5b-1 |
+|---|---|---|---|---|
+| lsu_cx | 71 | +11.776 | 33 | +13.535 |
+| cptag | 204 | +24.281 | 10 | absent |
+| capwe | 1 | +11.445 | 48 | +11.561 |
+| csrscr | 100 | +24.903 | 7 | absent |
+| rs1tag (from) | 8 | +25.326 | 21 | absent |
+| rs1tag through capwe | | +28.648 | 5 | absent |
+
+**Flash:** B5b-1's seal stays the default. B5b-2's is flashed under the delegated rule once the rtl lane's bare-kit
+pre-registration is pushed and the kit is sent, agreed with the runtime lane.
