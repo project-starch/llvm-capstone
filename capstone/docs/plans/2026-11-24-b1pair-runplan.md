@@ -80,3 +80,74 @@ ONLY after P1 reads back. Otherwise HOLD: the booking and the holder are kept an
 The board-stubbed dry runs passed every branch: phase B ok, prep failing, bad seal sha, bad rec, B flash fail, B
 readback fail, B post-loads readback fail, restore fail (HOLD), seal flash fail (HOLD), and RK_WAITPID without its
 start time (refused).
+
+## Before the run: two changes, both made before any reading
+
+- **Collateral rule (the rtl lane, 2026-11-24).** Phase B's ordering rule above is narrowed: only a load that FAILED TO
+  RETURN (no SR line, or no uart.txt) makes the loads after it collateral. A load that returns a wrong value is a reading,
+  so r79-cpmp after a returned NOT FIXED r79-pmp is graded and flagged. This is sound because the runner gives every image
+  a fresh start: `run_sup_bare.py:75-83` power-cycles, runs `monitor reset halt` and a fresh `load_image` per load.
+  `grade-p1r79.py` encodes it.
+- **d0afdb40f stays a bare-kit seal, never the default** (the board, rtl and runtime lanes agreed). CAPSTONE_SUBLET_FMT
+  makes CAPENTER illegal (`decoder.sv`), and the monitor CAPENTERs at init (opensbi 49b0f932 `sbi_capstone_init.S:34`).
+  The default waits for the integer-M monitor redesign.
+- The queue behind this booking changed after it was written: nested p1n came next, not t202s2. The booking's shape did
+  not change.
+
+## The p1-r79 build: FULL BUILD PASS (4/4 keys)
+
+Built under vivado-guard: exit=0, 1 h 33 m, peak RSS 29.71 GB. The loops-only in-flight gate passed and LUTLP-1 read 0.
+
+- **Seal:** `…-r76-r75d-r79_7bd984edc.bit`, 11,443,722 B, sha256
+  `ca3bd00e0fd4a067e90c60e24054759093674e337df16b5c64bdfb7888f4e04b`.
+- **Source:** PROVENANCE names HEAD 7bd984edc01d. The working tree differs only in the four host env scripts, the same four
+  as 1c5d31474's reference build.
+- **Keys** (`grade_full.py` against 1c5d31474's full build):
+  - placed congestion level 4 (ref 5);
+  - check_timing loops 0;
+  - routed WNS -12.619 ns (ref -13.598, Δ +0.979, inside the ±3.74 band);
+  - routed clean, 242,229/242,229.
+- **Reported, not graded:**
+  - LUT 186,920 (91.72 %, Δ -992);
+  - FF 76,852 (Δ +59);
+  - slices 50,645 (99.40 %, Δ +25);
+  - TNS -195,033 (ref -224,506);
+  - WHS +0.049.
+
+## Result: booking 1463 (board 1, 2026-11-24 01:09:57-01:28:50Z), run `run-b1p-20261123T2309`
+
+### Phase B: all three loads EXACT, i.e. R-79 FIXED ON SILICON on the P1 line, PMP and CPMP sides, N=1 (the board lane's grade; the rtl lane's independent grade is pending)
+
+- The seal read back by name as `…-r75d-r79_7bd984edc.bit` after the flash and again after the loads.
+- `grade-p1r79.py` (PREREG 172d21085037) graded all three loads EXACT, rc 0.
+- Each vector was read again by hand from the raw uart.txt. Each load has one SUPTEST BEGIN, and its image sha16 in
+  chain.log equals the table's.
+
+| load | image sha16 | SR | read |
+|---|---|---|---|
+| va-runv (control) | f0ed3fac351b60f3 | 15 | `0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x0 0x9` (EXACT) |
+| r79-pmp | 8eb72553965cfc1c | 17 | the 9d3a8afbce52 fixed row (EXACT) |
+| r79-cpmp | c1efe4e23976c6cd | 21 | `0x0 0x0 0x0 0x5a5a5a5a5a5a5a5a 0x7 0x80003000 0x5a5a5a5a5a5a5a5a 0x7 0x80003000 0x5 0x80004000 0x77 0x0 0x0 0x0 0x7 0x80003008 0x4321 0x99 0x5a5a5a5a5a5a5a5a 0x4` (EXACT) |
+
+The rtl lane grades this run independently from the raw uart.txt before anything lands on dev.
+
+### Phase A: CSMINT N=2 on d0afdb40f is VOID (infrastructure, not a reading)
+
+- The seal read back by name after the flash and again after the loads.
+- **The control sublet-life never ran.** run_sup_bare.py reached `reset halt` and `load_image`, and then `set $pc` timed
+  out: `[riscv.cpu] Timed out after 120s waiting for busy to go low (abstractcs=0x8001102)`. The load left no uart.txt
+  and exited rc=1.
+- This was the first load after the flash and its power cycle. It is the JTAG debug-module failure recorded in
+  `SILICON-BLOCKER.md:4062` and history 19-07-2026, and it says nothing about the image or the design.
+- The PREREG voids the kit without its control.
+- The other five loads each had a fresh power cycle and load. All five read EXACT, and their SR/SV streams are
+  byte-identical to board 2's run (booking 1457) for csmint, csmint-vm, csmint-vm-nc, csmint-pmp and r79-pmp. They are
+  recorded here and not graded.
+- CSMINT stays CONFIRMED ON SILICON at N=1, on board 2.
+- No retry: the runtime lane declined to reorder the queue for it. d0afdb40f cannot become the default at any N, so a
+  second reading is for the record only. It is to be offered a natural gap if one opens.
+
+### Restore
+
+- P1 `…_d83d3a633.bit` was flashed (sha checked) and read back by name: `RESTORED … rc=3`.
+- Then UNBOOK 1463 returned 200, and the holder stopped. No HOLD.
