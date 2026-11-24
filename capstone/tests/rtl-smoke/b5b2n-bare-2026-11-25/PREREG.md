@@ -1,8 +1,9 @@
 # The next B5b-2 bitstream on silicon: pre-registered 2026-11-25, before any board run
 
 **The bitstream:** the full build on capstone-ariane b5b2-step9 904cd9c6b (8a + 8b + the CCSRRW deletion + step 9),
-sealed by the board lane as `caplifive_…-r75d-b5b2n_904cd9c6b.bit`. Its sha256 is added here at the seal, before the
-flash; the full build's keys are in llvm-capstone capstone/docs/plans/2026-11-24-b5b2-trap-route.md. The tests are at
+sealed by the board lane as `caplifive_…-r75d-b5b2n_904cd9c6b.bit`, 11,443,722 B, sha256
+`36e70855a55de3692a359817b5043cc6f6f2cc92d4f41f0317df7861223a1b08` (re-hashed by the rtl lane, equal to the seal verdict;
+added at the seal, before the flash); the full build's keys are in llvm-capstone capstone/docs/plans/2026-11-24-b5b2-trap-route.md. The tests are at
 2bed0dfe7 (904cd9c6b + the kit re-key, tests only), so every image sim ran on the synthesised RTL.
 
 **The session:** one board (2 or 3), the seal flashed and its name read back after the power cycle, then the 22 images

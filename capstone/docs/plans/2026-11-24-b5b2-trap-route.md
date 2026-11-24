@@ -1577,6 +1577,25 @@ pre-registration. Board 1 stays on the nested lane's work.
   raw position 16 (layout), ctxport-wide data[8] (_start at 0x80001000), sublet-life's pool dump (the shift). Eleven
   images read identically to their in-tree runs.
 
+**The full build: read (board lane, 2026-11-25), PASS 11/11, sealed.** Graded from the board lane's
+grade-b5b2n-full.txt, read here; the seal re-hashed here.
+- **Seal:** `…-r75d-b5b2n_904cd9c6b.bit`, 11,443,722 B, sha256
+  36e70855a55de3692a359817b5043cc6f6f2cc92d4f41f0317df7861223a1b08. Guard exit 0, 1h13m, peak 24.83 GB.
+- **Keys:**
+  - placed LUT 148,038 (+338 on 147,700) and FF 68,231 (exactly the prediction);
+  - routed clean, 197,012 / 197,012;
+  - placed congestion 3, and the router reported no hotspot;
+  - check_timing, TIMING-23 and LUTLP-1 all 0, each toy firing;
+  - **removal:** dom_switcher 0 instances and 0 primitives (B5b-2's routed dcp: 1 and 15,303);
+  - **clk_out1 WNS +2.266** (B5b-2 +0.286, so +1.980), in the band, meeting timing.
+- **The worst 20** sit in i_issue_read_operands fu_data_q cap_metadata -> rd_metadata / the scoreboard's result
+  metadata, 82-104 levels: B5b-2's family.
+- **Reported:** design WNS +0.177 (a MIG path), TNS 0, WHS +0.054; slices 43,912 (86.19 %, B5b-2 95.67 %); RAMB36 115.
+  - The full build's synthesis reproduces step 9's gate on all 13 module rows.
+  - Routed, against B5b-2: core -24,656 LUT. dom_switcher -11,487, csr_regfile_i -3,139 / -3,797 FF, csr_buffer_i
+    -5,141, dyn_unit -7,442, and rev_node +5,069.
+  - The family census cannot fire, as on the base.
+
 **The re-key, read (2026-11-25; capstone-ariane 2bed0dfe7, tests only; kit b5b2n-bare-2026-11-25):**
 - **In-tree, with the scaffold:** nsedge, sref and sref-gen are unchanged; ctxport's F4 arms gain their marker
   (data[16] = 1), as pre-registered; its wide and edgem arms are unchanged.
