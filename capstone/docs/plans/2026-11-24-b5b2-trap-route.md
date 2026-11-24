@@ -852,6 +852,57 @@ rev_node, i_scoreboard and i_issue_read_operands):
 - Gate 6a has no fallback of its own beyond the keys: a failure there means CPTAG does not enter the bitstream in this
   round.
 
+**Step 5's census** (board lane, 88f79e9f72d2c792 against b05ca47912c75223):
+- The scoreboard-entry cone's cap_result part moved dyn_unit -> i_issue_read_operands, field for field. The
+  result/imm pair looks like the same cone renamed; that is a reading of names, not a measurement.
+- Fix 2, measured directly: 8 FF (rs1_tag_q) and 19 LUT.
+- The core FF miss is retiming register replication: FPU _bret/_fret (net +300) and dyn_child_q[base] (+74). The only
+  RTL flops are byp_raw_q's 8.
+- From step 5 on, the cone is graded as one sum of dyn_unit, rev_node, i_scoreboard and i_issue_read_operands.
+
+### Gate 6a (step 6 part 1): read (board lane, 2026-11-24), PASS 3/3
+
+eff52e152, graded against 03902b250094. Base: step 5's gate.
+- Key 1 (memory): TM peak 5,063.9 MB, against 5,244.6 (-180.7; ±505). PASS.
+- Key 2 (loops): 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy 1), LUTLP-1 0 (toy 1); in-flight PASS.
+- Key 3 (core LUT): 147,798, against 146,277 (+1,521; limit 148,777). PASS.
+- Reported:
+  - i_axi_adapter +85 LUT / +5 FF, RAMB36 48 (+0); tbm_mem's BRAM row identical (4K x 64). This is under my
+    prediction (a few hundred LUT, about 40 FF).
+  - The cone sum is 63,428 (-264, inside).
+  - ex_stage_i +1,102 (lsu_i +565), i_load_unit +350, i_store_unit +406, commit_stage_i +60: all inside the floor.
+    Part 1 touches none of those except lsu_i's amo_req mux, so this is redistribution, not attributed.
+  - Core FF +112; no row beyond ±2,500.
+  - Guard peak 27.46 GB; dcp sha16 a82acbbe85801608.
+
+## Step 7: the namespace must-pass (2026-11-24)
+
+capstone-ariane b5b2-step6 eb8e32f08 (the arm and its mutant control), 0c0458149 (the arm's fix after its void first
+mutant run). The semantics owner accepted the design and its four additions.
+- **va-rc-trap / -zp are ids55-only arms.** They build P1-format tables (va-fetchsplit.S :736-756: a flat RECYCLE
+  header with no PAGED flag; record 2's word 1 = 1 << 60, "valid at generation 0"). The Sublet unit reads word 1 as
+  {generation@63:32, prev, next} in a paged table (capstone_sublet_life.sv:10-12). So under Sublet the context entry
+  is refused: the unit answers status 1 for node 2, and S's CSRUNV at 0x8000101c traps with mcause 0x1d.
+  - The printed vector 0x2 / 0x80003000 / 0x1d is the legacy-C control, a3 (left over from the MINT macro's
+    `lla a3, LO`, not a tval), and that mcause.
+  - B5b-1's and B5b-2's Sublet tips read it identically (81,216 / 81,323 cycles). The ids55 build of B5b-2 reproduces
+    the P1 record exactly (93,870 / 94,094 cycles, two R75-BLK events).
+  - Not traced: which switcher arm maps the unit's status 1 to cause 29.
+- **b5b2-nsedge.S, the must-pass for the consumers outside M:**
+  - A is live in T1 and stale in T2; B is stale in T1 and live in T2. T2 is a repointed copy of T1's paged table.
+  - Each srevroot write is immediately followed by the access: S under rule 1 with ld and ldc, both directions, and
+    protected U with the switch in S right before the sret.
+  - The mutant NS_SIM_NOFLUSH is a sim-only `ifndef` around the LSU's verdict-cache flush; with the macro undefined the
+    code is unchanged.
+  - Readings, script-checked against the header: the build is 16/16; the mutant is 16/16 against its re-registered
+    vector. All six discriminating readings move (live to stale 2, 6, 13: 25 -> 0; stale to live 9, 11, 15: 0 -> 25).
+  - **First mutant run VOID for 9, 11, 15:** B's ALLOW, cached at its cderive in the pool, was never flushed, so B
+    never took a DEAD verdict. Fixed by ending B in the pool first (CREVOKE); the build's readings did not change.
+- **Fetch is not covered, by design on both sides.** Under Sublet no fetch check consults the namespace: both
+  PC-capability checks need M and capmode (commit_stage.sv:423 pc_cap_check, :518 pcc_chk_o), and capmode is set only
+  by the illegal CAPENTER. The reference checks protected U's data accesses only (translate.c:130-132;
+  op_helper.c:1387-1390).
+
 ## Silicon acceptance: bare kits
 
 No Linux kit can run until the runtime lane's integer-M monitor exists: the current one executes CAPENTER at init. So
