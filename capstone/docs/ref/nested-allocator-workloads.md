@@ -6243,6 +6243,77 @@ opcount boots of `stage-pt6` (`opc-prot6-37381b03`, 11:07-11:54) and `stage-ptn`
 - Cross-checks: MOVC (funct7 0x0a) rises by 13,794,897, 102 above CDERIVE's fall. All image instructions differ by
   −4,062 (the zone runs read −7,849). Neither enters the reading.
 
+### Result: N−U +9,092.9 M, P−N +4,490.9 M, 129.1-133.9 cycles per lifetime instruction (board 1, 2026-11-24 14:20-22:00, read against 021cd655daec)
+
+**The boot.**
+- Chain `nested/p1pn/p1pn.*` (pid 2329273) ran on board 1 after M-16. It read P1 back by name as resident (no flash),
+  booked 1476, and unbooked it (HTTP 200).
+- The smoke passed all 9 steps. The watchdog sampled throughout (1,439 ALIVE/QUIET lines).
+- The command line carries `capstone_vm.node_flat_records=1048576`.
+- The stage still verifies against `pairn.SHA256SUMS` (rc 0, no mismatches). Its images decompress to the registered
+  hashes: u `c1744e87`, n `9acc61bc`.
+- The chain's `SPEC rc=2` is the generic classifier, which does not read this stage's markers. It is not a verdict.
+- Transcript `…/out-nat-p1pn-perlbench-b1/pairn/board.txt` (sha256 `3c1c76f7…`). It was read by `read-pairn.py`
+  (`732d220d…`) with pair6's transcript, SPEC's references and the lifetime count 26,043,473 fixed above.
+
+**The checks.**
+- **Answers: met.** All four commands rc 0. Both arms' `makerand.out` (`539d02dc…`) and `test.out` (`b41ee90a…`) equal
+  SPEC's references, and every `.err` is empty.
+- **Stock check: met.** u's test.pl reads 267,083.1 M against pair6's u 267,219.2 M, −0.051 %.
+
+**In-context cycles, test.pl:**
+
+| | cycles | difference | share of P−U |
+|---|---:|---:|---:|
+| u (this boot) | 267,083,082,253 | | |
+| n (this boot) | 276,176,023,556 | N−U **+9,092.9 M (+3.40 %)** | 66.9 % |
+| P (pair6, against pair6's u) | 280,802,971,216 | P−U +13,583.8 M | 100 % |
+| | | P−N = P−U − N−U **+4,490.9 M** | 33.1 % |
+
+**Predictions.**
+1. **N−U, +9,092.9 M: met** (band 4,000-11,000 M).
+   - That is 3.726 cycles per twin instruction (over +2,440,555,323), 1.176 times the stock mean of 3.169. suns.pl
+     read 1.149.
+   - It falls in the registered outcome "the code's price ratio carries over from Perl 5.36" (8,000-9,770 M).
+2. **Records: met.**
+   - N's distance from u, as a share of pair6's u-to-P gap: hpm3 (record-TLB misses) 1.7 %, hpm4 (walk cycles) 4.4 %,
+     hpm5 0.7 %, hpm7 (event-23 replays) 3.9 %. All are under 15 %.
+   - N's L1D misses (hpm8, 1,343.1 M) lie between u's (1,305.6 M) and pair6's P (1,416.2 M). N−U carries +37.5 M of
+     them, 33.9 % of pair6's P−U +110.5 M.
+3. **P−N** is the rest of P−U, +4,490.9 M. It divides as follows:
+
+| part | cycles | share of P−U | price and its source |
+|---|---:|---:|---|
+| the port's code, measured | 9,092.9 M | 66.9 % | N−U on the board, 3.726 cycles per twin instruction |
+| record-table walks | 295.6 M | 2.2 % | P−N hpm4, read as cycles (measured; each side against its own boot's u) |
+| event-23 replays | 707.3-832.2 M | 5.2-6.1 % | P−N hpm7, +41.61 M at 17-20 cycles each (Addendum 1's RTL estimate, from source) |
+| the lifetime instructions and their other record traffic | 3,363.1-3,487.9 M | 24.8-25.7 % | P−N less the two rows above |
+| **not attributed** | **none at this resolution** | | N−U + P−N = P−U by construction |
+
+- **A price per lifetime instruction: 129.1-133.9 cycles.** It is the last row over 26,043,473 executed CDERIVEs and
+  CREVOKEs: prot6 minus N in the twin's opcode counts, fixed before the boot.
+  - It covers the instruction and its record traffic beyond the walks and the replays, as on suns.pl.
+  - N runs a MOVC or an ADD in each one's place, so the price is over a 1-cycle substitute.
+- **Where the unattributed 34.4-35.4 % goes.**
+  - At the stock mean the code would have taken 7,733 M (the pre-registration's figure). Measured, it takes
+    9,092.9 M, so 1,359.9 M of the remainder is the code's.
+  - The lifetime instructions take 3,363.1-3,487.9 M, most of the rest.
+  - The walks and the replays move slightly against the earlier table, because P−N leaves out the small part of each
+    that N−U carries.
+- **Against suns.pl's 95.5-97.6.** The test.pl price is 1.32-1.40 times suns.pl's. No threshold for "close" was
+  registered, and 32-40 % above is not close.
+  - On the registered reading, the lifetime cost is not a fixed property of the instructions. It depends on the
+    program's record working set.
+  - test.pl's record-TLB misses are 89 % above stock and suns.pl's 66 %. That is consistent with this reading.
+  - It is two programs, a consistency rather than a test. The counts also come from different instruments: suns.pl's
+    from the one-operand build, test.pl's from the twin.
+- **Reported, not part of any prediction:** kernel + other N−U +1,339.5 M; uptime span N−U +421.1 s.
+
+**Limits.**
+- As registered: one run per arm, u first, not interleaved.
+- P−N is cross-boot: pair6's P against this boot's N, each taken against its own boot's u. The two u's agree to 0.051 %.
+- N is an instrument. Its heads are unprotected copies of their arena's capability.
+
 ## perlbench item 3: CRENEW for hash entries and op slabs, and the protection fixtures of all three CRENEW variants, in oneop (2026-11-24)
 
 ### Pre-registration (written 2026-11-24 12:48, before the runs)
