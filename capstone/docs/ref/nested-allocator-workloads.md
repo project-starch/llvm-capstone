@@ -5776,3 +5776,48 @@ A dry run with an echo runner reaches `CHAIN-PERLRN-DONE` through all four.
 **What follows.**
 - If held, the saving per reissue (zone delta ÷ CDERIVE fall) is what a renew is worth in the port's code.
 - The bodies half is the same change on perlbench's body free lists, once perlbench builds in oneop.
+
+### Result: the CRENEW variant saves 11.68 M image instructions (−0.52 %), 13.5 per reissue; every prediction but one holds (08:38-08:44)
+
+Chain `fig10/chain-perlrenew.sh`, four boots, rc 0, read by `fig10/read-renew.py`.
+
+- **Answers:** `suns.out` in every boot (sha256 `01688ea0…`, MATCH, status 0). **Held.**
+- **Control:** q3 (p0002, same day) reads 2,257,591,178, inside p0002's 2,257,591,178-183. **Held.**
+- **Repeats:** r1 2,245,912,933 and r2 2,245,912,932, 1 instruction apart. **Held.**
+- **Image instructions: renew − p0002 = −11,678,248 (−0.52 %), inside the −20 M to −2 M band. Held.**
+  - Against stock's 2,082,931,984, the variant costs +7.82 %, against p0002's +8.385 %.
+  - The per-function profile against q3 puts −11,677,721 of it in `Perl_sv_arena_issue`, at the same 1,077,570
+    entries (77,477,237 → 65,799,516). No other function moves by more than 700.
+- **Lifetime instructions** (opcount renew against p0002's opcount):
+  - CDERIVE 2,064,278 → 1,199,660, which is −864,618, inside the band. **Held.**
+  - CREVOKE 1,684,011 → 819,422 (−864,589). CRENEW 0 → 864,662.
+  - **"CRENEW equals CREVOKE's fall exactly": not held.** CRENEW is 73 higher.
+- **Saving per reissue: 13.51 image instructions per CDERIVE removed** (11,677,721 ÷ 864,618). The band assumed
+  about 12 for the derive path, less a load and a branch.
+
+**The 73, as far as this run reads them.**
+- `Perl_sv_free2` executes 73 more instructions in renew at the same 864,579 entries, and no other function moves
+  by a count near 73.
+- That fits 73 retires that find a non-NULL `issued` entry in renew where p0002 finds NULL, and so renew a lifetime
+  p0002 would not release. p0002 clears the entry when it releases. The renew variant never clears it, so a head
+  that comes back to a retire without passing through `Perl_sv_arena_issue` is renewed again.
+- Which Perl path hands a head out without the issue call is not identified here, and the reading above is
+  inferred, not traced.
+- **The counts do not close, so the 73 are not fully accounted for.**
+  - With 73 second renews, at most 864,589 distinct entries could be reissued without a derive. Yet CDERIVE fell by
+    864,618.
+  - The opcode totals include mallocng's own CDERIVEs and CREVOKEs. Those moved by +10 and +6 between the prot and
+    p0002 builds, whose head code differs only in the lookup. So a few dozen in these totals is not attributable to
+    the heads from opcounts alone.
+  - Per-function opcode counts would settle it, and this runner does not give them.
+- If the hypothesis holds, it costs nothing in correctness here, since every old copy is already stale. But a
+  renew-at-free design would then have to clear or mark the entry, or count on every handout going through the issue
+  call.
+
+**Reading.**
+- Renewing a head at its free instead of releasing it removes 864,618 of Perl's 2,064,278 CDERIVEs on suns.pl. In
+  the image zone that is worth 13.5 instructions a reissue, 0.52 % of the zone. It is a seventh of p0002's
+  +174.7 M over stock.
+- That is the program's side only. On oneop's table, without generations, a renew is a release plus an allocation
+  in the kit, and its record cost is not in these numbers. Cycles need a bitstream with CRENEW.
+- The bodies half (perlbench's body free lists) remains open. perlbench does not build in oneop yet.
