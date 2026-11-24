@@ -6158,3 +6158,93 @@ The opcount boots agree with the zone boots to within 8 instructions: bodies 2,6
   u to +0.009 % across boots.
 - N is an instrument: its heads are unprotected copies of their arena's capability.
 - Kernel + other is printed but not part of any prediction.
+
+**The lifetime count, fixed before the boot** (2026-11-24 12:48; the p1pn boot has not started). `nested/p1pn/opc.out`,
+opcount boots of `stage-pt6` (`opc-prot6-37381b03`, 11:07-11:54) and `stage-ptn` (`opc-protnop-9acc61bc`,
+11:54-12:41), both rc 0, image zone:
+- CDERIVE (0x51) 34,414,810 → 20,620,015, prot6 minus N **13,794,795**;
+- CREVOKE (0x52) 30,966,183 → 18,717,505, prot6 minus N **12,248,678**;
+- **lifetime instructions 26,043,473**, the reader's fourth argument.
+- Cross-checks: MOVC (funct7 0x0a) rises by 13,794,897, 102 above CDERIVE's fall. All image instructions differ by
+  −4,062 (the zone runs read −7,849). Neither enters the reading.
+
+## perlbench item 3: CRENEW for hash entries and op slabs, and the protection fixtures of all three CRENEW variants, in oneop (2026-11-24)
+
+### Pre-registration (written 2026-11-24 12:48, before the runs)
+
+**Question.**
+- Item 3's two remaining CRENEW lines, after the bodies half above, use the same change and the same reading.
+- The fixtures answer the runtime lane's standing condition for all three variants. It was not checked for the bodies
+  variant before its result: is protection unchanged when a renew replaces the revoke?
+
+**The arms** (`fig10/build-perlbench-arms2.sh`, from the same oneopperl build directory, `make.out`'s compile and
+link commands, and the one-operand shim `oneop-shim.h` as before):
+- **he** (`42cb82ec…`): heads + `port-sv-bodies.py` + `port-he.py`, with `-DPERL_CAPSTONE_SUBLET -DPERL_CAPSTONE_SUBLET_HE`,
+  as the twin's he arm.
+- **heren** (`087516c3…`): he + `fig10/renew/he-renew.py`, an experiment script. In `capstone_sv_segs.h` (hv.c's
+  copy of the segment helpers) it makes the bodies variant's two changes:
+  - the retire returns `capstone_cap_renew(entry)`;
+  - the issue hands a popped capability out as it is when its bounds are narrower than a segment.
+- **ops** (`a1c60222…`): heads + `port-op-slabs.py` (revision 4), with `-DPERL_CAPSTONE_SUBLET -DPERL_CAPSTONE_SUBLET_OPS`.
+- **opsren** (`e8338bba…`): ops + `fig10/renew/ops-renew.py`, also an experiment script:
+  - `S_op_retire` returns `capstone_cap_renew(op)` where it revoked and returned the slab's own pointer. The free chain
+    (`opslab_freed`) then holds the renewed child.
+  - `S_op_issue` hands a reused slot out as it is when its bounds are narrower than its home slab's lifetime. A
+    renewed child spans its slot, header included, which is what a derive would give.
+  - Both paths still find the holding slab first, as in the port.
+- **Static census** (4-byte words of `.text`):
+  - he 9 CREVOKE, heren 6 CREVOKE and 3 CRENEW (`del_HE`'s three sites), +13 words;
+  - ops 7 CREVOKE, opsren 6 CREVOKE and 1 CRENEW, +10 words.
+- Neither image goes to P1, which decodes funct7 0x54 as CSNODE.
+
+**Fixtures** (`fig10/build-renew-fixtures.sh`):
+- The port's own fixture scripts, each compiled with its arm's `perlmain.o` line and linked in `perlmain.o`'s place:
+  - `make-bodies-fixture.py` on bodies (`9151c874…`), bodren (`3150a3aa…`) and the control bodies-nr (`f04275c7…`);
+  - `make-he-fixture.py` on he (`fd8f6afa…`), heren (`f0841be5…`) and he-nr (`dc50e9af…`);
+  - `make-ops-fixture.py` on heads (`a7ba2720…`, the reference for mode 5), ops (`558ff148…`), opsren (`e3300a7e…`)
+    and ops-nr (`27f93d9d…`).
+- **The controls:**
+  - each is a copy of its port arm rebuilt with the port's NOREVOKE define on every compile:
+    `PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE` for bodies and he, `PERL_CAPSTONE_SUBLET_OPS_NOREVOKE` for ops;
+  - their CREVOKE counts fall to the shim's 6, 6 and 6.
+- One oneop boot (`fig10/run-renew-fx.sh`) runs every fixture in modes 0-7. It prints each run's lines, its exit status
+  and the kernel fault line that run added. The bodies and HE fixtures return 2 above mode 4.
+
+**Runs.** `fig10/chain-perlbench-renew3.sh` (TAG `fig10-pbrn3`), with a dry run through both stubs to
+`CHAIN-PBRN3-DONE` (`perlbench/dry3.log`). The boots, in order:
+- the fixture boot;
+- suns.pl, one image per boot: zones3 he, zones3 heren, opcount heren, opcount he, zones3 ops, zones3 opsren,
+  opcount opsren, opcount ops.
+
+The answer is SPEC's `suns.out` (`01688ea0…`), as in the bodies half.
+
+**Predictions.**
+1. **Fixtures.**
+   - **Each renew arm faults exactly where its port arm faults.** A fault is read from the run's fault line, and the
+     two arms are compared run by run.
+   - **bodies and bodren:** mode 0 reads, and modes 1-4 fault.
+   - **he and heren:** mode 0 reads, and modes 1-4 fault.
+   - **ops and opsren:** mode 0 reads, and modes 1-4 fault. In mode 2, the op made in the freed op's slot reads, and
+     so does the second op. Modes 5 and 6 return.
+   - **Controls:**
+     - bodies-nr reads in modes 0-3 and faults in mode 4 (the twin's control did);
+     - he-nr reads in modes 0-4;
+     - ops-nr reads in modes 0-3, faults in mode 4, and returns in modes 5 and 6.
+   - **heads with the ops fixture:** reads in modes 0-3 and returns in modes 5 and 6. Its mode 4 is not predicted.
+   - Mode 7 is recorded, not predicted. Its positive control was the twin sandbox's refusal of `/dev/null`, which
+     oneop's need not share.
+   - If a control does not read where predicted, its fixture's protected modes are not read.
+2. **Answers:** `suns.out` in every suns.pl boot. A boot that differs is not read.
+3. **Lifetime instructions** (opcount, renew arm against port arm, for he and for ops):
+   - CRENEW appears;
+   - CREVOKE falls by the CRENEW count to within 0.1 % of it. The two halves so far missed "exactly" by 73 and 63,
+     untraced, so the band is stated here instead;
+   - CDERIVE falls by at most the CRENEW count.
+4. **Image instructions:** renew arm minus port arm between −2 and −14 per removed CDERIVE, for each. Bodies read 10.04
+   and heads 13.51.
+
+**What is read.**
+- Each variant's saving, and its share of its port's own instructions (port arm minus heads, from a heads zones3
+  reading; `fig10-pbrn2-z-heads`, 2,648,354,139).
+- Not read: cycles, since no bitstream decodes CRENEW, and memory (not measured in oneop).
+- The free lists hold the same words in the variant and the port, a renewed capability in place of the own pointer.
