@@ -116,7 +116,7 @@ Built under vivado-guard: exit=0, 1 h 33 m, peak RSS 29.71 GB. The loops-only in
 
 ## Result: booking 1463 (board 1, 2026-11-24 01:09:57-01:28:50Z), run `run-b1p-20261123T2309`
 
-### Phase B: all three loads EXACT, i.e. R-79 FIXED ON SILICON on the P1 line, PMP and CPMP sides, N=1 (the board lane's grade; the rtl lane's independent grade is pending)
+### Phase B: all three loads EXACT, i.e. R-79 FIXED ON SILICON on the P1 line, PMP and CPMP sides, N=1 (the board lane's grade, and the rtl lane's independent grade from the raw uart.txt, landed on dev in 16c131fdb5f6)
 
 - The seal read back by name as `…-r75d-r79_7bd984edc.bit` after the flash and again after the loads.
 - `grade-p1r79.py` (PREREG 172d21085037) graded all three loads EXACT, rc 0.
