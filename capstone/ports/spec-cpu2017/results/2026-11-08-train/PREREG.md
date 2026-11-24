@@ -7405,3 +7405,18 @@ ec07def0bf1702a7 (image manifests).
 
 Predictions 1 and 3 held, and 2's completion half held. Its ordering half (c0's MemAvailable above Full's) waits on
 Addendum 231's xzh16f, which is queued on board 1 behind t202s2.
+
+## Addendum 236 (2026-11-24 23:36 +08): SPEC train moves to the end of the programme; t202s2 stopped, xzh16f withdrawn
+
+The lead's instruction of 24 Nov: SPEC train runs only at the very end, when everything else is ready. Until then,
+SPEC test is enough.
+- t202s2 (board 1, +Spatial imagick then x264 train) was stopped by hand during imagick train, which had started at
+  22:01. Its output directory is set aside unread. It gives no reading.
+- xzh16f (Addendum 231, Full + H16 xz train) never started: its waiter was stopped first, and no wrapper waited on
+  either pid.
+- Booking 1486 was released; board-busy 1 read FREE.
+- Still open, until the final train campaign:
+  - Addendum 231 as a whole;
+  - the ordering half of Addendum 232's prediction 2;
+  - t202s2's two rows.
+  They are re-registered against that campaign's images when it is planned. No train chain is queued on any board.
