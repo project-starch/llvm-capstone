@@ -7278,3 +7278,63 @@ and it gives the same result.json with the new lines as without them (tested on 
 Every bkit7-rev2x* base manifest names it (bkit95 among them), so any Plain bake would have stopped. The first bkit113
 dry bake stopped there. It was restored from bkit95's ctl-capstone.ko (sha256 f2a2645cc570dcc6), which equals the
 test-domains/capstone-proc.ko inside the rootfs.cpio of the last two Plain bakes (t202rvm, h16rvm). No run was lost.
+
+## Addendum 233 (2026-11-24 13:32 +08, before it runs): matched Plain with the 48 KiB 12-way L1D, board 3; Addendum 224's decision made conditional on it
+
+**Why.** Addendum 224 put the 48 KiB 12-way L1D into the performance batch on a reading of Capstone alone: P1 +
+L1D48, 0039e34f4, against P1. The project lead's rule of 24 Nov is that the L1D must be the same on RISC-V and on
+Capstone. A larger L1D is therefore judged as a pair against Plain at the same L1D, never on Capstone alone.
+- Today both baselines are 32 KiB 8-way: Plain 8db8f9cda `baseline_..._config_pkg.sv:49-50`, P1 d83d3a633
+  `capstone_..._config_pkg.sv:83-84`.
+- No published comparison has mixed the two: Addenda 213, 224 and 225 compare Capstone 48K only with Capstone 32K.
+- **Amendment to Addendum 224's decision.** The 48 KiB L1D enters the performance batch only as a change to both
+  lines at once, and only on this pair's reading (the decision below).
+
+**The Plain twin.** capstone-ariane bb56087ba (riscv-base-l1d48-12way): 8db8f9cda with 0039e34f4's config change
+and missunit change, applied by anchor.
+- Gated by the rtl lane against 8db8f9cda: lint equal on every counter; 123 of 124 Plain-sweep tests identical in
+  result, RVFI and cycles; the 124th, d12, by design, with exact checksums. The records and the build's
+  pre-registration are at llvm-capstone land/rtl-plain-l1d48 3121b3c82401.
+- Seal, from the board lane:
+  - `caplifive_rvbase-matched-ic32k-dtlb64-l1d48-12way_bb56087ba.bit`, sha256 442fc40bb9be4f9b…31ed0, checked here;
+  - WNS +12.880 ns (8db8f9cda +11.231); routed, 0 errors; 0 loops;
+  - i_cva6 LUT +1,034, RAMB36 62 against 50.
+- The rtl lane grades the seal valid. Its LUT key missed by letter, because the band was carried over from the
+  Capstone line.
+- HPM event 18 (eviction) is mis-sized at 12 ways on both 48K lines (rtl lane, 24 Nov). This addendum reads no event
+  18.
+
+**Run.** Chain l48p-b3 (`perf/thp2/thrun.sh 3 <pid> perf/natstage/l48p-b3.conf`), behind board 3's queue, after the
+Plain xz train of Addendum 232.
+- The seven rows and the exact stages of Addendum 196's matched-Plain run (r3rvm-b3.list, diffed equal): gcc
+  train01, lbm, nab, imagick, mcf, xz, perlbench.
+- Kit bkit114-k2n-rvm48: bkit95-k2n-rvm with only BOARD_BITSTREAM changed. The file set is unchanged, and
+  SHA256SUMS differs only in board.env. The module c3ec55fbf4f59ec6 and the launcher a8a4dbe637ac758a are the
+  same as bkit95's.
+- The chain flashes bb56087ba with its sha checked and reads the name back. Board 3 then stays on it until the next
+  chain flashes.
+- The stubbed dry run reaches DONE through all seven stages: scratchpad dryl48/thrun.log. The bake and firmware
+  are bkit95's recipe, unchanged, which produced the Addendum 196 rows.
+
+**Predictions** (each row N = 1; the 32K Plain means and spreads are Addendum 208's; the Capstone 48K readings are
+Addendum 224's, N = 1):
+1. Every boot reaches a shell. Smoke is PASS with task 70 waived, there is no panic or illegal-instruction line, and
+   specdiff passes on every row, x264 being absent here.
+2. On every row Plain 48K is no slower than Plain 32K by more than 0.3 %.
+3. **The decisive reading** is per row: Δoverhead = (Capstone 48K / Plain 48K) − (Full mean / Plain mean), in
+   percentage points. Predicted from the wider pointers' footprint:
+   - mcf, gcc and perlbench: Plain gains less than Capstone did, so Δoverhead is between −0.3 and −2.0 pp. Capstone
+     gained −2.36 %, −1.55 % and −2.50 %.
+   - lbm: within ±0.3 pp.
+   - nab, xz, imagick: the direction is not predicted. Capstone's nab, xz and imagick gains (−0.79 %, −0.89 %,
+     −6.3 %) came with large miss drops on both kinds of image.
+   - The gcc reference in Addendum 224 was a board-2 P1 control (1,771.72 s), not the Full mean. Both are given.
+4. The seven-row geometric mean of Full against Plain at 48K is set against the same seven at 32K.
+
+**Decision rule.**
+- If the seven-row geomean overhead falls by at least 0.3 pp at 48K, a pair-wide 48K L1D goes to the lead as a
+  platform choice for both lines. It costs about +4.5k LUT on Capstone (0039e34f4) and +1.0k on Plain. The paper is
+  unchanged either way; any wording is the lead's.
+- Otherwise the 48K L1D brings the comparison nothing, and it leaves the performance batch.
+- A Δoverhead inside 0.3 pp on a row is read as no change, because N = 1 and the 32K extreme pairings move up to
+  0.2 pp.
