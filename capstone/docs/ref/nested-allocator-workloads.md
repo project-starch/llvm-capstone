@@ -6018,3 +6018,48 @@ in source:
 3. **Kept unchanged:**
    - Lifetime instructions: CRENEW = CREVOKE's fall exactly, and CDERIVE falls by at most the CRENEW count.
    - Image instructions: bodren minus bodies at −2 to −14 per removed CDERIVE.
+
+### Result: perlbench's SV bodies renewed instead of revoked, suns.pl in oneop (2026-11-24 10:41-10:50, read against 71e4e38d4b66 as amended by 057682723325)
+
+All five boots (`fig10/runs/fig10-pbrn2-*`) returned status 0 with SPEC's `suns.out` (`output=MATCH`).
+
+| arm | image-zone instructions | against stock |
+|---|---:|---:|
+| stock (`fig10-pbrn-chk-suns`, the feasibility run before the amendment) | 2,488,000,453 | |
+| heads (`453cbfed`) | 2,648,354,139 | +6.445 % |
+| bodies (`0f6b36fe`) | 2,699,578,683 | +8.504 % |
+| bodren (`618d7bf7`) | 2,691,163,440 | +8.166 % |
+
+The opcount boots agree with the zone boots to within 8 instructions: bodies 2,699,578,691, bodren 2,691,163,441.
+
+**Executed lifetime instructions (opcount):**
+
+| | CDERIVE (0x51) | CREVOKE (0x52) | CRENEW (0x54) |
+|---|---:|---:|---:|
+| bodies | 3,114,591 | 2,574,839 | 0 |
+| bodren | 2,276,822 | 1,737,087 | 837,815 |
+| change | −837,769 | −837,752 | +837,815 |
+
+**Against the predictions.**
+1. Answers: **met**, `suns.out` in all five.
+2. **CRENEW equals CREVOKE's fall exactly: missed by 63.** CRENEW is 837,815 and the fall 837,752.
+   - The heads half missed the same claim by 73, in the same direction.
+   - Where the 63 renews come from is not traced here. A renew where the bodies arm made no revoke at all would give
+     this, as would a revoke elsewhere that the bodies arm makes and bodren does not. Neither is checked.
+3. **CDERIVE falls by at most the CRENEW count: met.** The fall is 837,769, so 46 renewed bodies were not handed out
+   again before the end.
+4. **Image instructions, −2 to −14 per removed CDERIVE: met.** Bodren minus bodies is −8,415,243 (−0.312 % of the
+   bodies arm), **10.04 instructions per removed CDERIVE**. The heads half read 13.51 with no bounds test; this
+   variant adds one.
+
+**Reading.**
+- Renewing a freed body instead of revoking it removes 16.4 % of the bodies port's own instructions on suns.pl:
+  8.42 M of the +51.22 M that bodies adds to heads.
+- The protected image goes from +8.504 % to +8.166 % against stock.
+- These are instructions of the program only. oneop's table has no generations, and cycles need a bitstream that
+  decodes CRENEW, as for the heads half.
+- The arms here are the 5.22 port with the one-operand revision (`oneop-shim.h`), on suns.pl. The board's perlbench
+  images are the two-operand port on test.pl. So these figures say what a renew saves in the port's code, not what
+  any board image would read.
+- Hash entries and op slabs are not built here. Their free paths have the same shape, a revoke at the free and a
+  derive at the next issue, so the same change applies. Its saving there is not measured.
