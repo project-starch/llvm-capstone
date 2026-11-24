@@ -4510,6 +4510,60 @@ Read with `parse-abba.py` from the boot's serial log (sha256 `6f661677…`); the
   the variant that would separate them. It has not been built. The P1 row's unprotected arm (`nested/appd/php10`) runs
   mode 4, not pristine; which comparison the paper uses is the lead's decision.
 
+### Pre-registration: PHP pristine against protected mode 6 on P1, u1 p1 p2 u2 in one boot (written 2026-11-25 00:28, before the boot)
+
+**Question.** The twin's result above puts protected PHP at +15.43 % against pristine zend_alloc. Almost all of that is
+the allocator substitution, not the lifetimes. This boot reads the same pairing on P1. That is Fig. 10's pairing, a
+pristine second binary, which the P1 row (mode 6 against mode 4 of one image, +2.34 %) does not provide.
+
+**Configuration.**
+- **Stage** `nested/p1ps/php10s` (`php10s.SHA256SUMS`, 20 files), made by bkit91's `make-train-stage.sh` from
+  `nested/appd/php10s`, the twin's stage.
+  - Against the P1 row's board stage `nested/p1a/php10` (`diff -rq`), three files differ:
+    - `php_unprot` is the pristine `13d187b0…` in place of `d63abbc5…`;
+    - `run.sh` drops `PHP_CAP_MODE=4` from the two u commands and renames the stage;
+    - `plan.json` names the stage and the u image.
+  - `php_prot` (`d63abbc5…`, mode 6), the workload (`bench10-check.php` `655fd6d4…`), the normalisation and the smoke
+    are the P1 row's, byte for byte.
+- **Kit** `bkit91-k2n-native-p1-tree-cscfix` (SHA256SUMS verified), the P1 row's kit: 262,144 records.
+- **Bitstream** P1 `…-tagoverlap6c-pagedtbl_d83d3a633`, board 2, where it is resident. The chain reads it back by name
+  and flashes it, sha checked, only if it is not.
+- **Chain** `nested/p1s100/nat-run3p.sh 2 1 nested/p1ps/p1ps-b2.conf`, list line `php10s 2400 120`. That gives
+  `BAKED_TIMEOUT=9600`, as the row's, and a booking of 120 min.
+- **Checked off the board** (rule 8, `nested/p1/recheck-p1.sh` with `RD=nested/p1ps`):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on the P1 row's real transcript (`out-nat-p1a-php-b2/php10`) and on its cut after
+    `@@SPEC-BEGIN`, both PASS all 9 steps and print `BAKED_TIMEOUT=9600`;
+  - real firmware 19,566,088 B (`9dc4cadc…`);
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/p1ps/dry.log`).
+- **Reader:** `nested/appd/parse-abba.py` (`1d0459d5…`) against the native reference `8f692e64…`, then
+  `nested/p1/abba.py` (`fe8e1531…`).
+  - On the P1 row's transcript it reproduces that row's figures (+2.32 % span, +151.69 % record-TLB misses).
+  - On the cut transcript it exits 2.
+
+**Rules.**
+- **Answers:** every command rc 0 with the native normalised output. p1 and p2 print `ZEND_CAP_MODE 6 exact=0
+  revoke=1` and retire all 3,442,469 issues. u1 and u2 print no `ZEND_CAP_MODE` line. Otherwise VOID.
+- **Repeats:** `run_cycles` within 1 % in each arm, or the cost is not read.
+
+**Predictions** (in-context cycles, ABBA means).
+1. **The protected arm repeats the P1 row's protected arm** (22,903.2 M) within 1 %: the same image, kit and
+   bitstream in a different boot.
+2. **Cost, protected against pristine: +8 % to +31 %, point +18 %.**
+   - On P1 the row's mode-4 arm ran 2.553 times its twin cycles.
+   - The pristine arm at 2.3 to 2.8 times its twin 7,605.7 M gives 17,493-21,296 M. Against 22,903 M that is +7.5 %
+     to +30.9 %, and +18.1 % at 2.553.
+3. **The geometry share:** P1's mode 4 against pristine (two boots, not a pair) is the substitution's cost on silicon.
+   The row's +2.34 % is the lifetime's. The prediction is that the substitution is most of the total, as on the twin.
+4. **Duration:** 12 to 16 min per pristine command (the row's mode-4 commands took 15.2 min), and about 75 min for the
+   boot.
+
+**Limits.**
+- The pristine binary differs from mode 4 in block geometry and caches, not only in the lifetimes. So prediction 3
+  rests on two boots, with no pair between them.
+- One boot.
+- hpm6 (grow) can read nonzero in the first commands, as on the row. It is reported, not read.
+
 ## Item 5: the SQLite and PHP bug corpora for the board (2026-11-23)
 
 The programme's item 5: prepare the images and the pre-registration, and the runtime lane queues them on a P1 board.
