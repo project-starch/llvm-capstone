@@ -811,6 +811,47 @@ capstone-ariane b5b2-step6 8f83093fc, on part 1 (adapter only):
 - Regression: 29 tests identical in value. b5b2-cptag takes +1,119 cycles: its one acknowledge on a marked page now
   walks (1 walk against 0 on part 1).
 
+**claim-auditor** (over eff52e152 and 8f83093fc):
+- **Confirmed:** no false 0 (every older tag write is complete when the CPTAG is answered or walks: store buffer, then
+  wbuffer, then the adapter's tag FSM and tag_wr_pend); ID 2's beats match no other decode; the clear's
+  read-modify-write and epoch bump are sound; no CSR side effect.
+- **Fixed in 0c9992bc6:** the clear is registered (TAG_QDONE, from the walk's result), so no path runs from the R data
+  to tbm_mem's write enable or the TWC epoch; and the F2 invariant's text. Same readings and cycle counts after the fix.
+- **Inherited AMO hazard, unreachable under Sublet:** a PC-capability fault on an AMO-class head leaves
+  amo_valid_commit set while the head is flushed (the missunit would wait in AMO_WAIT forever). pc_cap_ex_valid
+  requires priv M and capmode (commit_stage.sv:423), and capmode is never set under the Sublet format. Not changed.
+- **A false 1, never a false 0:** an AMO-residual tag byte (S-06 P6, I4), or a software write into a marked page's tag
+  bytes, makes the ack answer 1 and keep the bit where the reference answers 0. This is contract-safe, recorded as a
+  divergence.
+
+### Synthesis-only gates on step 6: pre-registration (written before the requests)
+
+Two gates, one per part, so each part's cost is attributed on its own (the semantics owner's ruling):
+- **Gate 6a:** part 1, eff52e152, against step 5's gate (b5b2s5-4457a77a7-gate-out, dcp sha16 88f79e9f72d2c792).
+- **Gate 6b:** part 2, 0c9992bc6 (8f83093fc + the claim-auditor's fixes), against gate 6a.
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within ±505 MB of the base's (6a: 5,244.6 MB), under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires), LUTLP-1 0 (the toy fires) |
+| 3 core LUT | at most the base + 2,500 (6a: 146,277 -> 148,777; 6b: gate 6a's + 2,500) |
+
+Reported, graded nothing (bands at the ±2,500 floor; the scoreboard-entry cone is read as one sum of dyn_unit,
+rev_node, i_scoreboard and i_issue_read_operands):
+- **6a:** i_axi_adapter (wt_axi_adapter) a few hundred LUT and about 40 FF (the CPTAG answer and tid registers);
+  commit_stage, lsu_i and ex_stage tens of LUT; the page bitmap still 8 RAMB36 (its write port gains no source in 6a).
+- **6b:** i_axi_adapter a few hundred LUT more and about 75 FF (the walk's word address, count, offset and result);
+  tbm_mem still BRAM with a third write source (the claim-auditor's point: one write address, one read address),
+  RAMB36 unchanged.
+- **Timing:** these gates read no slack. The full build reads the walk's beat-to-register path and the LSU's
+  cap_exception cone (step 5).
+- **The semantics owner's branch for 6b, fixed now:** loop growth (key 2) on the missunit mem_data_o channel (a
+  standing member), or core LUT past key 3, ships part 1 alone. The acknowledge's divergence (an ack never clears
+  the bit, so a page that once held a tag reads 1 until reset) is then recorded with b5b2-cptag2's arms as its
+  evidence, and part 2 becomes the next item.
+- Gate 6a has no fallback of its own beyond the keys: a failure there means CPTAG does not enter the bitstream in this
+  round.
+
 ## Silicon acceptance: bare kits
 
 No Linux kit can run until the runtime lane's integer-M monitor exists: the current one executes CAPENTER at init. So
