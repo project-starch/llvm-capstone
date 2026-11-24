@@ -373,4 +373,16 @@ In this order; items 1 to 3 are independent of each other and can overlap.
    - What is left is a choice, not a mechanism: raise the kits' default ceiling, which costs memory only when records
      are used. 2^25 records would be 512 MiB, more than the 256 MiB CMA pool. Each change of ceiling goes into a
      pre-registration.
+   State, 24 Nov: kfast and NO_HZ need no board pair; both are closed as follows.
+   - kfast (3f7c8e19fecc) serves delegated calls in the module to save the launcher's round trip. The measured route
+     has no launcher: every P1 native kit builds the adapter into the kernel ("no capstone_vm.ko and no
+     capstone-vexec", bkit108 README.md:14). Every boot's command line turns on the kernel's direct services:
+     `native_io` (direct small I/O), `native_seek`, `native_stat`, `native_fd` and `native_close`. Their descriptions
+     are in binfmt-dom.h:31-46 of linux-board-k2n-native-hpm2tree.
+     kfast therefore applies only to the old process-ABI route, which no native kit runs.
+   - NO_HZ: both arms have run NO_HZ_IDLE kernels since Addendum 66 (12 Nov). Capstone boots K2N-native
+     (`CONFIG_NO_HZ_IDLE=y`, `CONFIG_HZ=100` in out-nat-b1l48-frcdkms-b3's native-kernel.config). Plain uses bkit95's
+     K2N (board.env:2). NO_HZ_FULL needs a housekeeping CPU besides the full-tickless one, and the board has one hart.
+     So the tick on a busy CPU cannot be removed on either arm, and Plain's timer share keeps its estimate correction.
+   - Huge pages stay open. Plain mcf with THP read −0.69 % (Addendum 67). As a matched lever it changes both arms.
 5. The silicon check of the `ccsrrw` defect, run last in its boot.
