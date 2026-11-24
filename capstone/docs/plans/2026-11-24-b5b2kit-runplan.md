@@ -81,3 +81,63 @@ kit worktree `wt-b5b2kit` at 126444a3325e. `images/SHA256SUMS` passes there.
   - each VOID: a readback naming the B5b-1 seal, a readback after the loads that misses the seal, a wrong sha prefix on
     one RUN line, and a missing RUN line;
   - a tampered json: ERROR.
+
+## Re-slotted to board 1 (2026-11-24 15:36Z), at the runtime lane's order
+
+The runtime lane withdrew the board-3 slot because l48p might run for hours more. It freed board 1 instead: the lead
+ruled that SPEC train runs only at the very end, so it stopped its board-1 train chain and released booking 1486.
+Nothing of its own was queued on board 1.
+
+**Board 3 before the disarm.** l48p's pid exited at 15:34:00Z, before the withdrawal reached the board lane. The
+board-3 run, `run-b3-20261124T1530`, then went ahead as the grant then stood:
+- It booked board 3 (1487) at 15:34:01.
+- It read rvbase `…l1d48-12way_bb56087ba.bit` as resident and flashed the B5b-2 seal, local sha checked first.
+- The runner was sent TERM at 15:36:15 during the flash's power cycle. The flash completed: rc 0, and the resident
+  after the power cycle is the seal.
+- No image was loaded. Booking 1487 was unbooked (HTTP 200) and the holder exited.
+- The runtime lane was told. Its next board-3 chain reflashes rvbase on the readback mismatch.
+
+**Board 1.** `orch-b5b2-b1.sh` is `orch-b5b2.sh` with board 1 and no pid boundary. It was dry-run once, through a flash
+and 16 loads. Run `run-b1-20261124T1536`, booking 1488, booked 15:36:57Z and unbooked 15:50:27Z.
+- Before the flash: P1 `…pagedtbl_d83d3a633.bit` was resident.
+- Flash: the local sha256 matched the seal, then the power cycle.
+- Readback after the flash: the seal `…-r75d-b5b2_0c0458149.bit`.
+- The 16 loads all returned rc 0, each with its full SR count, SUPTEST BEGIN and SUPTEST END.
+- Readback after the loads: the seal again.
+
+## Reading: B5B2-KIT 15/15 AS PREDICTED, the control exact (board 1, N=1)
+
+`grade-b5b2kit.py`, rc 0. The readback names the 0c0458149 seal both before and after the loads, and every RUN line
+carries its image's sha256 prefix and rec.
+
+| load | image | sha16 | reading |
+|---|---|---|---|
+| 1 | sublet-life (control) | 991f87887e3f40ba | SR 35, AS PREDICTED on positions 1-24 and 35 |
+| 2 | b5b2-illegal | d76a286aa87a65aa | SR 73, AS PREDICTED |
+| 3 | b5b2-illegal-runv | 1e6591f0f0b5a8ae | SR 4, AS PREDICTED |
+| 4 | b5b2-uprot | 08285ab00036d92f | SR 19, AS PREDICTED |
+| 5 | b5b2-uprot-mis | b51889b8266d654d | SR 23, AS PREDICTED |
+| 6 | b5b2-rule2 | 748635029c20760f | SR 14, AS PREDICTED |
+| 7 | b5b2-rule2-pair | 408e7d85b84dcb3c | SR 21, AS PREDICTED |
+| 8 | b5b2-sref | 624a531562bab3a4 | SR 20, AS PREDICTED |
+| 9 | b5b2-sref-gen | 6fb462b500969cd1 | SR 20, AS PREDICTED |
+| 10 | b5b2-scratch | 12adb230ffbdc8e1 | SR 54, AS PREDICTED |
+| 11 | b5b2-mwrite | 17975ed92c56eb21 | SR 8, AS PREDICTED |
+| 12 | b5b2-raw | 50ed437fdb47d25b | SR 38, AS PREDICTED (position 16 reads 0, the PREREG's layout-dependent prediction) |
+| 13 | b5b2-rawlcc | e4764971b93d9e0b | SR 5, AS PREDICTED |
+| 14 | b5b2-cptag | 8e74b5918604fd81 | SR 24, AS PREDICTED |
+| 15 | b5b2-cptag2 | ecb129125c952ce3 | SR 13, AS PREDICTED |
+| 16 | b5b2-nsedge | b75706e200fb76e2 | SR 17, AS PREDICTED |
+
+**Checked by hand against the raw UART.**
+- sref, sref-gen, raw and nsedge: each capture holds one SUPTEST BEGIN, one SR line, its SV lines and one SUPTEST END,
+  and each file was written during its own load.
+- sref and sref-gen differ exactly where their vectors do: position 12 reads 0x6 in sref and 0x6000000080000006 in
+  sref-gen, and position 14 reads 0x0 and 0xc0000001. So each capture is its own image's, not a replay.
+- The control's ungraded positions 25-34 read 0x0 on this boot. They are recorded only; DRAM after this power cycle
+  happened to hold zeros there.
+
+**Scope.** N=1, one board. The grading is the PREREG's, applied by the board lane's script. The rtl lane re-grades the
+captures against `expected-vectors.json` with its own script. The B5b-2 seal stays resident on boards 1 and 3. The
+registry's default (R-75 (d)) and fallback (bitstream 1) are unchanged; whether B5b-2 becomes a candidate is for the
+board, rtl and runtime lanes to agree under the delegated rule.
