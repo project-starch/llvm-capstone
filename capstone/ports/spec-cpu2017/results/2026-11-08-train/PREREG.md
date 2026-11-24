@@ -7382,3 +7382,26 @@ subordinate to Addendum 233:
   the third makerand runs are not spent.
 - If Addendum 233 keeps it, the third runs follow on board 3 in the order B, A, continuing the drift-balanced
   sequence. They are pre-registered with their chain before they run, and Addendum 225's rule decides.
+
+## Addendum 235 (2026-11-24 22:06 +08, outcomes): Addendum 222's Full and +Spatial halves; Addendum 232
+
+**Addendum 222, h16f and h16s**, board 2, P1 (the seal checked), kit bkit91. Each image is the pre-registered one, by
+the manifest's mcf_r_base.native sha256. Smoke 9/9 on both boots. Read with perf/natstage/read-one.sh (the kit's
+classifier prints NO RESULT on native rows, Addendum 224).
+
+| Arm | Image | mcf train | specdiff | Predicted (±5 %) | run_cycles | hpm8 |
+|---|---|---|---|---|---|---|
+| Full + H16 | 62690f60eb3f9429 | 28,757.18 s | 2/2 PASS | 29,081 s: in (-1.11 %) | 708,902,617,031 | 17,445,677,449 |
+| +Spatial + H16 | c46bf36b75ced2b0 | 27,092.83 s | 2/2 PASS | 27,684 s: in (-2.14 %) | 667,485,975,636 | 16,371,022,382 |
+
+Predictions 1 and 3 held: every row completed with specdiff 2/2, rc 0, and no OOM line. Prediction 2 held in
+Addendum 227. Against Plain + H16 (23,841.43 s, board 3, Addendum 227), Full is +20.62 % and +Spatial +13.64 %. Each
+arm has one run, and Plain ran on another board.
+
+**Addendum 232, xzh16p**, board 3, rvbase (8db8f9cda, the seal checked), kit bkit113. Both stages carry the H16c relink
+ec07def0bf1702a7 (image manifests).
+- c0: 8,129.0 s, rc 0, specdiff 1/1 PASS. `@@INITRD ok`, `@@MEM pre` MemAvailable 927,184 kB, no OOM line.
+- c1: 4,303.93 s, rc 0, specdiff 1/1 PASS. `@@INITRD ok`, `@@MEM pre` MemAvailable 920,760 kB, no OOM line.
+
+Predictions 1 and 3 held, and 2's completion half held. Its ordering half (c0's MemAvailable above Full's) waits on
+Addendum 231's xzh16f, which is queued on board 1 behind t202s2.
