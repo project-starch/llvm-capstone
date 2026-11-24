@@ -43,5 +43,12 @@ and the grading rule; `expected-vectors.json` holds the same for graders. Runner
     - each board's own miss scale is 43-47 cycles;
     - the one zero in the diagnostic boot had both cold windows slow (18 / 25).
   - Classified as an instrument artifact of the cold fetch window, not an RTL reading.
-- N=1 on the new bitstream. Board 3 holds the B5b-2 seal.
+- **N=2 (board 3, run n2-b3-20261124T2303, 2026-11-24, loads from 23:05:29Z): Tier 1 20/21 as pre-registered, the control exact;
+  b5b2-cptag reading 21 MISS (position 22 read 0) again, classified H-fetch by the diagnostic at 70dbac168818 (its one
+  load: 1 | 4 4 | 4 4 1 | 43, VALID).**
+  - Board 3 held the B5b-2 seal (0c0458149); the flash checked the seal's sha256, and the resident name read back
+    after the flash and after the loads is …-r75d-b5b2n_904cd9c6b.bit.
+  - 23 loads in PREREG order, the control first, then the diagnostic: every BEGIN line's sha16 equals SHA256SUMS.
+  - Graded here from the raw uart.txt by a separate script (and by the board lane's grader): no key-check failure.
+  - So, on this bitstream: N=1 and N=2 each 20/21 as pre-registered with the same one MISS, never 21/21.
 

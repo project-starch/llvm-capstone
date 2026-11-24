@@ -1620,15 +1620,23 @@ grade-b5b2n-full.txt, read here; the seal re-hashed here.
   - the CSMINT id shift (sublet-life's pool dump; sref's ids);
   - the link layout (raw 16; the wide arms' data[8]).
 
-## The next bitstream on silicon (8a + 8b + CCSRRW + 9, 904cd9c6b): board 2, N=1, 2026-11-24
+## The next bitstream on silicon (8a + 8b + CCSRRW + 9, 904cd9c6b): boards 2 and 3, N=2, 2026-11-24
 
 The kit b5b2n-bare-2026-11-25, pinned at ac0429080d36, run on board 2 (booking 1493).
 **904cd9c6b CONFIRMED ON SILICON, N=1 (board 2): Tier 1 20/21 as pre-registered, the control exact; b5b2-cptag
 reading 21 MISS, classified by the pre-registered diagnostic (70dbac168818) as an instrument artifact: H-fetch 6/6 on
 both seals, warm delta 0 against a measured miss of 43-47 cycles.** (The semantics owner's wording, 2026-11-25.)
-- No key-check failure. Step 9's deletion reads on silicon: b5b2-illegal's sites 19-23 and 25 trap 2.
+- (Board 2.) No key-check failure. Step 9's deletion reads on silicon: b5b2-illegal's sites 19-23 and 25 trap 2.
 - The re-keyed nsedge, sref and ctxport read as predicted, the reached-F4 marker included.
 - The board lane's grader and a separate script here agree.
+- **N=2 (board 3, run n2-b3-20261124T2303, 2026-11-24, loads from 23:05:29Z): Tier 1 20/21 as pre-registered, the control exact;
+  b5b2-cptag reading 21 MISS (position 22 read 0) again, classified H-fetch by the diagnostic at 70dbac168818 (its one
+  load: 1 | 4 4 | 4 4 1 | 43, VALID).**
+  - Board 3 held the B5b-2 seal (0c0458149); the flash checked the seal's sha256, and the resident name read back
+    after the flash and after the loads is …-r75d-b5b2n_904cd9c6b.bit.
+  - 23 loads in PREREG order, the control first, then the diagnostic: every BEGIN line's sha16 equals SHA256SUMS.
+  - Graded here from the raw uart.txt by a separate script (and by the board lane's grader): no key-check failure.
+  - So, on this bitstream: N=1 and N=2 each 20/21 as pre-registered with the same one MISS, never 21/21.
 
 **The one MISS:** b5b2-cptag reading 21, a cycle comparison of a load before and after CPTAG, read 0.
 - It is intermittent on both bitstreams: about 2 zeros in 8 loads on 904cd9c6b (board 2) and about 2 in 7 on
