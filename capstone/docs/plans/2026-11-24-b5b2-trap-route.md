@@ -86,8 +86,8 @@ The interruptible CREVOKE (Line B step 4(b), spec-silicon 24ecb7b4daa4) moves th
 - sscratch is an integer register (:650, :1462). mscratch holds a capability only as half of CCSR CSCRATCH.
 - The custom-0 decode holds only the debug print. CLDRAW, CSTRAW and CPTAG are illegal there, and no per-page summary
   exists.
-- Board DRAM: 0x3c2d2000 usable bytes (caplifive.dts :46), so 246,482 4-KiB pages. A one-bit sticky summary per page is
-  about 30 KB. The shadow-tag region starts at CAP_TAG_MEM_BASE 0xBC2D2D2D.
+- Board DRAM: 0x3c2d2000 usable bytes (caplifive.dts :46), so 246,482 4-KiB pages. The shadow-tag region starts at
+  CAP_TAG_MEM_BASE 0xBC2D2D2D. A sticky bit per page would have been about 30 KB; the ruling (step 6) needs none.
 
 ## Steps (each gets a synthesis-only gate before anything is built on it)
 
@@ -135,16 +135,25 @@ The interruptible CREVOKE (Line B step 4(b), spec-silicon 24ecb7b4daa4) moves th
    The likely synthesis surprise is the extra bit through every forwarding path. Arms: CLDRAW then CSTRAW of a tagged
    granule republishes the tag; a tagged rs2 to CSTRAW raises 24; a raw register used as a base raises 24 in protected
    U; an integer write between CLDRAW and CSTRAW clears raw_tag.
-6. **CPTAG and the per-page summary.** A new hardware structure, 246,482 bits for today's DRAM. Two placements, decided
-   in the step's design:
-   - an on-chip array (about 8 BRAM36);
-   - a shadow bit array in DRAM on the tag-cache write path, like the tags.
-   The acknowledge has to show that no tag in the page is set: 256 granule tags, one 32-byte read of the tag store.
-   **Open question for the runtime lane:** the reference's bit is STICKY (set by publication, cleared only by an
-   acknowledge with no tags). An OR of the page's live tags would be simpler in hardware, and it is a strict
-   refinement (0 exactly when no tag is set), but CPTAG without an acknowledge would then read differently from the
-   reference. The sticky form is the default unless the runtime lane rules otherwise. This step's gate runs alone,
-   because it adds memory.
+6. **CPTAG as the OR of the page's live tags** (the runtime lane's ruling, 2026-11-24; no sticky array).
+   - **Contract:** dev `docs/design/virtual-capstone/raw-tag-moves-proposal.md:60`: "False positives are allowed;
+     false negatives are not." The reference's sticky bit is one allowed over-approximation. The OR is exact.
+   - **The kernel's call sites** (dev `runtime/virtual/unpinned/linux-6.1-unpinned.patch`), all correct under OR:
+     - copy_highpage copies raw only when the query reads 1;
+     - arch_free_page queries, then acknowledges and clears;
+     - arch_prepare_to_swap refuses on 1.
+     None relies on the sticky history ("published since the last acknowledge").
+   - **Divergence from 9289114e06, recorded as a model freedom:** after a scalar store clears a page's last tag, the
+     reference reads 1 until an acknowledge, and this RTL reads 0. A test that expects 1 there tests the reference's
+     choice, not the contract. The acknowledge stays an encoding and returns the same exact value as the query.
+   - **Hardware:** one read of the page's 256 granule tags (32 bytes of the tag store). There is no new array.
+   - **Binding condition:** the OR must see tags not yet written back. It reads through the tag cache, or drains the
+     tag cache for that page first; a dirty tag missed is a false negative, the one forbidden outcome.
+   - Faults as the reference: not 4 KiB-aligned or outside tagged RAM gives a load access fault, tval = rs1.
+   - Arms: a page with one tag published reads 1; after a scalar store clears it, 0; a tag still dirty in the tag
+     cache reads 1 (the positive control for the binding condition); a raw copy (CSTRAW with raw_tag) sets it; an
+     unaligned or untagged-region address faults.
+   - The gate runs alone, because it adds a tag-store read path.
 7. **Namespace must-pass** (scope note, R-75 section):
    - va-rc-trap and va-rc-trap-zp as regression arms;
    - a record clear that takes effect no later than the namespace change it follows, so that no verdict from the
