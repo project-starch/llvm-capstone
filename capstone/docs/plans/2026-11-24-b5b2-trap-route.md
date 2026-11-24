@@ -1577,6 +1577,25 @@ pre-registration. Board 1 stays on the nested lane's work.
   raw position 16 (layout), ctxport-wide data[8] (_start at 0x80001000), sublet-life's pool dump (the shift). Eleven
   images read identically to their in-tree runs.
 
+**The re-key, read (2026-11-25; capstone-ariane 2bed0dfe7, tests only; kit b5b2n-bare-2026-11-25):**
+- **In-tree, with the scaffold:** nsedge, sref and sref-gen are unchanged; ctxport's F4 arms gain their marker
+  (data[16] = 1), as pre-registered; its wide and edgem arms are unchanged.
+- **Kit images, without the scaffold, every value as pre-registered:**
+  - nsedge reads the pass vector;
+  - sref's ids are 5 and 4, a6 is slot 7, and the flag is 1;
+  - sref-gen's a6 reads 0x6000000080000007 (generation 0xc0000001) with the flag at 1;
+  - f4 reads 0x19 with the reached-F4 marker at 1; f4ctl passes, marker 1.
+- **The key check's skews** (root assumed at slot 4) each read the sentinel alone: nsedge, sref and ctxport.
+- **nsedge's kit image under NS_SIM_NOFLUSH** reads the mutant vector, so the re-keyed test still discriminates.
+  - My first mutant run never started, a runner error: docker's `-e` landed after the image name. It was re-run.
+- **The rebuild changed exactly the 8 images of the three re-keyed tests.** The other 14 are identical by sha256
+  across both builds, and their first readings stand. For every image the simulated bytes equal the board image.
+- Every image's UART output is exact: 59 + 21·SR characters.
+- **The kit's PREREG lists every difference from the in-tree runs, attributed:**
+  - step 9's deletion arms in b5b2-illegal (sites 19-23 and 25: 2 / 1 / 1, count 0x19);
+  - the CSMINT id shift (sublet-life's pool dump; sref's ids);
+  - the link layout (raw 16; the wide arms' data[8]).
+
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
 - **Interruptible CREVOKE** (Line B step 4(b)): spec-silicon 24ecb7b4daa4. Read at source on b5b1-step3:
