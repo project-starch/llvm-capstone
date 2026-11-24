@@ -63,10 +63,12 @@ inside one of its blocks.
 Every case is live at the pin and the proof is a measurement, never an
 assertion: the trigger is upstream's own reproducer from the issue, and running
 it on the pinned 3.13.7 ASan build produces the sanitizer report quoted in
-`live_proof`. All 32 reproduce from their case directory with the oracle
+`live_proof`. All 36 reproduce from their case directory with the oracle
 recorded for them -- the 21 filling the three cells `pymalloc-repros`
-does not cover, and the 11 temporal/nested cases that re-measure its
-issues through the interpreter.
+does not cover, and the 15 temporal/nested cases that re-measure its
+issues through the interpreter (22-32, and 33-36 added 2026-10-29, whose
+record and the five of its issues that cannot run whole are in
+`results/2026-10-29-asan/README.md`).
 
 Three things that had to be got right for those runs to mean anything:
 
@@ -112,7 +114,9 @@ How to build and run the two Capstone arms is in
 lies in one of the case's `fault_sites`, which come from a host ASan run recorded before any arm
 ran (`probe/asan-sites.py`, `results/2026-10-10-asan/sites.tsv`). That run locates 31 of the 32
 cases; case 17 produced no report there, although the 2026-10-07 ASan build recorded one, so a
-Capstone fault in case 17 cannot be attributed.
+Capstone fault in case 17 cannot be attributed. Cases 33-35 take theirs from the same tool's run of
+2026-10-29 (`results/2026-10-29-asan/sites.tsv`), which locates all three; case 28 rode along in
+that run as a control and gave exactly its 2026-10-10 sites.
 
 **Superseded: the physical arms.** Until 2026-10-10 the Capstone arms ran on the physical
 application domain, `spatial` (the level0 heap with per-object bounds, pymalloc stock) and `sublet`
@@ -184,6 +188,21 @@ not a measurement, as before.
 The case-by-case review that follows was written against the 2026-10-20 pair. For the rows equal in
 verdict, cause and function, 28 of 32 on `virtual-nested-pools` and 29 of 32 on `virtual-malloc`,
 it holds for the declared bundles too.
+
+## Measured 2026-11-12: all 36 cases, on images with zlib
+
+[`results/2026-11-12-whole`](results/2026-11-12-whole/README.md) runs all 36 cases with the
+invocation of the declared bundles (hash seed 0) on the same kit, one boot for each arm. The images
+are new: they carry zlib and the `_capstone_nomemory` module that case 36 needs.
+
+    virtual-malloc        CAUGHT 18  MISSED 17  NO-READING 1
+    virtual-nested-pools  CAUGHT 32  MISSED  3  NO-READING 1
+
+Cases 33-36 read as on 2026-10-29: 33 and 34 caught by both arms, 35 and 36 missed by
+`virtual-malloc` and caught by `virtual-nested-pools`, every catch with `cause=25` at a host fault
+site. Of the 32 older rows, `virtual-nested-pools` equals the declared bundle in all 32 and
+`virtual-malloc` in 30. The two that differ, 09 and 15, are the rows already read as unstable from
+run to run on that arm. `verdict_bundles` is unchanged.
 
 ## Measured 2026-10-20, case by case (the declared bundles until 2026-11-12)
 
