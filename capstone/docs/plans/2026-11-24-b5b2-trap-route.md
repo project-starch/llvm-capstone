@@ -1095,6 +1095,108 @@ The kit b5b2-bare-2026-11-24 on the seal `…-r75d-b5b2_0c0458149.bit`, board 1 
   only: CAPENTER is illegal under the Sublet format, and the current monitor executes it at init. It becomes a
   default candidate with the integer-M monitor.
 
+## What the integer-M monitor needs from the RTL (2026-11-25, sent to the semantics owner)
+
+That monitor is what turns the B5b-2 seal from a bare-kit bitstream into one that runs workloads. Each primitive below
+is already in B5b-2 and read on silicon.
+- **Integer M.** capmode is 0 from reset, and mtvec/mepc/mtval are integer.
+  - The monitor must not use CAPENTER, CCSRRW, CALL/RETURN/CJALR, CSRUNV, the supervisor ops, the deleted mints or the
+    CAPCREATE debug family.
+  - Today's fw_jump (build-fpga) executes CAPENTER 1, CCSRRW 342, CALL 7 and RETURN 5, plus the deleted
+    DELIN/SPLIT/SEAL/MREV/INIT/TIGHTEN/REVOKE, by encoding. So the monitor is a rewrite.
+- **A tag-keeping save of the trapped mode's registers.** It branches on LCC selector 1:
+  - tagged registers go through STC and LDC, which keep the tag through a plain base in M (step 2b);
+  - all other registers go through CSTRAW and CLDRAW (step 5). CSTRAW of a tagged register raises 24, as in the
+    reference, op_helper.c:3546.
+  - The restore follows the state saved with each register. An LDC of a CSTRAW'd raw granule would come back tagged.
+  - The save area must be taggable DRAM.
+- **The trap-entry swap:** csrrw mscratch moves the tag (step 4).
+- **The remaining primitives:** CSMINT is the only mint; srevroot is written by M and S; medeleg 24-30 (Q-24); PMP
+  only.
+- **The trap route's own code, by encoding** (scripts in the RTL lane's scratch: census.py, crevoke.py, csrscan.py),
+  checked against the tip's decoder: every instruction is legal in its mode.
+  - The kernel rebuild executes LDC, STC, LCC, CINCOFFSET, CSMINT (S), CDERIVE, CREVOKE (one-operand) and SHRINK.
+  - The -capstone-image-gp userland executes SHRINKTO, SHRINK, LCC, SCC, MOVC, CINCOFFSET(IMM), LDC/STC, CDERIVE,
+    CREVOKE (one-operand) and CRENEW (rs2 = x0).
+  - **The dev-clang userland (no -capstone-image-gp) executed DELIN at 876 sites,** and DELIN is illegal under Sublet
+    and absent from the reference. The rebuild with -capstone-image-gp has 0 (the runtime lane's build, scanned here).
+    That closes the blocker; the board's trap-route images must come from that compiler.
+- **Unknown:** what f-keep does on an M trap; it has no source. The semantics owner is asking for it through the lead.
+
+## Step 8: the design (2026-11-25, before any code; to the semantics owner before synthesis)
+
+**Survey.** A read-only survey of 7997b51a2 enumerated every port of the switcher, the CPMP state and the supervisor
+signals and their consumers. Its load-bearing claims were checked at source here.
+
+**The finding that orders the step: CSRUNV is still legal under Sublet.**
+- decoder.sv:1483-1495 makes it illegal only from U, from M with capmode, and inside a running context. There is no
+  Sublet term. b5b2-illegal-runv reads 0xff (retired) in simulation and on silicon.
+- From scalar S or M it enters the switcher: the dyn unit's CSRUNV produces the request, commit raises
+  dom_switch_valid, and csr_regfile.sv:2207-2216 sets sup_active and sup_runv.
+- Under Sublet, CSRUNV is the ONLY route into the supervisor:
+  - CSSUPERVISE is illegal (:1476);
+  - an armed CALL is impossible, because CALL is illegal (:1447);
+  - the CSU* CSRs only configure.
+- The reference deleted CSRUNV, the supervisor and virtual C in one commit (capstone-qemu 35de150cef, an ancestor of
+  9289114e06). Its only Capstone CSR is srevroot (csr.c:4897).
+
+**8a: decode only, reference-exact (its own synthesis-only gate).** Under CAPSTONE_SUBLET_FMT:
+- CSRUNV (custom-2 funct7 0x24) is illegal, in the style of :1447.
+- CSUPQUANTUM (0x7C3), CSUPCTL (0x7C4) and CSUPSTATUS/CAUSE/EPC/TVAL (0xFC0-0xFC3) are illegal CSRs: cause 2 on any
+  access.
+- **Boot set, by encoding:** 0 CSRUNV (funct7 0x24) and 0 accesses to those CSR numbers in:
+  - the trap-route kernel rebuild (which does access srevroot 22 times: the scanner's control);
+  - the -capstone-image-gp userland;
+  - today's fw_jump.
+- **Arms, pre-registered with the code:**
+  - b5b2-illegal-runv's first reading moves 0xff -> 2;
+  - a new arm reads each supervisor CSR (csrr and csrw) from M and from S and expects 2;
+  - the 29-test regression and the kit's tests are otherwise unchanged.
+- After 8a, sup_armed, sup_active, sup_runv, vctx, the quantum and the escape are unreachable under Sublet, and so is
+  every switcher request: CALL, RETURN and CSRUNV are all illegal, and the escape needs sup_active.
+
+**8b: the physical removal (its own gate, after 8a's).** The goal is that the synthesised netlist no longer carries
+the switcher, the supervisor or the CPMP state. Unreachable at decode is not the same as constant to synthesis: the
+dyn unit's CSRUNV is Anvil code with no Sublet variant, and an illegal instruction still flows to commit. So 8b ties
+the SOURCES to constants under CAPSTONE_SUBLET_FMT and leaves the consumers to fold away.
+- **cva6.sv:** the switcher instance (:2374-2394) goes under `ifndef`. Its outputs are tied off: commit ack, busy, idx,
+  data_valid, reg_valid and resp_ack are all 0, so dom_switch_active_q is 0 and the frontend, commit, CSR and
+  controller consumers fold.
+- **csr_regfile.sv:**
+  - sup_armed_q, sup_active_q, sup_runv_q, the quantum and csupctl are constant 0;
+  - the CSU* read and write cases are compiled out;
+  - cpmp_q / cpmp_tag_q are removed (writers: CCSRRW, illegal, and the switcher's ids 9-24, gone);
+  - capmode_q is tied to 0 explicitly, so the CPMP checks (pmp_data_if.sv:247-283, :225-241) and the PC checks
+    (commit_stage.sv:392, :487) fold;
+  - vctx_table_o / cap_data_ctx_o keep their srevroot terms without the sup_active and csupctl.table disjuncts.
+- **ex_stage.sv:** the dyn unit's runv_en (:2826) is tied to 0 before commit.
+- **Kept, shared with Sublet:**
+  - srevroot (CSR write :2064, srevroot_o, its flush and the ex_stage namespace hold);
+  - **CSMINT's use of the switcher's LSU data channel.** load_store_unit.sv:2227-2228 merges cm_dsw_v into
+    dsw_valid, so store_unit's sel_dom_switch, the store buffer's is_dom_switch, dom_switch_data_req_t and the
+    response FIFO all stay. Only the top-level dom_switch_data_valid_i is tied to 0;
+  - SHRINK, which reads no supervisor state (flu.anvil:258-299);
+  - the decoder's CLDRAW/CSTRAW/CPTAG gates on sup_active/vctx (:537, :553) and the LSU's cap_data_ctx[2]: these
+    Sublet-only sites fold from the tied sources, and the step writes them as constants.
+- **Not yet surveyed, to read before 8b is coded:** commit_stage's PC tracker (:264/:456/:509), the store_unit snap
+  path (:178-197), the load_unit's dom-switch path (CSMINT never sets write_en there, so it looks removable;
+  UNRESOLVED), and ariane_pkg's and wt_axi_adapter's Sublet sites.
+- **Questions for the semantics owner:** CSUPCTL bit 2 (ns_flush_strobe -> revnode_ns_flush) and bit 3 (table, M's
+  namespace term) go with CSUPCTL. Does the integer-M monitor need an M table namespace or a namespace flush other
+  than an srevroot write? The reference has neither.
+- **Each half's checks:**
+  - ids55 token-identical;
+  - lint by name;
+  - the 29-test regression, the kit's 16 tests and step 7's must-pass;
+  - 8b only: every simulation reading identical to 8a's, since removing unreachable logic must change no value.
+- **Predicted area:** from 8b's gate rows. dom_switcher, the CSR file's supervisor and CPMP state, and the trackers
+  are the removable cones. A number is written before the request.
+
+**Not in step 8:** the CAPCREATE family's deletion. Every B5b-2 test and the bare wrapper's recorder still use it, so it
+comes after the tests are ported to CSMINT.
+
+**Batching:** 8a, 8b and the CCSRRW deletion (7997b51a2) go into the next bitstream together, each gated alone first.
+
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
 - **Interruptible CREVOKE** (Line B step 4(b)): spec-silicon 24ecb7b4daa4. Read at source on b5b1-step3:
