@@ -1081,6 +1081,20 @@ Each kit is pre-registered from image simulations before any board run.
   - a scan for loads of uninitialised DRAM: 0 in every B5b-2 image. It flags sublet-life's pool dump as its control,
     and those positions (25-34) are ungraded, as in csmint-bare's amendment.
 
+## B5b-2 on silicon: CONFIRMED (board 1, N=1, 2026-11-24)
+
+The kit b5b2-bare-2026-11-24 on the seal `…-r75d-b5b2_0c0458149.bit`, board 1 (booking 1488; board/meas-pw
+8661f733bdae). **15/15 AS PREDICTED, with the control exact.**
+- Steps 1-7 read on silicon as in simulation: the deletions, protected U and S rule 1, rule 2 in the MMU, supervisor
+  references, tagged sscratch/mscratch, CLDRAW/CSTRAW and the rs1-tag gate, CPTAG's answer and its acknowledge walk,
+  and the namespace edge.
+- Graded twice from the raw UART: by the board lane's grade-b5b2kit.py and by a separate script here, which reads the
+  PREREG's JSON from git and whose negatives fired before the run.
+- The flash checked the seal's local sha256; the resident name was read back after the power cycle and after the loads.
+- **Which bitstream is the default stays unchanged** (R-75 (d), fallback bitstream 1). B5b-2's seal runs bare kits
+  only: CAPENTER is illegal under the Sublet format, and the current monitor executes it at init. It becomes a
+  default candidate with the integer-M monitor.
+
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
 - **Interruptible CREVOKE** (Line B step 4(b)): spec-silicon 24ecb7b4daa4. Read at source on b5b1-step3:

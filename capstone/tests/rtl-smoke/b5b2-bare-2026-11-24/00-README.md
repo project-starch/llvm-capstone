@@ -49,3 +49,19 @@ Runner: `sup-bare-2026-10-03-ladder/run_sup_bare.py` (`SUP_IMG`, and `SUP_REC_AD
   first tag write. So no stale DRAM tag byte is read, and CPTAG starts from unmarked pages.
 - All test data is PROGBITS (`.zero` in `.data`), so the images carry their zeros. The prologue rewrites `.data` and
   zeroes `.bss`.
+
+## Silicon readings
+
+- **Board 1, booking 1488 (2026-11-24, 15:36:57-15:50:27Z, run-b1-20261124T1536; board/meas-pw 8661f733bdae): B5b-2
+  CONFIRMED ON SILICON, 15/15 AS PREDICTED with the control exact.**
+  - The seal was flashed with its local sha256 checked against the synth lane's. The resident name read back after the
+    power cycle and again after the loads is `…-r75d-b5b2_0c0458149.bit`.
+  - Every RUN line carries its image's sha16 and rec, equal to SHA256SUMS. All 16 loads returned.
+  - The board lane's grader (grade-b5b2kit.py) and a separate script here agree. The script reads expected-vectors.json
+    from git at 126444a3325e and grades the raw uart.txt captures. Its negatives fired before the run: a changed value,
+    a control miss (VOID), no SR line, another image's capture, a missing control, a truncated capture; and an edit at
+    an ungraded control position still passes.
+  - sublet-life's ungraded positions 25-34 read 0x0 on this boot. b5b2-raw position 16 read 0x0, the link-layout
+    prediction.
+- N=1. Board 3 holds the same seal (flashed, no image run), so N=2 would need only its kit run.
+
