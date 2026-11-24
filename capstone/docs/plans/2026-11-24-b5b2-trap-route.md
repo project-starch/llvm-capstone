@@ -1437,6 +1437,82 @@ capstone-ariane b5b2-step8b 15b637630; 22abb11ea adds the retired tests' cover l
      36fbc9e7c: commit_stage.sv:518, and capmode_d = 0 at csr_regfile.sv:349.
   3. The escape state is the supervisor's, deleted in 35de150cef; pc_revnode is the PC tracker's.
   The reference has no fetch or PC check. 8b's simulation reads identically to 8a.
+- **The semantics owner's rulings (2026-11-25): all three groups are reference-exact.** Protected U checks data
+  accesses only (translate.c:130-135, op_helper.c:1387-1390); the writers and the M && capmode consumers are deleted
+  under Sublet; the escape and the PC tracker went with the supervisor (35de150cef). Confirmed to the board lane.
+- **medeleg against the reference:**
+  - The seven Capstone bits are causes 24-30 by number on both sides (QEMU cpu_bits.h:694-700, 0x18-0x1e;
+    riscv_pkg.sv:358-370).
+  - CVA6's 12 standard bits (0-8, 12, 13, 15) are a subset of QEMU's DELEGABLE_EXCPS (csr.c:1149-1167). QEMU also
+    delegates S_ECALL (9), VS_ECALL (10), M_ECALL (11) and the guest faults 20-23.
+  - That is a CVA6-vs-QEMU platform difference that predates Capstone, not a semantic divergence.
+- **Bitstream: HOLD** (the semantics owner). One full build carries 8a, 8b, the CCSRRW deletion and step 9: the B5b-2
+  family runs bare kits only until the integer-M monitor exists, so nothing waits on an earlier build.
+
+## Step 9: the custom-3 debug family (2026-11-25)
+
+**The scope finding.**
+- 13 test files mint through a MINT macro built on CAPCREATE, CAPTYPE, CAPBOUND and CAPPERM; sublet-fmt, sublet-life
+  and csmint call the family directly; the bare recorder used it too.
+- CSMINT always allocates a fresh record at the physical pool's next, which is 3 at reset; the debug root is slot 2.
+  So a CSMINT-based MINT shifts every later pool id by one, along with every table and prediction keyed to them.
+
+**The semantics owner's ruling: option B**, a simulation-only scaffold. The lead's no-divergence rule binds the ISA a
+bitstream decodes, and under B no bitstream decodes the family. Re-deriving the tables (option A) would take days on
+tables whose subject is not minting. The ruling's four conditions:
+1. **The scaffold cannot reach synthesis,** and a negative control shows it.
+2. **The deletion is tested where it applies:** one arm per family op expecting 2, in a build without the define and
+   on silicon; the same arms read the old values with the define.
+3. **Kit cross-check differences are predicted** from the image sims before the board run. Any other difference is a
+   finding.
+4. **No new test uses the scaffold.** From step 9 on, every new test mints with CSMINT; the legacy files are marked
+   in their headers.
+
+**Step 9, capstone-ariane b5b2-step9 904cd9c6b** (on 8b's tip 22abb11ea):
+- **The deletion:** under CAPSTONE_SUBLET_FMT the whole custom-3 block is illegal unless CAPSTONE_SIM_DEBUG_MINT is
+  set. By encoding that is CAPCREATE (4), CAPTYPE (5), CAPNODE (6), CAPPERM (7), CAPBOUND (8) and CAPPRINT (9); the
+  reference decodes no custom-3 at all.
+- **The guard:** with CAPSTONE_SIM_DEBUG_MINT and SYNTHESIS (Vivado), GENESYSII or KINTEX7 (the board header),
+  decoder instantiates a module that does not exist. The lint gate's own elaboration (top cva6):
+  - no define: 0 errors;
+  - the scaffold alone: 0 errors;
+  - the scaffold with SYNTHESIS, and with GENESYSII: fail, "Cannot find file containing module:
+    capstone_sim_debug_mint_is_simulation_only".
+  - **The first guard did not fire:** a reference to an undefined macro, which Verilator's preprocessor accepts
+    silently. The negative control caught it.
+- **b5b2-illegal gains site 25** (capprint's raw encoding). Pre-registered for both builds:
+  - with the scaffold: as before, plus site 25 retiring;
+  - without it (the kit image, silicon): sites 19-23 and 25 trap 2, and the count moves 0x13 -> 0x19.
+- **The kit mint:** the 11 tests sharing MINT, and sublet-life, get -DCAP_MINT_CSMINT: a descriptor and a granule
+  private to each use, CSMINT, then an M ldc. The legacy default is unchanged. 15 files carry a LEGACY SCAFFOLD header.
+- **The runner** adds the scaffold by default for in-tree runs; NO_SIM_MINT=1 builds as silicon does.
+- **Checks:**
+  - ids55 is token-identical (359,790);
+  - Sublet lint passes, with 0 lines by name against 8b in either build;
+  - with the scaffold, 37 tests (every B5b-2 arm, b5b2-ctxport's five, the Sublet regression) read identically to
+    8b in value and retired count;
+  - b5b2-illegal reads its pre-registered vector, site 25's capprint line (a0 = 0x1000) included.
+- **Recorded beside it, as condition 4 requires:** NO NEW TEST USES THE SCAFFOLD. Every test written from step 9 on
+  mints with CSMINT.
+
+### Synthesis-only gate on step 9: pre-registration (written before the request)
+
+Hash 904cd9c6b. Base: step 8b's gate (b5b2s8b-36fbc9e7c, dcp sha16 198a0c9f68b1eeb6).
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within ±505 MB of 4,955.4 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires), LUTLP-1 0 (the toy fires) |
+| 3 core LUT | at most the base + 2,500 (122,922 -> 125,422) |
+
+**Reported, graded nothing:**
+- decoder: tens of LUT down.
+- The family's execution logic (the FLU's capcreate/captype/capnode/capperm/capbound/capprint ops) can fold now that
+  decode never issues them. I predict a drop of 0 to 3,000 LUT across ex_stage, with no tighter claim; it is reported
+  by module.
+- Core FF 0 ± 300.
+- Also reported: that the synthesised build carries no CAPSTONE_SIM_DEBUG_MINT, read from the synthesis log's
+  define list or by the guard instance's absence. The guard makes a scaffolded synthesis fail outright.
 
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
