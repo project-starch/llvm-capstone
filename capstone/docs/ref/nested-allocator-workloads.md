@@ -4408,7 +4408,8 @@ registered band of 60,000-93,000 s. The runtime lane asked whether the run had o
   the 100,000 s batch budget is the cap, as registered.
 
 **The `st.db` field is void.**
-- Every beat so far reads `st.db=0`, from the first one at uptime 3,071 s. The cause is in the heartbeat's command:
+- Every beat so far reads `st.db=0`, from the first one at uptime 1,267 s. (Corrected 2026-11-25: the first version said
+  3,071 s, which is the first beat my parser read whole from the split UART chunks.) The cause is in the heartbeat's command:
   `stat -c %s st.db 2>/dev/null || echo 0`.
 - The board's busybox has no `stat` applet, so the command fails and prints 0. The rootfs is this boot's
   `image/rootfs.cpio`. Its applet table runs `sort`, `start-stop-daemon`, `strings` with no `stat`, while `sleep`,
@@ -4430,6 +4431,26 @@ registered band of 60,000-93,000 s. The runtime lane asked whether the run had o
   - **beats stop:** the core or kernel stopped.
 - **If u1 returns,** the field never enters the reading. The answers, the time and the cost are read as registered.
 - The running stage is not changed. s100p carries the same heartbeat, so the same applies to it.
+
+### Stopped by the project lead's ruling, before u1 returned (2026-11-25 00:22): no reading
+
+- **The ruling.** The runtime lane relayed it on 2026-11-25. SPEC train runs only in the final campaign, and
+  speedtest1 `--size 100` moves there with it (spec-silicon `bbcc54172beb`, PREREG Addendum 236, for the train half).
+  That is a deviation from 84b7a23c5935 and its amendment a8cfc596bd86, by the lead's instruction.
+- **The stop, at 00:22.**
+  - Before it, every process of the chain was listed: chain `nat-run3p.sh` pid 1617419, its two `board-run.sh`
+    shells, the `timeout 101800` runner group, and the watchdog. One other process waited on the chain pid: this
+    lane's own log watcher.
+  - The chain was stopped first, so it could not start s100p. Then the runner's process group was stopped (driver
+    rc 130). `board-run.sh` released the lease, and the watchdog ended with it.
+  - Booking 1478 was unbooked (HTTP 200), and board 2 reads FREE. There was no flash.
+- **State at the stop.** u1 began at about uptime 365 s (its first beat was at 1,267 s). It had run about 31,100 s of
+  its registered 60,000-93,000 s. The last beat was at uptime 31,028 s, with `register` 1,889,377 (still rising at 15,741 a beat) and `exchange` 382. `st.db` read 0, which is void
+  (amendment above).
+- **No reading.** u1 did not return, and p1 never ran, so there is no answer, time or cost for `--size 100` on silicon.
+  The stage, the reader and these limits stand for the final campaign.
+  - Before that run, the heartbeat's size field needs a command that the board's busybox has, for example `wc -c`.
+    It must also print `NA` instead of 0 when the command fails.
 
 ## PHP against a pristine second binary (2026-11-22)
 
