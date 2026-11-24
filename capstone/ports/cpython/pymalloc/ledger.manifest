@@ -2,6 +2,7 @@
 patches/cpython-3.13.7-0001-standalone-pymalloc.patch compat interpreter extraction boundary
 patches/cpython-3.13.7-0002-capability-provenance.patch compat pool sentinels and retained pointer authority
 patches/cpython-3.13.7-0003-blocks-as-sublet-lifetimes.patch allocator Sublet protection: each block a child lifetime of its arena (CDERIVE/CREVOKE)
+patches/cpython-3.13.7-0004-one-operand-crevoke.patch allocator Sublet protection on the virtual profile: a block ends through its own reference (one-operand CREVOKE)
 src/shared/pymalloc-compat.h compat freestanding interface to upstream pymalloc
 src/shared/pymalloc-api.inc glue allocator initialization and public replay entry points
 src/shared/backing.c glue bounded native backing: arenas from one region, metadata heap

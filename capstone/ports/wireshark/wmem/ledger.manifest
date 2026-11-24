@@ -1,6 +1,6 @@
 # wmem adaptation inventory: path, bucket, purpose.
 # The allocator patch is wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch.
-patches/wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch allocator block and block_fast objects as child lifetimes of their blocks (CDERIVE/CREVOKE)
+patches/wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch allocator block and block_fast objects as child lifetimes of their blocks (CDERIVE/CREVOKE/CRENEW)
 src/shared/shim/glib.h compat the GLib surface wmem uses, mapped onto port services
 src/shared/shim/wsutil/ws_assert.h compat scope assertions kept active
 src/shared/system.c compat g_malloc, g_free and g_realloc as the process's malloc, counted

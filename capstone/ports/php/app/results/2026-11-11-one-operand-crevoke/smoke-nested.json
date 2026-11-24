@@ -1,0 +1,232 @@
+{
+  "booted": true,
+  "reached_script": true,
+  "completed": true,
+  "panic": false,
+  "exits": {
+    "version-m0": 1,
+    "hello-m0": 0,
+    "churn-m0": 0,
+    "sanity-m0": 0,
+    "sorts-m0": 0,
+    "gate-m0": 0,
+    "hello-m4": 0,
+    "churn-m4": 0,
+    "sanity-m4": 0,
+    "sorts-m4": 0,
+    "gate-m4": 0,
+    "hello-m6": 0,
+    "churn-m6": 0,
+    "sanity-m6": 0,
+    "sorts-m6": 0,
+    "gate-m6": 0,
+    "hello-m7": 0,
+    "churn-m7": 0,
+    "sanity-m7": 0,
+    "sorts-m7": 0,
+    "gate-m7": 0
+  },
+  "output": {
+    "version-m0": [
+      "ZEND_CAP_MODE 0 exact=0 revoke=0",
+      "PHP 5.0.0 (cli) (built: Nov 14 2023 22:13:20)",
+      "Copyright (c) 1997-2004 The PHP Group",
+      "Zend Engine v2.0.0, Copyright (c) 1998-2004 Zend Technologies",
+      "PHP_VIRTUAL NESTED blocks=209 frees=209 issues=245 retires=0 revokes=0 splits=0 reallocs=37 live=245",
+      "CAPSTONE_VM_STATS arenas=34 pages=111 peak=279 nodes=3514 steps=1176 faults=234 collections=0 reclaimed=0 rounds=22 bytes_in=472 bytes_out=16 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=249640400 elapsed_ns=6247001500",
+      "CAPSTONE_VM_STEPS quantum=636 service=240 fault=73 other=0 service0_delegate=0 service1_map=122 service2_unmap=93 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=22 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "hello-m0": [
+      "ZEND_CAP_MODE 0 exact=0 revoke=0",
+      "hello from PHP 5.0.0",
+      "3,3,1,2 OK ca72431bf6bc7729c82dbb19ed7a9f2c",
+      "PHP_VIRTUAL NESTED blocks=287 frees=287 issues=349 retires=0 revokes=0 splits=0 reallocs=37 live=349",
+      "CAPSTONE_VM_STATS arenas=41 pages=134 peak=302 nodes=3624 steps=738 faults=250 collections=0 reclaimed=0 rounds=55 bytes_in=487 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=70912900 elapsed_ns=2560154300",
+      "CAPSTONE_VM_STEPS quantum=170 service=280 fault=35 other=0 service0_delegate=0 service1_map=129 service2_unmap=93 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=55 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "churn-m0": [
+      "ZEND_CAP_MODE 0 exact=0 revoke=0",
+      "churn 197900",
+      "PHP_VIRTUAL NESTED blocks=99218 frees=99218 issues=349797 retires=0 revokes=0 splits=0 reallocs=9466 live=349797",
+      "CAPSTONE_VM_STATS arenas=3304 pages=6967 peak=7135 nodes=112330 steps=32352 faults=7081 collections=0 reclaimed=0 rounds=47 bytes_in=447 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=82719900 elapsed_ns=164298836500",
+      "CAPSTONE_VM_STEPS quantum=21696 service=3537 fault=1192 other=0 service0_delegate=0 service1_map=3392 service2_unmap=93 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=5 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=47 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "sanity-m0": [
+      "ZEND_CAP_MODE 0 exact=0 revoke=0",
+      "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+      "PHP_VIRTUAL NESTED blocks=3392 frees=3392 issues=6372 retires=0 revokes=0 splits=0 reallocs=292 live=6372",
+      "CAPSTONE_VM_STATS arenas=157 pages=387 peak=548 nodes=7072 steps=1411 faults=473 collections=0 reclaimed=0 rounds=55 bytes_in=469 bytes_out=29239 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=235966100 elapsed_ns=5951048900",
+      "CAPSTONE_VM_STEPS quantum=510 service=390 fault=82 other=0 service0_delegate=0 service1_map=242 service2_unmap=90 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=55 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "sorts-m0": [
+      "ZEND_CAP_MODE 0 exact=0 revoke=0",
+      "sorted 1,2,3",
+      "PHP_VIRTUAL NESTED blocks=276 frees=276 issues=325 retires=0 revokes=0 splits=0 reallocs=37 live=325",
+      "CAPSTONE_VM_STATS arenas=41 pages=132 peak=300 nodes=3613 steps=631 faults=250 collections=0 reclaimed=0 rounds=47 bytes_in=435 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=320197800 elapsed_ns=2238483700",
+      "CAPSTONE_VM_STEPS quantum=71 service=272 fault=46 other=0 service0_delegate=0 service1_map=129 service2_unmap=93 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=47 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "gate-m0": [
+      "ZEND_CAP_MODE 0 exact=0 revoke=0",
+      "PHP_VIRTUAL_OK sorted=1,2,3 md5=ca72431bf6bc7729c82dbb19ed7a9f2c file=virtual",
+      "PHP_VIRTUAL NESTED blocks=329 frees=329 issues=413 retires=0 revokes=0 splits=0 reallocs=38 live=413",
+      "CAPSTONE_VM_STATS arenas=42 pages=148 peak=312 nodes=3680 steps=699 faults=262 collections=0 reclaimed=0 rounds=68 bytes_in=507 bytes_out=87196 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=283550100 elapsed_ns=2720618000",
+      "CAPSTONE_VM_STEPS quantum=107 service=292 fault=50 other=0 service0_delegate=0 service1_map=129 service2_unmap=92 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=68 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "hello-m4": [
+      "ZEND_CAP_MODE 4 exact=0 revoke=0",
+      "hello from PHP 5.0.0",
+      "3,3,1,2 OK ca72431bf6bc7729c82dbb19ed7a9f2c",
+      "PHP_VIRTUAL NESTED blocks=287 frees=287 issues=349 retires=0 revokes=0 splits=0 reallocs=37 live=349",
+      "CAPSTONE_VM_STATS arenas=13 pages=91 peak=299 nodes=3621 steps=617 faults=251 collections=0 reclaimed=0 rounds=55 bytes_in=487 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=537374900 elapsed_ns=2931494700",
+      "CAPSTONE_VM_STEPS quantum=22 service=306 fault=61 other=0 service0_delegate=0 service1_map=128 service2_unmap=120 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=55 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "churn-m4": [
+      "ZEND_CAP_MODE 4 exact=0 revoke=0",
+      "churn 197900",
+      "PHP_VIRTUAL NESTED blocks=99218 frees=99218 issues=349797 retires=0 revokes=0 splits=0 reallocs=9466 live=349797",
+      "CAPSTONE_VM_STATS arenas=14 pages=95 peak=303 nodes=108562 steps=27897 faults=2259 collections=0 reclaimed=0 rounds=47 bytes_in=447 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=325525600 elapsed_ns=149948892900",
+      "CAPSTONE_VM_STEPS quantum=21297 service=4303 fault=44 other=0 service0_delegate=0 service1_map=2131 service2_unmap=2122 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=47 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "sanity-m4": [
+      "ZEND_CAP_MODE 4 exact=0 revoke=0",
+      "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+      "PHP_VIRTUAL NESTED blocks=3392 frees=3392 issues=6372 retires=0 revokes=0 splits=0 reallocs=292 live=6372",
+      "CAPSTONE_VM_STATS arenas=14 pages=99 peak=372 nodes=6878 steps=1149 faults=340 collections=0 reclaimed=0 rounds=55 bytes_in=469 bytes_out=29239 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=605543100 elapsed_ns=6199715800",
+      "CAPSTONE_VM_STEPS quantum=368 service=403 fault=81 other=0 service0_delegate=0 service1_map=177 service2_unmap=168 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=55 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "sorts-m4": [
+      "ZEND_CAP_MODE 4 exact=0 revoke=0",
+      "sorted 1,2,3",
+      "PHP_VIRTUAL NESTED blocks=276 frees=276 issues=325 retires=0 revokes=0 splits=0 reallocs=37 live=325",
+      "CAPSTONE_VM_STATS arenas=12 pages=90 peak=297 nodes=3608 steps=611 faults=244 collections=0 reclaimed=0 rounds=47 bytes_in=435 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=440483100 elapsed_ns=1864132300",
+      "CAPSTONE_VM_STEPS quantum=32 service=297 fault=28 other=0 service0_delegate=0 service1_map=127 service2_unmap=120 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=47 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "gate-m4": [
+      "ZEND_CAP_MODE 4 exact=0 revoke=0",
+      "PHP_VIRTUAL_OK sorted=1,2,3 md5=ca72431bf6bc7729c82dbb19ed7a9f2c file=virtual",
+      "PHP_VIRTUAL NESTED blocks=329 frees=329 issues=413 retires=0 revokes=0 splits=0 reallocs=38 live=413",
+      "CAPSTONE_VM_STATS arenas=13 pages=94 peak=302 nodes=3680 steps=636 faults=255 collections=0 reclaimed=0 rounds=68 bytes_in=507 bytes_out=87196 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=611689900 elapsed_ns=2857072500",
+      "CAPSTONE_VM_STEPS quantum=22 service=321 fault=50 other=0 service0_delegate=0 service1_map=129 service2_unmap=121 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=68 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "hello-m6": [
+      "ZEND_CAP_MODE 6 exact=0 revoke=1",
+      "hello from PHP 5.0.0",
+      "3,3,1,2 OK ca72431bf6bc7729c82dbb19ed7a9f2c",
+      "PHP_VIRTUAL NESTED blocks=287 frees=287 issues=349 retires=349 revokes=349 splits=0 reallocs=37 live=0",
+      "CAPSTONE_VM_STATS arenas=13 pages=92 peak=300 nodes=3970 steps=682 faults=253 collections=0 reclaimed=0 rounds=55 bytes_in=489 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=411888900 elapsed_ns=2382088800",
+      "CAPSTONE_VM_STEPS quantum=85 service=306 fault=47 other=0 service0_delegate=0 service1_map=128 service2_unmap=120 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=55 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "churn-m6": [
+      "ZEND_CAP_MODE 6 exact=0 revoke=1",
+      "churn 197900",
+      "PHP_VIRTUAL NESTED blocks=99218 frees=99218 issues=349797 retires=349797 revokes=349797 splits=0 reallocs=9466 live=0",
+      "CAPSTONE_VM_STATS arenas=14 pages=94 peak=302 nodes=458359 steps=32047 faults=2255 collections=1 reclaimed=258086 rounds=47 bytes_in=452 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=623942500 elapsed_ns=209616627300",
+      "CAPSTONE_VM_STEPS quantum=25451 service=4303 fault=60 other=0 service0_delegate=0 service1_map=2131 service2_unmap=2122 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=47 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "sanity-m6": [
+      "ZEND_CAP_MODE 6 exact=0 revoke=1",
+      "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+      "PHP_VIRTUAL NESTED blocks=3392 frees=3392 issues=6372 retires=6372 revokes=6372 splits=0 reallocs=292 live=0",
+      "CAPSTONE_VM_STATS arenas=14 pages=99 peak=372 nodes=13250 steps=1354 faults=340 collections=0 reclaimed=0 rounds=55 bytes_in=472 bytes_out=29239 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=474351600 elapsed_ns=5737038200",
+      "CAPSTONE_VM_STEPS quantum=573 service=403 fault=46 other=0 service0_delegate=0 service1_map=177 service2_unmap=168 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=55 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "sorts-m6": [
+      "ZEND_CAP_MODE 6 exact=0 revoke=1",
+      "sorted 1,2,3",
+      "PHP_VIRTUAL NESTED blocks=276 frees=276 issues=325 retires=325 revokes=325 splits=0 reallocs=37 live=0",
+      "CAPSTONE_VM_STATS arenas=12 pages=90 peak=297 nodes=3933 steps=602 faults=244 collections=0 reclaimed=0 rounds=47 bytes_in=437 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=673298900 elapsed_ns=2973143800",
+      "CAPSTONE_VM_STEPS quantum=23 service=297 fault=53 other=0 service0_delegate=0 service1_map=127 service2_unmap=120 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=47 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "gate-m6": [
+      "ZEND_CAP_MODE 6 exact=0 revoke=1",
+      "PHP_VIRTUAL_OK sorted=1,2,3 md5=ca72431bf6bc7729c82dbb19ed7a9f2c file=virtual",
+      "PHP_VIRTUAL NESTED blocks=329 frees=329 issues=413 retires=413 revokes=413 splits=0 reallocs=38 live=0",
+      "CAPSTONE_VM_STATS arenas=12 pages=94 peak=302 nodes=4091 steps=637 faults=257 collections=0 reclaimed=0 rounds=68 bytes_in=509 bytes_out=87196 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=446628100 elapsed_ns=1764327300",
+      "CAPSTONE_VM_STEPS quantum=22 service=320 fault=27 other=0 service0_delegate=0 service1_map=128 service2_unmap=121 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=68 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "hello-m7": [
+      "ZEND_CAP_MODE 7 exact=1 revoke=1",
+      "hello from PHP 5.0.0",
+      "3,3,1,2 OK ca72431bf6bc7729c82dbb19ed7a9f2c",
+      "PHP_VIRTUAL NESTED blocks=287 frees=287 issues=349 retires=349 revokes=349 splits=0 reallocs=37 live=0",
+      "CAPSTONE_VM_STATS arenas=13 pages=92 peak=300 nodes=3970 steps=622 faults=249 collections=0 reclaimed=0 rounds=55 bytes_in=489 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=717706900 elapsed_ns=3129956300",
+      "CAPSTONE_VM_STEPS quantum=29 service=306 fault=61 other=0 service0_delegate=0 service1_map=128 service2_unmap=120 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=55 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "churn-m7": [
+      "ZEND_CAP_MODE 7 exact=1 revoke=1",
+      "churn 197900",
+      "PHP_VIRTUAL NESTED blocks=99218 frees=99218 issues=349797 retires=349797 revokes=349797 splits=0 reallocs=9466 live=0",
+      "CAPSTONE_VM_STATS arenas=13 pages=93 peak=301 nodes=458357 steps=34788 faults=2254 collections=1 reclaimed=258086 rounds=47 bytes_in=452 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=456427300 elapsed_ns=189350604500",
+      "CAPSTONE_VM_STEPS quantum=28194 service=4302 fault=30 other=0 service0_delegate=0 service1_map=2130 service2_unmap=2122 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=47 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "sanity-m7": [
+      "ZEND_CAP_MODE 7 exact=1 revoke=1",
+      "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+      "PHP_VIRTUAL NESTED blocks=3392 frees=3392 issues=6372 retires=6372 revokes=6372 splits=0 reallocs=292 live=0",
+      "CAPSTONE_VM_STATS arenas=14 pages=99 peak=372 nodes=13250 steps=1219 faults=343 collections=0 reclaimed=0 rounds=55 bytes_in=472 bytes_out=29239 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=651919200 elapsed_ns=6323889300",
+      "CAPSTONE_VM_STEPS quantum=435 service=403 fault=68 other=0 service0_delegate=0 service1_map=177 service2_unmap=168 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=55 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "sorts-m7": [
+      "ZEND_CAP_MODE 7 exact=1 revoke=1",
+      "sorted 1,2,3",
+      "PHP_VIRTUAL NESTED blocks=276 frees=276 issues=325 retires=325 revokes=325 splits=0 reallocs=37 live=0",
+      "CAPSTONE_VM_STATS arenas=12 pages=90 peak=297 nodes=3933 steps=609 faults=244 collections=0 reclaimed=0 rounds=47 bytes_in=437 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=436738800 elapsed_ns=1791643800",
+      "CAPSTONE_VM_STEPS quantum=30 service=297 fault=26 other=0 service0_delegate=0 service1_map=127 service2_unmap=120 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=47 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ],
+    "gate-m7": [
+      "ZEND_CAP_MODE 7 exact=1 revoke=1",
+      "PHP_VIRTUAL_OK sorted=1,2,3 md5=ca72431bf6bc7729c82dbb19ed7a9f2c file=virtual",
+      "PHP_VIRTUAL NESTED blocks=329 frees=329 issues=413 retires=413 revokes=413 splits=0 reallocs=38 live=0",
+      "CAPSTONE_VM_STATS arenas=13 pages=94 peak=302 nodes=4093 steps=642 faults=258 collections=0 reclaimed=0 rounds=68 bytes_in=509 bytes_out=87196 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=666815800 elapsed_ns=2900952000",
+      "CAPSTONE_VM_STEPS quantum=25 service=321 fault=50 other=0 service0_delegate=0 service1_map=129 service2_unmap=121 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=68 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=php-real-nested.dom sha256=a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949"
+    ]
+  },
+  "serial_log": "smoke-nested.serial",
+  "filtered": {
+    "what": "CAPSTONE_VM_ADD_OK launcher mapping lines and kernel console lines removed from output; exits and every other line kept",
+    "removed_per_run": {
+      "version-m0": 0,
+      "hello-m0": 0,
+      "churn-m0": 0,
+      "sanity-m0": 0,
+      "sorts-m0": 0,
+      "gate-m0": 0,
+      "hello-m4": 0,
+      "churn-m4": 0,
+      "sanity-m4": 0,
+      "sorts-m4": 0,
+      "gate-m4": 0,
+      "hello-m6": 0,
+      "churn-m6": 0,
+      "sanity-m6": 0,
+      "sorts-m6": 0,
+      "gate-m6": 0,
+      "hello-m7": 0,
+      "churn-m7": 0,
+      "sanity-m7": 0,
+      "sorts-m7": 0,
+      "gate-m7": 0
+    }
+  }
+}

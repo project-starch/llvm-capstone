@@ -4,7 +4,7 @@
  * A and B are the first two chunks the class hands out; ctl_page_zero then fills the class's first
  * page and opens a second so that slabs_peek_page returns slab_list[0], and requires both A and B
  * to lie inside it, at chunk boundaries. Under patch 0006 both are CDERIVE children of the same
- * generation, and slabs_free(A) is CREVOKE(generation, A).
+ * generation, and slabs_free(A) is CREVOKE(A).
  *
  * WHAT IS READ AND WRITTEN, all through B:
  *   before the free: write data[0..16) = 0xB2; read B's it_flags, slabs_clsid and refcount;

@@ -30,13 +30,13 @@
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
-      "verdict_from": "results/2026-10-29-virtual/virtual-malloc"
+      "verdict_from": "results/2026-11-11-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3fa10578e0 in sqlite3DbFreeNN; by function: sqlite3DbFreeNN is where host ASan reported it",
-      "verdict_from": "results/2026-10-29-virtual/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3f93c5386c in sqlite3DbFreeNN; by function: sqlite3DbFreeNN is where host ASan reported it",
+      "verdict_from": "results/2026-11-11-virtual/virtual-nested-pools"
     },
     "silicon-sqlite-stock": {
       "oracle": "silicon, classic line, memsys5 stock over its static arena, lookaside 0,0 (tools/arms.json silicon-sqlite-memsys5): a trap in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
@@ -53,8 +53,8 @@
     "virtual-platform": {
       "oracle": "virtual profile with memsys5 left OUT of the build (tools/arms.json virtual-mallocng, ports/sqlite/repro322/build-virtual.py without --memsys5, build.json arm 'platform'): every SQLite object is its own mallocng object, bounded to its request and retired on free, so there is no arena to hide it inside. A fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3fa3c57228 in sqlite3DbFreeNN; by function: sqlite3DbFreeNN is where host ASan reported it",
-      "verdict_from": "results/2026-10-29-virtual/virtual-platform"
+      "verdict_note": "cause=25 pc=0x3f93853294 in sqlite3DbFreeNN; by function: sqlite3DbFreeNN is where host ASan reported it",
+      "verdict_from": "results/2026-11-11-virtual/virtual-platform"
     },
     "cheribsd-platform": {
       "oracle": "the same guest with memsys5 left OUT (shared/run-cheribsd.py --mode non-nested: the _sys binaries, SYSALLOC=1, run NOMEM5=1, which also forces a revoke at SQLite's allocator boundary). Every SQLite object is one of the guest malloc's, so its end IS a free the quarantine sees and revocation can act. SIGPROT(34) at the function host ASan reported (fault_sites), or the case returns and this arm did not see it. The cell is a reading of this arm only if the run records allocator=system and revoke=on-every-free for the case, which is repro_init()'s NOMEM5 branch saying it ran: a case whose run_case() does its own sqlite3_config(SQLITE_CONFIG_HEAP) never calls repro_init() at all, so NOMEM5 does nothing to it and what ran was the nested configuration under the stock quarantine. 31 of the 33 record the marker; the two that do not are 07 and 22, the same two the Capstone builder reports not applicable, and both are NO-READING:out-of-denominator here for the same reason",

@@ -1,0 +1,64 @@
+Subject: [PATCH 4/4] End a block's lifetime with the one-operand CREVOKE
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: Capstone application on the virtual profile, PYMALLOC_SUBLET=ON (prepare-source.py --variant protected-virtual)
+Depends-On: cpython-3.13.7-0003-blocks-as-sublet-lifetimes.patch
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+Patch 0003 ends a block with the two-operand CREVOKE of the capstone-sublet
+bitstream (capstone_cap_revoke_child: the arena's child as parent, the block
+as child). The processor model of the virtual profile takes the object alone
+and refuses that encoding as an illegal instruction
+(capstone/docs/design/virtual-capstone/isa.md). This patch replaces the two
+revocations by capstone_cap_release, as the interpreter's patch 0014 does:
+
+- pymalloc_free ends the block through the client's reference. CREVOKE
+  faults when that reference is stale, so a double free stops there.
+- pymalloc_realloc ends the client's child the same way before it issues
+  one of the new length for a block that stays.
+
+arena_life stays the parent every block is derived from. It is no longer an
+operand of the revocation. Patch 0003 alone remains the bitstream's variant
+(--variant protected).
+
+--- a/Include/internal/pycore_obmalloc.h
++++ b/Include/internal/pycore_obmalloc.h
+@@ -273,8 +273,8 @@
+      * allocated arena.
+      */
+     uintptr_t address;
+-    /* Sublet: the arena's child lifetime (CDERIVE), which carries MANAGE.
+-     * Every block handed out is derived from it and revoked through it. */
++    /* Sublet: the arena's child lifetime (CDERIVE). Every block handed out
++     * is derived from it. A block ends through its own reference. */
+     void *arena_life;
+ 
+     /* Pool-aligned pointer to the next pool to be carved off. */
+--- a/Objects/obmalloc.c
++++ b/Objects/obmalloc.c
+@@ -2506,11 +2506,11 @@
+     if (UNLIKELY(!address_in_range(state, p, pool))) {
+         return 0;
+     }
+-    /* We allocated this address. End the client's lifetime of the block;
+-       CREVOKE faults on a reference that is not a live block of this arena,
+-       so a double or foreign free stops here. POOL_ADDR resolved the pool by
++    /* We allocated this address. End the client's lifetime of the block.
++       The client's reference is the only operand, and CREVOKE faults when it
++       is stale, so a double free stops here. POOL_ADDR resolved the pool by
+        address, so obmalloc continues with its own pointer. */
+-    capstone_cap_revoke_child(allarenas[pool->arenaindex].arena_life, p);
++    capstone_cap_release(p);
+     p = (pymem_block *)pool + ((uintptr_t)p - (uintptr_t)pool);
+ 
+     /* Link p to the start of the pool's freeblock list.  Since
+@@ -2627,7 +2627,7 @@
+         if (4 * nbytes > 3 * size) {
+             /* It's the same, or shrinking and new/old > 3/4. The block stays;
+                its client lifetime is replaced by one of the new length. */
+-            capstone_cap_revoke_child(allarenas[pool->arenaindex].arena_life, p);
++            capstone_cap_release(p);
+             *newptr_p = block_issue(
+                 state, (pymem_block *)pool + ((uintptr_t)p - (uintptr_t)pool), nbytes);
+             return 1;

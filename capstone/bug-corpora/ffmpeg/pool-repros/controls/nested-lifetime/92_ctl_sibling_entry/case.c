@@ -2,7 +2,7 @@
  *
  * A and B are two hand-outs from the same AVBufferPool, held at once, so they are two entries
  * (pool_alloc_buffer twice). A is filled with 0xA1 and B with 0xB2; av_buffer_unref(&A) returns A's
- * entry to the pool, which on the protected arm revokes A's child (pool_release_buffer, CREVOKE).
+ * entry to the pool, which on the protected arm renews A's entry (pool_release_buffer, CRENEW).
  * Then B is read through B->data, its own reference: its contents must be intact (0xB2), and a
  * write (0xB7) must land and read back. Expected on both arms: completes, intact.
  */
@@ -34,7 +34,7 @@ CTL_CASE(92, "sibling") {
   memset(A->data, 0xA1, POOL_BYTES);
   memset(B->data, 0xB2, POOL_BYTES);
 
-  av_buffer_unref(&A); /* A's entry back to the pool; protected: CREVOKE A's child */
+  av_buffer_unref(&A); /* A's entry back to the pool; protected: CRENEW A's entry */
   printf("CTL-STEP released A to the pool\n");
 
   unsigned bad;

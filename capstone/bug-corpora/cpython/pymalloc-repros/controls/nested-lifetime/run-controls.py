@@ -33,10 +33,14 @@ sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
 import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import verdicts as v  # noqa: E402
 
-PLATFORM = {  # docs/plans/2026-10-11-protected-same-answers.md, as the corpus runs of 2026-10-11
-    "qemu-system-riscv64": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
-    "adapter/capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
-    "adapter/module/capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+# The platform of the 2026-11-11 run: the processor model with the one-operand CREVOKE and CRENEW,
+# which patch 0014 needs since that date, and the launcher and module built from the same tree.
+# The 2026-10-11 record ran on af37cc32 / 3975314a / a1c6cb6b, whose model has the two-operand
+# CREVOKE (docs/plans/2026-10-11-protected-same-answers.md).
+PLATFORM = {
+    "qemu-system-riscv64": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "adapter/capstone-vexec": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "adapter/module/capstone_vm.ko": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
 }
 IMAGES = ("Image", "fw_jump.elf", "rootfs.ext2")
 CONTROLS = ("parent", "sibling", "successor", "stale")

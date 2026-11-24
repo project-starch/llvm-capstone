@@ -1,0 +1,175 @@
+{
+ "booted": true,
+ "reached_script": true,
+ "completed": true,
+ "panic": false,
+ "exits": {
+  "stock__sanity": 0,
+  "stock__case__r1": 139,
+  "stock__case__r2": 139,
+  "stock__case__r3": 139,
+  "block__sanity": 0,
+  "block__case__r1": 139,
+  "block__case__r2": 139,
+  "block__case__r3": 139,
+  "object__sanity": 0,
+  "object__case__r1": 139,
+  "object__case__r2": 139,
+  "object__case__r3": 139,
+  "exact__sanity": 0,
+  "exact__case__r1": 139,
+  "exact__case__r2": 139,
+  "exact__case__r3": 139
+ },
+ "output": {
+  "stock__sanity": [
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+   "PHP_VIRTUAL NESTED blocks=3391 frees=3391 issues=6375 retires=0 revokes=0 splits=0 reallocs=292 live=6375",
+   "ZEND_CAP_WITNESS exit reclaims=6083 foreign=0 first_foreign=0x0 getters=0 member_refcount=18446744073709551615 member_is_ref=18446744073709551615 member_type=18446744073709551615 member_str=0x0",
+   "CAPSTONE_VM_STATS arenas=156 pages=386 peak=548 nodes=7071 steps=1747 faults=476 collections=0 reclaimed=0 rounds=62 bytes_in=663 bytes_out=29229 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=141486500 elapsed_ns=7184431400",
+   "CAPSTONE_VM_STEPS quantum=800 service=398 fault=97 other=0 service0_delegate=0 service1_map=242 service2_unmap=91 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=62 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+   "capstone-exec: exit image=php-real-nested.dom sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d"
+  ],
+  "stock__case__r1": [
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3f83e36405 base=0x3f83e36405 end=0x3f83e3640d tag=1 mode=0 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3f83e36405",
+   "capstone-exec: domain fault cause=2 pc=0x3f83df1408 address=0xc0001073 ra=0x3f83df08b8 fp=0x3f837fc450 entry=0x3f83c008e4 code=0x3f83c00000-0x3f84000000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3f83df0d20,0x3f83c20520,0x3f83cb21f0,0x3f83c5ae64,0x3f83c5f6ac,0x3f83c5eee4,0x3f83c5d3d0,0x3f83c892b8,0x3f83c88fe4,0x3f83c1e79c,0x3f83c3dfdc,0x3f83c3e168,0x3f83c4eee0,0x3f83c4fd58,0x3f83c420fc,0x3f83c15dc8",
+   "Segmentation fault"
+  ],
+  "stock__case__r2": [
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3fa5a36405 base=0x3fa5a36405 end=0x3fa5a3640d tag=1 mode=0 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3fa5a36405",
+   "capstone-exec: domain fault cause=2 pc=0x3fa59f1408 address=0xc0001073 ra=0x3fa59f08b8 fp=0x3fa4ffc450 entry=0x3fa58008e4 code=0x3fa5800000-0x3fa5c00000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3fa59f0d20,0x3fa5820520,0x3fa58b21f0,0x3fa585ae64,0x3fa585f6ac,0x3fa585eee4,0x3fa585d3d0,0x3fa58892b8,0x3fa5888fe4,0x3fa581e79c,0x3fa583dfdc,0x3fa583e168,0x3fa584eee0,0x3fa584fd58,0x3fa58420fc,0x3fa5815dc8",
+   "Segmentation fault"
+  ],
+  "stock__case__r3": [
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3f92e36405 base=0x3f92e36405 end=0x3f92e3640d tag=1 mode=0 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3f92e36405",
+   "capstone-exec: domain fault cause=2 pc=0x3f92df1408 address=0xc0001073 ra=0x3f92df08b8 fp=0x3f927fc450 entry=0x3f92c008e4 code=0x3f92c00000-0x3f93000000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3f92df0d20,0x3f92c20520,0x3f92cb21f0,0x3f92c5ae64,0x3f92c5f6ac,0x3f92c5eee4,0x3f92c5d3d0,0x3f92c892b8,0x3f92c88fe4,0x3f92c1e79c,0x3f92c3dfdc,0x3f92c3e168,0x3f92c4eee0,0x3f92c4fd58,0x3f92c420fc,0x3f92c15dc8",
+   "Segmentation fault"
+  ],
+  "block__sanity": [
+   "ZEND_CAP_MODE 4 exact=0 revoke=0",
+   "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+   "PHP_VIRTUAL NESTED blocks=3391 frees=3391 issues=6375 retires=0 revokes=0 splits=0 reallocs=292 live=6375",
+   "ZEND_CAP_WITNESS exit reclaims=6083 foreign=0 first_foreign=0x0 getters=0 member_refcount=18446744073709551615 member_is_ref=18446744073709551615 member_type=18446744073709551615 member_str=0x0",
+   "CAPSTONE_VM_STATS arenas=14 pages=99 peak=372 nodes=6916 steps=1143 faults=357 collections=0 reclaimed=0 rounds=62 bytes_in=663 bytes_out=29229 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=54555300 elapsed_ns=3369843500",
+   "CAPSTONE_VM_STEPS quantum=312 service=436 fault=38 other=0 service0_delegate=0 service1_map=190 service2_unmap=181 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=62 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+   "capstone-exec: exit image=php-real-nested.dom sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d"
+  ],
+  "block__case__r1": [
+   "ZEND_CAP_MODE 4 exact=0 revoke=0",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3f89a36405 base=0x3f89a36405 end=0x3f89a3640d tag=1 mode=4 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3f89a36405",
+   "capstone-exec: domain fault cause=2 pc=0x3f899f1408 address=0xc0001073 ra=0x3f899f08b8 fp=0x3f88ffc450 entry=0x3f898008e4 code=0x3f89800000-0x3f89c00000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3f899f0d20,0x3f89820520,0x3f898b21f0,0x3f8985ae64,0x3f8985f6ac,0x3f8985eee4,0x3f8985d3d0,0x3f898892b8,0x3f89888fe4,0x3f8981e79c,0x3f8983dfdc,0x3f8983e168,0x3f8984eee0,0x3f8984fd58,0x3f898420fc,0x3f89815dc8",
+   "Segmentation fault"
+  ],
+  "block__case__r2": [
+   "ZEND_CAP_MODE 4 exact=0 revoke=0",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3fb2a36405 base=0x3fb2a36405 end=0x3fb2a3640d tag=1 mode=4 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3fb2a36405",
+   "capstone-exec: domain fault cause=2 pc=0x3fb29f1408 address=0xc0001073 ra=0x3fb29f08b8 fp=0x3fb1ffc450 entry=0x3fb28008e4 code=0x3fb2800000-0x3fb2c00000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3fb29f0d20,0x3fb2820520,0x3fb28b21f0,0x3fb285ae64,0x3fb285f6ac,0x3fb285eee4,0x3fb285d3d0,0x3fb28892b8,0x3fb2888fe4,0x3fb281e79c,0x3fb283dfdc,0x3fb283e168,0x3fb284eee0,0x3fb284fd58,0x3fb28420fc,0x3fb2815dc8",
+   "Segmentation fault"
+  ],
+  "block__case__r3": [
+   "ZEND_CAP_MODE 4 exact=0 revoke=0",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3f81636405 base=0x3f81636405 end=0x3f8163640d tag=1 mode=4 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3f81636405",
+   "capstone-exec: domain fault cause=2 pc=0x3f815f1408 address=0xc0001073 ra=0x3f815f08b8 fp=0x3f80ffc450 entry=0x3f814008e4 code=0x3f81400000-0x3f81800000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3f815f0d20,0x3f81420520,0x3f814b21f0,0x3f8145ae64,0x3f8145f6ac,0x3f8145eee4,0x3f8145d3d0,0x3f814892b8,0x3f81488fe4,0x3f8141e79c,0x3f8143dfdc,0x3f8143e168,0x3f8144eee0,0x3f8144fd58,0x3f814420fc,0x3f81415dc8",
+   "Segmentation fault"
+  ],
+  "object__sanity": [
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+   "PHP_VIRTUAL NESTED blocks=3391 frees=3391 issues=6375 retires=6375 revokes=6375 splits=0 reallocs=292 live=0",
+   "ZEND_CAP_WITNESS exit reclaims=6083 foreign=0 first_foreign=0x0 getters=0 member_refcount=18446744073709551615 member_is_ref=18446744073709551615 member_type=18446744073709551615 member_str=0x0",
+   "CAPSTONE_VM_STATS arenas=14 pages=99 peak=372 nodes=13291 steps=1304 faults=355 collections=0 reclaimed=0 rounds=62 bytes_in=666 bytes_out=29229 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=56043100 elapsed_ns=4299026100",
+   "CAPSTONE_VM_STEPS quantum=475 service=436 fault=29 other=0 service0_delegate=0 service1_map=190 service2_unmap=181 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=62 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+   "capstone-exec: exit image=php-real-nested.dom sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d"
+  ],
+  "object__case__r1": [
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3f97236405 base=0x3f97236405 end=0x3f9723640d tag=1 mode=6 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3f97236405",
+   "capstone-exec: domain fault cause=2 pc=0x3f971f1408 address=0xc0001073 ra=0x3f971f08b8 fp=0x3f967fc450 entry=0x3f970008e4 code=0x3f97000000-0x3f97400000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3f971f0d20,0x3f97020520,0x3f970b21f0,0x3f9705ae64,0x3f9705f6ac,0x3f9705eee4,0x3f9705d3d0,0x3f970892b8,0x3f97088fe4,0x3f9701e79c,0x3f9703dfdc,0x3f9703e168,0x3f9704eee0,0x3f9704fd58,0x3f970420fc,0x3f97015dc8",
+   "Segmentation fault"
+  ],
+  "object__case__r2": [
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3fbd636405 base=0x3fbd636405 end=0x3fbd63640d tag=1 mode=6 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3fbd636405",
+   "capstone-exec: domain fault cause=2 pc=0x3fbd5f1408 address=0xc0001073 ra=0x3fbd5f08b8 fp=0x3fbcffc450 entry=0x3fbd4008e4 code=0x3fbd400000-0x3fbd800000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3fbd5f0d20,0x3fbd420520,0x3fbd4b21f0,0x3fbd45ae64,0x3fbd45f6ac,0x3fbd45eee4,0x3fbd45d3d0,0x3fbd4892b8,0x3fbd488fe4,0x3fbd41e79c,0x3fbd43dfdc,0x3fbd43e168,0x3fbd44eee0,0x3fbd44fd58,0x3fbd4420fc,0x3fbd415dc8",
+   "Segmentation fault"
+  ],
+  "object__case__r3": [
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3f96e36405 base=0x3f96e36405 end=0x3f96e3640d tag=1 mode=6 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3f96e36405",
+   "capstone-exec: domain fault cause=2 pc=0x3f96df1408 address=0xc0001073 ra=0x3f96df08b8 fp=0x3f967fc450 entry=0x3f96c008e4 code=0x3f96c00000-0x3f97000000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3f96df0d20,0x3f96c20520,0x3f96cb21f0,0x3f96c5ae64,0x3f96c5f6ac,0x3f96c5eee4,0x3f96c5d3d0,0x3f96c892b8,0x3f96c88fe4,0x3f96c1e79c,0x3f96c3dfdc,0x3f96c3e168,0x3f96c4eee0,0x3f96c4fd58,0x3f96c420fc,0x3f96c15dc8",
+   "Segmentation fault"
+  ],
+  "exact__sanity": [
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+   "PHP_VIRTUAL NESTED blocks=3391 frees=3391 issues=6375 retires=6375 revokes=6375 splits=0 reallocs=292 live=0",
+   "ZEND_CAP_WITNESS exit reclaims=6083 foreign=0 first_foreign=0x0 getters=0 member_refcount=18446744073709551615 member_is_ref=18446744073709551615 member_type=18446744073709551615 member_str=0x0",
+   "CAPSTONE_VM_STATS arenas=14 pages=99 peak=372 nodes=13291 steps=1418 faults=354 collections=0 reclaimed=0 rounds=62 bytes_in=666 bytes_out=29229 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=57057300 elapsed_ns=5078209700",
+   "CAPSTONE_VM_STEPS quantum=590 service=436 fault=33 other=0 service0_delegate=0 service1_map=190 service2_unmap=181 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=62 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+   "capstone-exec: exit image=php-real-nested.dom sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d"
+  ],
+  "exact__case__r1": [
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3fa7236405 base=0x3fa7236405 end=0x3fa723640d tag=1 mode=7 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3fa7236405",
+   "capstone-exec: domain fault cause=2 pc=0x3fa71f1408 address=0xc0001073 ra=0x3fa71f08b8 fp=0x3fa67fc450 entry=0x3fa70008e4 code=0x3fa7000000-0x3fa7400000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3fa71f0d20,0x3fa7020520,0x3fa70b21f0,0x3fa705ae64,0x3fa705f6ac,0x3fa705eee4,0x3fa705d3d0,0x3fa70892b8,0x3fa7088fe4,0x3fa701e79c,0x3fa703dfdc,0x3fa703e168,0x3fa704eee0,0x3fa704fd58,0x3fa70420fc,0x3fa7015dc8",
+   "Segmentation fault"
+  ],
+  "exact__case__r2": [
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3f92e36405 base=0x3f92e36405 end=0x3f92e3640d tag=1 mode=7 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3f92e36405",
+   "capstone-exec: domain fault cause=2 pc=0x3f92df1408 address=0xc0001073 ra=0x3f92df08b8 fp=0x3f927fc450 entry=0x3f92c008e4 code=0x3f92c00000-0x3f93000000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3f92df0d20,0x3f92c20520,0x3f92cb21f0,0x3f92c5ae64,0x3f92c5f6ac,0x3f92c5eee4,0x3f92c5d3d0,0x3f92c892b8,0x3f92c88fe4,0x3f92c1e79c,0x3f92c3dfdc,0x3f92c3e168,0x3f92c4eee0,0x3f92c4fd58,0x3f92c420fc,0x3f92c15dc8",
+   "Segmentation fault"
+  ],
+  "exact__case__r3": [
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "ZEND_CAP_WITNESS foreign-free cursor=0x3fa5e36405 base=0x3fa5e36405 end=0x3fa5e3640d tag=1 mode=7 reclaim_call=91 getters=1 member_refcount=0 member_is_ref=0 member_str=0x3fa5e36405",
+   "capstone-exec: domain fault cause=2 pc=0x3fa5df1408 address=0xc0001073 ra=0x3fa5df08b8 fp=0x3fa57fc450 entry=0x3fa5c008e4 code=0x3fa5c00000-0x3fa6000000 last=0x42 preparing=0x42 sha256=9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d image=php-real-nested.dom chain=0x3fa5df0d20,0x3fa5c20520,0x3fa5cb21f0,0x3fa5c5ae64,0x3fa5c5f6ac,0x3fa5c5eee4,0x3fa5c5d3d0,0x3fa5c892b8,0x3fa5c88fe4,0x3fa5c1e79c,0x3fa5c3dfdc,0x3fa5c3e168,0x3fa5c4eee0,0x3fa5c4fd58,0x3fa5c420fc,0x3fa5c15dc8",
+   "Segmentation fault"
+  ]
+ },
+ "serial_log": "forced-boot1-serial.log (not archived)",
+ "filtered": {
+  "what": "CAPSTONE_VM_ADD_OK launcher mapping lines and kernel console lines removed from output; exits and every other line kept",
+  "removed_per_run": {
+   "stock__sanity": 0,
+   "stock__case__r1": 0,
+   "stock__case__r2": 0,
+   "stock__case__r3": 0,
+   "block__sanity": 0,
+   "block__case__r1": 0,
+   "block__case__r2": 0,
+   "block__case__r3": 0,
+   "object__sanity": 0,
+   "object__case__r1": 0,
+   "object__case__r2": 0,
+   "object__case__r3": 0,
+   "exact__sanity": 0,
+   "exact__case__r1": 0,
+   "exact__case__r2": 0,
+   "exact__case__r3": 0
+  }
+ },
+ "image_sha256": "9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d",
+ "argv": {
+  "stock__sanity": "PHP_CAP_MODE=0 php-real-nested.dom -d memory_limit=512M /mnt/vm/phpb-sanity.php",
+  "stock__case__r1": "PHP_CAP_MODE=0 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "stock__case__r2": "PHP_CAP_MODE=0 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "stock__case__r3": "PHP_CAP_MODE=0 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "block__sanity": "PHP_CAP_MODE=4 php-real-nested.dom -d memory_limit=512M /mnt/vm/phpb-sanity.php",
+  "block__case__r1": "PHP_CAP_MODE=4 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "block__case__r2": "PHP_CAP_MODE=4 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "block__case__r3": "PHP_CAP_MODE=4 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "object__sanity": "PHP_CAP_MODE=6 php-real-nested.dom -d memory_limit=512M /mnt/vm/phpb-sanity.php",
+  "object__case__r1": "PHP_CAP_MODE=6 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "object__case__r2": "PHP_CAP_MODE=6 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "object__case__r3": "PHP_CAP_MODE=6 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "exact__sanity": "PHP_CAP_MODE=7 php-real-nested.dom -d memory_limit=512M /mnt/vm/phpb-sanity.php",
+  "exact__case__r1": "PHP_CAP_MODE=7 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "exact__case__r2": "PHP_CAP_MODE=7 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "exact__case__r3": "PHP_CAP_MODE=7 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php"
+ }
+}

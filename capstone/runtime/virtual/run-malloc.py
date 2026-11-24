@@ -43,7 +43,7 @@ def grade(log, cases, lifetimes, store_offset=None):
             marker={'ok':'MALLOC_TAG_COPY_OK','population':'MALLOC_POPULATION_OK','churn':'MALLOC_CHURN_OK','nested-ok':'MALLOC_SURVIVED:nested-ok','native':'MALLOC_TAG_COPY_OK'}.get(name,'MALLOC_HOT_END')
             results[name]=rc==0 and marker in body and 'MALLOC_FAIL' not in body and 'domain fault' not in body
             continue
-        expected=28 if name=='bounds' else 2 if name=='interior-free' else 29 if name=='nested-grandchild' else 25
+        expected=28 if name=='bounds' else 2 if name=='interior-free' else 25
         if not lifetimes:
             if name in ('stale','inplace-stale','reuse-stale','reuse-free'):
                 results[name]=rc==0 and 'MALLOC_SURVIVED:'+name in body and 'domain fault' not in body
@@ -56,7 +56,7 @@ def grade(log, cases, lifetimes, store_offset=None):
         after=body.split(ready,1)[1] if ready in body else ''
         causes=[int(n) for n in re.findall(r'domain fault cause=(\d+)',after)]
         results[name]=rc==139 and causes==[expected] and 'MALLOC_FAIL' not in body
-        if store_offset is not None and name in ('stale','inplace-stale','remap-stale','bounds','reuse-stale','nested-stale'):
+        if store_offset is not None and name in ('stale','inplace-stale','remap-stale','bounds','reuse-stale','nested-stale','nested-grandchild'):
             sites = re.findall(r'domain fault cause=\d+ pc=0x([0-9a-f]+).*?code=0x([0-9a-f]+)-', after)
             results[name] = results[name] and len(sites)==1 and int(sites[0][0],16)-int(sites[0][1],16)==store_offset
     return results

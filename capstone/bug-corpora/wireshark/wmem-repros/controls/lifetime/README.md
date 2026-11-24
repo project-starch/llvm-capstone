@@ -28,7 +28,7 @@ read is a separate run: on the protected build its fault ends the process.
   to A's offset. It does so on both builds.
 * **`via=generation`**: patch 0001's `block->sublet.generation`, A's DIRECT parent lifetime.
   `wmem_sublet_issue` derives every object from it with CDERIVE, and `wmem_free` ends the object
-  with `CREVOKE(generation, object)`. This path exists on the protected build only.
+  with `CREVOKE(object)`. This path exists on the protected build only.
 
 Before writing, control 00 checks what the allocator itself left in the range, reading through the
 block reference:
@@ -68,7 +68,9 @@ The port builds these exactly as it builds the corpus, from this directory:
 process under `capstone-vexec`. The runner resolves a fault's pc to the labelled instruction from
 the image's own symbols, and judges each program against the prediction above. A program with no
 result is an ERROR, never a match. The record of 2026-10-11 is
-[`../../results/2026-10-11-controls/`](../../results/2026-10-11-controls/README.md).
+[`../../results/2026-10-11-controls/`](../../results/2026-10-11-controls/README.md); the record on the
+processor model with the one-operand `CREVOKE` is
+[`../../results/2026-11-11-controls/`](../../results/2026-11-11-controls/README.md).
 
 This directory adds no case to the corpus. The CMake glob and `shared/run-defects.py` both scan
 only `NN_*` directories, so neither reaches `controls/lifetime/`.

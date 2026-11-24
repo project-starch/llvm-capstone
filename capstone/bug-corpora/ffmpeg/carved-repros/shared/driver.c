@@ -83,7 +83,7 @@ void ffc_recarve(void *region) {
   while (j < blk.pieces && !(blk.lo[j] <= a && a < blk.hi[j]))
     ++j;
   CHECK(blk.live && j < blk.pieces && blk.alias[j], 966);
-  capstone_cap_revoke_child(blk.life, region);
+  capstone_cap_release(region);
   blk.alias[j] = NULL;
   printf("recarve region=[%lu,%lu)\n", blk.lo[j] - blk.base, blk.hi[j] - blk.base);
 }

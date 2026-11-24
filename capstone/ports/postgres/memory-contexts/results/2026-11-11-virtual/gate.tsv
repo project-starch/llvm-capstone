@@ -1,0 +1,50 @@
+group	variant	program	outcome	result line	image sha256
+port programs	spatial (0001+0002)	replay-fixture	exit 0	PG_REPLAY PASS creates=128 allocs=3647 frees=240 reallocs=1 resets=65 deletes=128 checked=242 pointer_bytes=16	30db92a32c7485e5
+port programs	spatial (0001+0002)	replay-contexts	exit 0	PG_REPLAY PASS creates=7 allocs=4110 frees=1026 reallocs=12 resets=12 deletes=7 checked=1050 pointer_bytes=16	30db92a32c7485e5
+port programs	spatial (0001+0002)	contexts-native	exit 0	context 0 result 0 policy 5568948294794541063 ; context 1 result 0 policy 13966694474297062898 ; context 2 result 0 policy 76013758635295445	6337c0884de65e3d
+port programs	spatial (0001+0002)	allocator-example	exit 0		8cc6b602b4bf41d3
+port programs	spatial (0001+0002)	client-allocset	exit 0	PG_CLIENT allocset RESULT 0	1d31c2a145df2b18
+port programs	spatial (0001+0002)	client-generation	exit 0	PG_CLIENT generation RESULT 0	4e92bc212daf9145
+port programs	spatial (0001+0002)	client-slab	exit 0	PG_CLIENT slab RESULT 0	a7bcfd3e3ddd017e
+port programs	spatial (0001+0002)	client-bump	exit 0	PG_CLIENT bump RESULT 0	498a5edad6f5b438
+port programs	sublet as converted (0003 c63524ea5731)	replay-fixture	exit 0	PG_REPLAY PASS creates=128 allocs=3647 frees=240 reallocs=1 resets=65 deletes=128 checked=242 pointer_bytes=16	-
+port programs	sublet as converted (0003 c63524ea5731)	replay-contexts	exit 0	PG_REPLAY PASS creates=7 allocs=4110 frees=1026 reallocs=12 resets=12 deletes=7 checked=1050 pointer_bytes=16	-
+port programs	sublet as converted (0003 c63524ea5731)	contexts-native	fault cause=25 in GetMemoryChunkMethodID (return address in SubletRelease)		-
+port programs	sublet as converted (0003 c63524ea5731)	allocator-example	exit 0		-
+port programs	sublet as converted (0003 c63524ea5731)	client-allocset	exit 0	PG_CLIENT allocset RESULT 0	-
+port programs	sublet as converted (0003 c63524ea5731)	client-generation	exit 0	PG_CLIENT generation RESULT 0	-
+port programs	sublet as converted (0003 c63524ea5731)	client-slab	exit 0	PG_CLIENT slab RESULT 0	-
+port programs	sublet as converted (0003 c63524ea5731)	client-bump	exit 0	PG_CLIENT bump RESULT 0	-
+port programs	sublet (0003 29b94c5a026e)	replay-fixture	exit 0	PG_REPLAY PASS creates=128 allocs=3647 frees=240 reallocs=1 resets=65 deletes=128 checked=242 pointer_bytes=16	9880b07d1604038e
+port programs	sublet (0003 29b94c5a026e)	replay-contexts	exit 0	PG_REPLAY PASS creates=7 allocs=4110 frees=1026 reallocs=12 resets=12 deletes=7 checked=1050 pointer_bytes=16	9880b07d1604038e
+port programs	sublet (0003 29b94c5a026e)	contexts-native	fault cause=25 in GetMemoryChunkMethodID (return address in SubletRelease)		52d2e4b31ee123cf
+port programs	sublet (0003 29b94c5a026e)	allocator-example	exit 0		8064f98783377b3d
+port programs	sublet (0003 29b94c5a026e)	client-allocset	exit 0	PG_CLIENT allocset RESULT 0	409f43d81b877411
+port programs	sublet (0003 29b94c5a026e)	client-generation	exit 0	PG_CLIENT generation RESULT 0	43c51880c3493c63
+port programs	sublet (0003 29b94c5a026e)	client-slab	exit 0	PG_CLIENT slab RESULT 0	83fe667f17ce5b1f
+port programs	sublet (0003 29b94c5a026e)	client-bump	exit 0	PG_CLIENT bump RESULT 0	c55b1f06cb2b2f72
+block reference probe	spatial	00-small-block-reference-after-pfree	fault cause=25 in pg_probe	PROBE block reference read before pfree	86af9807761cedad
+block reference probe	spatial	01-small-block-reference-control	fault cause=25 in pg_probe	PROBE block reference read before reset	cc373c34bba47c1c
+block reference probe	spatial	02-slab-block-reference-after-pfree-and-reset	fault cause=25 in pg_probe	PROBE block reference read before pfree and reset	37b88262e0d28958
+block reference probe	spatial	03-slab-empty-block-reference-after-reset	fault cause=25 in pg_probe	PROBE block reference read before pfree and reset	eaa2d9a0da902f94
+block reference probe	spatial	04-slab-block-reference-control	fault cause=25 in pg_probe	PROBE block reference read before reset	bd700aa1c1828d7d
+block reference probe	sublet as converted	00-small-block-reference-after-pfree	exit 0	PROBE block reference read before pfree ; PROBE block reference STILL LIVE after pfree	98eda03c5ffcb82c
+block reference probe	sublet as converted	01-small-block-reference-control	fault cause=25 in pg_probe	PROBE block reference read before reset	06e5af8f6906c556
+block reference probe	sublet as converted	02-slab-block-reference-after-pfree-and-reset	exit 0	PROBE block reference read before pfree and reset ; PROBE block reference STILL LIVE after reset	3280b35bb3ab28c5
+block reference probe	sublet as converted	03-slab-empty-block-reference-after-reset	exit 0	PROBE block reference read before pfree and reset ; PROBE block reference STILL LIVE after reset	514c0f7c5fa01276
+block reference probe	sublet as converted	04-slab-block-reference-control	fault cause=25 in pg_probe	PROBE block reference read before reset	b438af0875f72bc8
+block reference probe	sublet	00-small-block-reference-after-pfree	fault cause=25 in pg_probe	PROBE block reference read before pfree	3a972f6e13a10454
+block reference probe	sublet	01-small-block-reference-control	fault cause=25 in pg_probe	PROBE block reference read before reset	bb5cc76c6baf295f
+block reference probe	sublet	02-slab-block-reference-after-pfree-and-reset	fault cause=25 in pg_probe	PROBE block reference read before pfree and reset	2a8c2eb1a951287b
+block reference probe	sublet	03-slab-empty-block-reference-after-reset	fault cause=25 in pg_probe	PROBE block reference read before pfree and reset	1cc95e01e3f82647
+block reference probe	sublet	04-slab-block-reference-control	fault cause=25 in pg_probe	PROBE block reference read before reset	7432478d756f970d
+dev control (two-operand CREVOKE, patch 8b36b57652ec)	sublet on unmodified dev	00-small-pfree	exit 0	loop: palloc(64), pfree	-
+dev control (two-operand CREVOKE, patch 8b36b57652ec)	sublet on unmodified dev	01-large-pfree	fault cause=29	loop: palloc(100000), pfree	-
+dev control (two-operand CREVOKE, patch 8b36b57652ec)	sublet on unmodified dev	02-large-repalloc	fault cause=29	loop: palloc(100000), repalloc to 300000 and 600000, pfree	-
+dev control (two-operand CREVOKE, patch 8b36b57652ec)	sublet on unmodified dev	03-generation-blocks	fault cause=29	loop: 64 chunks of a Generation context with 1 KiB blocks, all pfree'd	-
+dev control (two-operand CREVOKE, patch 8b36b57652ec)	sublet on unmodified dev	04-slab-blocks	fault cause=29	loop: 400 chunks of a Slab context with 1 KiB blocks, all pfree'd	-
+dev control (two-operand CREVOKE, patch 8b36b57652ec)	sublet on unmodified dev	05-context-cycle	exit 0	loop: four context types created, filled, reset, deleted	-
+dev control (two-operand CREVOKE, patch 8b36b57652ec)	sublet on unmodified dev	00-block-reference-after-large-pfree	fault cause=29	palloc(100000), pfree	-
+dev control (two-operand CREVOKE, patch 8b36b57652ec)	sublet on unmodified dev	01-block-reference-control	fault cause=25	palloc(100000), context deleted, read through the block's malloc reference	-
+dev control (two-operand CREVOKE, patch 8b36b57652ec)	sublet on unmodified dev	contexts-native	fault cause=29	tests/contexts-workload.h	-
+dev control (two-operand CREVOKE, patch 8b36b57652ec)	sublet on unmodified dev	client-allocset	exit 0	examples/allocset.c	-

@@ -1,0 +1,50 @@
+{
+  "images": {
+    "bucket-geometry, APR_HAS_MMAP=1": "69aa765147dab1001da30570d81314e51c927f3a2934eb801bc72b3d01d4d3bf",
+    "bucket-geometry, APR_HAS_MMAP=0": "7159188ff3ef31279981378ab266e90bc24a1618d96d5e88bf27fdcff5aeebb0",
+    "two-levels": "f92cd6fc341eb0bd1bf18b86e27858e1b9d8fabe4622d48d2a682946768f2d1c",
+    "allocator-example, APRP_SUBLET=OFF": "4ccdee62bab79fb99788727bfa31fb0f08a0c17ad10f2ddb4bd6c5acbd5dad95",
+    "bucket-example, APRP_SUBLET=OFF": "837a333ebd783b24d5499a7e77bf82829ae53b299eb78b49dc096f005d754aa1",
+    "allocator-example, APRP_SUBLET=ON": "b90dcc90525af3da94e11364689ea123a6104012417047f4abab41ad9271fe5f",
+    "bucket-example, APRP_SUBLET=ON": "b0a9da702f71edbeeff0443b4ff138457fc1503e4db00c4407c75e0efef9e98b",
+    "allocator-example, mode 1, APRP_SUBLET=ON": "d43d0437315990ee696f87b0856b20c857a7384e61fd61ab965f76995e625239",
+    "bucket-example, mode 1, APRP_SUBLET=ON": "eca32566bc98ca52556730d858ff58895540b23e90723e268f3a1829f4ae5417"
+  },
+  "mode_1_sources": "examples/pools.c and examples/buckets.c with aprp_set_mode(0) replaced by aprp_set_mode(1), nothing else",
+  "platform": {
+    "qemu_sha256": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "kernel_sha256": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "firmware_sha256": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "rootfs_sha256": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "launcher_sha256": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "module_sha256": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "qemu_cpu": "rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-test-csrs=true",
+    "module_args": ""
+  },
+  "compiler_sha256": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+  "sdk": {
+    "profile": "virtual",
+    "allocator": "mallocng",
+    "probes_codegen": "port SDK (no -fno-builtin gate)",
+    "examples_codegen": "corpus SDK (-fno-builtin)"
+  },
+  "lifetime_instructions": {
+    "bucket-example, mode 1, APRP_SUBLET=ON": {
+      "CDERIVE": 8,
+      "CREVOKE one-operand": 3,
+      "CREVOKE two-operand": 0
+    },
+    "allocator-example, mode 1, APRP_SUBLET=ON": {
+      "CDERIVE": 6,
+      "CREVOKE one-operand": 2,
+      "CREVOKE two-operand": 0
+    },
+    "bucket-example, APRP_SUBLET=OFF": {
+      "CDERIVE": 4,
+      "CREVOKE one-operand": 1,
+      "CREVOKE two-operand": 0
+    }
+  },
+  "rows_total": 9,
+  "rows_passed": 9
+}

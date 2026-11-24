@@ -1,0 +1,1147 @@
+{
+ "what": "SQLite 3.22.0 as an ordinary program with a nested heap, on the one-operand lifetime instructions: run-app.py and speedtest1 over a configured memsys5 heap, three arms",
+ "tree": "branch one-operand-crevoke-crenew at 59201bdf2, QEMU at ea57497908",
+ "inputs_sha256": {
+  "capstone/ports/sqlite/app/build-domain.sh": "2a73dd0177940df507edb0b4de17880fb617f9c80ccd2642d3e7e07a028677f3",
+  "capstone/ports/sqlite/app/run-app.py": "43e5dcd0e74432fb7b3dcfdd6dfa09bf2a95841151fe791d02a283990ee60147",
+  "capstone/ports/sqlite/app/prepare-sources.sh": "c9e004606a931b1e0b726944113bed3e0bf4cd82264cf0f3a923ea70ab9e32bb",
+  "capstone/ports/sqlite/sublet/sublet-3220000-memsys5.patch": "f96ee0329a08ba8489cf3a75c1e8c03c17aa26018d332ef544e8ccb5d08a10be",
+  "capstone/ports/sqlite/sublet/sublet-3220000-memsys5-block.patch": "508f9f53b0de3378e7c768b8f89ab07950715e0414540d921ea0b39ac185064c"
+ },
+ "prepared_sources": {
+  "sqlite3.c": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "speedtest1.c": "16750ede41d01935a1f423298b7676027048ddc0ce7951cc828b9f1760407291",
+  "shell.c": "ee64ba1fc18c7c4ae20024ea7074b73d7bbe404fbb8ffa226ad04c67dd1dec4d"
+ },
+ "native": {
+  "speedtest1_sha256": "10abe2f1897b3cb33f442a8709b59366c6d4f55ead4db651b02cec910726e3f2",
+  "sqlite3_sha256": "d48e68238fe36e34c8e53a8b85b49b7181e55f7c7ff8ee1f37e6dfe7b7438797",
+  "phases": [
+   {
+    "phase": 100,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 110,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 120,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 130,
+    "rows": 25,
+    "hash": "86f7643d251c40ef"
+   },
+   {
+    "phase": 140,
+    "rows": 10,
+    "hash": "0c7b7e747ae91a62"
+   },
+   {
+    "phase": 142,
+    "rows": 1050,
+    "hash": "359b7f1ecbeaaff8"
+   },
+   {
+    "phase": 145,
+    "rows": 100,
+    "hash": "a0d680adf09a4a75"
+   },
+   {
+    "phase": 150,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 160,
+    "rows": 100,
+    "hash": "df2ea006eed925a5"
+   },
+   {
+    "phase": 161,
+    "rows": 100,
+    "hash": "24d182f082f52e7c"
+   },
+   {
+    "phase": 170,
+    "rows": 100,
+    "hash": "7e14902b1948dce8"
+   },
+   {
+    "phase": 180,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 190,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 200,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 210,
+    "rows": 1,
+    "hash": "78a5f1150135b920"
+   },
+   {
+    "phase": 230,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 240,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 250,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 260,
+    "rows": 1,
+    "hash": "0c3a0c3404ffd068"
+   },
+   {
+    "phase": 270,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 280,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 290,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 300,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 310,
+    "rows": 900,
+    "hash": "5f60bc2cdcb89e99"
+   },
+   {
+    "phase": 320,
+    "rows": 1,
+    "hash": "9b7e48527050edfe"
+   },
+   {
+    "phase": 400,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 410,
+    "rows": 700,
+    "hash": "649813fe025d510b"
+   },
+   {
+    "phase": 500,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   },
+   {
+    "phase": 510,
+    "rows": 700,
+    "hash": "7e30b42e2404cc90"
+   },
+   {
+    "phase": 520,
+    "rows": 512,
+    "hash": "07aa5d31c6064a19"
+   },
+   {
+    "phase": 980,
+    "rows": 1,
+    "hash": "b8835f20872ee7fa"
+   },
+   {
+    "phase": 990,
+    "rows": 0,
+    "hash": "cbf29ce484222325"
+   }
+  ]
+ },
+ "sdk": {
+  "kind": "port SDK (runtime/virtual/build-sdk.sh, no corpus gate)",
+  "libc": "f4c80123c8aef4d84cdb5f513c89465c1e2010b63fb407054293a38a0645747d",
+  "runtime": "e681d37071b5a86a07d1a4ddbb4f1914df7918c55da7cbdcb543878d58e0f7b2",
+  "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+  "opt": "-O2"
+ },
+ "platform": {
+  "files": {
+   "qemu": {
+    "path": "~/crenew-step4/corpus/kit/qemu-system-riscv64",
+    "sha256": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365"
+   },
+   "kernel": {
+    "path": "~/crenew-step4/corpus/kit/images/Image",
+    "sha256": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2"
+   },
+   "firmware": {
+    "path": "~/crenew-step4/corpus/kit/images/fw_jump.elf",
+    "sha256": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af"
+   },
+   "rootfs": {
+    "path": "~/crenew-step4/corpus/kit/images/rootfs.ext2",
+    "sha256": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+   },
+   "launcher": {
+    "path": "~/crenew-step4/corpus/kit/adapter/capstone-vexec",
+    "sha256": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e"
+   },
+   "ssh_server": {
+    "path": "~/crenew-step4/corpus/kit/ssh-server/dropbearmulti",
+    "sha256": "f4fa3153325d7098785926e5edda553b31dfd9f9cb3448023b83a61e53b77d9b"
+   },
+   "module": {
+    "path": "~/crenew-step4/platform-arm/adapter/module/capstone_vm.ko",
+    "sha256": "38d4d411fb19f2c23cb4398fddd7534828a5c0468e7d20cd16a49d94ce2efcd6"
+   },
+   "job_helper": {
+    "path": "~/crenew-step4/corpus/kit/adapter/capstone-job",
+    "sha256": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1"
+   }
+  },
+  "share": "~/crenew-step4/corpus/work-sqlite-mruby-perl/share-sqapp",
+  "memory": "8G",
+  "cma_mib": 512,
+  "process_cache_mib": 384,
+  "environment": {
+   "CAPSTONE_GP_NONLIN": "1",
+   "CAPSTONE_REV_NODES": "65536"
+  },
+  "profile": "virtual",
+  "exact_bounds": true,
+  "cpu_props": [
+   "x-capstone-test-csrs=true",
+   "x-capstone-supervisor-slots=32"
+  ]
+ },
+ "lifetime_instruction_words": {
+  "memsys5": "6 CDERIVE, 3 CREVOKE, 0 CRENEW (the C library's)",
+  "memsys5-sublet": "16, 8, 0",
+  "memsys5-sublet-block": "16, 8, 22",
+  "note": "sqlite3.dom and speedtest1.dom alike; ports/common/application/lifetime-instructions.py"
+ },
+ "arms": {
+  "memsys5": {
+   "SQLITE_HEAP": "memsys5",
+   "images": {
+    "sqlite3.dom": "e9b3ec39512cbb4e7c9b95f179ce8bf3355b4a909ac3a6a5774e33d64ca22b95",
+    "speedtest1.dom": "8e242be6899e022a5be3e285d77c86102ec99da151d2469dd23ceb2667643dca"
+   },
+   "engine_source_sha256": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+   "run_app": {
+    "work": {
+     "verdict": "FAIL",
+     "status": 0,
+     "native_status": 0,
+     "lines": 27,
+     "output_sha256": "9de6b2fdddacb31433b85d9df249df0737f4eeed9957ebfdb722981a76fc1dca",
+     "native_output_sha256": "efdbe13353e838a52497ca5510a7be04e447ea656696a8d894ce44b6f5779473",
+     "guest_stderr_tail": [
+      "capstone-exec: exit image=/mnt/host/sqlite3-memsys5.dom sha256=e9b3ec39512cbb4e7c9b95f179ce8bf3355b4a909ac3a6a5774e33d64ca22b95"
+     ],
+     "first_differences": [
+      "24: native 'second writer exit 5' guest 'capstone-exec: exit image=/mnt/host/sqlite3-memsys5.dom sha256=e9b3ec39512cbb4e7c9b95f179ce8bf3355b4a909ac3a6a5774e33d64ca22b95'",
+      "25: native '1' guest 'second writer exit 5'",
+      "26: native '3.22.0' guest '1'",
+      "native 27 lines, guest 28 lines"
+     ]
+    },
+    "again": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 2,
+     "output_sha256": "21d61506c3c0973c08ffa34e07e65d8421b0d9ee76e2aa39eb6e48be9276df6a",
+     "native_output_sha256": "21d61506c3c0973c08ffa34e07e65d8421b0d9ee76e2aa39eb6e48be9276df6a"
+    },
+    "speedtest1": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 32,
+     "output_sha256": "5b90718d023d64d0013dad6246094cccb473859703f9f1ab2c29a0c2efd1a36c",
+     "native_output_sha256": "5b90718d023d64d0013dad6246094cccb473859703f9f1ab2c29a0c2efd1a36c"
+    }
+   },
+   "speedtest1_heap": {
+    "8388608": {
+     "args": "--heap 8388608 64 --size 1 st.db",
+     "exit": 0,
+     "host_wall_s": 63,
+     "phases": 32,
+     "equal_to_native_prefix": true,
+     "all_32_equal_to_native": true,
+     "domain_fault": false,
+     "stderr": [
+      "capstone-exec: exit image=/mnt/host/speedtest1-memsys5.dom sha256=8e242be6899e022a5be3e285d77c86102ec99da151d2469dd23ceb2667643dca"
+     ],
+     "phase_values": [
+      {
+       "phase": 100,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 110,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 120,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 130,
+       "rows": 25,
+       "hash": "86f7643d251c40ef"
+      },
+      {
+       "phase": 140,
+       "rows": 10,
+       "hash": "0c7b7e747ae91a62"
+      },
+      {
+       "phase": 142,
+       "rows": 1050,
+       "hash": "359b7f1ecbeaaff8"
+      },
+      {
+       "phase": 145,
+       "rows": 100,
+       "hash": "a0d680adf09a4a75"
+      },
+      {
+       "phase": 150,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 160,
+       "rows": 100,
+       "hash": "df2ea006eed925a5"
+      },
+      {
+       "phase": 161,
+       "rows": 100,
+       "hash": "24d182f082f52e7c"
+      },
+      {
+       "phase": 170,
+       "rows": 100,
+       "hash": "7e14902b1948dce8"
+      },
+      {
+       "phase": 180,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 190,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 200,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 210,
+       "rows": 1,
+       "hash": "78a5f1150135b920"
+      },
+      {
+       "phase": 230,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 240,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 250,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 260,
+       "rows": 1,
+       "hash": "0c3a0c3404ffd068"
+      },
+      {
+       "phase": 270,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 280,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 290,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 300,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 310,
+       "rows": 900,
+       "hash": "5f60bc2cdcb89e99"
+      },
+      {
+       "phase": 320,
+       "rows": 1,
+       "hash": "9b7e48527050edfe"
+      },
+      {
+       "phase": 400,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 410,
+       "rows": 700,
+       "hash": "649813fe025d510b"
+      },
+      {
+       "phase": 500,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 510,
+       "rows": 700,
+       "hash": "7e30b42e2404cc90"
+      },
+      {
+       "phase": 520,
+       "rows": 512,
+       "hash": "07aa5d31c6064a19"
+      },
+      {
+       "phase": 980,
+       "rows": 1,
+       "hash": "b8835f20872ee7fa"
+      },
+      {
+       "phase": 990,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      }
+     ]
+    },
+    "1048576": {
+     "args": "--heap 1048576 64 --size 1 st.db",
+     "exit": 1,
+     "host_wall_s": 24,
+     "phases": 13,
+     "equal_to_native_prefix": true,
+     "all_32_equal_to_native": false,
+     "domain_fault": false,
+     "stderr": [
+      "SQL error: out of memory",
+      "VACUUM",
+      "capstone-exec: exit image=/mnt/host/speedtest1-memsys5.dom sha256=8e242be6899e022a5be3e285d77c86102ec99da151d2469dd23ceb2667643dca"
+     ],
+     "phase_values": [
+      {
+       "phase": 100,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 110,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 120,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 130,
+       "rows": 25,
+       "hash": "86f7643d251c40ef"
+      },
+      {
+       "phase": 140,
+       "rows": 10,
+       "hash": "0c7b7e747ae91a62"
+      },
+      {
+       "phase": 142,
+       "rows": 1050,
+       "hash": "359b7f1ecbeaaff8"
+      },
+      {
+       "phase": 145,
+       "rows": 100,
+       "hash": "a0d680adf09a4a75"
+      },
+      {
+       "phase": 150,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 160,
+       "rows": 100,
+       "hash": "df2ea006eed925a5"
+      },
+      {
+       "phase": 161,
+       "rows": 100,
+       "hash": "24d182f082f52e7c"
+      },
+      {
+       "phase": 170,
+       "rows": 100,
+       "hash": "7e14902b1948dce8"
+      },
+      {
+       "phase": 180,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 190,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      }
+     ]
+    }
+   }
+  },
+  "memsys5-sublet": {
+   "SQLITE_HEAP": "memsys5-sublet",
+   "images": {
+    "sqlite3.dom": "225a8a368c11f223686340eb04b39c6991ca258e5d07e689d0e10b264830bd0d",
+    "speedtest1.dom": "0616616d88c95425ad464b2263ff6df830445c789ad03e85d6b573c741d0ed76"
+   },
+   "engine_source_sha256": "f05b67f965d03bf37c3c1cbcaf6ca7e0702664f08fbffbaadafcc30a05d1db52",
+   "run_app": {
+    "work": {
+     "verdict": "FAIL",
+     "status": 0,
+     "native_status": 0,
+     "lines": 27,
+     "output_sha256": "b1e6f0ae31e5b619fe01a87621aab43d5c6717287a8eed3d1de85cea7d7ae7f1",
+     "native_output_sha256": "efdbe13353e838a52497ca5510a7be04e447ea656696a8d894ce44b6f5779473",
+     "guest_stderr_tail": [
+      "capstone-exec: exit image=/mnt/host/sqlite3-memsys5-sublet.dom sha256=225a8a368c11f223686340eb04b39c6991ca258e5d07e689d0e10b264830bd0d"
+     ],
+     "first_differences": [
+      "24: native 'second writer exit 5' guest 'capstone-exec: exit image=/mnt/host/sqlite3-memsys5-sublet.dom sha256=225a8a368c11f223686340eb04b39c6991ca258e5d07e689d0e10b264830bd0d'",
+      "25: native '1' guest 'second writer exit 5'",
+      "26: native '3.22.0' guest '1'",
+      "native 27 lines, guest 28 lines"
+     ]
+    },
+    "again": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 2,
+     "output_sha256": "21d61506c3c0973c08ffa34e07e65d8421b0d9ee76e2aa39eb6e48be9276df6a",
+     "native_output_sha256": "21d61506c3c0973c08ffa34e07e65d8421b0d9ee76e2aa39eb6e48be9276df6a"
+    },
+    "speedtest1": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 32,
+     "output_sha256": "5b90718d023d64d0013dad6246094cccb473859703f9f1ab2c29a0c2efd1a36c",
+     "native_output_sha256": "5b90718d023d64d0013dad6246094cccb473859703f9f1ab2c29a0c2efd1a36c"
+    }
+   },
+   "speedtest1_heap": {
+    "8388608": {
+     "args": "--heap 8388608 64 --size 1 st.db",
+     "exit": 0,
+     "host_wall_s": 82,
+     "phases": 32,
+     "equal_to_native_prefix": true,
+     "all_32_equal_to_native": true,
+     "domain_fault": false,
+     "stderr": [
+      "capstone-exec: exit image=/mnt/host/speedtest1-memsys5-sublet.dom sha256=0616616d88c95425ad464b2263ff6df830445c789ad03e85d6b573c741d0ed76"
+     ],
+     "phase_values": [
+      {
+       "phase": 100,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 110,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 120,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 130,
+       "rows": 25,
+       "hash": "86f7643d251c40ef"
+      },
+      {
+       "phase": 140,
+       "rows": 10,
+       "hash": "0c7b7e747ae91a62"
+      },
+      {
+       "phase": 142,
+       "rows": 1050,
+       "hash": "359b7f1ecbeaaff8"
+      },
+      {
+       "phase": 145,
+       "rows": 100,
+       "hash": "a0d680adf09a4a75"
+      },
+      {
+       "phase": 150,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 160,
+       "rows": 100,
+       "hash": "df2ea006eed925a5"
+      },
+      {
+       "phase": 161,
+       "rows": 100,
+       "hash": "24d182f082f52e7c"
+      },
+      {
+       "phase": 170,
+       "rows": 100,
+       "hash": "7e14902b1948dce8"
+      },
+      {
+       "phase": 180,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 190,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 200,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 210,
+       "rows": 1,
+       "hash": "78a5f1150135b920"
+      },
+      {
+       "phase": 230,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 240,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 250,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 260,
+       "rows": 1,
+       "hash": "0c3a0c3404ffd068"
+      },
+      {
+       "phase": 270,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 280,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 290,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 300,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 310,
+       "rows": 900,
+       "hash": "5f60bc2cdcb89e99"
+      },
+      {
+       "phase": 320,
+       "rows": 1,
+       "hash": "9b7e48527050edfe"
+      },
+      {
+       "phase": 400,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 410,
+       "rows": 700,
+       "hash": "649813fe025d510b"
+      },
+      {
+       "phase": 500,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 510,
+       "rows": 700,
+       "hash": "7e30b42e2404cc90"
+      },
+      {
+       "phase": 520,
+       "rows": 512,
+       "hash": "07aa5d31c6064a19"
+      },
+      {
+       "phase": 980,
+       "rows": 1,
+       "hash": "b8835f20872ee7fa"
+      },
+      {
+       "phase": 990,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      }
+     ]
+    },
+    "1048576": {
+     "args": "--heap 1048576 64 --size 1 st.db",
+     "exit": 1,
+     "host_wall_s": 38,
+     "phases": 13,
+     "equal_to_native_prefix": true,
+     "all_32_equal_to_native": false,
+     "domain_fault": false,
+     "stderr": [
+      "SQL error: out of memory",
+      "VACUUM",
+      "capstone-exec: exit image=/mnt/host/speedtest1-memsys5-sublet.dom sha256=0616616d88c95425ad464b2263ff6df830445c789ad03e85d6b573c741d0ed76"
+     ],
+     "phase_values": [
+      {
+       "phase": 100,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 110,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 120,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 130,
+       "rows": 25,
+       "hash": "86f7643d251c40ef"
+      },
+      {
+       "phase": 140,
+       "rows": 10,
+       "hash": "0c7b7e747ae91a62"
+      },
+      {
+       "phase": 142,
+       "rows": 1050,
+       "hash": "359b7f1ecbeaaff8"
+      },
+      {
+       "phase": 145,
+       "rows": 100,
+       "hash": "a0d680adf09a4a75"
+      },
+      {
+       "phase": 150,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 160,
+       "rows": 100,
+       "hash": "df2ea006eed925a5"
+      },
+      {
+       "phase": 161,
+       "rows": 100,
+       "hash": "24d182f082f52e7c"
+      },
+      {
+       "phase": 170,
+       "rows": 100,
+       "hash": "7e14902b1948dce8"
+      },
+      {
+       "phase": 180,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 190,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      }
+     ]
+    }
+   }
+  },
+  "memsys5-sublet-block": {
+   "SQLITE_HEAP": "memsys5-sublet-block",
+   "images": {
+    "sqlite3.dom": "7a7822e35f2ed144b8b45e8dec8cea398859cf2bd41d047c5d02c46fd1224516",
+    "speedtest1.dom": "4e7dec1f2d3172a6ae78928798bc44354060443be2262a35735abc0e734678a0"
+   },
+   "engine_source_sha256": "81f1aec827b93cd37dbeb72712689e9449cab2d0aeb94c8997766bed1690b6ed",
+   "run_app": {
+    "work": {
+     "verdict": "FAIL",
+     "status": 0,
+     "native_status": 0,
+     "lines": 27,
+     "output_sha256": "029b6b2d933194eb6b14d4cd9189f4bba991a01c7ec5737a6ff8379df0be3f5e",
+     "native_output_sha256": "efdbe13353e838a52497ca5510a7be04e447ea656696a8d894ce44b6f5779473",
+     "guest_stderr_tail": [
+      "capstone-exec: exit image=/mnt/host/sqlite3-memsys5-sublet-block.dom sha256=7a7822e35f2ed144b8b45e8dec8cea398859cf2bd41d047c5d02c46fd1224516"
+     ],
+     "first_differences": [
+      "24: native 'second writer exit 5' guest 'capstone-exec: exit image=/mnt/host/sqlite3-memsys5-sublet-block.dom sha256=7a7822e35f2ed144b8b45e8dec8cea398859cf2bd41d047c5d02c46fd1224516'",
+      "25: native '1' guest 'second writer exit 5'",
+      "26: native '3.22.0' guest '1'",
+      "native 27 lines, guest 28 lines"
+     ]
+    },
+    "again": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 2,
+     "output_sha256": "21d61506c3c0973c08ffa34e07e65d8421b0d9ee76e2aa39eb6e48be9276df6a",
+     "native_output_sha256": "21d61506c3c0973c08ffa34e07e65d8421b0d9ee76e2aa39eb6e48be9276df6a"
+    },
+    "speedtest1": {
+     "verdict": "PASS",
+     "status": 0,
+     "native_status": 0,
+     "lines": 32,
+     "output_sha256": "5b90718d023d64d0013dad6246094cccb473859703f9f1ab2c29a0c2efd1a36c",
+     "native_output_sha256": "5b90718d023d64d0013dad6246094cccb473859703f9f1ab2c29a0c2efd1a36c"
+    }
+   },
+   "speedtest1_heap": {
+    "8388608": {
+     "args": "--heap 8388608 64 --size 1 st.db",
+     "exit": 0,
+     "host_wall_s": 116,
+     "phases": 32,
+     "equal_to_native_prefix": true,
+     "all_32_equal_to_native": true,
+     "domain_fault": false,
+     "stderr": [
+      "capstone-exec: exit image=/mnt/host/speedtest1-memsys5-sublet-block.dom sha256=4e7dec1f2d3172a6ae78928798bc44354060443be2262a35735abc0e734678a0"
+     ],
+     "phase_values": [
+      {
+       "phase": 100,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 110,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 120,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 130,
+       "rows": 25,
+       "hash": "86f7643d251c40ef"
+      },
+      {
+       "phase": 140,
+       "rows": 10,
+       "hash": "0c7b7e747ae91a62"
+      },
+      {
+       "phase": 142,
+       "rows": 1050,
+       "hash": "359b7f1ecbeaaff8"
+      },
+      {
+       "phase": 145,
+       "rows": 100,
+       "hash": "a0d680adf09a4a75"
+      },
+      {
+       "phase": 150,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 160,
+       "rows": 100,
+       "hash": "df2ea006eed925a5"
+      },
+      {
+       "phase": 161,
+       "rows": 100,
+       "hash": "24d182f082f52e7c"
+      },
+      {
+       "phase": 170,
+       "rows": 100,
+       "hash": "7e14902b1948dce8"
+      },
+      {
+       "phase": 180,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 190,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 200,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 210,
+       "rows": 1,
+       "hash": "78a5f1150135b920"
+      },
+      {
+       "phase": 230,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 240,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 250,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 260,
+       "rows": 1,
+       "hash": "0c3a0c3404ffd068"
+      },
+      {
+       "phase": 270,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 280,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 290,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 300,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 310,
+       "rows": 900,
+       "hash": "5f60bc2cdcb89e99"
+      },
+      {
+       "phase": 320,
+       "rows": 1,
+       "hash": "9b7e48527050edfe"
+      },
+      {
+       "phase": 400,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 410,
+       "rows": 700,
+       "hash": "649813fe025d510b"
+      },
+      {
+       "phase": 500,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 510,
+       "rows": 700,
+       "hash": "7e30b42e2404cc90"
+      },
+      {
+       "phase": 520,
+       "rows": 512,
+       "hash": "07aa5d31c6064a19"
+      },
+      {
+       "phase": 980,
+       "rows": 1,
+       "hash": "b8835f20872ee7fa"
+      },
+      {
+       "phase": 990,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      }
+     ]
+    },
+    "1048576": {
+     "args": "--heap 1048576 64 --size 1 st.db",
+     "exit": 1,
+     "host_wall_s": 30,
+     "phases": 13,
+     "equal_to_native_prefix": true,
+     "all_32_equal_to_native": false,
+     "domain_fault": false,
+     "stderr": [
+      "SQL error: out of memory",
+      "VACUUM",
+      "capstone-exec: exit image=/mnt/host/speedtest1-memsys5-sublet-block.dom sha256=4e7dec1f2d3172a6ae78928798bc44354060443be2262a35735abc0e734678a0"
+     ],
+     "phase_values": [
+      {
+       "phase": 100,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 110,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 120,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 130,
+       "rows": 25,
+       "hash": "86f7643d251c40ef"
+      },
+      {
+       "phase": 140,
+       "rows": 10,
+       "hash": "0c7b7e747ae91a62"
+      },
+      {
+       "phase": 142,
+       "rows": 1050,
+       "hash": "359b7f1ecbeaaff8"
+      },
+      {
+       "phase": 145,
+       "rows": 100,
+       "hash": "a0d680adf09a4a75"
+      },
+      {
+       "phase": 150,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 160,
+       "rows": 100,
+       "hash": "df2ea006eed925a5"
+      },
+      {
+       "phase": 161,
+       "rows": 100,
+       "hash": "24d182f082f52e7c"
+      },
+      {
+       "phase": 170,
+       "rows": 100,
+       "hash": "7e14902b1948dce8"
+      },
+      {
+       "phase": 180,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      },
+      {
+       "phase": 190,
+       "rows": 0,
+       "hash": "cbf29ce484222325"
+      }
+     ]
+    }
+   }
+  }
+ }
+}

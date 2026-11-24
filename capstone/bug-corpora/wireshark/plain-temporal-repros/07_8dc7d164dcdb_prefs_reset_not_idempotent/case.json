@@ -43,8 +43,8 @@
     "virtual-malloc": {
       "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3f95c90c7c in wst_read_probe; by probe: the fault is at the labelled probe wst_read_probe",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+      "verdict_note": "cause=25 pc=0x3f84e0e1d0 in wst_read_probe; by probe: the fault is at the labelled probe wst_read_probe",
+      "verdict_from": "results/2026-11-11-virtual/virtual-malloc"
     },
     "silicon-level0": {
       "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b): the same silicon-ABI build and board run with level0 as it ships (tools/arms.json silicon-level0, the bounds-only control arm). A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's oob control faulted and its uaf control completed. Pre-registered in silicon-predictions/2026-10-16-plain: MISSED, because level0 revokes nothing.",
@@ -59,10 +59,10 @@
       "verdict_from": "results/2026-10-16-silicon/silicon-lifetimes"
     },
     "vp2-malloc": {
+      "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
       "verdict": "CAUGHT",
       "verdict_note": "cause=25 pc=0x3fa0e9097c in wst_read_probe; by probe: the fault is at the labelled probe wst_read_probe",
-      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
-      "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc"
     }
   },
   "case": 7,

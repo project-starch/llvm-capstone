@@ -70,6 +70,13 @@ Measured 2026-10-26 on the bitstream-2 twin (`results/2026-10-26-virtual/`):
   pool's node and never calls free(), so the heap has no event.
 - `virtual-nested-pools` reads case 0 CAUGHT at `read_probe`, cause 25, and the control faults.
 
+Measured again 2026-11-11 (`results/2026-11-11-virtual/`, the current bundles), after the adapter moved to the
+one-operand CREVOKE (`capstone_cap_release` on the node's issued child, `src/virtual/node-derive.c`), on the QEMU that
+implements it (pinned module, `-cpu` extra `x-capstone-test-csrs=true`): both readings and all three controls of each
+arm are the same. `virtual-malloc` reads case 0 MISSED with `node-released-90` completing, `virtual-nested-pools` reads
+it CAUGHT at `read_probe`, cause 25, with `node-released-90` faulting. The nested image holds two CREVOKE instructions,
+both of the one-operand form.
+
 ## Where this corpus deviates from the contract, and why
 
 [`../../tools/check-corpus.py`](../../tools/check-corpus.py) enforces

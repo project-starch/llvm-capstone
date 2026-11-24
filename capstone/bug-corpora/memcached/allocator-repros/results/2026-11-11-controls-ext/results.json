@@ -1,0 +1,1838 @@
+{
+ "what": "memcached 1.6.45 cache.c object cache (cache_create/cache_alloc/cache_free): the parent, sibling and successor controls of the 2026-10-12 pre-registration, on the virtual-nested-pools arm (patch 0006: cache_free renews the object's own lifetime with CRENEW) and the virtual-malloc release arm, on the model with the one-operand CREVOKE and CRENEW",
+ "pre_registration": "capstone/docs/plans/2026-10-12-nested-lifetime-controls-extended.md; control definitions from capstone/docs/plans/2026-10-11-nested-lifetime-controls.md",
+ "revision": {
+  "llvm_capstone": "one-operand-crevoke-crenew 59201bdf2, QEMU ea57497908",
+  "patch_0006_sha256": "e9e12f62828d98e02b4fa98def983f4489d9572c759859ca5db22fc35cdc8b0d",
+  "control_files_sha256": {
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c": "19895e943bc9c0128e1ddaf8e630be718745641c802a21a08d971b0f5fe4e06a",
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.json": "d3fe21e955a787bc07dc32673598fbeaf335866cc63465f3cefc350d1f403d94",
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c": "b2e36d40314b27d4de45a761c238dd7540a6e258378a25486bb496971d0f56e6",
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.json": "8c19aee3e984541251f6b2c594c410f891dd070624913a86b5bbb671491c6277",
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c": "60dec4a2c5d76d1500125be9e8461bc839d9ef789381423adbc90adcd901f1ac",
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.json": "00c464906b8a3a16981296ec3bc3919d56cfbb52cf6ca9b4131b65f8d1f8fa44",
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/build-controls.sh": "17f06d29ad17c0506ebd4285dd5ef68cad001c89cd981143ac520244a0be447d",
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/cache-controls.h": "34fe9d8c49d0bca3330133a5ebf9aad90b6a6265f4471af10cde0aa6f4dbaf06",
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/run-controls.py": "ca9f1fc778fe27ac8f56e16214f44a3222c45a63733bef8eb27ba4c05bc12870",
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime/controls.h": "fb750e508313415a6a9cc285ed9484f8bf683a57074d8b1ec07bf8c5ba582a67",
+   "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime/driver-controls.c": "e7b68c2c1f65700afe4372226e62d2882e715bb22ca04e3cf62999ba8a87820e"
+  }
+ },
+ "sdk": {
+  "built_by": "CAPSTONE_SDK_CORPUS=1 capstone/runtime/virtual/build-sdk.sh (virtual profile, mallocng, -fno-builtin)",
+  "compiler_sha256": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e"
+ },
+ "platform": {
+  "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+  "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+  "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+  "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+  "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+  "profile": "virtual"
+ },
+ "runner_sha256": "ca9f1fc778fe27ac8f56e16214f44a3222c45a63733bef8eb27ba4c05bc12870",
+ "platform_options": "CAPSTONE_QEMU_CPU_EXTRA=x-capstone-test-csrs=true,x-capstone-exact-bounds=true, so -cpu rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-test-csrs=true,x-capstone-exact-bounds=true; -smp 1; module loaded without parameters (unpinned=0, supervisor_slots=1); via bug-corpora/tools/virtualvm.py, one boot per arm",
+ "repetitions": "one boot per arm (f1); the 2026-10 records ran three",
+ "images": {
+  "virtual-nested-pools": {
+   "ctl-94": "1c334ccf9dc83cfbaad4344469f649fb7d7a37f675517b66f550336d375a33b7",
+   "ctl-95": "719b120c9ee27ed9718d7fd325564da014a2c8cce74ce3e83b3c456dd581f22b",
+   "ctl-96": "5fb4a388bd4f5af865c24f0dd4019932e27b47811d9a3e5d33ced7577e27133f"
+  },
+  "virtual-malloc": {
+   "ctl-94": "84e71257c08463293d0b5a49990b9461a7641317577258738eacd5845b34409e",
+   "ctl-95": "106509fa7ce66b74aec766f824483c668d691b832f13822ed51e16b1d250b651",
+   "ctl-96": "ac0663e1fb5e090005aced02c2701c0dcc84853e45943616d39bca7d4cae1469"
+  }
+ },
+ "build_flags": {
+  "virtual-nested-pools": {
+   "cache": {
+    "MCP_SUBLET": "ON",
+    "MCP_STOCK_MALLOC": "OFF"
+   },
+   "flags": "-std=c11 -O1 -g -DNDEBUG -DCHUNK_ALIGN_BYTES=16 -DMC_CARVE_BOUNDS -DMC_CAPSTONE_SUBLET"
+  },
+  "virtual-malloc": {
+   "cache": {
+    "MCP_SUBLET": "OFF",
+    "MCP_STOCK_MALLOC": "ON"
+   },
+   "flags": "-std=c11 -O1 -g -DNDEBUG -DCHUNK_ALIGN_BYTES=16"
+  }
+ },
+ "static_check": {
+  "how": "every lifetime instruction of each image outside libc's heap, by the function it sits in (opcode 0x5b, funct3 1: CDERIVE funct7 0x51, CREVOKE 0x52, CRENEW 0x54); a capstone_cap_derive call site holds two CDERIVE encodings, the derive and the refusing zero-size form",
+  "virtual-nested-pools": {
+   "ctl-94": {
+    "CDERIVE in capstone_cap_derive": 2,
+    "CREVOKE in capstone_cap_release": 1,
+    "CRENEW in capstone_cap_renew": 1
+   },
+   "ctl-95": {
+    "CDERIVE in capstone_cap_derive": 2,
+    "CREVOKE in capstone_cap_release": 1,
+    "CRENEW in capstone_cap_renew": 1
+   },
+   "ctl-96": {
+    "CDERIVE in capstone_cap_derive": 2,
+    "CREVOKE in capstone_cap_release": 1,
+    "CRENEW in capstone_cap_renew": 1
+   }
+  },
+  "virtual-malloc": {
+   "ctl-94": {},
+   "ctl-95": {},
+   "ctl-96": {}
+  }
+ },
+ "summary": [
+  {
+   "arm": "virtual-nested-pools",
+   "rep": "f1",
+   "control": "94",
+   "variant": "list-head",
+   "outcome": "completed",
+   "addresses": {
+    "A": "0x3fbf1f3440",
+    "A-reissued": "0x3fbf1f3440"
+   },
+   "caps": {
+    "A": "[0x3fbf1f3440,0x3fbf1f3540) tag=1",
+    "A-reissued": "[0x3fbf1f3440,0x3fbf1f3540)"
+   },
+   "parent_ref": {
+    "name": "list-head",
+    "addr": "0x3fbf1f3440",
+    "base": "0x3fbf1f3440",
+    "end": "0x3fbf1f3540",
+    "tag": "1"
+   },
+   "sources": {
+    "A": {
+     "addr": "0x3fbf1f3440",
+     "path": "free-list",
+     "list_head_before": "0x3fbf1f3440",
+     "freecurr": "1->0",
+     "total": "1->1"
+    }
+   },
+   "prediction": "holds"
+  },
+  {
+   "arm": "virtual-nested-pools",
+   "rep": "f1",
+   "control": "95",
+   "variant": "sibling",
+   "outcome": "completed",
+   "addresses": {
+    "A": "0x3f9c9ff440",
+    "B": "0x3f9c9ff580"
+   },
+   "caps": {
+    "A": "[0x3f9c9ff440,0x3f9c9ff540) tag=1",
+    "B": "[0x3f9c9ff580,0x3f9c9ff680) tag=1"
+   },
+   "sources": {
+    "A": {
+     "addr": "0x3f9c9ff440",
+     "path": "free-list",
+     "list_head_before": "0x3f9c9ff440",
+     "freecurr": "2->1",
+     "total": "2->2"
+    },
+    "B": {
+     "addr": "0x3f9c9ff580",
+     "path": "free-list",
+     "list_head_before": "0x3f9c9ff580",
+     "freecurr": "1->0",
+     "total": "2->2"
+    }
+   },
+   "prediction": "holds"
+  },
+  {
+   "arm": "virtual-nested-pools",
+   "rep": "f1",
+   "control": "96",
+   "variant": "through-c",
+   "outcome": "completed",
+   "addresses": {
+    "A": "0x3fa3d53440",
+    "C": "0x3fa3d53440"
+   },
+   "caps": {
+    "A": "[0x3fa3d53440,0x3fa3d53540) tag=1",
+    "C": "[0x3fa3d53440,0x3fa3d53540)"
+   },
+   "sources": {
+    "A": {
+     "addr": "0x3fa3d53440",
+     "path": "free-list",
+     "list_head_before": "0x3fa3d53440",
+     "freecurr": "1->0",
+     "total": "1->1"
+    }
+   },
+   "successor": {
+    "A": "0x3fa3d53440",
+    "C": "0x3fa3d53440",
+    "equal": true,
+    "allocations": 1
+   },
+   "prediction": "holds"
+  },
+  {
+   "arm": "virtual-nested-pools",
+   "rep": "f1",
+   "control": "96",
+   "variant": "stale",
+   "outcome": "fault cause=25 in read_probe at capstone/bug-corpora/memcached/allocator-repros/shared/corpus.h:81:10",
+   "addresses": {
+    "A": "0x3fbb073440",
+    "C": "0x3fbb073440"
+   },
+   "caps": {
+    "A": "[0x3fbb073440,0x3fbb073540) tag=1",
+    "C": "[0x3fbb073440,0x3fbb073540)"
+   },
+   "sources": {
+    "A": {
+     "addr": "0x3fbb073440",
+     "path": "free-list",
+     "list_head_before": "0x3fbb073440",
+     "freecurr": "1->0",
+     "total": "1->1"
+    }
+   },
+   "successor": {
+    "A": "0x3fbb073440",
+    "C": "0x3fbb073440",
+    "equal": true,
+    "allocations": 1
+   },
+   "prediction": "holds"
+  },
+  {
+   "arm": "virtual-malloc",
+   "rep": "f1",
+   "control": "94",
+   "variant": "list-head",
+   "outcome": "completed",
+   "addresses": {
+    "A": "0x3f8d3b4070",
+    "A-reissued": "0x3f8d3b4070"
+   },
+   "caps": {
+    "A": "[0x3f8d3b4070,0x3f8d3b4170) tag=1",
+    "A-reissued": "[0x3f8d3b4070,0x3f8d3b4170)"
+   },
+   "parent_ref": {
+    "name": "list-head",
+    "addr": "0x3f8d3b4070",
+    "base": "0x3f8d3b4070",
+    "end": "0x3f8d3b4170",
+    "tag": "1"
+   },
+   "sources": {
+    "A": {
+     "addr": "0x3f8d3b4070",
+     "path": "free-list",
+     "list_head_before": "0x3f8d3b4070",
+     "freecurr": "1->0",
+     "total": "1->1"
+    }
+   },
+   "prediction": "holds"
+  },
+  {
+   "arm": "virtual-malloc",
+   "rep": "f1",
+   "control": "95",
+   "variant": "sibling",
+   "outcome": "completed",
+   "addresses": {
+    "A": "0x3f9949f070",
+    "B": "0x3f9949f1b0"
+   },
+   "caps": {
+    "A": "[0x3f9949f070,0x3f9949f170) tag=1",
+    "B": "[0x3f9949f1b0,0x3f9949f2b0) tag=1"
+   },
+   "sources": {
+    "A": {
+     "addr": "0x3f9949f070",
+     "path": "free-list",
+     "list_head_before": "0x3f9949f070",
+     "freecurr": "2->1",
+     "total": "2->2"
+    },
+    "B": {
+     "addr": "0x3f9949f1b0",
+     "path": "free-list",
+     "list_head_before": "0x3f9949f1b0",
+     "freecurr": "1->0",
+     "total": "2->2"
+    }
+   },
+   "prediction": "holds"
+  },
+  {
+   "arm": "virtual-malloc",
+   "rep": "f1",
+   "control": "96",
+   "variant": "through-c",
+   "outcome": "completed",
+   "addresses": {
+    "A": "0x3faec9f070",
+    "C": "0x3faec9f070"
+   },
+   "caps": {
+    "A": "[0x3faec9f070,0x3faec9f170) tag=1",
+    "C": "[0x3faec9f070,0x3faec9f170)"
+   },
+   "sources": {
+    "A": {
+     "addr": "0x3faec9f070",
+     "path": "free-list",
+     "list_head_before": "0x3faec9f070",
+     "freecurr": "1->0",
+     "total": "1->1"
+    }
+   },
+   "successor": {
+    "A": "0x3faec9f070",
+    "C": "0x3faec9f070",
+    "equal": true,
+    "allocations": 1
+   },
+   "prediction": "holds"
+  },
+  {
+   "arm": "virtual-malloc",
+   "rep": "f1",
+   "control": "96",
+   "variant": "stale",
+   "outcome": "completed",
+   "addresses": {
+    "A": "0x3f82b9f070",
+    "C": "0x3f82b9f070"
+   },
+   "caps": {
+    "A": "[0x3f82b9f070,0x3f82b9f170) tag=1",
+    "C": "[0x3f82b9f070,0x3f82b9f170)"
+   },
+   "sources": {
+    "A": {
+     "addr": "0x3f82b9f070",
+     "path": "free-list",
+     "list_head_before": "0x3f82b9f070",
+     "freecurr": "1->0",
+     "total": "1->1"
+    }
+   },
+   "successor": {
+    "A": "0x3f82b9f070",
+    "C": "0x3f82b9f070",
+    "equal": true,
+    "allocations": 1
+   },
+   "stale_read": {
+    "value": "0xc3",
+    "reads": "C-data"
+   },
+   "prediction": "holds"
+  }
+ ],
+ "records": [
+  {
+   "arm": "virtual-nested-pools",
+   "configuration": "virtual-memcached-sublet",
+   "revision": "one-operand-crevoke-crenew 59201bdf2, QEMU ea57497908",
+   "boot_completed": true,
+   "build": {
+    "cache": {
+     "MCP_SUBLET": "ON",
+     "MCP_STOCK_MALLOC": "OFF"
+    },
+    "flags": "-std=c11 -O1 -g -DNDEBUG -DCHUNK_ALIGN_BYTES=16 -DMC_CARVE_BOUNDS -DMC_CAPSTONE_SUBLET",
+    "images": {
+     "ctl-94": "1c334ccf9dc83cfbaad4344469f649fb7d7a37f675517b66f550336d375a33b7",
+     "ctl-95": "719b120c9ee27ed9718d7fd325564da014a2c8cce74ce3e83b3c456dd581f22b",
+     "ctl-96": "5fb4a388bd4f5af865c24f0dd4019932e27b47811d9a3e5d33ced7577e27133f"
+    },
+    "heap_controls": "0b90cbad4daca6aa2ac704295c5654563670d29770cbd40c7a4591eb97958d17"
+   },
+   "platform": {
+    "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+    "runner": "ca9f1fc778fe27ac8f56e16214f44a3222c45a63733bef8eb27ba4c05bc12870",
+    "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+    "profile": "virtual"
+   },
+   "heap_controls": {
+    "uaf-malloc": {
+     "observed": "fault",
+     "cause": 25,
+     "evidence": "capstone-exec: domain fault cause=25 pc=0x3fa9b8dd68 address=0x3fa9c0b040 ra=0x3fa9b8e100 fp=0x3fa9afff60 entry=0x3fa9b807d4 code=0x3fa9b80000-0x3fa9c00000 last"
+    },
+    "bounds-malloc": {
+     "observed": "fault",
+     "cause": 28,
+     "evidence": "capstone-exec: domain fault cause=28 pc=0x3f97d0dd34 address=0x3f97da2050 ra=0x3f97d0dfb0 fp=0x3f97bfff60 entry=0x3f97d007d4 code=0x3f97d00000-0x3f97d80000 last"
+    }
+   },
+   "runs": [
+    {
+     "exit": {
+      "kind": "exit",
+      "value": 0
+     },
+     "accesses": [
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3fbf1f3450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:30",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3fbf1f345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:30",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-free-list-link",
+       "kind": "read",
+       "via": "list-head",
+       "addr": "0x3fbf1f3440",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:53",
+       "probe": "ctl_load_ptr@controls.h:55",
+       "done": true,
+       "value": "0"
+      },
+      {
+       "name": "A-data-left-by-cache_free",
+       "kind": "read",
+       "via": "list-head",
+       "addr": "0x3fbf1f3450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:58",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xa1"
+      },
+      {
+       "name": "A-data-left-by-cache_free",
+       "kind": "read",
+       "via": "list-head",
+       "addr": "0x3fbf1f345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:58",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xa1"
+      },
+      {
+       "name": "A-data-by-list-head",
+       "kind": "write",
+       "via": "list-head",
+       "addr": "0x3fbf1f3450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:59",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-list-head",
+       "kind": "write",
+       "via": "list-head",
+       "addr": "0x3fbf1f345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:59",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-list-head-readback",
+       "kind": "read",
+       "via": "list-head",
+       "addr": "0x3fbf1f3450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:60",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0x7e"
+      },
+      {
+       "name": "A-data-by-list-head-readback",
+       "kind": "read",
+       "via": "list-head",
+       "addr": "0x3fbf1f345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:60",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0x7e"
+      },
+      {
+       "name": "A-reissued-holds-list-head-write",
+       "kind": "read",
+       "via": "A-reissued",
+       "addr": "0x3fbf1f3450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:68",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0x7e"
+      },
+      {
+       "name": "A-reissued-holds-list-head-write",
+       "kind": "read",
+       "via": "A-reissued",
+       "addr": "0x3fbf1f345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:68",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0x7e"
+      }
+     ],
+     "chunks": {
+      "A-cap": "[0x3fbf1f3440,0x3fbf1f3540) tag=1",
+      "A": "0x3fbf1f3440",
+      "A-reissued": "0x3fbf1f3440",
+      "A-reissued-cap": "[0x3fbf1f3440,0x3fbf1f3540)"
+     },
+     "checks": [
+      "CHECK name=A-renewed-object-shape object=[0x3fbf1f3440,0x3fbf1f3540) cursor=0x3fbf1f3440 ok",
+      "CHECK name=list-head-is-A-renewed addr=0x3fbf1f3440 bounds=[0x3fbf1f3440,0x3fbf1f3540) ok",
+      "CHECK name=A-link-left-by-cache_free link=0 want=0",
+      "CHECK name=A-data-left-by-cache_free bytes=16 value=0xa1 ok",
+      "CHECK name=A-data-by-list-head-readback bytes=16 value=0x7e ok",
+      "CHECK name=free-list-intact reissued=0x3fbf1f3440 A=0x3fbf1f3440 equal=1",
+      "CHECK name=A-reissued-holds-list-head-write bytes=16 value=0x7e ok"
+     ],
+     "lines": [
+      "CTL control=94 variant=list-head arm=virtual-nested-pools",
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0",
+      "PRIME alloc=0 addr=0x3fbf1f3440 path=malloc",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3fbf1f3440",
+      "SOURCE name=A addr=0x3fbf1f3440 path=free-list list_head_before=0x3fbf1f3440 freecurr=1->0 total=1->1",
+      "CHUNK-CAP name=A addr=0x3fbf1f3440 base=0x3fbf1f3440 end=0x3fbf1f3540 tag=1",
+      "CHECK name=A-renewed-object-shape object=[0x3fbf1f3440,0x3fbf1f3540) cursor=0x3fbf1f3440 ok",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3fbf1f3450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:30 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3fbf1f345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:30 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "FREED A by cache_free(cache, A)",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3fbf1f3440",
+      "PARENT-REF name=list-head addr=0x3fbf1f3440 base=0x3fbf1f3440 end=0x3fbf1f3540 tag=1",
+      "CHECK name=list-head-is-A-renewed addr=0x3fbf1f3440 bounds=[0x3fbf1f3440,0x3fbf1f3540) ok",
+      "ACCESS-BEGIN name=A-free-list-link kind=read via=list-head addr=0x3fbf1f3440 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:53 probe=ctl_load_ptr@controls.h:55",
+      "ACCESS-DONE name=A-free-list-link value=0",
+      "CHECK name=A-link-left-by-cache_free link=0 want=0",
+      "ACCESS-BEGIN name=A-data-left-by-cache_free kind=read via=list-head addr=0x3fbf1f3450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:58 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-data-left-by-cache_free value=0xa1",
+      "ACCESS-BEGIN name=A-data-left-by-cache_free kind=read via=list-head addr=0x3fbf1f345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:58 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-data-left-by-cache_free value=0xa1",
+      "CHECK name=A-data-left-by-cache_free bytes=16 value=0xa1 ok",
+      "ACCESS-BEGIN name=A-data-by-list-head kind=write via=list-head addr=0x3fbf1f3450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:59 probe=ctl_write_u8@controls.h:51 value=0x7e",
+      "ACCESS-DONE name=A-data-by-list-head",
+      "ACCESS-BEGIN name=A-data-by-list-head kind=write via=list-head addr=0x3fbf1f345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:59 probe=ctl_write_u8@controls.h:51 value=0x7e",
+      "ACCESS-DONE name=A-data-by-list-head",
+      "ACCESS-BEGIN name=A-data-by-list-head-readback kind=read via=list-head addr=0x3fbf1f3450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:60 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-data-by-list-head-readback value=0x7e",
+      "ACCESS-BEGIN name=A-data-by-list-head-readback kind=read via=list-head addr=0x3fbf1f345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:60 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-data-by-list-head-readback value=0x7e",
+      "CHECK name=A-data-by-list-head-readback bytes=16 value=0x7e ok",
+      "CHUNK name=A-reissued addr=0x3fbf1f3440",
+      "CHUNK-CAP name=A-reissued base=0x3fbf1f3440 end=0x3fbf1f3540",
+      "CHECK name=free-list-intact reissued=0x3fbf1f3440 A=0x3fbf1f3440 equal=1",
+      "ACCESS-BEGIN name=A-reissued-holds-list-head-write kind=read via=A-reissued addr=0x3fbf1f3450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:68 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-reissued-holds-list-head-write value=0x7e",
+      "ACCESS-BEGIN name=A-reissued-holds-list-head-write kind=read via=A-reissued addr=0x3fbf1f345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:68 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-reissued-holds-list-head-write value=0x7e",
+      "CHECK name=A-reissued-holds-list-head-write bytes=16 value=0x7e ok",
+      "FREED A-reissued by cache_free",
+      "CACHE when=end bufsize=256 total=1 freecurr=1 limit=0 head=0x3fbf1f3440",
+      "CTL-COMPLETED control=94 variant=list-head arm=virtual-nested-pools",
+      "capstone-exec: exit image=./images/ctl-94 sha256=1c334ccf9dc83cfbaad4344469f649fb7d7a37f675517b66f550336d375a33b7"
+     ],
+     "cache_states": [
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3fbf1f3440",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3fbf1f3440",
+      "CACHE when=end bufsize=256 total=1 freecurr=1 limit=0 head=0x3fbf1f3440"
+     ],
+     "sources": {
+      "A": {
+       "addr": "0x3fbf1f3440",
+       "path": "free-list",
+       "list_head_before": "0x3fbf1f3440",
+       "freecurr": "1->0",
+       "total": "1->1"
+      }
+     },
+     "parent_ref": {
+      "name": "list-head",
+      "addr": "0x3fbf1f3440",
+      "base": "0x3fbf1f3440",
+      "end": "0x3fbf1f3540",
+      "tag": "1"
+     },
+     "completed": true,
+     "control": "94",
+     "variant": "list-head",
+     "image": "ctl-94",
+     "image_sha256": "1c334ccf9dc83cfbaad4344469f649fb7d7a37f675517b66f550336d375a33b7",
+     "argv": [
+      "94",
+      "list-head"
+     ],
+     "predicted": "completes, the read returns what the allocator left there",
+     "observed": "completed",
+     "prediction": "holds"
+    },
+    {
+     "exit": {
+      "kind": "exit",
+      "value": 0
+     },
+     "accesses": [
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3f9c9ff450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:24",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3f9c9ff45f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:24",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "B-data-by-owner",
+       "kind": "write",
+       "via": "B",
+       "addr": "0x3f9c9ff590",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:25",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "B-data-by-owner",
+       "kind": "write",
+       "via": "B",
+       "addr": "0x3f9c9ff59f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:25",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "B-data-after-A-free",
+       "kind": "read",
+       "via": "B",
+       "addr": "0x3f9c9ff590",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:32",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xb2"
+      },
+      {
+       "name": "B-data-after-A-free",
+       "kind": "read",
+       "via": "B",
+       "addr": "0x3f9c9ff59f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:32",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xb2"
+      },
+      {
+       "name": "B-data-rewrite",
+       "kind": "write",
+       "via": "B",
+       "addr": "0x3f9c9ff590",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:33",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "B-data-rewrite",
+       "kind": "write",
+       "via": "B",
+       "addr": "0x3f9c9ff59f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:33",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "B-data-rewrite-readback",
+       "kind": "read",
+       "via": "B",
+       "addr": "0x3f9c9ff590",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:34",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xb5"
+      },
+      {
+       "name": "B-data-rewrite-readback",
+       "kind": "read",
+       "via": "B",
+       "addr": "0x3f9c9ff59f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:34",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xb5"
+      }
+     ],
+     "chunks": {
+      "A-cap": "[0x3f9c9ff440,0x3f9c9ff540) tag=1",
+      "A": "0x3f9c9ff440",
+      "B-cap": "[0x3f9c9ff580,0x3f9c9ff680) tag=1",
+      "B": "0x3f9c9ff580"
+     },
+     "checks": [
+      "CHECK name=A-renewed-object-shape object=[0x3f9c9ff440,0x3f9c9ff540) cursor=0x3f9c9ff440 ok",
+      "CHECK name=B-renewed-object-shape object=[0x3f9c9ff580,0x3f9c9ff680) cursor=0x3f9c9ff580 ok",
+      "CHECK name=B-data-after-A-free bytes=16 value=0xb2 ok",
+      "CHECK name=B-data-rewrite-readback bytes=16 value=0xb5 ok"
+     ],
+     "lines": [
+      "CTL control=95 variant=sibling arm=virtual-nested-pools",
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0",
+      "PRIME alloc=0 addr=0x3f9c9ff440 path=malloc",
+      "PRIME alloc=1 addr=0x3f9c9ff580 path=malloc",
+      "CACHE when=primed bufsize=256 total=2 freecurr=2 limit=0 head=0x3f9c9ff440",
+      "SOURCE name=A addr=0x3f9c9ff440 path=free-list list_head_before=0x3f9c9ff440 freecurr=2->1 total=2->2",
+      "CHUNK-CAP name=A addr=0x3f9c9ff440 base=0x3f9c9ff440 end=0x3f9c9ff540 tag=1",
+      "CHECK name=A-renewed-object-shape object=[0x3f9c9ff440,0x3f9c9ff540) cursor=0x3f9c9ff440 ok",
+      "SOURCE name=B addr=0x3f9c9ff580 path=free-list list_head_before=0x3f9c9ff580 freecurr=1->0 total=2->2",
+      "CHUNK-CAP name=B addr=0x3f9c9ff580 base=0x3f9c9ff580 end=0x3f9c9ff680 tag=1",
+      "CHECK name=B-renewed-object-shape object=[0x3f9c9ff580,0x3f9c9ff680) cursor=0x3f9c9ff580 ok",
+      "SIBLING A=0x3f9c9ff440 B=0x3f9c9ff580 distance=320",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3f9c9ff450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:24 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3f9c9ff45f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:24 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "ACCESS-BEGIN name=B-data-by-owner kind=write via=B addr=0x3f9c9ff590 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:25 probe=ctl_write_u8@controls.h:51 value=0xb2",
+      "ACCESS-DONE name=B-data-by-owner",
+      "ACCESS-BEGIN name=B-data-by-owner kind=write via=B addr=0x3f9c9ff59f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:25 probe=ctl_write_u8@controls.h:51 value=0xb2",
+      "ACCESS-DONE name=B-data-by-owner",
+      "FREED A by cache_free(cache, A)",
+      "CACHE when=after-free-A bufsize=256 total=2 freecurr=1 limit=0 head=0x3f9c9ff440",
+      "ACCESS-BEGIN name=B-data-after-A-free kind=read via=B addr=0x3f9c9ff590 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:32 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=B-data-after-A-free value=0xb2",
+      "ACCESS-BEGIN name=B-data-after-A-free kind=read via=B addr=0x3f9c9ff59f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:32 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=B-data-after-A-free value=0xb2",
+      "CHECK name=B-data-after-A-free bytes=16 value=0xb2 ok",
+      "ACCESS-BEGIN name=B-data-rewrite kind=write via=B addr=0x3f9c9ff590 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:33 probe=ctl_write_u8@controls.h:51 value=0xb5",
+      "ACCESS-DONE name=B-data-rewrite",
+      "ACCESS-BEGIN name=B-data-rewrite kind=write via=B addr=0x3f9c9ff59f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:33 probe=ctl_write_u8@controls.h:51 value=0xb5",
+      "ACCESS-DONE name=B-data-rewrite",
+      "ACCESS-BEGIN name=B-data-rewrite-readback kind=read via=B addr=0x3f9c9ff590 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:34 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=B-data-rewrite-readback value=0xb5",
+      "ACCESS-BEGIN name=B-data-rewrite-readback kind=read via=B addr=0x3f9c9ff59f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:34 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=B-data-rewrite-readback value=0xb5",
+      "CHECK name=B-data-rewrite-readback bytes=16 value=0xb5 ok",
+      "FREED B by cache_free(cache, B)",
+      "CACHE when=end bufsize=256 total=2 freecurr=2 limit=0 head=0x3f9c9ff580",
+      "CTL-COMPLETED control=95 variant=sibling arm=virtual-nested-pools",
+      "capstone-exec: exit image=./images/ctl-95 sha256=719b120c9ee27ed9718d7fd325564da014a2c8cce74ce3e83b3c456dd581f22b"
+     ],
+     "cache_states": [
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0",
+      "CACHE when=primed bufsize=256 total=2 freecurr=2 limit=0 head=0x3f9c9ff440",
+      "CACHE when=after-free-A bufsize=256 total=2 freecurr=1 limit=0 head=0x3f9c9ff440",
+      "CACHE when=end bufsize=256 total=2 freecurr=2 limit=0 head=0x3f9c9ff580"
+     ],
+     "sources": {
+      "A": {
+       "addr": "0x3f9c9ff440",
+       "path": "free-list",
+       "list_head_before": "0x3f9c9ff440",
+       "freecurr": "2->1",
+       "total": "2->2"
+      },
+      "B": {
+       "addr": "0x3f9c9ff580",
+       "path": "free-list",
+       "list_head_before": "0x3f9c9ff580",
+       "freecurr": "1->0",
+       "total": "2->2"
+      }
+     },
+     "completed": true,
+     "control": "95",
+     "variant": "sibling",
+     "image": "ctl-95",
+     "image_sha256": "719b120c9ee27ed9718d7fd325564da014a2c8cce74ce3e83b3c456dd581f22b",
+     "argv": [
+      "95",
+      "sibling"
+     ],
+     "predicted": "completes, B's contents intact",
+     "observed": "completed",
+     "prediction": "holds"
+    },
+    {
+     "exit": {
+      "kind": "exit",
+      "value": 0
+     },
+     "accesses": [
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3fa3d53450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3fa3d5345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data",
+       "kind": "write",
+       "via": "C",
+       "addr": "0x3fa3d53450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data",
+       "kind": "write",
+       "via": "C",
+       "addr": "0x3fa3d5345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data-readback",
+       "kind": "read",
+       "via": "C",
+       "addr": "0x3fa3d53450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xc3"
+      },
+      {
+       "name": "C-data-readback",
+       "kind": "read",
+       "via": "C",
+       "addr": "0x3fa3d5345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xc3"
+      }
+     ],
+     "chunks": {
+      "A-cap": "[0x3fa3d53440,0x3fa3d53540) tag=1",
+      "A": "0x3fa3d53440",
+      "C": "0x3fa3d53440",
+      "C-cap": "[0x3fa3d53440,0x3fa3d53540)"
+     },
+     "checks": [
+      "CHECK name=A-renewed-object-shape object=[0x3fa3d53440,0x3fa3d53540) cursor=0x3fa3d53440 ok",
+      "CHECK name=C-data-readback bytes=16 value=0xc3 ok"
+     ],
+     "lines": [
+      "CTL control=96 variant=through-c arm=virtual-nested-pools",
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0",
+      "PRIME alloc=0 addr=0x3fa3d53440 path=malloc",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3fa3d53440",
+      "SOURCE name=A addr=0x3fa3d53440 path=free-list list_head_before=0x3fa3d53440 freecurr=1->0 total=1->1",
+      "CHUNK-CAP name=A addr=0x3fa3d53440 base=0x3fa3d53440 end=0x3fa3d53540 tag=1",
+      "CHECK name=A-renewed-object-shape object=[0x3fa3d53440,0x3fa3d53540) cursor=0x3fa3d53440 ok",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3fa3d53450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3fa3d5345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "FREED A by cache_free(cache, A)",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3fa3d53440",
+      "ALLOC try=1 addr=0x3fa3d53440",
+      "CHUNK name=C addr=0x3fa3d53440",
+      "CHUNK-CAP name=C base=0x3fa3d53440 end=0x3fa3d53540",
+      "CACHE when=after-alloc-C bufsize=256 total=1 freecurr=0 limit=0 head=0",
+      "SUCCESSOR A=0x3fa3d53440 C=0x3fa3d53440 equal=1 allocations=1",
+      "ACCESS-BEGIN name=C-data kind=write via=C addr=0x3fa3d53450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53 probe=ctl_write_u8@controls.h:51 value=0xc3",
+      "ACCESS-DONE name=C-data",
+      "ACCESS-BEGIN name=C-data kind=write via=C addr=0x3fa3d5345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53 probe=ctl_write_u8@controls.h:51 value=0xc3",
+      "ACCESS-DONE name=C-data",
+      "ACCESS-BEGIN name=C-data-readback kind=read via=C addr=0x3fa3d53450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=C-data-readback value=0xc3",
+      "ACCESS-BEGIN name=C-data-readback kind=read via=C addr=0x3fa3d5345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=C-data-readback value=0xc3",
+      "CHECK name=C-data-readback bytes=16 value=0xc3 ok",
+      "CTL-COMPLETED control=96 variant=through-c arm=virtual-nested-pools",
+      "capstone-exec: exit image=./images/ctl-96 sha256=5fb4a388bd4f5af865c24f0dd4019932e27b47811d9a3e5d33ced7577e27133f"
+     ],
+     "cache_states": [
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3fa3d53440",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3fa3d53440",
+      "CACHE when=after-alloc-C bufsize=256 total=1 freecurr=0 limit=0 head=0"
+     ],
+     "sources": {
+      "A": {
+       "addr": "0x3fa3d53440",
+       "path": "free-list",
+       "list_head_before": "0x3fa3d53440",
+       "freecurr": "1->0",
+       "total": "1->1"
+      }
+     },
+     "successor": {
+      "A": "0x3fa3d53440",
+      "C": "0x3fa3d53440",
+      "equal": true,
+      "allocations": 1
+     },
+     "completed": true,
+     "control": "96",
+     "variant": "through-c",
+     "image": "ctl-96",
+     "image_sha256": "5fb4a388bd4f5af865c24f0dd4019932e27b47811d9a3e5d33ced7577e27133f",
+     "argv": [
+      "96",
+      "through-c"
+     ],
+     "predicted": "C's address equals A's; access through C completes",
+     "observed": "completed",
+     "prediction": "holds"
+    },
+    {
+     "exit": {
+      "kind": "signal",
+      "value": 11,
+      "fault": "capstone-exec: domain fault cause=25 pc=0x3fbaf8de44 address=0x3fbb073450 ra=0x3fbaf8e918 fp=0x3fbaefff00 entry=0x3fbaf807d4 code=0x3fbaf80000-0x3fbb000000 last=0x42 preparing=0x42 sha256=5fb4a388bd4f5af865c24f0dd4019932e27b47811d9a3e5d33ced7577e27133f image=./images/ctl-96 chain=0x3fbaf8ecf4,0x3fbaf80a38,0x3fbaf800a8"
+     },
+     "accesses": [
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3fbb073450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3fbb07345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data",
+       "kind": "write",
+       "via": "C",
+       "addr": "0x3fbb073450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data",
+       "kind": "write",
+       "via": "C",
+       "addr": "0x3fbb07345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data-readback",
+       "kind": "read",
+       "via": "C",
+       "addr": "0x3fbb073450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xc3"
+      },
+      {
+       "name": "C-data-readback",
+       "kind": "read",
+       "via": "C",
+       "addr": "0x3fbb07345f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xc3"
+      },
+      {
+       "name": "stale-A-read",
+       "kind": "read",
+       "via": "A(stale)",
+       "addr": "0x3fbb073450",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:59",
+       "probe": "read_probe@capstone/bug-corpora/memcached/allocator-repros/shared/corpus.h:81",
+       "done": false
+      }
+     ],
+     "chunks": {
+      "A-cap": "[0x3fbb073440,0x3fbb073540) tag=1",
+      "A": "0x3fbb073440",
+      "C": "0x3fbb073440",
+      "C-cap": "[0x3fbb073440,0x3fbb073540)"
+     },
+     "checks": [
+      "CHECK name=A-renewed-object-shape object=[0x3fbb073440,0x3fbb073540) cursor=0x3fbb073440 ok",
+      "CHECK name=C-data-readback bytes=16 value=0xc3 ok"
+     ],
+     "lines": [
+      "[CAPSTONE] Cap mem access on revoked capability: pc = 3fbaf8de44, rs1 = x10, imm = 0, cursor = 3fbb073450, bounds = (3fbb073440, 3fbb073540)",
+      "Segmentation fault",
+      "CTL control=96 variant=stale arm=virtual-nested-pools",
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0",
+      "PRIME alloc=0 addr=0x3fbb073440 path=malloc",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3fbb073440",
+      "SOURCE name=A addr=0x3fbb073440 path=free-list list_head_before=0x3fbb073440 freecurr=1->0 total=1->1",
+      "CHUNK-CAP name=A addr=0x3fbb073440 base=0x3fbb073440 end=0x3fbb073540 tag=1",
+      "CHECK name=A-renewed-object-shape object=[0x3fbb073440,0x3fbb073540) cursor=0x3fbb073440 ok",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3fbb073450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3fbb07345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "FREED A by cache_free(cache, A)",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3fbb073440",
+      "ALLOC try=1 addr=0x3fbb073440",
+      "CHUNK name=C addr=0x3fbb073440",
+      "CHUNK-CAP name=C base=0x3fbb073440 end=0x3fbb073540",
+      "CACHE when=after-alloc-C bufsize=256 total=1 freecurr=0 limit=0 head=0",
+      "SUCCESSOR A=0x3fbb073440 C=0x3fbb073440 equal=1 allocations=1",
+      "ACCESS-BEGIN name=C-data kind=write via=C addr=0x3fbb073450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53 probe=ctl_write_u8@controls.h:51 value=0xc3",
+      "ACCESS-DONE name=C-data",
+      "ACCESS-BEGIN name=C-data kind=write via=C addr=0x3fbb07345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53 probe=ctl_write_u8@controls.h:51 value=0xc3",
+      "ACCESS-DONE name=C-data",
+      "ACCESS-BEGIN name=C-data-readback kind=read via=C addr=0x3fbb073450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=C-data-readback value=0xc3",
+      "ACCESS-BEGIN name=C-data-readback kind=read via=C addr=0x3fbb07345f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=C-data-readback value=0xc3",
+      "CHECK name=C-data-readback bytes=16 value=0xc3 ok",
+      "ACCESS-BEGIN name=stale-A-read kind=read via=A(stale) addr=0x3fbb073450 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:59 probe=read_probe@shared/corpus.h",
+      "capstone-exec: domain fault cause=25 pc=0x3fbaf8de44 address=0x3fbb073450 ra=0x3fbaf8e918 fp=0x3fbaefff00 entry=0x3fbaf807d4 code=0x3fbaf80000-0x3fbb000000 last=0x42 preparing=0x42 sha256=5fb4a388bd4f5af865c24f0dd4019932e27b47811d9a3e5d33ced7577e27133f image=./images/ctl-96 chain=0x3fbaf8ecf4,0x3fbaf80a38,0x3fbaf800a8"
+     ],
+     "cache_states": [
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3fbb073440",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3fbb073440",
+      "CACHE when=after-alloc-C bufsize=256 total=1 freecurr=0 limit=0 head=0"
+     ],
+     "sources": {
+      "A": {
+       "addr": "0x3fbb073440",
+       "path": "free-list",
+       "list_head_before": "0x3fbb073440",
+       "freecurr": "1->0",
+       "total": "1->1"
+      }
+     },
+     "successor": {
+      "A": "0x3fbb073440",
+      "C": "0x3fbb073440",
+      "equal": true,
+      "allocations": 1
+     },
+     "completed": false,
+     "fault": {
+      "cause": 25,
+      "pc": "0x3fbaf8de44",
+      "link_pc": "0x1de44",
+      "symbol": "read_probe",
+      "offset": 0,
+      "source": "capstone/bug-corpora/memcached/allocator-repros/shared/corpus.h:81:10",
+      "line": "domain fault cause=25 pc=0x3fbaf8de44 address=0x3fbb073450 ra=0x3fbaf8e918 fp=0x3fbaefff00 entry=0x3fbaf807d4 code=0x3fbaf80000-"
+     },
+     "faulted_access": {
+      "name": "stale-A-read",
+      "kind": "read",
+      "via": "A(stale)",
+      "addr": "0x3fbb073450",
+      "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:59",
+      "probe": "read_probe@capstone/bug-corpora/memcached/allocator-repros/shared/corpus.h:81",
+      "done": false
+     },
+     "control": "96",
+     "variant": "stale",
+     "image": "ctl-96",
+     "image_sha256": "5fb4a388bd4f5af865c24f0dd4019932e27b47811d9a3e5d33ced7577e27133f",
+     "argv": [
+      "96",
+      "stale"
+     ],
+     "predicted": "C's address equals A's; stale read rejected, cause 25 at read_probe",
+     "observed": "fault cause=25 pc=0x3fbaf8de44 in read_probe at capstone/bug-corpora/memcached/allocator-repros/shared/corpus.h:81:10 during stale-A-read",
+     "prediction": "holds"
+    }
+   ],
+   "rep": "f1"
+  },
+  {
+   "arm": "virtual-malloc",
+   "configuration": "virtual-memcached-stock",
+   "revision": "one-operand-crevoke-crenew 59201bdf2, QEMU ea57497908",
+   "boot_completed": true,
+   "build": {
+    "cache": {
+     "MCP_SUBLET": "OFF",
+     "MCP_STOCK_MALLOC": "ON"
+    },
+    "flags": "-std=c11 -O1 -g -DNDEBUG -DCHUNK_ALIGN_BYTES=16",
+    "images": {
+     "ctl-94": "84e71257c08463293d0b5a49990b9461a7641317577258738eacd5845b34409e",
+     "ctl-95": "106509fa7ce66b74aec766f824483c668d691b832f13822ed51e16b1d250b651",
+     "ctl-96": "ac0663e1fb5e090005aced02c2701c0dcc84853e45943616d39bca7d4cae1469"
+    },
+    "heap_controls": "0b90cbad4daca6aa2ac704295c5654563670d29770cbd40c7a4591eb97958d17"
+   },
+   "platform": {
+    "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+    "runner": "ca9f1fc778fe27ac8f56e16214f44a3222c45a63733bef8eb27ba4c05bc12870",
+    "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+    "profile": "virtual"
+   },
+   "heap_controls": {
+    "uaf-malloc": {
+     "observed": "fault",
+     "cause": 25,
+     "evidence": "capstone-exec: domain fault cause=25 pc=0x3f83e8dd68 address=0x3f83f1f040 ra=0x3f83e8e100 fp=0x3f83dfff60 entry=0x3f83e807d4 code=0x3f83e80000-0x3f83f00000 last"
+    },
+    "bounds-malloc": {
+     "observed": "fault",
+     "cause": 28,
+     "evidence": "capstone-exec: domain fault cause=28 pc=0x3fbd28dd34 address=0x3fbd32b050 ra=0x3fbd28dfb0 fp=0x3fbd1fff60 entry=0x3fbd2807d4 code=0x3fbd280000-0x3fbd300000 last"
+    }
+   },
+   "runs": [
+    {
+     "exit": {
+      "kind": "exit",
+      "value": 0
+     },
+     "accesses": [
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3f8d3b4080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:30",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3f8d3b408f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:30",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-free-list-link",
+       "kind": "read",
+       "via": "list-head",
+       "addr": "0x3f8d3b4070",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:53",
+       "probe": "ctl_load_ptr@controls.h:55",
+       "done": true,
+       "value": "0"
+      },
+      {
+       "name": "A-data-left-by-cache_free",
+       "kind": "read",
+       "via": "list-head",
+       "addr": "0x3f8d3b4080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:58",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xa1"
+      },
+      {
+       "name": "A-data-left-by-cache_free",
+       "kind": "read",
+       "via": "list-head",
+       "addr": "0x3f8d3b408f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:58",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xa1"
+      },
+      {
+       "name": "A-data-by-list-head",
+       "kind": "write",
+       "via": "list-head",
+       "addr": "0x3f8d3b4080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:59",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-list-head",
+       "kind": "write",
+       "via": "list-head",
+       "addr": "0x3f8d3b408f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:59",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-list-head-readback",
+       "kind": "read",
+       "via": "list-head",
+       "addr": "0x3f8d3b4080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:60",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0x7e"
+      },
+      {
+       "name": "A-data-by-list-head-readback",
+       "kind": "read",
+       "via": "list-head",
+       "addr": "0x3f8d3b408f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:60",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0x7e"
+      },
+      {
+       "name": "A-reissued-holds-list-head-write",
+       "kind": "read",
+       "via": "A-reissued",
+       "addr": "0x3f8d3b4080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:68",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0x7e"
+      },
+      {
+       "name": "A-reissued-holds-list-head-write",
+       "kind": "read",
+       "via": "A-reissued",
+       "addr": "0x3f8d3b408f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:68",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0x7e"
+      }
+     ],
+     "chunks": {
+      "A-cap": "[0x3f8d3b4070,0x3f8d3b4170) tag=1",
+      "A": "0x3f8d3b4070",
+      "A-reissued": "0x3f8d3b4070",
+      "A-reissued-cap": "[0x3f8d3b4070,0x3f8d3b4170)"
+     },
+     "checks": [
+      "CHECK name=A-ledger-issue object_reuses=0->1",
+      "CHECK name=A-link-left-by-cache_free link=0 want=0",
+      "CHECK name=A-data-left-by-cache_free bytes=16 value=0xa1 ok",
+      "CHECK name=A-data-by-list-head-readback bytes=16 value=0x7e ok",
+      "CHECK name=free-list-intact reissued=0x3f8d3b4070 A=0x3f8d3b4070 equal=1",
+      "CHECK name=A-reissued-holds-list-head-write bytes=16 value=0x7e ok"
+     ],
+     "lines": [
+      "CTL control=94 variant=list-head arm=virtual-malloc",
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0 object_reuses=0 object_releases=0",
+      "PRIME alloc=0 addr=0x3f8d3b4070 path=malloc",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3f8d3b4070 object_reuses=0 object_releases=1",
+      "SOURCE name=A addr=0x3f8d3b4070 path=free-list list_head_before=0x3f8d3b4070 freecurr=1->0 total=1->1",
+      "CHUNK-CAP name=A addr=0x3f8d3b4070 base=0x3f8d3b4070 end=0x3f8d3b4170 tag=1",
+      "CHECK name=A-ledger-issue object_reuses=0->1",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3f8d3b4080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:30 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3f8d3b408f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:30 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "FREED A by cache_free(cache, A)",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3f8d3b4070 object_reuses=1 object_releases=2",
+      "PARENT-REF name=list-head addr=0x3f8d3b4070 base=0x3f8d3b4070 end=0x3f8d3b4170 tag=1",
+      "ACCESS-BEGIN name=A-free-list-link kind=read via=list-head addr=0x3f8d3b4070 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:53 probe=ctl_load_ptr@controls.h:55",
+      "ACCESS-DONE name=A-free-list-link value=0",
+      "CHECK name=A-link-left-by-cache_free link=0 want=0",
+      "ACCESS-BEGIN name=A-data-left-by-cache_free kind=read via=list-head addr=0x3f8d3b4080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:58 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-data-left-by-cache_free value=0xa1",
+      "ACCESS-BEGIN name=A-data-left-by-cache_free kind=read via=list-head addr=0x3f8d3b408f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:58 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-data-left-by-cache_free value=0xa1",
+      "CHECK name=A-data-left-by-cache_free bytes=16 value=0xa1 ok",
+      "ACCESS-BEGIN name=A-data-by-list-head kind=write via=list-head addr=0x3f8d3b4080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:59 probe=ctl_write_u8@controls.h:51 value=0x7e",
+      "ACCESS-DONE name=A-data-by-list-head",
+      "ACCESS-BEGIN name=A-data-by-list-head kind=write via=list-head addr=0x3f8d3b408f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:59 probe=ctl_write_u8@controls.h:51 value=0x7e",
+      "ACCESS-DONE name=A-data-by-list-head",
+      "ACCESS-BEGIN name=A-data-by-list-head-readback kind=read via=list-head addr=0x3f8d3b4080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:60 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-data-by-list-head-readback value=0x7e",
+      "ACCESS-BEGIN name=A-data-by-list-head-readback kind=read via=list-head addr=0x3f8d3b408f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:60 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-data-by-list-head-readback value=0x7e",
+      "CHECK name=A-data-by-list-head-readback bytes=16 value=0x7e ok",
+      "CHUNK name=A-reissued addr=0x3f8d3b4070",
+      "CHUNK-CAP name=A-reissued base=0x3f8d3b4070 end=0x3f8d3b4170",
+      "CHECK name=free-list-intact reissued=0x3f8d3b4070 A=0x3f8d3b4070 equal=1",
+      "ACCESS-BEGIN name=A-reissued-holds-list-head-write kind=read via=A-reissued addr=0x3f8d3b4080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:68 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-reissued-holds-list-head-write value=0x7e",
+      "ACCESS-BEGIN name=A-reissued-holds-list-head-write kind=read via=A-reissued addr=0x3f8d3b408f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/94_ctl_parent_cache_list_reference/case.c:68 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=A-reissued-holds-list-head-write value=0x7e",
+      "CHECK name=A-reissued-holds-list-head-write bytes=16 value=0x7e ok",
+      "FREED A-reissued by cache_free",
+      "CACHE when=end bufsize=256 total=1 freecurr=1 limit=0 head=0x3f8d3b4070 object_reuses=2 object_releases=3",
+      "CTL-COMPLETED control=94 variant=list-head arm=virtual-malloc",
+      "capstone-exec: exit image=./images/ctl-94 sha256=84e71257c08463293d0b5a49990b9461a7641317577258738eacd5845b34409e"
+     ],
+     "cache_states": [
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0 object_reuses=0 object_releases=0",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3f8d3b4070 object_reuses=0 object_releases=1",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3f8d3b4070 object_reuses=1 object_releases=2",
+      "CACHE when=end bufsize=256 total=1 freecurr=1 limit=0 head=0x3f8d3b4070 object_reuses=2 object_releases=3"
+     ],
+     "sources": {
+      "A": {
+       "addr": "0x3f8d3b4070",
+       "path": "free-list",
+       "list_head_before": "0x3f8d3b4070",
+       "freecurr": "1->0",
+       "total": "1->1"
+      }
+     },
+     "parent_ref": {
+      "name": "list-head",
+      "addr": "0x3f8d3b4070",
+      "base": "0x3f8d3b4070",
+      "end": "0x3f8d3b4170",
+      "tag": "1"
+     },
+     "completed": true,
+     "control": "94",
+     "variant": "list-head",
+     "image": "ctl-94",
+     "image_sha256": "84e71257c08463293d0b5a49990b9461a7641317577258738eacd5845b34409e",
+     "argv": [
+      "94",
+      "list-head"
+     ],
+     "predicted": "completes, the read returns what the allocator left there",
+     "observed": "completed",
+     "prediction": "holds"
+    },
+    {
+     "exit": {
+      "kind": "exit",
+      "value": 0
+     },
+     "accesses": [
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3f9949f080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:24",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3f9949f08f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:24",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "B-data-by-owner",
+       "kind": "write",
+       "via": "B",
+       "addr": "0x3f9949f1c0",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:25",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "B-data-by-owner",
+       "kind": "write",
+       "via": "B",
+       "addr": "0x3f9949f1cf",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:25",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "B-data-after-A-free",
+       "kind": "read",
+       "via": "B",
+       "addr": "0x3f9949f1c0",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:32",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xb2"
+      },
+      {
+       "name": "B-data-after-A-free",
+       "kind": "read",
+       "via": "B",
+       "addr": "0x3f9949f1cf",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:32",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xb2"
+      },
+      {
+       "name": "B-data-rewrite",
+       "kind": "write",
+       "via": "B",
+       "addr": "0x3f9949f1c0",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:33",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "B-data-rewrite",
+       "kind": "write",
+       "via": "B",
+       "addr": "0x3f9949f1cf",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:33",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "B-data-rewrite-readback",
+       "kind": "read",
+       "via": "B",
+       "addr": "0x3f9949f1c0",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:34",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xb5"
+      },
+      {
+       "name": "B-data-rewrite-readback",
+       "kind": "read",
+       "via": "B",
+       "addr": "0x3f9949f1cf",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:34",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xb5"
+      }
+     ],
+     "chunks": {
+      "A-cap": "[0x3f9949f070,0x3f9949f170) tag=1",
+      "A": "0x3f9949f070",
+      "B-cap": "[0x3f9949f1b0,0x3f9949f2b0) tag=1",
+      "B": "0x3f9949f1b0"
+     },
+     "checks": [
+      "CHECK name=A-ledger-issue object_reuses=0->1",
+      "CHECK name=B-ledger-issue object_reuses=1->2",
+      "CHECK name=B-data-after-A-free bytes=16 value=0xb2 ok",
+      "CHECK name=B-data-rewrite-readback bytes=16 value=0xb5 ok"
+     ],
+     "lines": [
+      "CTL control=95 variant=sibling arm=virtual-malloc",
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0 object_reuses=0 object_releases=0",
+      "PRIME alloc=0 addr=0x3f9949f070 path=malloc",
+      "PRIME alloc=1 addr=0x3f9949f1b0 path=malloc",
+      "CACHE when=primed bufsize=256 total=2 freecurr=2 limit=0 head=0x3f9949f070 object_reuses=0 object_releases=2",
+      "SOURCE name=A addr=0x3f9949f070 path=free-list list_head_before=0x3f9949f070 freecurr=2->1 total=2->2",
+      "CHUNK-CAP name=A addr=0x3f9949f070 base=0x3f9949f070 end=0x3f9949f170 tag=1",
+      "CHECK name=A-ledger-issue object_reuses=0->1",
+      "SOURCE name=B addr=0x3f9949f1b0 path=free-list list_head_before=0x3f9949f1b0 freecurr=1->0 total=2->2",
+      "CHUNK-CAP name=B addr=0x3f9949f1b0 base=0x3f9949f1b0 end=0x3f9949f2b0 tag=1",
+      "CHECK name=B-ledger-issue object_reuses=1->2",
+      "SIBLING A=0x3f9949f070 B=0x3f9949f1b0 distance=320",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3f9949f080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:24 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3f9949f08f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:24 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "ACCESS-BEGIN name=B-data-by-owner kind=write via=B addr=0x3f9949f1c0 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:25 probe=ctl_write_u8@controls.h:51 value=0xb2",
+      "ACCESS-DONE name=B-data-by-owner",
+      "ACCESS-BEGIN name=B-data-by-owner kind=write via=B addr=0x3f9949f1cf site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:25 probe=ctl_write_u8@controls.h:51 value=0xb2",
+      "ACCESS-DONE name=B-data-by-owner",
+      "FREED A by cache_free(cache, A)",
+      "CACHE when=after-free-A bufsize=256 total=2 freecurr=1 limit=0 head=0x3f9949f070 object_reuses=2 object_releases=3",
+      "ACCESS-BEGIN name=B-data-after-A-free kind=read via=B addr=0x3f9949f1c0 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:32 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=B-data-after-A-free value=0xb2",
+      "ACCESS-BEGIN name=B-data-after-A-free kind=read via=B addr=0x3f9949f1cf site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:32 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=B-data-after-A-free value=0xb2",
+      "CHECK name=B-data-after-A-free bytes=16 value=0xb2 ok",
+      "ACCESS-BEGIN name=B-data-rewrite kind=write via=B addr=0x3f9949f1c0 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:33 probe=ctl_write_u8@controls.h:51 value=0xb5",
+      "ACCESS-DONE name=B-data-rewrite",
+      "ACCESS-BEGIN name=B-data-rewrite kind=write via=B addr=0x3f9949f1cf site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:33 probe=ctl_write_u8@controls.h:51 value=0xb5",
+      "ACCESS-DONE name=B-data-rewrite",
+      "ACCESS-BEGIN name=B-data-rewrite-readback kind=read via=B addr=0x3f9949f1c0 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:34 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=B-data-rewrite-readback value=0xb5",
+      "ACCESS-BEGIN name=B-data-rewrite-readback kind=read via=B addr=0x3f9949f1cf site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/95_ctl_sibling_same_cache/case.c:34 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=B-data-rewrite-readback value=0xb5",
+      "CHECK name=B-data-rewrite-readback bytes=16 value=0xb5 ok",
+      "FREED B by cache_free(cache, B)",
+      "CACHE when=end bufsize=256 total=2 freecurr=2 limit=0 head=0x3f9949f1b0 object_reuses=2 object_releases=4",
+      "CTL-COMPLETED control=95 variant=sibling arm=virtual-malloc",
+      "capstone-exec: exit image=./images/ctl-95 sha256=106509fa7ce66b74aec766f824483c668d691b832f13822ed51e16b1d250b651"
+     ],
+     "cache_states": [
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0 object_reuses=0 object_releases=0",
+      "CACHE when=primed bufsize=256 total=2 freecurr=2 limit=0 head=0x3f9949f070 object_reuses=0 object_releases=2",
+      "CACHE when=after-free-A bufsize=256 total=2 freecurr=1 limit=0 head=0x3f9949f070 object_reuses=2 object_releases=3",
+      "CACHE when=end bufsize=256 total=2 freecurr=2 limit=0 head=0x3f9949f1b0 object_reuses=2 object_releases=4"
+     ],
+     "sources": {
+      "A": {
+       "addr": "0x3f9949f070",
+       "path": "free-list",
+       "list_head_before": "0x3f9949f070",
+       "freecurr": "2->1",
+       "total": "2->2"
+      },
+      "B": {
+       "addr": "0x3f9949f1b0",
+       "path": "free-list",
+       "list_head_before": "0x3f9949f1b0",
+       "freecurr": "1->0",
+       "total": "2->2"
+      }
+     },
+     "completed": true,
+     "control": "95",
+     "variant": "sibling",
+     "image": "ctl-95",
+     "image_sha256": "106509fa7ce66b74aec766f824483c668d691b832f13822ed51e16b1d250b651",
+     "argv": [
+      "95",
+      "sibling"
+     ],
+     "predicted": "completes, B's contents intact",
+     "observed": "completed",
+     "prediction": "holds"
+    },
+    {
+     "exit": {
+      "kind": "exit",
+      "value": 0
+     },
+     "accesses": [
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3faec9f080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3faec9f08f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data",
+       "kind": "write",
+       "via": "C",
+       "addr": "0x3faec9f080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data",
+       "kind": "write",
+       "via": "C",
+       "addr": "0x3faec9f08f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data-readback",
+       "kind": "read",
+       "via": "C",
+       "addr": "0x3faec9f080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xc3"
+      },
+      {
+       "name": "C-data-readback",
+       "kind": "read",
+       "via": "C",
+       "addr": "0x3faec9f08f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xc3"
+      }
+     ],
+     "chunks": {
+      "A-cap": "[0x3faec9f070,0x3faec9f170) tag=1",
+      "A": "0x3faec9f070",
+      "C": "0x3faec9f070",
+      "C-cap": "[0x3faec9f070,0x3faec9f170)"
+     },
+     "checks": [
+      "CHECK name=A-ledger-issue object_reuses=0->1",
+      "CHECK name=C-data-readback bytes=16 value=0xc3 ok"
+     ],
+     "lines": [
+      "CTL control=96 variant=through-c arm=virtual-malloc",
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0 object_reuses=0 object_releases=0",
+      "PRIME alloc=0 addr=0x3faec9f070 path=malloc",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3faec9f070 object_reuses=0 object_releases=1",
+      "SOURCE name=A addr=0x3faec9f070 path=free-list list_head_before=0x3faec9f070 freecurr=1->0 total=1->1",
+      "CHUNK-CAP name=A addr=0x3faec9f070 base=0x3faec9f070 end=0x3faec9f170 tag=1",
+      "CHECK name=A-ledger-issue object_reuses=0->1",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3faec9f080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3faec9f08f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "FREED A by cache_free(cache, A)",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3faec9f070 object_reuses=1 object_releases=2",
+      "ALLOC try=1 addr=0x3faec9f070",
+      "CHUNK name=C addr=0x3faec9f070",
+      "CHUNK-CAP name=C base=0x3faec9f070 end=0x3faec9f170",
+      "CACHE when=after-alloc-C bufsize=256 total=1 freecurr=0 limit=0 head=0 object_reuses=2 object_releases=2",
+      "SUCCESSOR A=0x3faec9f070 C=0x3faec9f070 equal=1 allocations=1",
+      "ACCESS-BEGIN name=C-data kind=write via=C addr=0x3faec9f080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53 probe=ctl_write_u8@controls.h:51 value=0xc3",
+      "ACCESS-DONE name=C-data",
+      "ACCESS-BEGIN name=C-data kind=write via=C addr=0x3faec9f08f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53 probe=ctl_write_u8@controls.h:51 value=0xc3",
+      "ACCESS-DONE name=C-data",
+      "ACCESS-BEGIN name=C-data-readback kind=read via=C addr=0x3faec9f080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=C-data-readback value=0xc3",
+      "ACCESS-BEGIN name=C-data-readback kind=read via=C addr=0x3faec9f08f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=C-data-readback value=0xc3",
+      "CHECK name=C-data-readback bytes=16 value=0xc3 ok",
+      "CTL-COMPLETED control=96 variant=through-c arm=virtual-malloc",
+      "capstone-exec: exit image=./images/ctl-96 sha256=ac0663e1fb5e090005aced02c2701c0dcc84853e45943616d39bca7d4cae1469"
+     ],
+     "cache_states": [
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0 object_reuses=0 object_releases=0",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3faec9f070 object_reuses=0 object_releases=1",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3faec9f070 object_reuses=1 object_releases=2",
+      "CACHE when=after-alloc-C bufsize=256 total=1 freecurr=0 limit=0 head=0 object_reuses=2 object_releases=2"
+     ],
+     "sources": {
+      "A": {
+       "addr": "0x3faec9f070",
+       "path": "free-list",
+       "list_head_before": "0x3faec9f070",
+       "freecurr": "1->0",
+       "total": "1->1"
+      }
+     },
+     "successor": {
+      "A": "0x3faec9f070",
+      "C": "0x3faec9f070",
+      "equal": true,
+      "allocations": 1
+     },
+     "completed": true,
+     "control": "96",
+     "variant": "through-c",
+     "image": "ctl-96",
+     "image_sha256": "ac0663e1fb5e090005aced02c2701c0dcc84853e45943616d39bca7d4cae1469",
+     "argv": [
+      "96",
+      "through-c"
+     ],
+     "predicted": "C's address equals A's; access through C completes",
+     "observed": "completed",
+     "prediction": "holds"
+    },
+    {
+     "exit": {
+      "kind": "exit",
+      "value": 0
+     },
+     "accesses": [
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3f82b9f080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "A-data-by-owner",
+       "kind": "write",
+       "via": "A",
+       "addr": "0x3f82b9f08f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data",
+       "kind": "write",
+       "via": "C",
+       "addr": "0x3f82b9f080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data",
+       "kind": "write",
+       "via": "C",
+       "addr": "0x3f82b9f08f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53",
+       "probe": "ctl_write_u8@controls.h:51",
+       "done": true
+      },
+      {
+       "name": "C-data-readback",
+       "kind": "read",
+       "via": "C",
+       "addr": "0x3f82b9f080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xc3"
+      },
+      {
+       "name": "C-data-readback",
+       "kind": "read",
+       "via": "C",
+       "addr": "0x3f82b9f08f",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54",
+       "probe": "ctl_read_u8@controls.h:48",
+       "done": true,
+       "value": "0xc3"
+      },
+      {
+       "name": "stale-A-read",
+       "kind": "read",
+       "via": "A(stale)",
+       "addr": "0x3f82b9f080",
+       "site": "capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:59",
+       "probe": "read_probe@capstone/bug-corpora/memcached/allocator-repros/shared/corpus.h:81",
+       "done": true,
+       "value": "0xc3"
+      }
+     ],
+     "chunks": {
+      "A-cap": "[0x3f82b9f070,0x3f82b9f170) tag=1",
+      "A": "0x3f82b9f070",
+      "C": "0x3f82b9f070",
+      "C-cap": "[0x3f82b9f070,0x3f82b9f170)"
+     },
+     "checks": [
+      "CHECK name=A-ledger-issue object_reuses=0->1",
+      "CHECK name=C-data-readback bytes=16 value=0xc3 ok"
+     ],
+     "lines": [
+      "CTL control=96 variant=stale arm=virtual-malloc",
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0 object_reuses=0 object_releases=0",
+      "PRIME alloc=0 addr=0x3f82b9f070 path=malloc",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3f82b9f070 object_reuses=0 object_releases=1",
+      "SOURCE name=A addr=0x3f82b9f070 path=free-list list_head_before=0x3f82b9f070 freecurr=1->0 total=1->1",
+      "CHUNK-CAP name=A addr=0x3f82b9f070 base=0x3f82b9f070 end=0x3f82b9f170 tag=1",
+      "CHECK name=A-ledger-issue object_reuses=0->1",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3f82b9f080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "ACCESS-BEGIN name=A-data-by-owner kind=write via=A addr=0x3f82b9f08f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:27 probe=ctl_write_u8@controls.h:51 value=0xa1",
+      "ACCESS-DONE name=A-data-by-owner",
+      "FREED A by cache_free(cache, A)",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3f82b9f070 object_reuses=1 object_releases=2",
+      "ALLOC try=1 addr=0x3f82b9f070",
+      "CHUNK name=C addr=0x3f82b9f070",
+      "CHUNK-CAP name=C base=0x3f82b9f070 end=0x3f82b9f170",
+      "CACHE when=after-alloc-C bufsize=256 total=1 freecurr=0 limit=0 head=0 object_reuses=2 object_releases=2",
+      "SUCCESSOR A=0x3f82b9f070 C=0x3f82b9f070 equal=1 allocations=1",
+      "ACCESS-BEGIN name=C-data kind=write via=C addr=0x3f82b9f080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53 probe=ctl_write_u8@controls.h:51 value=0xc3",
+      "ACCESS-DONE name=C-data",
+      "ACCESS-BEGIN name=C-data kind=write via=C addr=0x3f82b9f08f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:53 probe=ctl_write_u8@controls.h:51 value=0xc3",
+      "ACCESS-DONE name=C-data",
+      "ACCESS-BEGIN name=C-data-readback kind=read via=C addr=0x3f82b9f080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=C-data-readback value=0xc3",
+      "ACCESS-BEGIN name=C-data-readback kind=read via=C addr=0x3f82b9f08f site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:54 probe=ctl_read_u8@controls.h:48",
+      "ACCESS-DONE name=C-data-readback value=0xc3",
+      "CHECK name=C-data-readback bytes=16 value=0xc3 ok",
+      "ACCESS-BEGIN name=stale-A-read kind=read via=A(stale) addr=0x3f82b9f080 site=capstone/bug-corpora/memcached/allocator-repros/controls/lifetime-cache/96_ctl_successor_reuses_object/case.c:59 probe=read_probe@shared/corpus.h",
+      "ACCESS-DONE name=stale-A-read value=0xc3",
+      "STALE-READ value=0xc3 reads=C-data",
+      "CTL-COMPLETED control=96 variant=stale arm=virtual-malloc",
+      "capstone-exec: exit image=./images/ctl-96 sha256=ac0663e1fb5e090005aced02c2701c0dcc84853e45943616d39bca7d4cae1469"
+     ],
+     "cache_states": [
+      "CACHE when=created bufsize=256 total=0 freecurr=0 limit=0 head=0 object_reuses=0 object_releases=0",
+      "CACHE when=primed bufsize=256 total=1 freecurr=1 limit=0 head=0x3f82b9f070 object_reuses=0 object_releases=1",
+      "CACHE when=after-free-A bufsize=256 total=1 freecurr=1 limit=0 head=0x3f82b9f070 object_reuses=1 object_releases=2",
+      "CACHE when=after-alloc-C bufsize=256 total=1 freecurr=0 limit=0 head=0 object_reuses=2 object_releases=2"
+     ],
+     "sources": {
+      "A": {
+       "addr": "0x3f82b9f070",
+       "path": "free-list",
+       "list_head_before": "0x3f82b9f070",
+       "freecurr": "1->0",
+       "total": "1->1"
+      }
+     },
+     "successor": {
+      "A": "0x3f82b9f070",
+      "C": "0x3f82b9f070",
+      "equal": true,
+      "allocations": 1
+     },
+     "stale_read": {
+      "value": "0xc3",
+      "reads": "C-data"
+     },
+     "completed": true,
+     "control": "96",
+     "variant": "stale",
+     "image": "ctl-96",
+     "image_sha256": "ac0663e1fb5e090005aced02c2701c0dcc84853e45943616d39bca7d4cae1469",
+     "argv": [
+      "96",
+      "stale"
+     ],
+     "predicted": "C's address equals A's; stale read completes and reads C's data (0xc3)",
+     "observed": "completed; read 0xc3 (C-data)",
+     "prediction": "holds"
+    }
+   ],
+   "rep": "f1"
+  }
+ ],
+ "all_predictions_held": true
+}

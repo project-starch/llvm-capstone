@@ -1,0 +1,513 @@
+{
+ "meta": {
+  "tree": "one-operand-crevoke-crenew 59201bdf2, QEMU ea57497908"
+ },
+ "arms": {
+  "stock": {
+   "image": "~/crenew-step4/corpus/work-sqlite-mruby-perl/perl-corpus-stock/svhead-controls.dom",
+   "image_sha256": "8a6f7a7447701dd7c040dbf7ac819c2657093cc3fb4e9c4481fd3dbda9ba1135",
+   "serial_sha256": "710832cc2b47a34879a6caef0c5bb1542cdc059863f90be98fc6d66262bae671",
+   "runs": {
+    "parent": {
+     "exit": 0,
+     "seconds": 15.68,
+     "result": "PASS",
+     "result_detail": "freed_flags=yes free_list_link=yes write_read_back=yes",
+     "pointers": {
+      "A": {
+       "addr": "0x3face6baa0",
+       "base": "0x3face6aae0",
+       "end": "0x3face6bad0"
+      },
+      "arena": {
+       "addr": "0x3face6aae0",
+       "base": "0x3face6aae0",
+       "end": "0x3face6bad0"
+      },
+      "parent": {
+       "addr": "0x3face6baa0",
+       "base": "0x3face6aae0",
+       "end": "0x3face6bad0"
+      }
+     },
+     "probes": [
+      {
+       "label": "parent-read-flags",
+       "at": "svhead-controls.c:130"
+      },
+      {
+       "label": "parent-read-link",
+       "at": "svhead-controls.c:131"
+      },
+      {
+       "label": "parent-read-refcnt",
+       "at": "svhead-controls.c:132"
+      },
+      {
+       "label": "parent-write-refcnt",
+       "at": "svhead-controls.c:133"
+      },
+      {
+       "label": "parent-read-refcnt",
+       "at": "svhead-controls.c:134"
+      },
+      {
+       "label": "parent-write-refcnt",
+       "at": "svhead-controls.c:135"
+      },
+      {
+       "label": "parent-read-refcnt",
+       "at": "svhead-controls.c:136"
+      }
+     ],
+     "last_probe": {
+      "label": "parent-read-refcnt",
+      "at": "svhead-controls.c:136"
+     },
+     "lines": [
+      "BUILD release",
+      "INTERP up sizeof(SV)=48 arena_heads=84",
+      "FREE A refcnt=1 (SvREFCNT_dec to 0: sv_free2 -> del_SV -> plant_SV)",
+      "PL_sv_root addr=0x3face6baa0 (A=0x3face6baa0) link_expected=0x3faccfeee0",
+      "ARENA_HEAD via=walk addr=0x3face6baa0",
+      "READ flags=0xff (SVTYPEMASK=0xff) link=0x3faccfeee0 refcnt=0 wrote=0x5a5a5a5a read_back=0x5a5a5a5a restored=0",
+      "RESULT parent PASS freed_flags=yes free_list_link=yes write_read_back=yes",
+      "DONE parent"
+     ],
+     "outcome": "completed",
+     "stderr": [
+      "capstone-exec: exit image=/mnt/vm/ctl.dom sha256=8a6f7a7447701dd7c040dbf7ac819c2657093cc3fb4e9c4481fd3dbda9ba1135"
+     ]
+    },
+    "sibling": {
+     "exit": 0,
+     "seconds": 17.09,
+     "result": "PASS",
+     "result_detail": "intact=yes write_read_back=yes",
+     "pointers": {
+      "A": {
+       "addr": "0x3f85828c20",
+       "base": "0x3f85827c90",
+       "end": "0x3f85828c80"
+      },
+      "B": {
+       "addr": "0x3f85828c50",
+       "base": "0x3f85827c90",
+       "end": "0x3f85828c80"
+      }
+     },
+     "probes": [
+      {
+       "label": "sibling-read-flags",
+       "at": "svhead-controls.c:178"
+      },
+      {
+       "label": "sibling-read-iv",
+       "at": "svhead-controls.c:179"
+      },
+      {
+       "label": "sibling-read-refcnt",
+       "at": "svhead-controls.c:180"
+      },
+      {
+       "label": "sibling-write-iv",
+       "at": "svhead-controls.c:181"
+      },
+      {
+       "label": "sibling-read-iv",
+       "at": "svhead-controls.c:182"
+      }
+     ],
+     "last_probe": {
+      "label": "sibling-read-iv",
+      "at": "svhead-controls.c:182"
+     },
+     "lines": [
+      "BUILD release",
+      "INTERP up sizeof(SV)=48 arena_heads=84",
+      "SAME_ARENA arena=0x3f85827c90 tries=3 B_minus_A=48",
+      "FREE A refcnt=1",
+      "READ B flags=0x1101 iv=0xb0b0b02 refcnt=1 wrote=0xb0b0b03 read_back=0xb0b0b03 SvIV=0xb0b0b03 after_sv_setiv=0xb0b0b02",
+      "RESULT sibling PASS intact=yes write_read_back=yes",
+      "DONE sibling"
+     ],
+     "outcome": "completed",
+     "stderr": [
+      "capstone-exec: exit image=/mnt/vm/ctl.dom sha256=8a6f7a7447701dd7c040dbf7ac819c2657093cc3fb4e9c4481fd3dbda9ba1135"
+     ]
+    },
+    "successor": {
+     "exit": 0,
+     "seconds": 24.41,
+     "result": "PASS",
+     "result_detail": "C_at_A=yes C_read_write=yes",
+     "pointers": {
+      "A": {
+       "addr": "0x3f90f5baa0",
+       "base": "0x3f90f5aae0",
+       "end": "0x3f90f5bad0"
+      },
+      "C": {
+       "addr": "0x3f90f5baa0",
+       "base": "0x3f90f5aae0",
+       "end": "0x3f90f5bad0"
+      }
+     },
+     "probes": [
+      {
+       "label": "successor-read-flags",
+       "at": "svhead-controls.c:222"
+      },
+      {
+       "label": "successor-read-iv",
+       "at": "svhead-controls.c:223"
+      },
+      {
+       "label": "successor-write-iv",
+       "at": "svhead-controls.c:224"
+      },
+      {
+       "label": "successor-read-iv",
+       "at": "svhead-controls.c:225"
+      }
+     ],
+     "last_probe": {
+      "label": "successor-read-iv",
+      "at": "svhead-controls.c:225"
+     },
+     "lines": [
+      "BUILD release",
+      "INTERP up sizeof(SV)=48 arena_heads=84",
+      "FREE A refcnt=1",
+      "SUCCESSOR newSV_calls=1 A=0x3f90f5baa0 C=0x3f90f5baa0 equal=yes",
+      "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+      "RESULT successor PASS C_at_A=yes C_read_write=yes",
+      "DONE successor"
+     ],
+     "outcome": "completed",
+     "stderr": [
+      "capstone-exec: exit image=/mnt/vm/ctl.dom sha256=8a6f7a7447701dd7c040dbf7ac819c2657093cc3fb4e9c4481fd3dbda9ba1135"
+     ]
+    },
+    "stale": {
+     "exit": 0,
+     "seconds": 18.61,
+     "result": "PASS",
+     "result_detail": "stale_read_completed reads_C=yes",
+     "pointers": {
+      "A": {
+       "addr": "0x3f9c6dbaa0",
+       "base": "0x3f9c6daae0",
+       "end": "0x3f9c6dbad0"
+      },
+      "C": {
+       "addr": "0x3f9c6dbaa0",
+       "base": "0x3f9c6daae0",
+       "end": "0x3f9c6dbad0"
+      }
+     },
+     "probes": [
+      {
+       "label": "successor-read-flags",
+       "at": "svhead-controls.c:222"
+      },
+      {
+       "label": "successor-read-iv",
+       "at": "svhead-controls.c:223"
+      },
+      {
+       "label": "successor-write-iv",
+       "at": "svhead-controls.c:224"
+      },
+      {
+       "label": "successor-read-iv",
+       "at": "svhead-controls.c:225"
+      },
+      {
+       "label": "stale-read-flags",
+       "at": "svhead-controls.c:236"
+      },
+      {
+       "label": "stale-read-iv",
+       "at": "svhead-controls.c:237"
+      }
+     ],
+     "last_probe": {
+      "label": "stale-read-iv",
+      "at": "svhead-controls.c:237"
+     },
+     "lines": [
+      "BUILD release",
+      "INTERP up sizeof(SV)=48 arena_heads=84",
+      "FREE A refcnt=1",
+      "SUCCESSOR newSV_calls=1 A=0x3f9c6dbaa0 C=0x3f9c6dbaa0 equal=yes",
+      "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+      "STALE about to read through the old pointer to A (0x3f9c6dbaa0)",
+      "READ via_A flags=0x1101 iv=0xc0c0c05 (C: flags=0x1101 iv=0xc0c0c05)",
+      "RESULT stale PASS stale_read_completed reads_C=yes",
+      "DONE stale"
+     ],
+     "outcome": "completed",
+     "stderr": [
+      "capstone-exec: exit image=/mnt/vm/ctl.dom sha256=8a6f7a7447701dd7c040dbf7ac819c2657093cc3fb4e9c4481fd3dbda9ba1135"
+     ]
+    }
+   }
+  },
+  "protected": {
+   "image": "~/crenew-step4/corpus/work-sqlite-mruby-perl/perl-corpus-protected/svhead-controls.dom",
+   "image_sha256": "f33ef92501017e2adf31fa51bd07be6ac698e028b4e6f048985acb623d96bd53",
+   "serial_sha256": "a3c2b07e4392ba4fce1cfdd2bf64cf3f24eb814fcbd2bd5b567a1fd18312d82a",
+   "runs": {
+    "parent": {
+     "exit": 0,
+     "seconds": 14.64,
+     "result": "PASS",
+     "result_detail": "freed_flags=yes free_list_link=yes write_read_back=yes",
+     "pointers": {
+      "A": {
+       "addr": "0x3fb0651030",
+       "base": "0x3fb0651030",
+       "end": "0x3fb0651060"
+      },
+      "arena": {
+       "addr": "0x3fb0650070",
+       "base": "0x3fb0650070",
+       "end": "0x3fb06515a0"
+      },
+      "parent": {
+       "addr": "0x3fb0651030",
+       "base": "0x3fb0650070",
+       "end": "0x3fb06515a0"
+      }
+     },
+     "probes": [
+      {
+       "label": "parent-read-flags",
+       "at": "svhead-controls.c:130"
+      },
+      {
+       "label": "parent-read-link",
+       "at": "svhead-controls.c:131"
+      },
+      {
+       "label": "parent-read-refcnt",
+       "at": "svhead-controls.c:132"
+      },
+      {
+       "label": "parent-write-refcnt",
+       "at": "svhead-controls.c:133"
+      },
+      {
+       "label": "parent-read-refcnt",
+       "at": "svhead-controls.c:134"
+      },
+      {
+       "label": "parent-write-refcnt",
+       "at": "svhead-controls.c:135"
+      },
+      {
+       "label": "parent-read-refcnt",
+       "at": "svhead-controls.c:136"
+      }
+     ],
+     "last_probe": {
+      "label": "parent-read-refcnt",
+      "at": "svhead-controls.c:136"
+     },
+     "lines": [
+      "BUILD protected (PERL_CAPSTONE_SUBLET)",
+      "INTERP up sizeof(SV)=48 arena_heads=84",
+      "FREE A refcnt=1 (SvREFCNT_dec to 0: sv_free2 -> del_SV -> plant_SV)",
+      "PL_sv_root addr=0x3fb0651030 (A=0x3fb0651030) link_expected=0x3fb04a4480",
+      "ARENA_HEAD via=Perl_sv_arena_head addr=0x3fb0651030 walk=0x3fb0651030 same=yes",
+      "READ flags=0xff (SVTYPEMASK=0xff) link=0x3fb04a4480 refcnt=0 wrote=0x5a5a5a5a read_back=0x5a5a5a5a restored=0",
+      "RESULT parent PASS freed_flags=yes free_list_link=yes write_read_back=yes",
+      "DONE parent"
+     ],
+     "outcome": "completed",
+     "stderr": [
+      "capstone-exec: exit image=/mnt/vm/ctl.dom sha256=f33ef92501017e2adf31fa51bd07be6ac698e028b4e6f048985acb623d96bd53"
+     ]
+    },
+    "sibling": {
+     "exit": 0,
+     "seconds": 16.79,
+     "result": "PASS",
+     "result_detail": "intact=yes write_read_back=yes",
+     "pointers": {
+      "A": {
+       "addr": "0x3f9d80e1d0",
+       "base": "0x3f9d80e1d0",
+       "end": "0x3f9d80e200"
+      },
+      "B": {
+       "addr": "0x3f9d80e200",
+       "base": "0x3f9d80e200",
+       "end": "0x3f9d80e230"
+      }
+     },
+     "probes": [
+      {
+       "label": "sibling-read-flags",
+       "at": "svhead-controls.c:178"
+      },
+      {
+       "label": "sibling-read-iv",
+       "at": "svhead-controls.c:179"
+      },
+      {
+       "label": "sibling-read-refcnt",
+       "at": "svhead-controls.c:180"
+      },
+      {
+       "label": "sibling-write-iv",
+       "at": "svhead-controls.c:181"
+      },
+      {
+       "label": "sibling-read-iv",
+       "at": "svhead-controls.c:182"
+      }
+     ],
+     "last_probe": {
+      "label": "sibling-read-iv",
+      "at": "svhead-controls.c:182"
+     },
+     "lines": [
+      "BUILD protected (PERL_CAPSTONE_SUBLET)",
+      "INTERP up sizeof(SV)=48 arena_heads=84",
+      "SAME_ARENA arena=0x3f9d80d240 tries=3 B_minus_A=48",
+      "FREE A refcnt=1",
+      "READ B flags=0x1101 iv=0xb0b0b02 refcnt=1 wrote=0xb0b0b03 read_back=0xb0b0b03 SvIV=0xb0b0b03 after_sv_setiv=0xb0b0b02",
+      "RESULT sibling PASS intact=yes write_read_back=yes",
+      "DONE sibling"
+     ],
+     "outcome": "completed",
+     "stderr": [
+      "capstone-exec: exit image=/mnt/vm/ctl.dom sha256=f33ef92501017e2adf31fa51bd07be6ac698e028b4e6f048985acb623d96bd53"
+     ]
+    },
+    "successor": {
+     "exit": 0,
+     "seconds": 17.15,
+     "result": "PASS",
+     "result_detail": "C_at_A=yes C_read_write=yes",
+     "pointers": {
+      "A": {
+       "addr": "0x3fbafc9030",
+       "base": "0x3fbafc9030",
+       "end": "0x3fbafc9060"
+      },
+      "C": {
+       "addr": "0x3fbafc9030",
+       "base": "0x3fbafc9030",
+       "end": "0x3fbafc9060"
+      }
+     },
+     "probes": [
+      {
+       "label": "successor-read-flags",
+       "at": "svhead-controls.c:222"
+      },
+      {
+       "label": "successor-read-iv",
+       "at": "svhead-controls.c:223"
+      },
+      {
+       "label": "successor-write-iv",
+       "at": "svhead-controls.c:224"
+      },
+      {
+       "label": "successor-read-iv",
+       "at": "svhead-controls.c:225"
+      }
+     ],
+     "last_probe": {
+      "label": "successor-read-iv",
+      "at": "svhead-controls.c:225"
+     },
+     "lines": [
+      "BUILD protected (PERL_CAPSTONE_SUBLET)",
+      "INTERP up sizeof(SV)=48 arena_heads=84",
+      "FREE A refcnt=1",
+      "SUCCESSOR newSV_calls=1 A=0x3fbafc9030 C=0x3fbafc9030 equal=yes",
+      "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+      "RESULT successor PASS C_at_A=yes C_read_write=yes",
+      "DONE successor"
+     ],
+     "outcome": "completed",
+     "stderr": [
+      "capstone-exec: exit image=/mnt/vm/ctl.dom sha256=f33ef92501017e2adf31fa51bd07be6ac698e028b4e6f048985acb623d96bd53"
+     ]
+    },
+    "stale": {
+     "exit": 139,
+     "seconds": 23.9,
+     "result": null,
+     "result_detail": null,
+     "pointers": {
+      "A": {
+       "addr": "0x3f861ab030",
+       "base": "0x3f861ab030",
+       "end": "0x3f861ab060"
+      },
+      "C": {
+       "addr": "0x3f861ab030",
+       "base": "0x3f861ab030",
+       "end": "0x3f861ab060"
+      }
+     },
+     "probes": [
+      {
+       "label": "successor-read-flags",
+       "at": "svhead-controls.c:222"
+      },
+      {
+       "label": "successor-read-iv",
+       "at": "svhead-controls.c:223"
+      },
+      {
+       "label": "successor-write-iv",
+       "at": "svhead-controls.c:224"
+      },
+      {
+       "label": "successor-read-iv",
+       "at": "svhead-controls.c:225"
+      },
+      {
+       "label": "stale-read-flags",
+       "at": "svhead-controls.c:236"
+      }
+     ],
+     "last_probe": {
+      "label": "stale-read-flags",
+      "at": "svhead-controls.c:236"
+     },
+     "lines": [
+      "BUILD protected (PERL_CAPSTONE_SUBLET)",
+      "INTERP up sizeof(SV)=48 arena_heads=84",
+      "FREE A refcnt=1",
+      "SUCCESSOR newSV_calls=1 A=0x3f861ab030 C=0x3f861ab030 equal=yes",
+      "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+      "STALE about to read through the old pointer to A (0x3f861ab030)"
+     ],
+     "outcome": "fault",
+     "fault": {
+      "cause": 25,
+      "pc": "0x3f85811fa0",
+      "address": "0x3f861ab044",
+      "code_start": "0x3f85800000",
+      "link_pc": "0x21fa0",
+      "function": "probe_read_flags",
+      "offset": 0,
+      "source": "capstone/bug-corpora/perl/release-differential/controls/svhead-controls.c:38:3"
+     },
+     "stderr": [
+      "capstone-exec: domain fault cause=25 pc=0x3f85811fa0 address=0x3f861ab044 ra=0x3f85811ca8 fp=0x3f856ffd20 entry=0x3f858008e4 code=0x3f85800000-0x3f86000000 last=0x42 preparing=0x42 sha256=f33ef92501017e2adf31fa51bd07be6ac698e028b4e6f048985acb623d96bd53 image=/mnt/vm/ctl.dom chain=0x3f85810fc4,0x3f85800b48,0x3f858000a8",
+      "Segmentation fault"
+     ]
+    }
+   }
+  }
+ }
+}

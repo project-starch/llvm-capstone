@@ -81,7 +81,7 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
  	unsigned char *start = g->mem->storage + stride*idx;
  	unsigned char *end = start + stride - IB;
  	get_nominal_size(p, end);
-+	heap_alloc_end(p, issued);
++	heap_alloc_end(issued);
  	uint32_t self = 1u<<idx, all = (2u<<g->last_idx)-1;
  	((unsigned char *)p)[-3] = 255;
  	// invalidate offset to group header, and cycle offset of
@@ -392,7 +392,7 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
 +	    && !((uintptr_t)p & (heap_granule(n)-1))
  	    && size_to_class(n)+1 >= g->sizeclass) {
 +		void *fresh = heap_alloc_issue(p, n);
-+		heap_alloc_end(p, issued);
++		heap_alloc_end(issued);
  		set_size(p, end, n);
 -		return p;
 +		return fresh;
@@ -420,7 +420,7 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
 +			end = g->mem->storage + (needed - GRP_SIZE) - IB;
  			*end = 0;
 +			void *fresh = heap_alloc_issue(p, n);
-+			if (!moved) heap_alloc_end(p, issued);
++			if (!moved) heap_alloc_end(issued);
  			set_size(p, end, n);
 -			return p;
 +			return fresh;

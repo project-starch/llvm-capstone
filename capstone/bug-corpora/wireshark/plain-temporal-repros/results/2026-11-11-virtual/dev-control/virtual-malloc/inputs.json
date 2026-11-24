@@ -1,0 +1,33 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "cc_args": [],
+    "flags": [
+      "-O0",
+      "-DCORPUS_VIRTUAL"
+    ],
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ]
+  },
+  "cases": 10,
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "wireshark/plain-temporal-repros",
+  "platform": {
+    "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+    "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+    "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "module": "1f2ac8580711b54e97f3d1c7ad0cfbe3ce4755f836ff15ffd6d1fc1bd8e0efac",
+    "profile": "virtual",
+    "qemu": "35529815bf4b3ba5139482dba9f12fc3516d1819046998e34bedd6b24fe3e1f7",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "runner": "e464b106e1eb5c8e9594f958545961db20a6c577245ddbe86bb1b9ad9aa0514a"
+  },
+  "tally": {
+    "CAUGHT": 10
+  }
+}

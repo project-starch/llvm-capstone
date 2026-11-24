@@ -10,7 +10,7 @@ every granule here) go through the real wmem_sublet_issue_at, which writes its o
 [at, at+len) is judged by qemu_compact_repr.py (a port of cap_compress at b290f5656600):
   exact; tail pad only (len >= size, pad below the granule); inside the bytes the allocator served
   (wmem_sublet_request); a placed child at least WMEM_SUBLET_Q15_SLACK past the data with its offset stored below it;
-  and the jumbo length wmem_sublet_block_size(request + 80) exact at a granule-aligned base.
+  and the jumbo length wmem_sublet_block_size(request + 64) exact at a granule-aligned base.
 Controls, both must fire: the unrepaired child [ptr, ptr+size) and the unrounded jumbo length, refused by the encoder.
 """
 import os, subprocess, sys, tempfile
@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
   unsigned long seed = 12345, N = strtoul(argv[1], 0, 0);
   void *bufv; if (posix_memalign(&bufv, 1UL << 26, 1UL << 26)) return 2;
   uint8_t *buf = bufv;
-  wmem_sublet_block_t s = { 0, 0 };
+  wmem_sublet_block_t s = { 0 };
   for (unsigned long i = 0; i < N; i++) {
     seed = seed * 6364136223846793005UL + 1442695040888963407UL;
     unsigned long r = seed >> 11;
@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
     wmem_sublet_issue_at(&s, ptr, size, &at, 0);
     unsigned long stored = (at != ptr) ? *(uint64_t *)(at - 8) : 0;
     printf("%zu %zu %lu %lu %lu %lu %lu\n", size, req, (unsigned long)(uintptr_t)ptr, (unsigned long)(uintptr_t)at,
-           last_len, stored, (unsigned long)wmem_sublet_block_size(req + 80));
+           last_len, stored, (unsigned long)wmem_sublet_block_size(req + 64));
   }
   return 0;
 }
@@ -54,7 +54,7 @@ def main():
     a, b = s.index('#define WMEM_SUBLET_Q15_ALIGN'), s.index("/* End the caller's object (CREVOKE)")
     pre = ('#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#include <string.h>\n#include <stdio.h>\n'
            '#include <stdlib.h>\n#include "%s"\n'
-           'typedef struct { void *life, *generation; } wmem_sublet_block_t;\n'
+           'typedef struct { void *generation; } wmem_sublet_block_t;\n'
            '#define __builtin_capstone_cap_get_cursor(p) ((unsigned long)(uintptr_t)(p))\n'
            '#define __builtin_capstone_cap_get_base(p) ((unsigned long)(uintptr_t)(p))\n'
            'static unsigned long last_len;\n'
@@ -80,7 +80,7 @@ def main():
             bad['slack'] += not (at - ptr >= 16 and stored == at - ptr)
         if J > (2 << 20):
             bad['jumbo'] += not representable(base, J)
-            ctl_jumbo += not representable(base, req + 80)
+            ctl_jumbo += not representable(base, req + 64)
         if size >= 4096:
             big += 1
             ctl_child += not representable(ptr, size)

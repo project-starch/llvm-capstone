@@ -32,21 +32,32 @@ Every case declares one of these, and the table partitions the corpus.
 | `virtual-platform` | virtual Capstone, memsys5 OUT of the build | with no inner allocator at all, does the platform notice? |
 | `cheribsd-platform` | CheriBSD riscv64-purecap, memsys5 OUT of the build | the same question on the CHERI side -- the arm where revocation can act |
 
-## On virtual Capstone (2026-10-29), under the shared judge
+## On virtual Capstone (2026-11-11), under the shared judge
 
 | arm | configuration (`tools/arms.json`) | caught | missed | no reading |
 |---|---|---:|---:|---:|
 | `virtual-malloc` | `virtual-sqlite-memsys5`: memsys5 stock over its static arena; virtual mallocng below sees one object | 0 | 29 | 4 |
 | `virtual-nested-pools` | `virtual-sqlite-memsys5-pools`: memsys5 on its Sublet port, the pool lent linear by the virtual heap | 29 | 4 | 0 |
-| `virtual-platform` | `virtual-mallocng`: no memsys5 at all, so every SQLite object is one of mallocng's | 25 | 6 | 2 |
+| `virtual-platform` | `virtual-mallocng`: no memsys5 at all, so every SQLite object is one of mallocng's | 26 | 5 | 2 |
 
 Those counts are **transcribed from the bundles `corpus.json` declares**, not measured afresh:
-`verdict_bundles` names `results/2026-10-29-virtual/<arm>`, and this table agrees with the derived
+`verdict_bundles` names `results/2026-11-11-virtual/<arm>`, and this table agrees with the derived
 record taken from them -- `results/verdicts.tsv`, written by `tools/derive-verdicts.py`, and the
 `arms` block of every `case.json`. The bundle is the only original (`../../SCHEMA.md`, "Verdicts:
 one judge, one original"), so the figures here follow it. The superseded
 `results/2026-10-11-virtual-request-bounds/<arm>` bundles stay in the tree as the record of what
 the pre-review triggers measured; they are no longer what any table reads.
+
+**The 2026-11-11 bundles are the first run on the one-operand lifetime instructions.** `CREVOKE` takes the object
+alone, and `sublet-3220000-memsys5.patch` was converted to it. The three arms were run again on the platform that
+implements those instructions, from the same engine source (`amalgamation_sha256` 7fc92e19...) and the same triggers.
+`virtual-nested-pools` and `virtual-malloc` read as on 2026-10-29 in all 33 cells each: the same verdict, the same
+reason for a cell with no reading, the same cause and the same function. `virtual-platform` differs in one cell: case
+28 is CAUGHT (cause 28 in `fts3EvalUpdateCounts`, its declared site) where it was MISSED. That is not the instruction
+change. The same image built from unmodified dev (f8d6cb8bc) and run on the QEMU dev pins reads the same CAUGHT
+(`results/2026-11-11-virtual/control-dev`, cases 03 and 28 with both controls), so the cell moved with the virtual
+allocator between the 2026-10-29 SDK and current dev. `results/2026-10-29-virtual/<arm>` stays in the tree as the record
+of the two-operand instructions.
 
 Built by `ports/sqlite/repro322/build-virtual.py` (`--memsys5`, `--sublet`, and with neither for
 `virtual-platform`) from the adapted 3.22.0 amalgamation plus `fts5-azarg-patch.py` and
@@ -54,7 +65,7 @@ Built by `ports/sqlite/repro322/build-virtual.py` (`--memsys5`, `--sublet`, and 
 `tools/verdicts.py`. Before any case each arm runs the controls its configuration declares --
 `controls/control_*_mem5.c` for the two memsys5 arms, `controls/control_*_malloc.c` for
 `virtual-platform` -- a block used after free and written 1 KiB past its start, which must behave as
-`tools/arms.json` says or the run is void. In the 2026-10-29 run every control behaved as declared.
+`tools/arms.json` says or the run is void. In the 2026-11-11 run every control behaved as declared, as in the 2026-10-29 run.
 The adapted amalgamation the bundles record (`amalgamation_sha256` 7fc92e19…) is stock 3.22.0
 (sha256 7991acd0…) through `ports/sqlite/adapt-sqlite-322.sh` as of 423d13f5b81f; regenerating it
 from that script on 2026-10-29 reproduced 7fc92e19… exactly, so the engine source is the same bytes
@@ -204,15 +215,15 @@ object is its own object of the platform allocator, bounded to its request and r
 | axis | cases | (1) = (2) base = Sublet | (3) CheriBSD |
 |---|---:|---:|---:|
 | temporal | 19 | **17 / 17** (+2 out of denominator) | **17 / 17** (+2 out of denominator) |
-| spatial | 8 | **6 / 8** | **6 / 8** |
+| spatial | 8 | **7 / 8** | **6 / 8** |
 
 * **(1) base** is `virtual-malloc`, configuration `virtual-sqlite-memsys5`, bundle
-  `results/2026-10-29-virtual/virtual-malloc`. It catches nothing on either axis, and so does its
+  `results/2026-11-11-virtual/virtual-malloc`. It catches nothing on either axis, and so does its
   silicon twin: `vp2-malloc` and `silicon-sqlite-stock` read 0 as well, over the same configuration
   and the mechanism rule below. The four cells with no reading are 02 and 20 (a fault, unattributed),
   06 (reached, then neither completed nor faulted) and 11 (the runner's bound; see below).
 * **(2) Sublet** is `virtual-nested-pools`, configuration `virtual-sqlite-memsys5-pools`, bundle
-  `results/2026-10-29-virtual/virtual-nested-pools`. It has no temporal miss and no cell without a
+  `results/2026-11-11-virtual/virtual-nested-pools`. It has no temporal miss and no cell without a
   reading.
 * **(3) CheriBSD** is `cheribsd-revocation`, configuration `cheribsd-sqlite-memsys5`, bundle
   `results/2026-10-30-cheribsd/cheribsd-revocation` (folded from the run record
@@ -220,7 +231,7 @@ object is its own object of the platform allocator, bounded to its request and r
   FAULTed before any case ran). The three cells with no reading are 02, 20 and 22: all three
   faulted, none of them at a function this corpus can place (see the retraction below).
 * **The non-nested columns** are `virtual-platform` (configuration `virtual-mallocng`, bundle
-  `results/2026-10-29-virtual/virtual-platform`) and `cheribsd-platform`
+  `results/2026-11-11-virtual/virtual-platform`) and `cheribsd-platform`
   (`run-cheribsd.py --mode non-nested`, `results/2026-10-30-cheribsd/non-nested`, same gate). The
   two cases out of the non-nested denominator are 07 and 22: both reach for `sqlite_heap` to
   engineer the OOM their trigger needs, and that array exists only when memsys5 is configured.
@@ -419,6 +430,18 @@ a `.capstone_virtual` image the pinned platform kit's launcher accepts (`CPONVVM
 `ENOEXEC`), and the first that honours `CAPSTONE_SDK_EXTRA_CODEGEN`. The platform is the pinned kit
 `kit-pinned` of 2026-10-17 -- its own QEMU, Image, firmware, rootfs, launcher and module together,
 as `tools/virtualvm.py` requires. Every bundle's `inputs.json` records all of it.
+
+**Provenance of the 2026-11-11 bundles.** The tree is the branch `one-operand-crevoke-crenew` at 59201bdf2 with QEMU
+at ea57497908. The adapted amalgamation is again 7fc92e19... from `ports/sqlite/adapt-sqlite-322.sh`. The SDK is a
+corpus SDK (`CAPSTONE_SDK_CORPUS=1`, effective `-fno-builtin`) built from that tree with
+`runtime/virtual/build-sdk.sh`. The platform is the kit built from the same tree: its QEMU, kernel, firmware, rootfs,
+launcher and module are in every bundle's `inputs.json`. The module is loaded without parameters, so it runs pinned
+with one context, and the VM was started with `capstone_vm up --profile virtual --exact-bounds --cpu-prop
+x-capstone-test-csrs=true`; a pinned boot of this kernel needs that CPU property, and `inputs.json` does not record it.
+Two things follow from the single context. On `virtual-malloc` the runner's bound ends case 11, as on 2026-10-29, and
+its process keeps the context; it was killed in the guest so that cases 12 to 32 could start. And the run of record of
+`virtual-malloc` is the second: in the first, 24 QEMU sessions of the same campaign shared the host and case 12 also
+ran into the runner's bound, so that run was stopped and is not kept.
 
 ## The case-by-case review of 2026-10-15/17
 

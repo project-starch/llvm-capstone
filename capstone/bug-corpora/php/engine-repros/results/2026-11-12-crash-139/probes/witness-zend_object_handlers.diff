@@ -1,0 +1,20 @@
+--- a/zend_object_handlers.c	2026-11-12 09:16:18.143785926 +0800
++++ b/zend_object_handlers.c	2026-11-12 09:16:18.195786940 +0800
+@@ -63,6 +63,17 @@
+ 	zval __get_name;
+ 	int call_result;
+ 	
++	/* DIAGNOSTIC WITNESS, probe build only: the member zval as zend_read_property left it,
++	   read before call_user_function_ex counts it. Static stores, no call, no local. */
++	{
++		extern unsigned long zend_cap_wit_getters, zend_cap_wit_refcount, zend_cap_wit_is_ref,
++		                     zend_cap_wit_type, zend_cap_wit_str;
++		++zend_cap_wit_getters;
++		zend_cap_wit_refcount = member->refcount;
++		zend_cap_wit_is_ref = member->is_ref;
++		zend_cap_wit_type = member->type;
++		zend_cap_wit_str = __builtin_capstone_cap_get_cursor(member->value.str.val);
++	}
+ 	/* __get handler is called with two arguments:
+ 	   property name
+ 	   return value for the object (by reference)

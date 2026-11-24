@@ -1,4 +1,4 @@
-Subject: [PATCH 1/1] wmem objects as Sublet lifetimes (CDERIVE/CREVOKE)
+Subject: [PATCH 1/1] wmem objects as Sublet lifetimes (CDERIVE/CREVOKE/CRENEW)
 Upstream: wireshark 4.6.8
 Upstream-Archive: https://www.wireshark.org/download/src/all-versions/wireshark-4.6.8.tar.xz
 Upstream-SHA256: c0f1ccf217bc0d3b51a9c03ea178b0f7df682e475da26a2d21cd4a1bdd9579d0
@@ -13,13 +13,14 @@ caller's pointer dies with it. simple and strict are untouched: every object
 of theirs is its own malloc'd object, which the system allocator bounds and
 retires itself.
 
-# Two instructions do the work. CDERIVE makes a child capability of a
-# non-linear parent, bounded to a sub-range and carrying MANAGE over its own
-# children; CREVOKE(parent, child) ends a direct child and everything below
-# it, and faults when the child is not a live direct child.
+# Three instructions do the work. CDERIVE makes a child capability of a
+# non-linear parent, bounded to a sub-range; CREVOKE(object) ends the
+# object's lifetime and everything below it, and faults when the object is
+# not live; CRENEW(object) does the same and starts a new lifetime in the
+# same place, returned with the operand's cursor and bounds.
 #
-# Every block carries two lifetimes in its header: life, derived from the
-# malloc'd object, and the generation below it (wmem_allocator.h). Each
+# Every block carries one lifetime in its header, its generation, derived
+# from the system allocator's malloc'd object (wmem_allocator.h). Each
 # allocator's consumer functions stay upstream's and work on the allocator's
 # own pointers; three wrappers registered in their place hand out and take
 # back the callers': alloc derives the caller's pointer from the generation
@@ -27,13 +28,14 @@ retires itself.
 # free the allocator's pointer at the same address, and realloc does both.
 # The block is found by address in the allocator's block lists, so the
 # caller's pointer covers its request only: not the chunk header, not the
-# block header and its lifetimes. block_fast's free stays a no-op.
+# block header and its generation. block_fast's free stays a no-op.
 #
 # Freeing a block revokes the system allocator's lifetime of it, and every
 # object lies below. A reset that keeps a block (block's free_all keeps
-# them all, block_fast's keeps the first) revokes its generation and derives
-# a new one. A pointer found in no block faults on a load through it, as a
-# stale one does once its block went back to the system allocator.
+# them all, block_fast's keeps the first) renews its generation: every
+# object below it is revoked, and the new generation has the same bounds.
+# A pointer found in no block faults on a load through it, as a stale one
+# does once its block went back to the system allocator.
 #
 # block keeps its free-list links inside free chunks, and they carry the
 # whole block's bounds. A chunk handed out is cleared of them over the
@@ -51,8 +53,8 @@ retires itself.
 # larger, with its offset kept below it.  A realloc moves a placed object's
 # bytes back to the chunk's data for the allocator's own copy and up again to
 # the new placement.  A dedicated (jumbo) block is malloc'd at
-# capstone_repr_round of its size and its life and generation cover that
-# length.  The pad is counted; the corpus driver prints it (Q15_PAD).
+# capstone_repr_round of its size and its generation covers that length.
+# The pad is counted; the corpus driver prints it (Q15_PAD).
 # WMEM_SUBLET_Q15_PLANT_UNPADDED_JUMBO restores the unrounded jumbo block, for
 # the planted negative control only.
 --- a/wsutil/wmem/wmem_allocator.h
@@ -67,22 +69,21 @@ retires itself.
  #ifdef __cplusplus
  extern "C" {
  #endif /* __cplusplus */
-@@ -44,6 +47,193 @@
+@@ -44,6 +47,190 @@
      bool                         in_scope;
  };
  
 +/*
 + * Sublet lifetimes.  Every block the block and block_fast allocators take
-+ * from the system allocator carries two lifetimes in its header: life,
-+ * derived from the malloc'd object, and the generation below it.  Every
-+ * object is handed out as a child of its block's generation (CDERIVE),
-+ * bounded to the request; freeing or reallocating it revokes that child
-+ * (CREVOKE).  Freeing the block revokes the system allocator's lifetime of
-+ * it, and every object lies below; a reset that keeps the block revokes its
-+ * generation and derives a new one.
++ * from the system allocator carries one lifetime in its header: the
++ * generation, derived from the malloc'd object.  Every object is handed out
++ * as a child of its block's generation (CDERIVE), bounded to the request;
++ * freeing or reallocating it revokes that child (CREVOKE).  Freeing the
++ * block revokes the system allocator's lifetime of it, and every object lies
++ * below; a reset that keeps the block renews its generation (CRENEW): every
++ * object below it is revoked, and the new generation has the same bounds.
 + */
 +typedef struct _wmem_sublet_block_t {
-+    void *life;
 +    void *generation;
 +} wmem_sublet_block_t;
 +
@@ -90,15 +91,13 @@ retires itself.
 +static inline void
 +wmem_sublet_block_init(wmem_sublet_block_t *s, void *block, size_t size)
 +{
-+    s->life = capstone_cap_derive(block, 0, size);
-+    s->generation = capstone_cap_derive(s->life, 0, size);
++    s->generation = capstone_cap_derive(block, 0, size);
 +}
 +
 +static inline void
-+wmem_sublet_block_renew(wmem_sublet_block_t *s, size_t size)
++wmem_sublet_block_renew(wmem_sublet_block_t *s)
 +{
-+    capstone_cap_revoke_child(s->life, s->generation);
-+    s->generation = capstone_cap_derive(s->life, 0, size);
++    s->generation = capstone_cap_renew(s->generation);
 +}
 +
 +/* Whether ptr's address lies in the block. */
@@ -107,8 +106,8 @@ retires itself.
 +{
 +    unsigned long at = __builtin_capstone_cap_get_cursor((void *)ptr);
 +
-+    return at >= __builtin_capstone_cap_get_base(s->life) &&
-+           at < __builtin_capstone_cap_get_end(s->life);
++    return at >= __builtin_capstone_cap_get_base(s->generation) &&
++           at < __builtin_capstone_cap_get_end(s->generation);
 +}
 +
 +/*
@@ -126,7 +125,7 @@ retires itself.
 + *    first granule boundary at least WMEM_SUBLET_Q15_SLACK bytes into the data,
 + *    and the offset back to the data is kept in the 8 bytes below at, which the
 + *    child does not cover;
-+ *  - a block's life and generation cover a representable length: a dedicated
++ *  - a block's generation covers a representable length: a dedicated
 + *    (jumbo) block is malloc'd at capstone_repr_round of its size
 + *    (wmem_sublet_block_size), and the system allocator's own exact object puts
 + *    its base on that length's granule.
@@ -161,7 +160,7 @@ retires itself.
 +}
 +
 +/* The length a dedicated block of size bytes is malloc'd at and its
-+ * lifetimes cover. */
++ * generation covers. */
 +static inline size_t
 +wmem_sublet_block_size(size_t size)
 +{
@@ -215,20 +214,20 @@ retires itself.
 +    return wmem_sublet_issue_at(s, ptr, size, NULL, 0);
 +}
 +
-+/* End the caller's object (CREVOKE), which faults unless ptr is a live
-+ * object of this block, and return the allocator's pointer to the chunk's
-+ * data.  A placed object's bytes are moved back to the chunk's data first,
-+ * so the allocator's own realloc copies them from where it expects them;
-+ * *len_out is the child's length. */
++/* End the caller's object (CREVOKE), which faults unless ptr is live, and
++ * return the allocator's pointer to the chunk's data, reached through block,
++ * the block that holds ptr's address.  A placed object's bytes are moved back
++ * to the chunk's data first, so the allocator's own realloc copies them from
++ * where it expects them; *len_out is the child's length. */
 +static inline void *
-+wmem_sublet_release_len(const wmem_sublet_block_t *s, void *block, void *ptr,
-+                        size_t *len_out, bool move_back)
++wmem_sublet_release_len(void *block, void *ptr, size_t *len_out,
++                        bool move_back)
 +{
 +    size_t   len = __builtin_capstone_cap_get_end(ptr) -
 +                   __builtin_capstone_cap_get_base(ptr);
 +    uint8_t *at;
 +
-+    capstone_cap_revoke_child(s->generation, ptr);
++    capstone_cap_release(ptr);
 +    at = (uint8_t *)block + (__builtin_capstone_cap_get_cursor(ptr) -
 +            __builtin_capstone_cap_get_base(block));
 +    if (wmem_sublet_placed(len)) {
@@ -244,9 +243,9 @@ retires itself.
 +}
 +
 +static inline void *
-+wmem_sublet_release(const wmem_sublet_block_t *s, void *block, void *ptr)
++wmem_sublet_release(void *block, void *ptr)
 +{
-+    return wmem_sublet_release_len(s, block, ptr, NULL, false);
++    return wmem_sublet_release_len(block, ptr, NULL, false);
 +}
 +
 +/* A pointer in no block of the allocator: a stale one faults on this load,
@@ -313,7 +312,7 @@ retires itself.
          }
          else {
              wmem_block_init_block(allocator, cur);
-+            wmem_sublet_block_renew(&cur->sublet, WMEM_BLOCK_SIZE);
++            wmem_sublet_block_renew(&cur->sublet);
              cur = cur->next;
          }
      }
@@ -364,7 +363,7 @@ retires itself.
 +{
 +    wmem_block_hdr_t *block = wmem_block_sublet_find(allocator, ptr);
 +
-+    return wmem_sublet_release(&block->sublet, block, ptr);
++    return wmem_sublet_release(block, ptr);
 +}
 +
 +/* For realloc: the object's bytes go back to the chunk's data, and its
@@ -375,7 +374,7 @@ retires itself.
 +{
 +    wmem_block_hdr_t *block = wmem_block_sublet_find(allocator, ptr);
 +
-+    return wmem_sublet_release_len(&block->sublet, block, ptr, len, true);
++    return wmem_sublet_release_len(block, ptr, len, true);
 +}
 +
 +/* A free chunk holds its free-list links, pointers with the whole block's
@@ -490,11 +489,11 @@ retires itself.
  
      if (cur) {
           cur->pos = WMEM_BLOCK_HEADER_SIZE;
-+         wmem_sublet_block_renew(&cur->sublet, WMEM_BLOCK_SIZE);
++         wmem_sublet_block_renew(&cur->sublet);
           nxt = cur->next;
           cur->next = NULL;
           cur = nxt;
-@@ -226,6 +234,68 @@
+@@ -226,6 +234,67 @@
      wmem_free(NULL, private_data);
  }
  
@@ -547,14 +546,13 @@ retires itself.
 +wmem_block_fast_sublet_realloc(void *private_data, void *ptr, const size_t size)
 +{
 +    wmem_block_fast_allocator_t *allocator = (wmem_block_fast_allocator_t*) private_data;
-+    wmem_sublet_block_t         *sublet;
 +    void                        *block;
 +    size_t                       had;
 +
 +    /* The old object's bytes go back to the chunk's data for the allocator's
 +     * copy; the issue moves them up to a placed child. */
-+    sublet = wmem_block_fast_sublet_find(allocator, ptr, &block);
-+    ptr = wmem_sublet_release_len(sublet, block, ptr, &had, true);
++    wmem_block_fast_sublet_find(allocator, ptr, &block);
++    ptr = wmem_sublet_release_len(block, ptr, &had, true);
 +    ptr = wmem_block_fast_realloc(private_data, ptr, wmem_sublet_request(size));
 +    return wmem_sublet_issue_at(wmem_block_fast_sublet_find(allocator, ptr, &block),
 +                                ptr, size, NULL, had);
@@ -563,7 +561,7 @@ retires itself.
  void
  wmem_block_fast_allocator_init(wmem_allocator_t *allocator)
  {
-@@ -233,8 +303,8 @@
+@@ -233,8 +302,8 @@
  
      block_allocator = wmem_new(NULL, wmem_block_fast_allocator_t);
  

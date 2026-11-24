@@ -38,14 +38,15 @@ prepares one of two variants: `reference`, wmem as released, and `sublet`, with
 `patches/wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch` applied. Only
 `capstone-application` with `WM_SUBLET=ON` builds `sublet`.
 
-Patch 0001 uses the two instructions directly. `CDERIVE` makes a child
-capability of a non-linear parent, bounded to a sub-range and carrying MANAGE
-over its own children; `CREVOKE(parent, child)` ends a direct child and
-everything below it, and faults when the child is not a live direct child.
+Patch 0001 uses three instructions directly. `CDERIVE` makes a child
+capability of a non-linear parent, bounded to a sub-range; `CREVOKE(object)`
+ends the object's lifetime and everything below it, and faults when the object
+is not live; `CRENEW(object)` does the same and starts a new lifetime in the
+same place, returned with the operand's cursor and bounds.
 
 * Every block `block` and `block_fast` take from the system allocator, jumbo
-  blocks included, carries two lifetimes in its header: `life`, derived from the
-  malloc'd object, and the `generation` below it (`wmem_allocator.h`).
+  blocks included, carries one lifetime in its header: its `generation`, derived
+  from the malloc'd object (`wmem_allocator.h`).
 * Each allocator's consumer functions stay upstream's and work on the
   allocator's own pointers. Three wrappers are registered in their place: alloc
   derives the caller's pointer from the generation of the block that holds the
@@ -54,7 +55,8 @@ everything below it, and faults when the child is not a live direct child.
   by address in the allocator's block lists.
 * Freeing a block revokes the system allocator's lifetime of it, and every object
   lies below. A reset that keeps a block -- `block` keeps all of them,
-  `block_fast` its first -- revokes the block's generation and derives a new one.
+  `block_fast` its first -- renews the block's generation: every object below it
+  is revoked, and the new generation has the same bounds.
 * `block_fast`'s free stays a no-op: an object lives until the reset, or until
   realloc replaces it.
 * `block` keeps its free-list links inside free chunks, with the whole block's
@@ -65,7 +67,7 @@ everything below it, and faults when the child is not a live direct child.
 malloc'd object, which the system allocator bounds and retires itself.
 
 The caller's pointer covers its request and nothing else, neither the chunk
-header nor the block header that holds the lifetimes, so a live pointer cannot
+header nor the block header that holds the generation, so a live pointer cannot
 reach its block's generation. The cost of finding the block by address is a
 walk of the allocator's block list on every alloc, free and realloc.
 

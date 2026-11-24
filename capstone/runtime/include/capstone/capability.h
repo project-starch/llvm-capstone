@@ -22,11 +22,14 @@ enum {
   CAPSTONE_PERM_EXECUTE = 1,
   CAPSTONE_PERM_WRITE = 2,
   CAPSTONE_PERM_READ = 4,
+  /* The fourth right. Only the capstone-sublet bitstream gives it a meaning:
+   * its two-operand CREVOKE asks for it on the parent. The current model has
+   * no instruction that reads it, and its CDERIVE does not set it. */
   CAPSTONE_PERM_MANAGE = 8
 };
 
 /* Sublet CDERIVE: offset is relative to the non-linear parent's base.
- * A fresh child inherits data rights and gains MANAGE for its own children.
+ * A fresh child inherits its parent's data rights and no other right.
  * The parent is unchanged. Invalid/empty ranges fault before allocation.
  * Check offset before addition so wraparound cannot turn it into a valid
  * range. The ISA takes the requested start from the parent's cursor.
@@ -55,15 +58,45 @@ static inline void *capstone_cap_derive(void *parent, unsigned long offset,
   return child;
 }
 
-/* Sublet CREVOKE: parent must carry MANAGE and child must name a live direct
- * child. Ends that subtree without touching payload bytes. Offset/narrowed
- * references name the same lifetime. Distinct from legacy handle REVOKE. */
+/* Sublet CREVOKE: ends the lifetime of the object that [object] names, and of
+ * every object derived inside it, without touching payload bytes. The object
+ * is the only operand, and it must be live. No parent is named and no right
+ * is needed: whoever holds a live reference to an object may end its
+ * lifetime. An offset or narrowed reference names the same lifetime. Distinct
+ * from legacy handle REVOKE. */
+static inline void capstone_cap_release(void *object) {
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x52, x0, %0, x0\n"
+                   : : "r"(object) : "memory");
+}
+
+/* Sublet CRENEW: a release of [object] and an allocation in the same place,
+ * in one instruction. Every object derived inside it ends, and every
+ * reference to its old lifetime is stale, [object] included. The result names
+ * the new lifetime, under the same parent, with the cursor, bounds and rights
+ * of [object]. So renew through the reference whose bounds the next holder is
+ * to get. A pool that takes a piece back and hands it out again needs only
+ * the reference its client returned. */
+static inline void *capstone_cap_renew(void *object) {
+  void *renewed;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x54, %0, %1, x0\n"
+                   : "=r"(renewed) : "r"(object) : "memory");
+  return renewed;
+}
+
+/* The two-operand CREVOKE of the capstone-sublet bitstream: parent must carry
+ * the fourth right and child must name a live direct child. Only code built
+ * for that bitstream uses it. The current capstone-qemu model refuses this
+ * encoding as illegal, because there CREVOKE takes the object alone: use
+ * capstone_cap_release. */
 static inline void capstone_cap_revoke_child(void *parent, void *child) {
   __asm__ volatile(".insn r 0x5b, 0x1, 0x52, x0, %0, %1\n"
                    : : "r"(parent), "r"(child) : "memory");
 }
 
-/* Issue a non-linear reference with the same data rights but no MANAGE.
+/* Issue a non-linear reference with the same data rights but without the
+ * fourth right. Needed only on the capstone-sublet bitstream, where that
+ * right lets its holder release a node's children. Under the current model
+ * it returns a reference with the same rights it was given.
  * TIGHTEN encodes its rights mask in rs2's register number, not its value.
  * TIGHTEN also moves a linear source, so anything but a non-linear reference
  * is refused first, atomically, by a zero-size CDERIVE into x0 (cause 26;

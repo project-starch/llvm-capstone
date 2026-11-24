@@ -1,0 +1,422 @@
+{
+ "what": "Perl 5.36.3: t/base (9 files) and scripts/smoke.pl on native, the stock virtual image and the protected one (PERLD_SUBLET=1), on the one-operand lifetime instructions",
+ "tree": "branch one-operand-crevoke-crenew at 59201bdf2, QEMU at ea57497908",
+ "inputs_sha256": {
+  "capstone/ports/perl/musl/build-perl-domain.sh": "516ab37908c3935668fa521a6e348e87f8b11383ffafc9f409d9e3eb02879d80",
+  "capstone/ports/perl/sublet/patches/5.36.3/0001-sv-heads-as-sublet-lifetimes.patch": "822a151fc30256e55104d00f389c6eccf1ada482f8ac22ea9ac53f032ceef8a9",
+  "capstone/ports/perl/musl/scripts/smoke.pl": "15bf158879a2f5432b183ed944bd52d928e0e4bbf40a5f93a8d9d0f2c6af1f44",
+  "capstone/runtime/virtual/run-staged.py": "563040af03e8ec940ad2d916562b42232cbe93dfa4b1fdf4cc4083600182254a"
+ },
+ "images": {
+  "stock": "a0878a2b759dcd69de61dc6258b2fbd502b67329bd3d4ec3815b13524ed47f97",
+  "protected": "5507d74ec7dd89f083bb4fdb99ff206f62a28ef5c98d103b0a3ea905878f2f75",
+  "native_perl": "d738a933a42ad5c91a38761963f85075008ba10f03cfdfa16d1be49305fb0590"
+ },
+ "platform": {
+  "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+  "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+  "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+  "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+  "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180"
+ },
+ "guest_cpu": "rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-test-csrs=true",
+ "native": {
+  "base/cond.t": {
+   "exit": 0,
+   "stdout_sha256": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485"
+  },
+  "base/if.t": {
+   "exit": 0,
+   "stdout_sha256": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9"
+  },
+  "base/lex.t": {
+   "exit": 0,
+   "stdout_sha256": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8"
+  },
+  "base/num.t": {
+   "exit": 0,
+   "stdout_sha256": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2"
+  },
+  "base/pat.t": {
+   "exit": 0,
+   "stdout_sha256": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad"
+  },
+  "base/rs.t": {
+   "exit": 0,
+   "stdout_sha256": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a"
+  },
+  "base/term.t": {
+   "exit": 0,
+   "stdout_sha256": "954eb67d78c6ac5a8a1ae9f86632c6b12ab45e67822531ed39da37678814c61f"
+  },
+  "base/translate.t": {
+   "exit": 0,
+   "stdout_sha256": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1"
+  },
+  "base/while.t": {
+   "exit": 0,
+   "stdout_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147"
+  },
+  "smoke": {
+   "exit": 0,
+   "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e"
+  },
+  "smoke2k": {
+   "exit": 0,
+   "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e"
+  }
+ },
+ "same_answers_boot": {
+  "stock": {
+   "base/cond.t": {
+    "exit": 0,
+    "guest_seconds": 60.4,
+    "stdout_sha256": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+    "stdout_lines": 5,
+    "tap": {
+     "plan": 4,
+     "ok": 4,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/if.t": {
+    "exit": 0,
+    "guest_seconds": 8.8,
+    "stdout_sha256": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+    "stdout_lines": 3,
+    "tap": {
+     "plan": 2,
+     "ok": 2,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/lex.t": {
+    "exit": 0,
+    "guest_seconds": 22.5,
+    "stdout_sha256": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+    "stdout_lines": 124,
+    "tap": {
+     "plan": 120,
+     "ok": 120,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/num.t": {
+    "exit": 0,
+    "guest_seconds": 42.4,
+    "stdout_sha256": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "stdout_lines": 57,
+    "tap": {
+     "plan": 56,
+     "ok": 56,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/pat.t": {
+    "exit": 0,
+    "guest_seconds": 40.0,
+    "stdout_sha256": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+    "stdout_lines": 3,
+    "tap": {
+     "plan": 2,
+     "ok": 2,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/rs.t": {
+    "exit": 0,
+    "guest_seconds": 46.5,
+    "stdout_sha256": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+    "stdout_lines": 44,
+    "tap": {
+     "plan": 41,
+     "ok": 41,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/term.t": {
+    "exit": 0,
+    "guest_seconds": 42.9,
+    "stdout_sha256": "6414b42d575567cf5270d8f0c79bf6a466762fe41e46befa7443cc95385eae69",
+    "stdout_lines": 9,
+    "tap": {
+     "plan": 7,
+     "ok": 6,
+     "not_ok": [
+      2
+     ]
+    },
+    "domain_fault": false,
+    "stderr_tail": [
+     "/mnt/vm/stock/perl.dom: line 9: \u0013\ufffd\u0004\ufffd\u0006\u0005\ufffd\u0005\ufffd\ufffd\u0014\ufffd\u0002\u0003\ufffd\ufffd\ufffd\u0005@\u0002\ufffd\ufffd\ufffd[\ufffd\ufffd\u0002\u06e5\u0004\u0007\ufffd\u0006\u0013\ufffd\ufffd\u0006\ufffd\u0006: not found",
+     "/mnt/vm/stock/perl.dom: line 10: syntax error: unexpected \"(\""
+    ]
+   },
+   "base/translate.t": {
+    "exit": 0,
+    "guest_seconds": 42.8,
+    "stdout_sha256": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+    "stdout_lines": 258,
+    "tap": {
+     "plan": 257,
+     "ok": 257,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/while.t": {
+    "exit": 0,
+    "guest_seconds": 33.0,
+    "stdout_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "stdout_lines": 5,
+    "tap": {
+     "plan": 4,
+     "ok": 4,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "smoke": {
+    "exit": 0,
+    "guest_seconds": 180.6,
+    "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "stdout_lines": 18,
+    "tap": null,
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "smoke2k": {
+    "exit": 0,
+    "guest_seconds": 74.3,
+    "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+    "stdout_lines": 18,
+    "tap": null,
+    "domain_fault": false,
+    "stderr_tail": []
+   }
+  },
+  "protected": {
+   "base/cond.t": {
+    "exit": 0,
+    "guest_seconds": 67.6,
+    "stdout_sha256": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+    "stdout_lines": 5,
+    "tap": {
+     "plan": 4,
+     "ok": 4,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/if.t": {
+    "exit": 0,
+    "guest_seconds": 29.0,
+    "stdout_sha256": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+    "stdout_lines": 3,
+    "tap": {
+     "plan": 2,
+     "ok": 2,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/lex.t": {
+    "exit": 0,
+    "guest_seconds": 43.9,
+    "stdout_sha256": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+    "stdout_lines": 124,
+    "tap": {
+     "plan": 120,
+     "ok": 120,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/num.t": {
+    "exit": 0,
+    "guest_seconds": 33.8,
+    "stdout_sha256": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "stdout_lines": 57,
+    "tap": {
+     "plan": 56,
+     "ok": 56,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/pat.t": {
+    "exit": 0,
+    "guest_seconds": 34.0,
+    "stdout_sha256": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+    "stdout_lines": 3,
+    "tap": {
+     "plan": 2,
+     "ok": 2,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/rs.t": {
+    "exit": 0,
+    "guest_seconds": 43.1,
+    "stdout_sha256": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+    "stdout_lines": 44,
+    "tap": {
+     "plan": 41,
+     "ok": 41,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/term.t": {
+    "exit": 0,
+    "guest_seconds": 42.7,
+    "stdout_sha256": "6414b42d575567cf5270d8f0c79bf6a466762fe41e46befa7443cc95385eae69",
+    "stdout_lines": 9,
+    "tap": {
+     "plan": 7,
+     "ok": 6,
+     "not_ok": [
+      2
+     ]
+    },
+    "domain_fault": false,
+    "stderr_tail": [
+     "/mnt/vm/protected/perl.dom: line 9: \u0013\ufffd\u0004\ufffd\u0006\u0005\ufffd\u0005\ufffd\ufffd\u0014\ufffd\u0002\u0003\ufffd\ufffd\ufffd\u0005@\u0002\ufffd\ufffd\ufffd[\ufffd\ufffd\u0002\u06e5\u0004\u0007\ufffd\u0006\u0013\ufffd\ufffd\u0006\ufffd\u0006: not found",
+     "/mnt/vm/protected/perl.dom: line 10: syntax error: unexpected \"(\""
+    ]
+   },
+   "base/translate.t": {
+    "exit": 0,
+    "guest_seconds": 42.9,
+    "stdout_sha256": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+    "stdout_lines": 258,
+    "tap": {
+     "plan": 257,
+     "ok": 257,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   },
+   "base/while.t": {
+    "exit": 0,
+    "guest_seconds": 31.6,
+    "stdout_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "stdout_lines": 5,
+    "tap": {
+     "plan": 4,
+     "ok": 4,
+     "not_ok": []
+    },
+    "domain_fault": false,
+    "stderr_tail": []
+   }
+  }
+ },
+ "smoke_sizes_boot": {
+  "bound_seconds": 600,
+  "runs": {
+   "protected": {
+    "smoke2000": {
+     "exit": 0,
+     "guest_seconds": 165.3,
+     "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+     "stdout_lines": 18,
+     "tap": null,
+     "domain_fault": false,
+     "stderr_tail": []
+    },
+    "smoke6000": {
+     "exit": 0,
+     "guest_seconds": 281.2,
+     "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+     "stdout_lines": 18,
+     "tap": null,
+     "domain_fault": false,
+     "stderr_tail": []
+    },
+    "smoke20000": {
+     "exit": 143,
+     "guest_seconds": 602.3,
+     "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "stdout_lines": 0,
+     "tap": null,
+     "domain_fault": false,
+     "stderr_tail": []
+    }
+   },
+   "stock": {
+    "smoke2000": {
+     "exit": 0,
+     "guest_seconds": 89.4,
+     "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+     "stdout_lines": 18,
+     "tap": null,
+     "domain_fault": false,
+     "stderr_tail": []
+    },
+    "smoke6000": {
+     "exit": 0,
+     "guest_seconds": 91.8,
+     "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+     "stdout_lines": 18,
+     "tap": null,
+     "domain_fault": false,
+     "stderr_tail": []
+    },
+    "smoke20000": {
+     "exit": 0,
+     "guest_seconds": 158.8,
+     "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+     "stdout_lines": 18,
+     "tap": null,
+     "domain_fault": false,
+     "stderr_tail": []
+    }
+   }
+  }
+ },
+ "control_dev_protected_smoke": {
+  "what": "Perl built from unmodified dev (f8d6cb8bc, the two-operand patch, corpus SDK) on the QEMU dev pins, one persistent VM; host wall seconds around each run, launch included",
+  "runs": {
+   "2000": {
+    "rc": 0,
+    "host_wall_s": 158,
+    "P_lines": 17
+   },
+   "6000": {
+    "rc": 0,
+    "host_wall_s": 306,
+    "P_lines": 17
+   },
+   "20000": {
+    "rc": 0,
+    "host_wall_s": 807,
+    "P_lines": 17
+   }
+  },
+  "bound_seconds": 900
+ }
+}

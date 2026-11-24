@@ -11,19 +11,26 @@ qroot=$CAPSTONE_REPO_ROOT/capstone/capstone-qemu
 qemu=${VIRTUAL_CAPSTONE_QEMU_BINARY:-$qroot/build/qemu-system-riscv64}
 work=$(mktemp -d "$CAPSTONE_TMP_ROOT/sublet-wrappers.XXXXXX")
 # variant: define, QEMU gate case id (selects the expected cause), allocated
-# node count, and which emitted instruction must be the fault PC.
-#   good           36  ebreak          11  (8 bootstrap + 3 derives)
-#   bad_offset     27  cause 29         8  zero-size CDERIVE in derive
-#   linear_parent  11  cause 26         8  zero-size CDERIVE in derive
-#   no_manage       7  cause 27        10  the CREVOKE
-#   stale_alias     1  cause 25        10  entry.inc's load of the child
-variants=(good:-:36:11:none bad_offset:BAD_OFFSET:27:8:derive
-          linear_parent:LINEAR_PARENT:11:8:derive no_manage:NO_MANAGE:7:10:revoke
-          stale_alias:STALE_ALIAS:1:10:none)
+# node count on the flat and on the paged table, and which emitted instruction
+# must be the fault PC. A renewal takes no identity where ids carry a
+# generation (the flat table) and one where they are bare (the paged table).
+#   good           36  ebreak          11 11  (8 bootstrap + 3 derives)
+#   renew          36  ebreak          10 11  (2 derives, 1 renewal)
+#   bad_offset     27  cause 29         8  8  zero-size CDERIVE in derive
+#   linear_parent  11  cause 26         8  8  zero-size CDERIVE in derive
+#   legacy_form    29  cause 2         10 10  the two-operand CREVOKE
+#   stale_alias     1  cause 25        10 10  entry.inc's load of the child
+#   renew_stale     1  cause 25        10 11  entry.inc's load of the child
+variants=(good:-:36:11:11:none renew:RENEW:36:10:11:none
+          bad_offset:BAD_OFFSET:27:8:8:derive
+          linear_parent:LINEAR_PARENT:11:8:8:derive
+          legacy_form:LEGACY_FORM:29:10:10:revoke
+          stale_alias:STALE_ALIAS:1:10:10:none
+          renew_stale:RENEW_STALE:1:10:11:none)
 total=0
 for opt in 1 2; do
     for spec in "${variants[@]}"; do
-        IFS=: read -r variant define case_id count site <<< "$spec"
+        IFS=: read -r variant define case_id count_flat count_paged site <<< "$spec"
         extra=()
         [[ $define == - ]] || extra+=(-D"$define"=1)
         obj=$work/$opt-$variant.o
@@ -60,7 +67,8 @@ PY
 )
         for layout in flat paged; do
             flags=("${extra[@]}")
-            [[ $layout != paged ]] || flags+=(-DPAGED_NODES=1)
+            count=$count_flat
+            if [[ $layout == paged ]]; then flags+=(-DPAGED_NODES=1); count=$count_paged; fi
             elf=$work/$opt-$variant-$layout.elf
             clang --target=riscv64-unknown-elf -march=rv64gc -mabi=lp64d \
                 -nostdlib -fuse-ld=lld "${flags[@]}" -DSUBLET_CASE="$case_id" \
@@ -77,4 +85,4 @@ PY
         done
     done
 done
-echo "$total/20 passed; logs: $work"
+echo "$total/28 passed; logs: $work"

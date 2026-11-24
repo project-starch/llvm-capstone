@@ -1,0 +1,238 @@
+{
+ "what": "mruby 4.0.0-rc2 mrbtest on the virtual profile, release and protected (MRBD_SUBLET=1, patch 0008), on the one-operand lifetime instructions",
+ "tree": "branch one-operand-crevoke-crenew at 59201bdf2, QEMU at ea57497908",
+ "images": {
+  "release": {
+   "mrbtest": "20b5f225737e375d4b9da3192dfe9f3c9db350aab7b670925b8dae1e5f219586",
+   "mruby": "0e55fcf112e030ad89ed148b719f7706a9a9bbb80ef2ba7a6eafd2c5825fed0d"
+  },
+  "protected": {
+   "mrbtest": "d252e1802cae1bd98fb3c86893e27176f238376fdc3f771c0a025a4d81317bdb",
+   "mruby": "496bca6af75a0eff1fa69bef748e0aa5241266e426dd338b3e09f09e90795427"
+  }
+ },
+ "patch_0008_sha256": "31c512ae806ba11b6baba32bae80f38e43daa523c61220050ef2dd17809b6b90",
+ "platform": {
+  "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+  "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+  "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+  "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+  "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180"
+ },
+ "native": {
+  "protected": {
+   "summary": {
+    "Total": 1710,
+    "OK": 1701,
+    "KO": 0,
+    "Crash": 0,
+    "Warning": 0,
+    "Skip": 9
+   },
+   "output_bytes": 44154
+  },
+  "release": {
+   "summary": {
+    "Total": 1710,
+    "OK": 1701,
+    "KO": 0,
+    "Crash": 0,
+    "Warning": 0,
+    "Skip": 9
+   },
+   "output_bytes": 44154
+  }
+ },
+ "runs": [
+  {
+   "session": "mruby-gate",
+   "vm": "shared VM, runs 1 and 2 of it",
+   "arm": "protected",
+   "run": 1,
+   "exit": 0,
+   "kind": "exit",
+   "image_sha256": "d252e1802cae1bd98fb3c86893e27176f238376fdc3f771c0a025a4d81317bdb",
+   "summary_lines_that_arrived": {
+    "Total": 1710,
+    "KO": 0,
+    "Warning": 0
+   },
+   "failed_tests_that_arrived": [],
+   "gems_of_failed_tests": [],
+   "output_bytes": 25698,
+   "domain_fault": false
+  },
+  {
+   "session": "mruby-gate",
+   "vm": "shared VM, runs 1 and 2 of it",
+   "arm": "protected",
+   "run": 2,
+   "exit": 1,
+   "kind": "exit",
+   "image_sha256": "d252e1802cae1bd98fb3c86893e27176f238376fdc3f771c0a025a4d81317bdb",
+   "summary_lines_that_arrived": {
+    "Total": 1710,
+    "KO": 17,
+    "Warning": 0
+   },
+   "failed_tests_that_arrived": [
+    "FileTest.size? (mruby-io)",
+    "IO#getc [15.2.20.5.8] (mruby-io)",
+    "IO#read [15.2.20.5.14] (mruby-io)",
+    "IO#readchar [15.2.20.5.15] (mruby-io)",
+    "IO#rewind (mruby-io)",
+    "IO#sysseek (mruby-io)",
+    "IO.for_fd (mruby-io)",
+    "IO.open [15.2.20.4.1] (mruby-io)",
+    "IO.sysopen, IO#sysread (mruby-io)"
+   ],
+   "gems_of_failed_tests": [
+    "mruby-io"
+   ],
+   "output_bytes": 30485,
+   "domain_fault": false
+  },
+  {
+   "session": "mruby-gate",
+   "vm": "shared VM, run 3 of it",
+   "arm": "release",
+   "run": 1,
+   "exit": 1,
+   "kind": "exit",
+   "image_sha256": "20b5f225737e375d4b9da3192dfe9f3c9db350aab7b670925b8dae1e5f219586",
+   "summary_lines_that_arrived": {
+    "OK": 1681,
+    "Crash": 6,
+    "Skip": 9
+   },
+   "failed_tests_that_arrived": [
+    "IO#dup for readable (mruby-io)",
+    "IO#eof? [15.2.20.5.6] (mruby-io)",
+    "IO#getbyte (mruby-io)",
+    "IO#gets (mruby-io)",
+    "IO#pos=, IO#seek (mruby-io)",
+    "IO#pread (mruby-io)",
+    "IO#read(n, buf) (mruby-io)",
+    "IO#ungetc (mruby-io)",
+    "IO.new (mruby-io)",
+    "IO.open [15.2.20.4.1] (mruby-io)"
+   ],
+   "gems_of_failed_tests": [
+    "mruby-io"
+   ],
+   "output_bytes": 30084,
+   "domain_fault": false
+  },
+  {
+   "session": "mruby-gate2",
+   "vm": "fresh VM",
+   "arm": "protected",
+   "run": 1,
+   "exit": 1,
+   "kind": "exit",
+   "image_sha256": "d252e1802cae1bd98fb3c86893e27176f238376fdc3f771c0a025a4d81317bdb",
+   "summary_lines_that_arrived": {
+    "Total": 1710,
+    "KO": 17,
+    "Warning": 0
+   },
+   "failed_tests_that_arrived": [
+    "FileTest.size? (mruby-io)",
+    "IO#getc [15.2.20.5.8] (mruby-io)",
+    "IO#read [15.2.20.5.14] (mruby-io)",
+    "IO#readchar [15.2.20.5.15] (mruby-io)",
+    "IO#rewind (mruby-io)",
+    "IO#sysseek (mruby-io)",
+    "IO.for_fd (mruby-io)",
+    "IO.open [15.2.20.4.1] (mruby-io)",
+    "IO.sysopen, IO#sysread (mruby-io)"
+   ],
+   "gems_of_failed_tests": [
+    "mruby-io"
+   ],
+   "output_bytes": 31855,
+   "domain_fault": false
+  },
+  {
+   "session": "mruby-gate2",
+   "vm": "fresh VM",
+   "arm": "protected",
+   "run": 2,
+   "exit": 1,
+   "kind": "exit",
+   "image_sha256": "d252e1802cae1bd98fb3c86893e27176f238376fdc3f771c0a025a4d81317bdb",
+   "summary_lines_that_arrived": {
+    "OK": 1681,
+    "Crash": 6,
+    "Skip": 9
+   },
+   "failed_tests_that_arrived": [
+    "IO#dup for readable (mruby-io)",
+    "IO#eof? [15.2.20.5.6] (mruby-io)",
+    "IO#getbyte (mruby-io)",
+    "IO#gets (mruby-io)",
+    "IO#pos=, IO#seek (mruby-io)",
+    "IO#pread (mruby-io)",
+    "IO#read(n, buf) (mruby-io)",
+    "IO#ungetc (mruby-io)",
+    "IO.new (mruby-io)"
+   ],
+   "gems_of_failed_tests": [
+    "mruby-io"
+   ],
+   "output_bytes": 33975,
+   "domain_fault": false
+  },
+  {
+   "session": "mruby-gate2",
+   "vm": "fresh VM",
+   "arm": "release",
+   "run": 1,
+   "exit": 1,
+   "kind": "exit",
+   "image_sha256": "20b5f225737e375d4b9da3192dfe9f3c9db350aab7b670925b8dae1e5f219586",
+   "summary_lines_that_arrived": {
+    "OK": 1698,
+    "Crash": 0,
+    "Warning": 0,
+    "Skip": 9
+   },
+   "failed_tests_that_arrived": [
+    "FileTest.size? (mruby-io)"
+   ],
+   "gems_of_failed_tests": [
+    "mruby-io"
+   ],
+   "output_bytes": 29992,
+   "domain_fault": false
+  },
+  {
+   "session": "mruby-gate2",
+   "vm": "fresh VM",
+   "arm": "release",
+   "run": 2,
+   "exit": 0,
+   "kind": "exit",
+   "image_sha256": "20b5f225737e375d4b9da3192dfe9f3c9db350aab7b670925b8dae1e5f219586",
+   "summary_lines_that_arrived": {
+    "OK": 1701,
+    "Crash": 0,
+    "Skip": 9
+   },
+   "failed_tests_that_arrived": [],
+   "gems_of_failed_tests": [],
+   "output_bytes": 28545,
+   "domain_fault": false
+  }
+ ],
+ "host_wall_seconds": {
+  "mrgate protected r1": 397,
+  "mrgate protected r2": 480,
+  "mrgate release r1": 642,
+  "mrtp protected r1": 873,
+  "mrtp protected r2": 1012,
+  "mrtr release r1": 693,
+  "mrtr release r2": 657
+ }
+}

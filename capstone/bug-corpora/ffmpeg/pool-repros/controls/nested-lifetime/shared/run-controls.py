@@ -214,8 +214,7 @@ def predictions(rec):
         p = rec["platform_controls"][c]
         out.append((f"platform control {c} faults (the instrument is live)", p["observed"] == "fault", p["evidence"]))
     r = runs["91-run"]
-    ids = ["parent-read", "parent-write", "parent-readback"] + (
-        ["lifetime-read", "lifetime-write", "lifetime-readback"] if arm == "protected" else [])
+    ids = ["parent-read", "parent-write", "parent-readback"]
     ok = r["outcome"] == "completed" and all(access(r, i) and access(r, i)["done"] for i in ids)
     pr = access(r, "parent-read") or {}
     out.append(("control 1 (parent) completes; the read returns what the pool left there (A's 0x5A)",

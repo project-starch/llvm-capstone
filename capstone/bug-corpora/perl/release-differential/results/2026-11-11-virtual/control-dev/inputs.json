@@ -1,0 +1,29 @@
+{
+  "arm": "virtual-nested-pools",
+  "image_sha256": "f64da049ebf7988a7576d49d9588725110f2f8738d2bc1f5c0c03a3c45917fb2",
+  "cases": 2,
+  "controls": {
+    "eval": true,
+    "shim": true
+  },
+  "timeout_s": 600,
+  "platform": {
+    "qemu": "35529815bf4b3ba5139482dba9f12fc3516d1819046998e34bedd6b24fe3e1f7",
+    "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "ssh_server": "f4fa3153325d7098785926e5edda553b31dfd9f9cb3448023b83a61e53b77d9b",
+    "module": "1f2ac8580711b54e97f3d1c7ad0cfbe3ce4755f836ff15ffd6d1fc1bd8e0efac",
+    "job_helper": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+    "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+    "runner": "aabfa66858b2c35e59f34fb4bc3999d510b639f31a093ba6bd4763d8f0352c98",
+    "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+    "profile": "virtual",
+    "exact_bounds": true
+  },
+  "triggers": {
+    "05_17535c984a_cloned-const-sub-unrefcounted": "e0fbcd45a7b6a6c984b25bea51dd30ce131c43af94384182cedb3cc301f3dad5",
+    "06_40727c420c_code-blocks-count-reused": "e5902280a01895e022335bf2faf6415f9a38a4756c09922e8325c899c4016926"
+  }
+}

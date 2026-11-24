@@ -20,14 +20,18 @@ CheriBSD harness runs (`ports/common/host/cheribsd/components.json`).
 `upstream.json` pins the official CPython 3.13.7 archive by SHA256. `cmake/prepare-source.py`
 applies the ordered patches by variant:
 
-| patch | what it does | `reference` | `ported` | `protected` |
-|---|---|:-:|:-:|:-:|
-| 0001 standalone-pymalloc | extracts the allocator from the interpreter | x | x | x |
-| 0002 capability-provenance | real pool sentinels; arena and pool pointers from retained authority (`backing.c`), never rebuilt from integers | | x | x |
-| 0003 blocks-as-sublet-lifetimes | the Sublet protection: every block a child lifetime of its arena (`CDERIVE`), revoked on free (`CREVOKE`) | | | x |
+| patch | what it does | `reference` | `ported` | `protected` | `protected-virtual` |
+|---|---|:-:|:-:|:-:|:-:|
+| 0001 standalone-pymalloc | extracts the allocator from the interpreter | x | x | x | x |
+| 0002 capability-provenance | real pool sentinels; arena and pool pointers from retained authority (`backing.c`), never rebuilt from integers | | x | x | x |
+| 0003 blocks-as-sublet-lifetimes | the Sublet protection: every block a child lifetime of its arena (`CDERIVE`), revoked on free (`CREVOKE`) | | | x | x |
+| 0004 one-operand-crevoke | the block ends through the client's reference alone (`capstone_cap_release`), the `CREVOKE` of the virtual profile | | | | x |
 
-`PYMALLOC_SUBLET=ON` (capstone-application only) selects `protected`; the native
-`replay-reference` is `reference`. The interpreter carries the same protection as its patch 0014.
+`PYMALLOC_SUBLET=ON` (capstone-application only) selects `protected-virtual`; the native
+`replay-reference` is `reference`. `protected` is patch 0003 alone, with the two-operand `CREVOKE`
+of the capstone-sublet bitstream (`capstone_cap_revoke_child`); the silicon corpus arm builds it.
+The processor model of the virtual profile refuses that encoding as an illegal instruction, so a
+virtual build needs 0004. The interpreter carries the same protection as its patch 0014.
 
 The pinned 64-bit configuration uses 16 KiB pools, 1 MiB arenas, 16-byte size classes and a
 512-byte small-request threshold. Capability pointers enlarge the pool header from 48 to 80

@@ -4,7 +4,7 @@
  * B of the same size from memsys5's pool, fill both, release A with sqlite3_free, then read B
  * through B's own reference and check its bytes, write it, and read the write back. On the
  * protected arm (sublet-3220000-memsys5.patch) A and B are sibling CDERIVE children of
- * mem5.zPool, and sqlite3_free(A) is CREVOKE(pool, A).
+ * mem5.zPool, and sqlite3_free(A) is CREVOKE(A).
  *
  * Expected on both arms: every access completes and B's contents are intact. The control
  * reports whether A and B are buddies (adjacent halves of one memsys5 block), and A is the

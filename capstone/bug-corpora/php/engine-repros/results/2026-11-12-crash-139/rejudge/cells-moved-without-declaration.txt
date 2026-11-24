@@ -1,0 +1,1 @@
+cells: 560; row byte-identical: 560; verdict or reason moved: 0; same verdict but another field differs: 0

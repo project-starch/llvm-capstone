@@ -1,12 +1,13 @@
-# The Sublet protection (patch 0003): every pymalloc block a child lifetime of
-# its arena (CDERIVE), revoked on free (CREVOKE). Only the Capstone application
-# target executes those instructions.
-option(PYMALLOC_SUBLET "Apply patch 0003, pymalloc's blocks as Sublet child lifetimes" OFF)
+# The Sublet protection (patches 0003 and 0004): every pymalloc block a child
+# lifetime of its arena (CDERIVE), revoked on free (CREVOKE). Only the Capstone
+# application target executes those instructions. It runs on the virtual
+# profile, whose CREVOKE takes the object alone, so it applies 0004 as well.
+option(PYMALLOC_SUBLET "Apply patches 0003 and 0004, pymalloc's blocks as Sublet child lifetimes" OFF)
 if(PYMALLOC_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
   message(FATAL_ERROR "PYMALLOC_SUBLET needs the capstone-application toolchain")
 endif()
 if(PYMALLOC_SUBLET)
-  set(PYMALLOC_VARIANT protected)
+  set(PYMALLOC_VARIANT protected-virtual)
 else()
   set(PYMALLOC_VARIANT ported)
 endif()

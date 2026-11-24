@@ -7,7 +7,7 @@
 #
 #   shared/build-cases.sh capstone-application OUT [-DPYMALLOC_SUBLET=ON]
 #       the virtual Capstone profile, on the SDK in CAPSTONE_SDK; ON applies the
-#       port's patch 0003, pymalloc's blocks as Sublet child lifetimes.
+#       port's patches 0003 and 0004, pymalloc's blocks as Sublet child lifetimes.
 #   shared/build-cases.sh cheribsd OUT
 #       stock CheriBSD purecap, the platform as it ships.
 set -euo pipefail
@@ -44,7 +44,7 @@ for dir in "$CASES"/[0-9][0-9]_*/; do
     ;;
   capstone-application)
     # The virtual profile: the hosted replay as a Capstone process on the SDK in
-    # CAPSTONE_SDK. -DPYMALLOC_SUBLET=ON applies the port's patch 0003.
+    # CAPSTONE_SDK. -DPYMALLOC_SUBLET=ON applies the port's patches 0003 and 0004.
     : "${CAPSTONE_SDK:?set CAPSTONE_SDK to a virtual application SDK}"
     cmake --preset capstone-application -S "$PORT" -B "$work" -DCAPSTONE_SDK="$CAPSTONE_SDK" \
       -DPY_CORPUS_SRC="$dir/case.c" "$@" >"$OUT/work/$number.log" 2>&1

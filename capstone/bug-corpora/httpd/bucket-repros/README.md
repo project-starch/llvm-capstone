@@ -90,6 +90,13 @@ The virtual profile, measured 2026-10-26 under QEMU on the bitstream-2 twin (qki
 | `virtual-malloc` | virtual mallocng under the stock adapters: every node one heap object, filed on APR's free list and never freed | 8 / 8 MISSED; the port control `piece-filed-90` completes |
 | `virtual-nested-pools` | the pools port's `src/virtual/` adapters: a node's issued child revoked (CREVOKE) at its release, a bucket piece at its file | **8 / 8 CAUGHT** at `read_probe`, cause 25; `piece-filed-90` faults |
 
+Measured again 2026-11-11 (`results/2026-11-11-virtual/`, the current bundles), after both adapters moved to the
+one-operand CREVOKE (`capstone_cap_release` on the node's issued child and on the bucket piece, `src/virtual/`), on the
+QEMU that implements it (pinned module, `-cpu` extra `x-capstone-test-csrs=true`): every reading and every control is
+the same, `virtual-malloc` 8 / 8 MISSED with `piece-filed-90` completing, `virtual-nested-pools` 8 / 8 CAUGHT at
+`read_probe`, cause 25, with `piece-filed-90` faulting. The nested images hold two or three CREVOKE instructions (three
+where the case links the bucket adapter: cases 0, 1, 4, 6 and the control), all of the one-operand form.
+
 Which event each case ends at, and therefore which mechanism catches it:
 
 | cases | the lifetime ends at | under Sublet |
@@ -130,7 +137,8 @@ revocation does. What no system catches is the case with the declaration
 left out, because then there is no event -- which is the point of class 3.
 
 Records: `results/20260922-qemu/`, its negative control beside it,
-`results/20260922-cheribsd/` and `results/20260922-poisoncap/`.
+`results/20260922-cheribsd/` and `results/20260922-poisoncap/`;
+the virtual profile's are `results/2026-10-26-virtual/` and `results/2026-11-11-virtual/`.
 
 ## What CheriBSD's revoker sees
 
