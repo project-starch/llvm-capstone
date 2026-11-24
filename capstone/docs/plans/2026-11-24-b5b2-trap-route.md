@@ -562,6 +562,34 @@ inert instruction into cause 2. Pre-registered in b5b2-illegal.S's header before
   - f-keep's source is not in our repositories, and patch 0013 describes it as firmware that keeps register tags across
     M traps, so it is the main unknown. A source check does not replace the binary scan.
   - The deletion's own gate is batched with step 5.
+- **The boot set, scanned (2026-11-24).**
+  - **Instruments.** Two scanners of my own, each counting raw encodings (opcode 0x5b, funct3 7) over a linear
+    RVC-aware sweep of the executable sections:
+    - an objdump-based one, used for the kernel;
+    - an ELF and ar parser, for the capstone-machine images, which GNU objdump cannot disassemble. Its first pass read
+      "no instructions", an error, not a zero.
+    - Controls: a CCSRRW after a c.nop reads 2, as an object and as an archive member; LDC and LCC read 0. The parser
+      reproduces the objdump scanner's vmlinux census.
+  - **Kernel:** the runtime lane's defconfig REBUILD of the trap-route kernel, from 0133b9e21cd5's tree (Linux 6.1,
+    apply.sh, qemu 9289114e06 target/riscv). 0 CCSRRW in vmlinux and its 111 modules. vmlinux carries 38 op-0x5b
+    words: LDC 15, STC 4, LCC 10, CINCOFFSET 3, CSMINT 1, CDERIVE 1, CREVOKE 3, SHRINK 1. This is not the collaborator's
+    binary, whose config is unknown.
+  - **Userland** (origin/trap/eval build-trap-smoke.sh, dev's clang): 0 CCSRRW in the 8 smoke .dom images and every
+    member of libc-capstone.a and libtrap-runtime.a (1,205 with instructions). The .dom images carry 1,703-2,852
+    op-0x5b words each.
+  - **The runtime lane RETRACTED** start-musl.S's 30 CCSRRW as evidence: the trap route links runtime/virtual/start.S
+    (Application.cmake :44, :49-50, checked here).
+  - **The semantics owner's ruling** (the runtime lane, reported to the user; the lead may overrule): f-keep is not
+    needed.
+    - The deletion is reference-exact: 7800b39822 is an ancestor of 9289114e06.
+    - The collaborator's tests ran on qemu-1b = 9289114e06, where CCSRRW is already illegal. That bounds only the
+      paths those tests executed.
+    - f-keep never boots on the bitstream. The condition: the board's trap-route firmware gets this encoding scan
+      before its first boot.
+  - **Next:** the deletion is carried onto the B5b-2 tip as a new commit, then lint, its arms and a synthesis-only gate.
+    It rides the next bitstream.
+- **A constraint on step 8:** the trap-route kernel executes SHRINK (funct7 0x01) in S (sublet_store_user_ref). SHRINK
+  is legal under Sublet (decoder.sv:1260-1265) and must survive the physical removal.
 
 ## Step 5: CLDRAW and CSTRAW, the design (2026-11-24, before any code)
 
@@ -945,6 +973,30 @@ eff52e152, graded against 03902b250094. Base: step 5's gate.
 Flash is the delegated bitstream rule, agreed with runtime. B5b-1's seal stays the default until B5b-2's bare kits
 (below) read. Each kit is pre-registered from image simulations of THIS hash before its boot.
 
+## B5b-2's full build: read (board lane, 2026-11-24), PASS 10/10, and the core clock meets timing
+
+Graded from the board lane's `grade-board/grade-b5b2-full.txt`, read here; the seal was re-hashed here.
+- **Seal:** `…-pagedtbl-r76-r75d-b5b2_0c0458149.bit`, 11,443,722 B, sha256
+  b44291bacb220b8ae6dd02ff113cb68bcfff231893fae70741261c087bb53b9a. Guard exit 0, 1h09m, peak 27.48 GB.
+- **The keys:**
+  - placed LUT 172,682 (-418 on 173,100) and FF 78,043 (+10 on 78,033); B5b-1 170,699 / 77,561;
+  - routed clean (227,293 / 227,293);
+  - placed congestion 4; the router reported no hotspot (Phase 2 ran; R-75 (d)'s log parses to 5 as control);
+  - check_timing 0 in the build report and on the routed dcp, TIMING-23 0, LUTLP-1 0 (each toy 1);
+  - **clk_out1 WNS +0.286**, in the band (B5b-1 +1.851, so -1.565). The core clock still meets timing.
+- **Reported:** design WNS +0.177, TNS 0, 0 of 237,785 endpoints failing, WHS +0.056; slices 48,746 (-289); RAMB36
+  115 (+2, gate 6b's twc_ep_mem, as expected).
+- **The worst 20** start at i_issue_read_operands fu_data_q[0].cap_metadata_b[1] (one at b[26]_rep) and end in
+  fu_data_q[0] cap_metadata_a / b / rd_metadata, at 90-95 levels: B5b-1's family (b[14] -> a[17], 103 levels).
+- **The points the gates could not read** (worst clk_out1 path through each; B5b-1 in brackets):
+  - the LSU cap_exception cone +11.776 at 33 levels [+13.535];
+  - CPTAG's walk +24.281;
+  - commit's cap_we +11.445 [+11.561];
+  - csr_scr_* +24.903;
+  - rs1_tag_q +25.326, and rs1_tag_q through cap_we +28.648.
+  None binds.
+- Flash: the delegated rule, after the bare kit's pre-registration (below) is pushed.
+
 ## Step 7: the namespace must-pass (2026-11-24)
 
 capstone-ariane b5b2-step6 eb8e32f08 (the arm and its mutant control), 0c0458149 (the arm's fix after its void first
@@ -986,6 +1038,23 @@ wrapper, with M writing srevroot and setting medeleg bits 24-30 in the prologue:
 - s_ref_state;
 - the raw moves and CPTAG arms of steps 5 and 6.
 Each kit is pre-registered from image simulations before any board run.
+
+**The kit: `capstone/tests/rtl-smoke/b5b2-bare-2026-11-24`, pre-registered from image sims of 0c0458149.**
+- **Images:** 16. The Sublet control (sublet-life) runs first, then every B5b-2 test configuration in
+  testlist_b5b2.yaml: illegal (and -runv), uprot (and -mis), rule2 (and -pair), sref (and -gen), scratch, mwrite,
+  raw, rawlcc, cptag, cptag2, nsedge. They are the in-tree tests, unchanged.
+- **Every vector equals its in-tree run except one position:** b5b2-raw reading 15 compares a raw word 0 (which carries
+  bounds << 38) with a projected plain ld, so it depends on the link address. That is explained in the PREREG.
+- **Two kit defects, found in the first image-sim pass:**
+  - the B5b-2 tests end in RVTEST_PASS, a tohost store that prints nothing on the board; the kit maps it to the UART
+    report;
+  - clang expanded macro names in a test's `#` comments; the kit builds with the tree's gcc and lets each test include
+    the board header itself.
+- **Checks on every image:**
+  - the exact UART character count, 59 + 21·SR (the same check read 25 for every image before the fix, so it fires);
+  - a plain-store recorder for b5b2-sref, cross-checked in simulation on b5b2-illegal;
+  - a scan for loads of uninitialised DRAM: 0 in every B5b-2 image. It flags sublet-life's pool dump as its control,
+    and those positions (25-34) are ungraded, as in csmint-bare's amendment.
 
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
