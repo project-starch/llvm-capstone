@@ -500,6 +500,53 @@ Reported, graded nothing (bands at the recorded ±2,500 per-module floor, not ti
 - the dyn_unit / rev_node pair (f4890ec7f: 10,714 / 7,690): if either moves beyond ±2,500 again, a cell-level diff of
   ab9efe547bd4b481, 8baaa42e6fee767e and this gate's dcp is asked for before step 5.
 
+### The gate on step 4: read (board lane, 2026-11-24), PASS 3/3
+
+eb03e7c99, graded against aad164b18412. Base: f4890ec7f's gate. Grade file
+`/mnt/hdd/<user>/synth/b5b2s4-eb03e7c99-gate-out/grade-b5b2s4.txt`.
+- Key 1 (memory): TM peak 5,066.5 MB, against 5,065.6 (+0.8; ±505). The whole-run peak was 5,134.6 MB. PASS.
+- Key 2 (loops): 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy 1), LUTLP-1 0 (toy 1); the in-flight
+  loops-only gate against f4890ec7f PASS.
+- Key 3 (core LUT): 145,169, against 146,206 (-1,037; limit 148,706). PASS.
+- Reported:
+  - csr_regfile_i FF +98 exactly (6,468 -> 6,566): sscratch's lane, as predicted. Its LUT is 7,491 (+591).
+  - Core FF 54,970 (-205): OUTSIDE my +98 ±300. ex_stage_i is FF -310 (dyn_unit +7, rev_node -2, lsu_i -11), so
+    about -304 sits in ex_stage's own logic. Unattributed.
+  - i_issue_read_operands 26,611 (-2,342) and i_scoreboard 17,244 (+2,326): issue_stage_i as a whole -16. commit_stage_i
+    286 (+8). ex_stage_i 59,863 (-1,302), lsu_i 23,997 (-1,368), id_stage_i +226, dom_switcher -346, i_wt_dcache +350,
+    top 172,460 (-1,044).
+  - Beyond ±2,500: dyn_unit 10,714 -> 15,670 (+4,956; _spawn_0 +4,971) and rev_node 7,690 -> 3,241 (-4,449). The pair is
+    back near the steps 1-2 values (14,843 / 3,312), and neither source changed in any of the three steps. Summed, the pair
+    reads 18,155 / 18,404 / 18,911 across the three gates. The pre-registered condition fired: the board lane runs a
+    read-only cell census over the three dcps (ab9efe547bd4b481, 8baaa42e6fee767e, b05ca47912c75223), shaped to separate a
+    re-homed shared cone (stems moving with an equal and opposite sign, a flat sum) from logic that appears and
+    disappears. It does not hold step 5.
+- The synth dcp is kept as twc/gate-synth-b5b2s4-eb03e7c99.dcp (sha16 b05ca47912c75223); vivado-guard peak RSS 24.59 GB,
+  51m41s.
+
+## CCSRRW deleted under the Sublet format (2026-11-24)
+
+capstone-ariane b5b2-ccsrrw 87aec16b4, on step 4. One decoder term (capstone-qemu 7800b39822 deleted it). Under Sublet a
+CCSRRW already wrote nothing (a ccsr write needs capmode, which only the illegal CAPENTER sets), so the deletion turns an
+inert instruction into cause 2. Pre-registered in b5b2-illegal.S's header before the run; checked by script:
+- b5b2-illegal: site 24 reads 2 / site / word, and the trap count is 19.
+- Every test that executes an inert ccsrrw reads as predicted. sublet-ns.S and its eight arms, and va-runv-snap, each
+  read exactly one more cause-2 print with the rest unchanged. r79-cpmp (built without its IDS55 define) reads a trap
+  count +4.
+- The other 15 tests: identical in value and cycles to step 4.
+- sublet-ns-edgem still creates its condition on an R43_TRACE build: edgem-r43-check.py exits 0, a probe pending across
+  the edge.
+- Lint: Sublet at REF, with 0 by-name lines against step 4 in both builds. ids55 is token-identical.
+- **Not handed to synthesis:** the ruled boot-set scan lacks the collaborator's trap-route images (f-keep fw_jump.elf,
+  the kernel Image(s), the initramfs). None of them is on our hosts; the runtime lane asked for them, with sha256 and
+  the cpio listing, through the lead.
+  - By source, the kernel patch series (0001-0051) has no CCSRRW encoding (the same grep finds LDC/STC in 0011, 0014 and
+    0017). The shared runtime has CCSRRW only in tests/application/context-probe-asm.S, an old P1 native-context test
+    to look for in the initramfs listing.
+  - f-keep's source is not in our repositories, and patch 0013 describes it as firmware that keeps register tags across
+    M traps, so it is the main unknown. A source check does not replace the binary scan.
+  - The deletion's own gate is batched with step 5.
+
 ## Silicon acceptance: bare kits
 
 No Linux kit can run until the runtime lane's integer-M monitor exists: the current one executes CAPENTER at init. So
