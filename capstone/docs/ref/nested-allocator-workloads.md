@@ -5558,3 +5558,161 @@ Readings against the predictions:
 
 So about 94 % of the difference is in the patched block allocators' alloc paths. Of the rest, `memset` is entered
 158,329 more times on prot. Its callers are not attributed here.
+
+## perlbench item 3: the port's code without its lifetime instructions (2026-11-24)
+
+### Pre-registration: Perl suns.pl on P1, U P N N P U in one boot, N = the port with its lifetime instructions neutralised (written 2026-11-24 08:18, before the boot)
+
+**Question.** The programme (item 3) asks where Perl 5.36's +788.8 M in-context cycles on suns.pl go. The attribution
+in "Perl with the arena lookup repaired" puts 491.7 M (62 %) in the port's +173.3 M twin instructions, priced at the
+stock arm's mean of 2.838 cycles per instruction. It leaves 32-33 % unattributed, and it calls that price the softest
+number: no board run has priced the port's instructions apart from the lifetimes they create. This boot adds an arm N
+that differs from P only in its lifetime instructions:
+- N−U is the port's other instructions at their real price;
+- P−N is the lifetime instructions together with their records.
+
+**The images.**
+- U: the stock image of every P1 Perl boot, `3012f392…` (built 2026-11-17).
+- P: `perl-protre.strip.dom` `09f8b716…`. This is patch 0001 + 0002, rebuilt today by `nested/perl/build-arms2.sh`
+  (`f8232cb6…`; FRCDKMS SDK, clang `ecd6d8c4…`, Perl tarball `f2a1ad88…` as in `PROVENANCE.txt`).
+  - It is not byte-identical to the 2026-11-18 image `693568f6…` (protfix): 10,393 bytes differ, in `.rodata`,
+    `.text` and `.data`. One known source is `__DATE__`/`__TIME__` ("Compiled at Nov 24 2026 08:07:20" against
+    "Nov 18 2026 11:03:21"). A changed string can move `.rodata` and the `.text` offsets that reach it. That every
+    differing byte comes from it is not shown.
+  - Section sizes are equal. A full opcode census of `.text` (`nested/perl/tools/capop-census.py`, `568d72b5…`) is
+    identical, and on the twin P reads the same instructions as protfix (below).
+- N: `perl-protnop.strip.dom` `d2d79d42…`. It is P plus `nested/perl/lifenop/0003-lifetime-instructions-neutralised.patch`
+  (`caf0cf33…`), an experiment patch kept outside `ports/`. In `sv.c` it redirects `capstone_cap_derive` and
+  `capstone_cap_revoke_child` to copies of their asm:
+  - the live CDERIVE (funct7 0x51) becomes MOVC (0x0a). The bytes were checked with `llvm-mc`: `movc a0, a1` and
+    `.insn r 0x5b, 0x1, 0x0a, a0, a1, x0` are both `5b 95 05 14`;
+  - CREVOKE (0x52) becomes `add x0, rs1, rs2`, a 4-byte word with the same two source registers;
+  - the refusing zero-size CDERIVE and every operand and clobber are unchanged.
+  - So a head is handed out as a copy of its arena's capability, with the cursor at the head and no record of its own.
+    The arena's own derive in `Perl_more_sv` is neutralised the same way, so each arena carries the capability that
+    `Newxz` returned. Nothing in the port reads a child's bounds.
+- Static census, P to N: CDERIVE 42 → 26 (−16, the live derive at each inlined site), MOVC +16, CREVOKE 7 → 6, ADD-to-x0
+  0 → 1. Total 4-byte words (957,966) and RVC words (273,062) are equal. The census of U to P differs in many classes,
+  so the census can fire.
+
+**Twin control** (`nested/out/npn-1`, 2^20 records, P in the stage's "unprot" slot and N in its "prot" slot, order P N
+N P): every command rc 0 with `suns.out`.
+- In-context instructions:
+  - P 1,905,129,684 and 1,905,131,815;
+  - N 1,905,130,755 and 1,905,130,627.
+  - N−P is −58 instructions on the means, inside the repeats' own spread of 2,131.
+- P equals the 2026-11-18 protfix twin run (1,905,130,536 and 1,905,132,087) within that spread.
+- So N executes P's instructions, apart from the substitutions. N−U on the twin is P−U, +173.3 M.
+
+**Configuration.**
+- Bitstream P1 (`…-pagedtbl_d83d3a633`), kit `nested/kits/bkit91-rec1m` (`node_flat_records=1048576`, SHA256SUMS
+  verified), board 1.
+- The runtime lane arms the chain `nested/p1n/p1n-b1.*` behind pid 893413 (board 1's current run and the board lane's
+  booking). The chain reads P1 back by name, and flashes it sha-checked if it is not resident.
+- Stage `nested/p1n/upn` (`upn.SHA256SUMS`) is the kit's `make-train-stage.sh` around `nested/appd/perl-upn`, made by
+  `appd/make-abba3-stage.py` (`a82bdfc5…`, make-abba-stage.py with a third arm).
+  - The smoke files are byte-identical to the perlfix stage's.
+  - Commands u1 p1 n1 n2 p2 u2, each in a fresh tmpfs copy of the inputs, with `PERL_HASH_SEED=0`.
+  - List line `upn 1200 60`, so `BAKED_TIMEOUT=4800` (the dry run prints it). Expected wall time: about 40 min of
+    commands.
+- Checked off the board (rule 8, `nested/p1n/recheck-p1k.sh` = recheck-p1.sh with the kit as a parameter):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on the perlfix boot's real transcript and on its cut, PASS all 9 steps;
+  - real firmware build 23,760,392 B, under the cap;
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/p1n/dry.log`).
+- Read by `appd/parse-abba.py` per command, with the readings computed per arm pair.
+
+**Rules.**
+- Answers: every command returns `suns.out`. Otherwise that arm is not read.
+- Repeats: 1 % in-context and 2 % kernel + other, per arm. Otherwise that arm's difference is not read.
+- Stock control: U within ±1 % of the perlfix boot's 4,914.4 M. Outside it, no comparison with that boot is made, but
+  this boot's own differences are still read.
+
+**Predictions.**
+1. **Records:**
+   - N's record counters sit at U's: hpm3, hpm4, hpm5 and hpm7 each within 10 % of the U-to-P gap from U. On perlfix
+     the gaps were +0.455 M, +12.3 M, +16.6 M and +1.45 M.
+   - N's L1D misses (hpm8) lie between U's and P's. N keeps the larger arenas and the `issued` array.
+2. **N−U, the port's other instructions on silicon: 250 M to 600 M** in-context cycles.
+   - At the mean price (2.838 a twin instruction) it would be 491.7 M.
+   - At the lookup pair's measured price (1.67) it would be 289 M.
+3. **P−N**, the lifetime instructions with their records, is the rest of P−U. Today's P−U is expected within ±5 % of
+   +788.8 M.
+
+**What each outcome says.**
+- **N−U near 491.7 M (418 to 565 M):** the mean price holds for the port's code. P−N is the 32-33 % remainder plus
+  the walks and replays.
+- **N−U below 418 M:** the port's code is cheaper than the mean, and the lifetimes cost more than the table
+  attributed.
+- **N−U above 565 M:** the code is dearer, for example through the `issued` array's cache traffic. Then the remainder
+  belongs to the code, not to the records.
+- **P−N:**
+  - From it come the measured walks (P−N hpm4) and the replays (P−N hpm7 at 17-20 cycles each).
+  - What is left is divided by the lifetime instructions P executes beyond N: on perlfix, 1.94 M CDERIVEs and
+    CREVOKEs. That gives a price per lifetime instruction, including its record traffic beyond walks and replays.
+  - This pair does not split the instruction from its record.
+
+**Limits.**
+- One run per arm, U first, not interleaved, which is the perlfix boot's design.
+- N's heads are not protected. N is an instrument, not a variant anyone would ship.
+- Item 3's CRENEW and liveness-test variant is no longer deferred behind item 5, which is done. It follows this pair,
+  in the one-operand environment ("The CRENEW and liveness-test variant" above).
+
+## M-16 on P1: how often the protected tshark returns (2026-11-24)
+
+### Pre-registration: the protected tshark stage in five consecutive boots on P1 (written 2026-11-24 08:07, before the boots)
+
+**Question.** The programme (item 4) asks for the Wireshark non-return to be root-caused. On P1 the protected stage
+returned in 2 of 3 boots (the heartbeat boot and tsu-p2; tsu-p1 did not), and on F in 0 of 2. Those counts can't
+separate an intermittent fault from one that depends on the boot. This run reads the return rate of the same bytes on
+P1. For each boot that does not return, it also records where the core stopped, compared with tsu-p1's reading.
+
+**Configuration.**
+- P1 `…-tagoverlap6c-pagedtbl_d83d3a633`, kit bkit91 (`t3-smoke/bkit91-k2n-native-p1-tree-cscfix`, its
+  SHA256SUMS verified), board 1.
+- The runtime lane arms the chain `nested/p1tr/p1tr-b1.*` behind this lane's Perl chain (the section above), which
+  waits for board 1's current runs. P1 is restored and read back before then; the chain reads it back by name again
+  and flashes it, sha checked, if it is not resident.
+- Five boots, `tsu-r1` to `tsu-r5`, each a `cp -a` of `nested/p1tu/tsu-p1`. `diff -r` against it is empty, and
+  `nested/p1tu/tsu-p1.SHA256SUMS` verifies:
+  - the image is `ts_prot.xz` (`c1a1293f…`, which unpacks to `bcc251f3…`), wmem 0001 with the Q-15 repair;
+  - the capture is 9,000 frames (`5ba7788d…`) and the command is `-r w.pcap -V -n`, with no heartbeat.
+- List lines are `<stage> 900 75`. The kit multiplies by 4, giving `BAKED_TIMEOUT=3600` with no entry-stall abort
+  on a SPEC stage. That is the limit tsu-p1 ran under. The booking is 75 min, because tsu-p1's non-return held the
+  board for 68 min.
+- Board time: about 39 min a boot that returns and 68 min one that doesn't, so 3.3 to 5.7 h in all.
+- Each boot is baked again on the shared native kernel tree. Its kernel Image hash is recorded from the bake, because
+  tsu-p2's kernel differed from tsu-p1's by four objects that another relink had recompiled.
+
+**Checked off the board** (rule 8): `nested/p1/recheck-p1.sh` on `tsu-r1` (`nested/p1tr/tsu-r1-recheck/`):
+- real bake rc 0;
+- `BOARD_STUB=2` rc 0 on the P1 heartbeat boot's real transcript (`out-nat-p1ts-nested-b1/tsph`, which returns) and on
+  its cut after `@@SPEC-BEGIN` (which does not), both PASS all 9 smoke steps, both `BAKED_TIMEOUT=3600`;
+- real firmware build 23,760,392 B;
+- an `NR_DRY=1` pass of the chain through five stub boots to DONE (`nested/p1tr/dry.log`).
+
+**Readings, per boot.**
+- **Returns:** `@@SPEC-END` with rc 0, and stdout equal to stock (`056c1f8c…`, 1,140,005 lines, 9,000 frames).
+- **Does not return:** no `@@SPEC-END` before the runner's 3,600 s limit. For each such boot, these are read from
+  the runner's apertures (`BAKED_WEDGE_APERTURES=1`):
+  - the commit pc;
+  - sw=225 and sw=220;
+  - the serving index (`rev_node_debug_ex`).
+  Each is compared with tsu-p1's readings: commit pc `0x3ff6780f04` (slot-0 residue at the CDERIVE of
+  `wmem_block_fast_sublet_alloc`), sw=225 `0x96`, sw=220 `0x8c`.
+- **Anything else** (rc != 0, or other output) is a third class and is reported as itself.
+- A boot whose smoke does not pass stops the chain. Its count stops there, and the boots that ran are read.
+
+**What is read.**
+- k returns of n boots read, with the Clopper-Pearson 95 % interval for the return rate. Pooled with tsu-p1/tsu-p2
+  and the heartbeat boot (same image, kit and capture; the heartbeat boot also had the beat), that gives k + 2 of
+  n + 3.
+- If every boot returns, the non-return rate of this stage on P1 is below 45 % (the upper bound for 0 of 5), or 53 %
+  pooled (1 of 8). Then M-16 on P1 is rare, and the folder for the hardware side needs a stress form.
+- If none returns, the non-return on P1 is the rule, and the two returns are the exception.
+- **Where it stops:** if every non-return reads tsu-p1's commit pc, the stops are at one site. That says where the core
+  stopped, not why: a pc says which instruction faulted, not where its operand came from.
+- Returning boots' in-context cycles are reported against tsu-p2's 24,073.7 M as a repeat. No cost is read: there is
+  no stock arm in this run, and the kernels may differ.
+
+**Prediction.** Intermittent: between 2 and 4 returns of 5, and every non-return at tsu-p1's commit pc.
