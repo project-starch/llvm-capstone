@@ -4564,6 +4564,50 @@ pristine second binary, which the P1 row (mode 6 against mode 4 of one image, +2
 - One boot.
 - hpm6 (grow) can read nonzero in the first commands, as on the row. It is reported, not read.
 
+### Result: protected PHP costs +29.78 % against pristine zend_alloc on P1, inside the band (board 2, 2026-11-25 00:28-01:32, read against 246d1c4f383b)
+
+The chain (pid 2204581) read P1 back by name as resident (no flash), booked 1491, and unbooked it. The smoke passed all
+9 steps. The chain's `SPEC rc=2` is the generic classifier, which does not read this stage's markers; it is not a
+verdict. Transcript `…/out-nat-p1ps-php-b2/php10s/board.txt` (sha256 `8506e1ca…`), read by `parse-abba.py`
+(`1d0459d5…`) against `8f692e64…` and `abba.py` (`fe8e1531…`).
+
+| command | rc | answer | in-context cycles | kernel + other | context entries |
+|---|---|---|---:|---:|---:|
+| u1 pristine | 0 | `8f692e64…` | 17,637,636,211 | 296,702,525 | 5,624 |
+| p1 mode 6 | 0 | `8f692e64…` | 22,887,566,222 | 427,165,472 | 7,569 |
+| p2 mode 6 | 0 | `8f692e64…` | 22,868,235,362 | 426,930,663 | 7,558 |
+| u2 pristine | 0 | `8f692e64…` | 17,619,420,646 | 295,729,335 | 5,613 |
+
+- **Answers: met.** Every normalised output equals the native reference. p1 and p2 print `ZEND_CAP_MODE 6 exact=0
+  revoke=1`, and their allocator line reads 3,442,469 issues, retires and revokes with 0 live. u1 and u2 print nothing
+  on stderr. Not VOID.
+- **Repeats: met**, 0.10 % (u) and 0.08 % (p).
+
+**Against the predictions.**
+1. **The protected arm repeats the row: met.** 22,877.9 M against the row's 22,903.2 M, −0.11 %.
+2. **Cost: +29.78 % (+5,249.4 M), inside the band** (+8 % to +31 %), well above the point (+18 %).
+   - The pristine arm ran 2.318 times its twin cycles (17,628.5 M over 7,605.7 M), at the low end of the 2.3-2.8 range.
+     The point assumed the row's mode-4 ratio, 2.553. The protected arm ran 2.606 times its twin's 8,779.2 M.
+   - So on silicon pristine zend_alloc gains less over the twin than mode 4 and mode 6 do, and the cost in percent is
+     nearly twice the twin's +15.43 %.
+3. **The substitution is most of the total: met.** It is a cross-boot reading, as registered.
+   - Mode 4 (the row's u, 22,379.1 M) against pristine (this boot, 17,628.5 M) is +4,750.6 M, +26.95 %.
+   - The row's lifetime cost (mode 6 against mode 4) is +524.1 M, +2.34 %.
+   - Of their sum, 5,274.7 M, the substitution is 90.1 %. The sum differs from this boot's own p−u (5,249.4 M) by
+     25.3 M, 0.11 % of p, which is the cross-boot difference in the protected arm.
+   - On the twin the same split was +15.25 % and +0.16 %.
+4. **Duration: missed, narrowly.** The pristine commands took 11.98 and 11.97 min (predicted 12 to 16 min), and the
+   protected ones 15.57 and 15.56 min. The boot took 63.8 min, against about 75.
+
+**Reported, not read.**
+- The protected arm enters context 34.6 % more often (7,569 against 5,624) and spends +44.2 % more cycles in kernel and
+  other (+130.8 M). On the twin it was 1,529 more entries per command.
+- Record-TLB misses +162 %, walk cycles +176 %, L1D misses +341 % (+77.6 M), event-23 replays +14 %.
+- hpm6 (grow) reads 10 and 8 in u1 and p1 and 0 after, as on the row.
+
+**Limits.** One boot. Prediction 3 rests on two boots with no pair between them. The pristine binary differs from mode
+4 in block geometry and caches, not only in the lifetimes.
+
 ## Item 5: the SQLite and PHP bug corpora for the board (2026-11-23)
 
 The programme's item 5: prepare the images and the pre-registration, and the runtime lane queues them on a P1 board.
