@@ -5976,3 +5976,45 @@ need a bitstream with CRENEW.
 - If held, the saving per reissue is what a renew is worth in the bodies port's code.
 - Its share of the bodies port's +0.733 % is the reading for item 3.
 - The hash-entry and op-slab ports are the same change in principle. They are not built here.
+
+### Amendment before any reading (written 2026-11-24 10:41): suns.pl, and the port's one-operand revision
+
+The first boot (`fig10-pbrn-z-bod`) ended at once, and the chain was stopped. No arm was read. Two causes, each found
+in source:
+
+1. **test.pl cannot run in oneop.** SPEC's test.pl runs every test as a new process of `$^X`. The twin's stage
+   provides one, and oneop's single-image runner cannot exec one.
+   - A check of the stock arm with the twin's driver line (`$^X="../sw/perl"; do "./test.pl"`, `fig10-pbrn-chk-stock3`)
+     prints `can't run '../../sw/perl base/cond.t': Permission denied` for all 317 tests, at 0.25 G image
+     instructions against the twin's 87 G.
+   - **The workload is now suns.pl** (`-I. -I./lib suns.pl`, SPEC's train input). It runs in one process and is what the
+     5.36 heads half used.
+   - The answer is SPEC's `suns.out` (`01688ea0…`). The stock arm matches it in oneop (`fig10-pbrn-chk-suns`:
+     2,488,000,453 image instructions, a feasibility check made before this amendment).
+   - The environment check against the twin's test.pl figure is dropped, because no twin reading of perlbench on
+     suns.pl exists. Bodies minus heads is still read, with nothing to check it against.
+2. **The 5.22 port emits the two-operand CREVOKE, which oneop's model refuses as illegal.** Its `capability.h` says so:
+   use `capstone_cap_release`.
+   - The heads arm faulted with cause 2 after 0.1 M image instructions, and bodies after 0.37 M.
+   - The fix is the same one-operand revision Fig. 10 made to the 5.36 patch. `fig10/perlbench/oneop-shim.h`
+     (`335b499c…`) is force-included into the port arms and maps `capstone_cap_revoke_child(parent, child)` to
+     `capstone_cap_release(child)`. On this model a release ends the child's lifetime and every lifetime derived
+     inside it.
+   - The rebuilt arms are heads `453cbfed…`, bodies `0f6b36fe…` and bodren `618d7bf7…`
+     (`build-perlbench-arms.sh` `0a175b46…`). The stock replay is again byte-identical to the build's executable.
+   - A scan of each image's CREVOKE words (rs2 = x0 means one operand):
+     - stock: 3 one-operand, 0 two-operand;
+     - the first heads build: 3 one-operand, 3 two-operand (the fault; the scan fires);
+     - rebuilt heads 6/0, bodies 9/0, bodren 6/0.
+
+**Runs.**
+- The chain is unchanged apart from the workload and fresh run names `fig10-pbrn2-*` (`chain-perlbench-renew.sh`
+  `6db35678…`, an echo-runner dry run to `CHAIN-PBRN-DONE`).
+- The boots are as before: zones3 bodies, zones3 bodren, opcount bodren, opcount bodies, zones3 heads.
+
+**Predictions, as amended.**
+1. **Answers:** SPEC's `suns.out` in every boot. A boot that differs is not read.
+2. **Dropped:** the twin test.pl check.
+3. **Kept unchanged:**
+   - Lifetime instructions: CRENEW = CREVOKE's fall exactly, and CDERIVE falls by at most the CRENEW count.
+   - Image instructions: bodren minus bodies at −2 to −14 per removed CDERIVE.
