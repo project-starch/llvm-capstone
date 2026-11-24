@@ -521,6 +521,20 @@ eb03e7c99, graded against aad164b18412. Base: f4890ec7f's gate. Grade file
     read-only cell census over the three dcps (ab9efe547bd4b481, 8baaa42e6fee767e, b05ca47912c75223), shaped to separate a
     re-homed shared cone (stems moving with an equal and opposite sign, a flat sum) from logic that appears and
     disappears. It does not hold step 5.
+  - **The census reads re-homing** (board lane, read-only; twc/pairdiff/analysis.txt on apollo):
+    - The pair's sum in LUT primitives is 21,627 / 21,271 / 21,768. That unit counts above the utilization report's
+      by 897-2,566 per instance; the direction of every move matches.
+    - 265 leaf stems, 47 seen in both modules; 9,927 moved across them in total. About 9,400 of that is seven stems,
+      all mem_q[N].sbe (cap_result ra_data / rs1_metadata / rs1_cursor, result, pc_next, pc_next_metadata, base_addr),
+      each moving with an equal and opposite sign.
+    - These are a scoreboard-entry cone: its inputs are the entry flops (5,272 FDCE, always in i_scoreboard) and the
+      writeback data. Its outputs were not followed to their loads, so write-side or read-side is untested.
+    - The cone sits in rev_node only in f4890ec7f's dcp. rev_node's own stems never move. In dyn_unit the cone's pins
+      include the LCC 8 block's nets.
+    - A residue of a few hundred LUT is unattributed (the s4 LUT6/LUT5 mix shift).
+    - The control (the 218 stems confined to one module show no cross-module move) cannot fail by construction. The
+      informative contrast is 7 stems carrying about 95% of the move.
+  - **From step 5 on**, dyn_unit and rev_node are graded as one sum together with i_scoreboard, never per module.
 - The synth dcp is kept as twc/gate-synth-b5b2s4-eb03e7c99.dcp (sha16 b05ca47912c75223); vivado-guard peak RSS 24.59 GB,
   51m41s.
 
@@ -546,6 +560,76 @@ inert instruction into cause 2. Pre-registered in b5b2-illegal.S's header before
   - f-keep's source is not in our repositories, and patch 0013 describes it as firmware that keeps register tags across
     M traps, so it is the main unknown. A source check does not replace the binary scan.
   - The deletion's own gate is batched with step 5.
+
+## Step 5: CLDRAW and CSTRAW, the design (2026-11-24, before any code)
+
+The reference: capstone-qemu 9289114e06 op_helper.c helper_cldraw / helper_cstraw / raw_granule_probe,
+trans_capstone.c.inc raw_moves_allowed, tests/capstone-raw-moves; dev docs/design/virtual-capstone/raw-tag-moves-proposal.md.
+- **Encodings:** custom-0 (0x0b) funct3 4 (I: CLDRAW rd, imm(rs1)) and 5 (S: CSTRAW rs2, imm(rs1)). Today the decoder
+  takes custom-0 only for debug.print (funct3 0); funct3 4, 5 and 6 are illegal (decoder.sv:506-520).
+- **Privilege:** legal only in S or M, outside a supervised context (sup_active) and a virtual context (vctx). U,
+  protected U and contexts take 2. The Sublet build only; ids55 keeps them illegal.
+- **The address** is rs1's integer view plus imm, through the current privilege's ordinary translation (MPRV included).
+  A raw move is a PLAIN access:
+  - no capability check, even through a tagged base in S (rule 1 does not apply);
+  - rule 2's S index applies, so with srevroot != 0 it reaches no user page;
+  - 16-byte alignment, else 4 / 6 with tval = the address;
+  - translation and PMP faults as for a load / store.
+- **CLDRAW** writes rd with all 128 stored bits and the memory tag, without decoding: the integer = lo, the lane =
+  {32'b0, raw_tag = the memory tag @65, tag 0 @64, hi @63:0}. rd's usable tag is 0, so it grants nothing. rs1 is not
+  written.
+- **CSTRAW** of a tagged rs2 (lane[64]) raises 24 before any store. Otherwise it stores lo = rs2's integer and hi =
+  lane[63:0], with memory tag = lane[65]. It writes no register.
+
+**Representation: raw_tag is lane[65] while lane[64] = 0.** This rests on the read/write enumeration of 87aec16b4 (an
+Explore pass; the two load-bearing facts re-read here: ariane_pkg.sv:813-832 and :1007-1017):
+- **Readers.** No reader interprets an untagged lane's bits [97:65]:
+  - decompress_cap_tagged (ariane_pkg.sv:813-832) maps tag 0 to NOT_CAP with no slot, and every authority path goes
+    through it (FLU, DYN, LSU check, commit's CCSRRW path);
+  - the reads that skip the tag are gated later (bypass types :1641-1643, r60 :2602-2607, commit :597);
+  - load_unit's rs1_perm_write (:240-242) is dead under Sublet (fmt_md_type returns only NONLIN or NOT_CAP).
+  So a raw register reads as untagged everywhere: no check accepts it, and no capability is built from it.
+- **Writers.** Every ordinary producer writes lane bits [97:65] = 0, so raw_tag is cleared with no new logic. This
+  matches the reference's scalar_destroys_tag and movc_clears_raw:
+  - ALU, branch, mul/div, loads, AMO, FPU moves and CSR reads: '0;
+  - FLU / DYN: cap_lane with slot 0 for NOT_CAP;
+  - MOVC of an untagged source: slot zeroed;
+  - LDC: fmt_unpack_lane gives {0, 0, hi} for an untagged granule (ariane_pkg.sv:1009-1010);
+  - the scratch CSRs keep a lane only with its tag (step 4);
+  - the switcher's save (fmt_pack_hi ignores the slot when untagged).
+  - Copies that keep the lane unchanged: forwarding, and the bypass STC's rd (= rs2) and rs1 write-back. These are the
+    reference's "the register was not written", so raw_tag correctly survives them.
+- **The hard part is identity, not the bit.** The untagged LDC / STC data path already is a raw transport minus the tag
+  (an untagged LDC yields integer lo and lane hi; an untagged STC stores integer and hi, fmt_pack_lo/hi). So CLDRAW and
+  CSTRAW are the bypass LDC / STC with three differences: no unpack even when the memory tag is set, raw_tag in and out,
+  and no capability check. They need new op identities: LDRAW and STRAW, appended to fu_op in ariane_pkg.sv AND to
+  capstone_unit.anvilh's twin enum (Anvil regenerates; no unit sees them). Every op-identity site the enumeration listed
+  must then admit or exclude them explicitly:
+  - check_cap_op / is_cap_load / is_cap_store (so the rs2 lane is read);
+  - the LSU's capability-context gate and the MMU's cap_ref (both excluded: a plain access);
+  - the lifetime verdict and the R43 probe (excluded);
+  - load_unit's data_is_cap / data_wuser request (included) and its clear / linear logic (excluded);
+  - store_unit's st_is_cap / st_ctag / st_user (included, with ctag = lane[65]);
+  - commit's LDC rs1-lane rule (LDRAW writes rd only) and the STC write-back (STRAW writes nothing).
+- **The likely synthesis surprise** the scope warned of, an extra bit through every forwarding path, does not arise:
+  the bit rides in the existing 98-bit lane.
+
+**Arms, ported from tests/capstone-raw-moves/probe.S** (the arm numbers are the reference's; each to be pre-registered
+from the reference's own expectation):
+- 1 tagged round trip republishes the tag;
+- 3 / 4 U load and store: 2;
+- 5 / 6 misaligned: 4 / 6;
+- 9 M mode;
+- 10 opaque authority: a raw register as a base in protected U raises 24;
+- 11 a scalar write destroys raw_tag;
+- 13 translated alias;
+- 14 / 15 read-only load and store;
+- 16 / 17 unmapped load and store;
+- 18 x0 faults;
+- 20 / 21 MOVC clears raw;
+- plus a tagged CSTRAW source: 24, and a context: 2.
+- 7 / 8 (MMIO: a tagged CSTRAW outside tagged RAM faults before changing bytes) needs the platform's taggable-memory
+  map. The simulation has none (its NI rule is off without CAPSTONE_FPGA_NI); recorded as a silicon arm.
 
 ## Silicon acceptance: bare kits
 
