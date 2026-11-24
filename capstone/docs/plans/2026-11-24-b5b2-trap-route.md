@@ -179,6 +179,82 @@ The interruptible CREVOKE (Line B step 4(b), spec-silicon 24ecb7b4daa4) moves th
 **Cost to measure in simulation:** srevroot is written at every switch_mm, and each write raises flush_o (a TLB and
 namespace flush). The per-switch cost lands on the SPEC baseline later, so step 2 reads it in cycles.
 
+## Steps 0 and 1: what was found, and step 1's first cut (2026-11-24)
+
+**Step 0 and step 1 as written above over-stated the work.**
+- B5b-1 already makes most of step 1's list illegal under CAPSTONE_SUBLET_FMT (decoder :1212-1456): REVOKE, TIGHTEN,
+  DELIN, SPLIT, SEAL, MREV, INIT, DROP, CSRETIRE, CALL, RETURN, CSSUPERVISE and CAPENTER. funct7 0x23 (supervisor_gc),
+  0x40 (gencap), 0x41 (capmem) and 0x42 (clearcmmap) fall into the custom-2 default, which is illegal at decode.
+- B5b-1 keeps an ids55 build (`+define+CAPSTONE_IDS55_FMT`; the (K) ruling of 2026-11-23). Its 95-test sweep is the
+  regression gate of the shared datapath.
+- So the deletions go under the Sublet format only, as B5b-1's did. The ids55 build stays unchanged and is checked by
+  `verilator -E -P` token identity, and the 95-test triage is not needed. The semantics owner ruled this (2026-11-24).
+- **Step 0's list** is therefore:
+  - the ids55 95-sweep, unchanged, carried by preprocess identity;
+  - the 15 Sublet directed tests of testlist_b5b1.yaml, compared before and after each deletion;
+  - b5b2-illegal (two builds) as the positive control.
+
+**What is left to delete.** Comparing against the reference's deletions (insn32.decode c1985bb529..9289114e06), four
+remain legal under Sublet.
+
+| op | encoding | deleted in the reference by | order (the semantics owner's ruling) |
+|---|---|---|---|
+| CJALR | custom-2 funct3 5 | 7800b39822 | first: step 1's first cut |
+| CCSRRW | custom-2 funct3 7 | 7800b39822 | after step 4 gives tagged sscratch/mscratch their own path |
+| CSRUNV | custom-2 f3 1 f7 0x24 | 35de150cef | once the monitor no longer needs it |
+| capcreate, captype, capnode, capperm, capbound | custom-3 f3 0 f7 0x04-0x08 | CVA6-only (the reference's debug mint gencap went in 7800b39822) | last, after the Sublet tests mint through CSMINT |
+
+- The custom-3 mints are illegal on the Line B Sublet bitstream (ruled). The reason: "an instruction that mints
+  authority from an integer has no place in Section 5's ISA".
+- CAPPRINT stays, the analogue of csdebugprint, provided it changes no architectural state on silicon.
+- Six Sublet tests use the mints and carry a note saying so: csmint, r79-cpmp, sublet-fmt, sublet-life, sublet-ns,
+  va-runv-snap.
+
+**Boot-set scan before each deletion** (ruled): every image a Line B kit bakes or loads, by encoding. That means
+fw_payload, the kernel Image, every .ko, .dom and userspace binary in the cpio, and any external initrd, taken from
+the kit's SHA256SUMS and its cpio listing.
+- Today's set is the csmint-bare-2026-11-23 kit. Its five images (sha256 = SHA256SUMS) read 0 CJALR, 0 CCSRRW and
+  0 CSRUNV words at any 2-byte offset, and 20-204 custom-3 mint words each.
+- Positive controls: a real ELF (an ids55 sweep jalr.o, cjalr = 1 as its source), and a mutant (2 of 2, one at a
+  2-byte offset).
+- The collaborator's trap-route kernel and firmware join the set before the CCSRRW and CSRUNV deletions.
+
+**Step 1, first cut** (capstone-ariane b5b2-step1 c36facb5a, on b5b1-step3 27e75c38a): CJALR is illegal under Sublet.
+- b5b2-illegal.S, the port of the reference's illegal.S, was pre-registered in its header before any run.
+  - Base: sites 1-17 read 2, with mepc = the site and mtval = the word. CJALR reads 24. The five mints and CCSRRW
+    retire. The trap count is 18. CSRUNV, its own build, retires.
+  - c36facb5a: CJALR reads 2 / site / word, and everything else is unchanged.
+- The 15 Sublet directed tests are identical before and after the deletion: logs byte for byte, .iss traces once
+  wall-clock and port lines are removed. The same holds on the committed tree, dirty=no.
+- ids55: the preprocess output is 98,689 lines, byte-identical.
+- Lint, Sublet build: PASS at REF (UNUSEDSIGNAL 1567, UNOPTFLAT 39, loop names 39 = 39). ids55 build: equal to B5b-1's
+  own ids55 listing on every counter and by name.
+- Not yet synthesised. The synthesis-only gate is batched with step 2: step 1 adds one illegal term to the decoder.
+
+### Step 2's prerequisite: every consumer of `capmode` (b5b2-step1 c36facb5a, read 2026-11-24)
+
+How the list was made: `git grep -w -E 'capmode(_[a-z]+)?' -- core`, excluding the generated `*.anvil.sv`. No `.anvil` or
+`.anvilh` source mentions capmode; `cap_mode` has no hits. 42 lines in 8 files.
+
+- **State** (csr_regfile.sv): `capmode_q`, reset to 0 (:3365) and set sticky by `capmode_set_i` (:342), which is CAPENTER's
+  commit pulse (cva6.sv:2207 `capenter_commit`). CAPENTER is illegal under the Sublet format (decoder :1456), so
+  **under Sublet capmode is 0 from reset on**, and every consumer below is already dead there.
+
+| # | site | what it gates | fate |
+|---|---|---|---|
+| 1 | csr_regfile.sv:2212 | flush after a CCSRRW write | CCSRRW is deleted after step 4. Step 4's tagged sscratch/mscratch must NOT inherit this capmode gate: gate by CSR address and privilege |
+| 2 | csr_regfile.sv:2654 | the CCSR write case (CTVEC, CEPC, CSCRATCH, CPMP...) | as 1. Today a Sublet CCSRRW writes nothing (b5b2-illegal site 24 retires with no trap) |
+| 3 | decoder.sv:1452 | CSRUNV illegal in M with capmode | goes with CSRUNV's deletion |
+| 4 | commit_stage.sv:392 | the PC capability check (M && capmode) | stays dead. The reference has no fetch or PC check (op_helper.c:1101 on); removed in step 8 |
+| 5 | commit_stage.sv:487 | `pcc_chk_o`, the PC probe request | as 4 |
+| 6 | load_store_unit.sv:1443 | the plain load/store capability check (M && capmode, fu LOAD/STORE) | **replaced in step 2** by the privilege rule (protected U; S with a tagged base) |
+| 7 | load_store_unit.sv:1798 | R43_TRACE `$display` (`ifndef SYNTHESIS`) | sim-only; follow 6's new condition or drop |
+| 8 | pmp_data_if.sv:331 | the CPMP execute check on S/U fetch | stays dead (no CPMP in the reference; B5b-1 tied the trackers off); step 8 |
+| 9 | pmp_data_if.sv:396 | the CPMP check on S/U loads and stores | as 8 |
+| - | cva6.sv:513/1495/1881/2154/2236, id_stage.sv:86/341, ex_stage.sv:91/901, load_store_unit.sv:214/734, pmp_data_if.sv:43 | ports and wiring | follow their consumers |
+
+The LDC/STC verdict gate (load_store_unit.sv:1604-1616) has no capmode term; the comment at :1604-1607 says so.
+
 ## Silicon acceptance: bare kits
 
 No Linux kit can run until the runtime lane's integer-M monitor exists: the current one executes CAPENTER at init. So
