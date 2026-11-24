@@ -7420,3 +7420,41 @@ SPEC test is enough.
   - the ordering half of Addendum 232's prediction 2;
   - t202s2's two rows.
   They are re-registered against that campaign's images when it is planned. No train chain is queued on any board.
+
+## Addendum 237 (2026-11-25 00:05 +08, outcome): Addendum 233, matched Plain with the 48 KiB 12-way L1D; the 48K L1D leaves the batch
+
+Chain l48p-b3 ran all seven rows on board 3, rvbase-matched-…-l1d48-12way_bb56087ba, kit bkit114-k2n-rvm48, from 16:25
+to 23:34. Every row ended rc 0 with specdiff PASS, and no boot printed a panic or illegal-instruction line. The
+readings are in each stage's result.json under spec/board/out-thp2-l48p-b3/l48p; the guest board.txt hashes are
+perlbench 70ce1c47f1564745, gcc 35af4fa876cbefb6, mcf 67b4c8245e5043d2, lbm 4d27a7d5080a861f, imagick
+026ede2efcc82dcb, nab 571ba0f4c4377a14, xz 6df5d4ebe8905267.
+
+Seconds follow Addendum 208's convention. Overheads are Capstone against Plain at the same L1D: 32K is Full mean /
+Plain mean (Addendum 208), 48K is Addendum 224's P1 + L1D48 against this run (each N = 1).
+
+| Row | Plain 48K | Plain 48K vs 32K | Overhead 32K | Overhead 48K | Δoverhead |
+|---|---|---|---|---|---|
+| perlbench (2 commands) | 10,534.88 | -2.51 % | +20.99 % | +21.00 % | +0.02 pp |
+| gcc train01 | 1,451.43 | -1.52 % | +20.18 % | +20.17 % | -0.01 pp |
+| mcf | 4,733.18 | -2.88 % | +21.97 % | +22.62 % | +0.65 pp |
+| lbm | 999.15 | -0.48 % | -1.47 % | -1.12 % | +0.35 pp |
+| nab | 652.18 | -1.07 % | +5.28 % | +5.57 % | +0.29 pp |
+| xz (sum of 12) | 4,626.88 | -1.19 % | +5.85 % | +6.18 % | +0.32 pp |
+| imagick (convert) | 9.71 | -8.48 % | +7.45 % | +9.99 % | +2.54 pp |
+
+The gcc overhead against the board-2 P1 control (1,771.72 s) instead of the Full mean is +20.21 % at 32K; the row
+still reads no change. Imagick's 32K figure is the ratio of Addendum 208's rounded means (+7.45 %; 208 prints +7.51 %).
+
+Seven-row geometric mean: +11.12 % at 32K, +11.73 % at 48K, Δ +0.61 pp.
+
+**Predictions.**
+1. Held: every row completed, with specdiff PASS and no panic or illegal-instruction line.
+2. Held: Plain 48K is faster than Plain 32K on every row.
+3. Failed for mcf, gcc and perlbench. Plain gained as much as Capstone (gcc, perlbench) or more (mcf), so Δoverhead is
+   0 or positive, not -0.3 to -2.0 pp. lbm's +0.35 pp is just outside its ±0.3 pp. Of the rows with no predicted
+   direction, imagick moves +2.54 pp; nab and xz move about +0.3 pp.
+4. Read: the geomean overhead rises by 0.61 pp.
+
+**Decision**, by Addendum 233's rule: the geomean did not fall by 0.3 pp, so the 48K L1D brings the comparison
+nothing and leaves the performance batch. Both lines stay at 32 KiB 8-way. By Addendum 234's amendment, bitstream 1
+stays the default and the third makerand runs are not spent. Board 3 returns to rvbase at its next chain.
