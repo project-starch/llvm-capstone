@@ -299,6 +299,51 @@ Timing is not graded by a synthesis-only run. The auditor's open point: the reor
 same-cycle invalidation ahead of the 64-bit bounds compare inside cap_exception, the LSU's dominant slack term. That is
 read at B5b-2's full build, where steps 1-6 are batched into one bitstream.
 
+### The gate on steps 1 and 2: read (board lane, 2026-11-24), PASS 3/3
+
+94cbc880e (the job's sha verified). Base: d0afdb40f's gate. Grade file
+`/mnt/hdd/<user>/synth/b5b2s2-94cbc880e-gate-out/grade-b5b2s2.txt`.
+- Key 1 (memory): TM peak 5,368.5 MB, against 5,446.4 (-77.9; ±505). The whole-run peak was 5,436.6 MB. PASS.
+- Key 2 (loops): 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy 1), LUTLP-1 0 (toy 1); the in-flight
+  gate PASS.
+- Key 3 (core LUT): 144,583, against 145,492 (-909; limit 147,992). PASS.
+- Reported, inside the predictions:
+  - lsu_i 23,818 (-271, predicted ±500);
+  - csr_regfile_i 7,409 (+9, predicted ±200);
+  - ex_stage + issue 103,895 (+122). ex_stage +2,048 against issue -1,926 (scoreboard -1,075, issue_read_operands
+    -851) is redistribution across the stem.
+- No module row is beyond ±2,500. FF -117. LUTRAM and BRAM are unchanged.
+- The synth dcp is kept as twc/gate-synth-b5b2s2-94cbc880e.dcp (sha16 ab9efe547bd4b481).
+
+## Step 3: rule 2 in the MMU (2026-11-24)
+
+capstone-ariane b5b2-step2 99d7ef22c, on step 2. The arm pre-registrations b3329c988 and b60a63efc were pushed before
+their runs; the test fixes 882fc699e and 223a6db2a are recorded in the test's header.
+- **The rule** (riscv_cpu_mmu_index). While the hart is in S with srevroot != 0, SUM is not consulted:
+  - a plain access to a user page faults 13 / 15;
+  - an access through a reference reaches user pages (S's SUM index);
+  - M with MPRV and MPP = S keeps SUM.
+- **How it is built.** `daccess_err`'s S term takes `cap_sref_ctx_i ? cap_ref_q : sum`. `cap_ref_q` is "the base is a
+  reference", taken from lsu_ctrl and registered with the request (as misaligned_ex), so it judges the same access as
+  dtlb_pte_q.
+- **Readings, as pre-registered.**
+  - b5b2-rule2, step 3: A 0xd 0xf 0 0x77 | B 0 0x77 0xd | C 0 0x77 0 0x77 | D 0 0x77 | traps 3.
+  - The base: A 0 0 0 0x77 | B 0xd 0 0xd | C and D the same as step 3 | traps 2.
+  - -DR2_PAIR, the claim-auditor's leak test: step 3 1 0xd | 0 0 0x77 | 1 0xf; base 2 0xd | 1 0xd 0 | 2 0xf.
+  - Every other B5b-2 arm and the 15 Sublet tests are byte-identical. Lint is at REF, with 0 by-name lines.
+- **The claim-auditor's residuals** (all low, none introduced here):
+  - (a) A switcher store translated while a STORE or STC is at the LSU head takes the head's cap_ref, as misaligned_ex
+    already does. A refused switcher store would drop the switcher write (store_unit.sv:382, pre-existing).
+    Reachability needs cap_sref_ctx (outside a context) together with a switcher write.
+  - (b) cap_sref_ctx is read unregistered at judgement time, as sum_i is. The switcher's register-path srevroot and
+    privilege writes show no flush in what was read.
+  - (c) The hardware keys "a reference" on the decoded type != NOT_CAP, the reference on the tag. They differ only for a
+    tagged register of type 0, which no Sublet op produces.
+- **Test slips** (memory each-phase-sets-its-own-preconditions):
+  - The copied page-table block clobbered the trap counter (t3 = x28).
+  - Phase D inherited SUM from phase E.
+  - Both are fixed and the record holds the fixed test's readings.
+
 ## Silicon acceptance: bare kits
 
 No Linux kit can run until the runtime lane's integer-M monitor exists: the current one executes CAPENTER at init. So
