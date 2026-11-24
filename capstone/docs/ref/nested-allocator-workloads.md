@@ -5714,9 +5714,12 @@ N P): every command rc 0 with `suns.out`.
 
 - **A price per lifetime instruction.**
   - The port's executed CDERIVEs and CREVOKEs come from the one-operand environment's opcode counts of the same
-    patches on suns.pl. Protected minus stock is +1,077,695 CDERIVE and +864,583 CREVOKE, 1,942,278 together
-    (`nested/oneop/fig10/runs/fig10-perl-r2-opc-p` against `-opc-u`). That count is from the one-operand build of the
-    patches, not from the board image's own trace.
+    patches on suns.pl. Protected minus stock is +1,077,705 CDERIVE and +864,589 CREVOKE, 1,942,294 together.
+    - Protected: 0001 + 0002, `nested/oneop/fig10/runs/fig10-perl02-opc-p`.
+    - Stock: the same `perl/stock` image, `fig10-perl-r2-opc-u`.
+    - (Corrected before landing. The first version cited `fig10-perl-r2-opc-p`, which is 0001 alone with the linear
+      arena search. Its counts differ by 10 and 6, so no figure moves.)
+    - That count is from the one-operand build of the patches, not from the board image's own trace.
   - That makes 95.5-97.6 cycles per lifetime instruction. N runs a MOVC or an ADD in each one's place, so this price
     is over a 1-cycle substitute.
   - It includes each instruction's record traffic beyond the walks and replays. This pair does not split the
@@ -5902,3 +5905,74 @@ Chain `fig10/chain-perlrenew.sh`, four boots, rc 0, read by `fig10/read-renew.py
 - That is the program's side only. On oneop's table, without generations, a renew is a release plus an allocation
   in the kit, and its record cost is not in these numbers. Cycles need a bitstream with CRENEW.
 - The bodies half (perlbench's body free lists) remains open. perlbench does not build in oneop yet.
+
+## perlbench item 3: the CRENEW variant of the SV bodies port, SPEC's test.pl in the one-operand environment (2026-11-24)
+
+### Pre-registration: bodies renewed instead of revoked, perlbench test.pl in oneop (written 2026-11-24 10:33, before the runs)
+
+**Question.** This is item 3's open CRENEW line for bodies, after the heads half above.
+- When a body is freed, the bodies port (`own-allocators/500.perlbench_r/port-sv-bodies.py`, `3933328d…`) revokes it
+  (CREVOKE), and the free list keeps the segment's pointer.
+- When the body is popped again, the port derives a new child (CDERIVE).
+- The variant renews the body at the free (CRENEW). Every old copy goes stale, as after the revoke, and the free list
+  keeps the renewed capability. A reissue hands that capability out with no CDERIVE.
+
+**perlbench in oneop, new today.**
+- `oneop/build-spec-perl.sh` is `build-spec.sh` for 500.perlbench_r, in a fresh copy of the pristine tree
+  (`spec/tree-perl`), with label `oneopperl` and the environment's SDK. Its executable is `ba295e57…`.
+- `fig10/build-perlbench-arms.sh` makes four copies of the build directory and rebuilds each with `make.out`'s own 69
+  compile commands and link command:
+  - **stock**, unchanged: byte-identical to the build's executable (`ba295e57…`), the replay control;
+  - **heads** (`408defc6…`): `port-sv-heads.py` (`f55e5096…`), `fix-lookup.py` (`f5ccf26e…`) and
+    `fix-lookup-pages.py` (`ddcfced5…`), with `-DPERL_CAPSTONE_SUBLET`. Its sources equal the twin's prot6 tree
+    (`perlspec/fx2/prot6`, the board's prot6 image) except `Makefile.spec`, which names the compiler;
+  - **bodies** (`7d5f41fa…`): heads plus `port-sv-bodies.py`, with `-DPERL_CAPSTONE_SUBLET_BODIES`. Its sources equal
+    the twin's bodies tree (`perlspec/fx2/bodies`), except `Makefile.spec`;
+  - **bodren** (`36c66ae5…`): bodies plus `fig10/renew/bodies-renew.py` (`9945e787…`, an experiment script, never a
+    port script), with `-DPERL_CAPSTONE_SUBLET_BODIES_RENEW`.
+- The variant changes two functions of the bodies port:
+  - `S_sv_body_retire` returns `capstone_cap_renew(body)` where the port revoked and returned the segment's pointer.
+    `del_body` stores that capability as the free-list link, in the word upstream already uses for it.
+  - `S_sv_body_issue` hands a popped capability out as it is when its bounds are narrower than a segment (a renewed
+    body). Otherwise, for a body fresh from an arena, it derives as before.
+- Static census, bodies to bodren (`capop-census.py`): CREVOKE 9 → 6, CRENEW 0 → 3, funct7 0x04 (the bounds reads)
+  +10, funct7 0x0c −3, funct3 3 −6, and 4-byte words +10.
+- **This image never goes to P1.** P1 decodes funct7 0x54 as CSNODE.
+
+**Runs.** `fig10/chain-perlbench-renew.sh`, five oneop boots, one image each, SPEC's test.pl (`-I. -I./lib test.pl`):
+- zones3 bodies;
+- zones3 bodren;
+- opcount bodren;
+- opcount bodies;
+- zones3 heads, the environment's check against the twin.
+
+The answer is the twin's own stock `test.out` (`7990ff94…`). On the twin, SPEC's reference differs in three known
+scripts. A dry run with an echo runner reaches `CHAIN-PBRN-DONE` through all five.
+
+**What is read: image-zone instructions only,** as in the heads half. oneop's table has no generations, and cycles
+need a bitstream with CRENEW.
+
+**Predictions.**
+1. **Answers:** every boot's `test.out` is the same file.
+   - If it equals the twin's stock output, it is read as is.
+   - If all five agree but differ from the twin's, the instruction readings are still read, and the difference is
+     recorded.
+   - If an arm's output differs from the others, that arm is not read.
+2. **Environment check:** bodies minus heads (image zone) within ±30 % of the twin's +636,442,127. The compiler
+   differs: oneop's builds have no RVC words.
+3. **Lifetime instructions** (opcount bodren against opcount bodies):
+   - CRENEW appears, and CREVOKE falls by exactly the CRENEW count. Each body retire with a segment renews instead of
+     revoking.
+   - CDERIVE falls by at most the CRENEW count: only reissues of renewed bodies skip it.
+   - The heads half read CRENEW 73 above CREVOKE's fall, from a cause it did not trace. So "exactly" is the claim
+     here, and a miss is recorded as one.
+4. **Image instructions: bodren minus bodies between −2 and −14 instructions per removed CDERIVE.**
+   - The derive skipped on a reissue is the asm's 10 instructions plus its operand set-up, against 4-5 added for the
+     bounds test.
+   - The retire swaps a CREVOKE and its address arithmetic for one CRENEW.
+   - The heads half read 13.51 per removed CDERIVE, with no bounds test.
+
+**What follows.**
+- If held, the saving per reissue is what a renew is worth in the bodies port's code.
+- Its share of the bodies port's +0.733 % is the reading for item 3.
+- The hash-entry and op-slab ports are the same change in principle. They are not built here.
