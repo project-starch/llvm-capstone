@@ -42,7 +42,9 @@ the first record past the run, or none.
 ```
 CREVOKE rs1                      (replaces §4.3; the checks before the walk are unchanged)
 o = x[rs1]; !o.tag: 24; table invalid: 29; !live(o.id): 25; r = record of o.id
-locate the run's last record t        (the scan below; a saved position may resume it)
+locate the run's last record t        (the scan below; a saved position may resume it):
+    the forward scan also requires every member, and the record after the run, to
+    name the record before it as previous: 29 otherwise, before any release
 repeat:
     take up to K records ending at t, walking previous links: each must have depth > d,
         a previous link other than 0, and a previous record whose next is that record;
@@ -81,6 +83,16 @@ r.prev.next = after; if after: after.prev = r.prev; release r
   free list after a CREVOKE does not depend on K or on where an execution stopped. The model shows it on every shape
   and size tested. With each chunk released front to back instead, it does depend on K (mutant
   `chunk-front-to-back`). The B5b-1 unit releases in list order, so 4(b)'s RTL changes that too.
+- **Where the checks run (ruling of 24 Nov, for the rtl lane).** A fresh execution checks the whole remaining run in
+  its forward scan, back links included, at no extra read. Nothing changes inside one execution, so its chunk checks
+  cannot fail, and the hardware's commit pass needs no second read. An execution that resumes from the saved
+  position skips the scan, so it must check each chunk before releasing any of it: at most K extra reads. K is sized
+  for two passes over a chunk. Check-as-you-go with a splice before the 29 would also leave a legal state, but it
+  differs from the model, and is used only if two passes cannot meet the target.
+- **Under corruption, the records released before a 29 are any legal suffix.** Once stops intervene, the RTL and
+  the model may differ in which records were released. Directed tests with corruption therefore compare the 29 and
+  the legality of the table (linked both ways, every live record's parent live, validation), not the released set.
+  Without stops the result is the model's: 29 at the first execution, nothing written.
 - **The one weakening against today.** A 29 found in chunk j leaves chunks 1 to j-1 released and r live. Today the check
   pass makes a 29 all-or-nothing. That state is still a legal one, by the suffix rule above.
 
@@ -157,7 +169,7 @@ position.
 - QEMU's walk_run (capstone-qemu c1985bb529, `cap_rev_tree.c:258-291`, `cap_rev_kill :232-246`) becomes the chunked
   backward loop. A test property forces a stop after every chunk, since QEMU takes no interrupt inside a helper. It runs
   the same instruction to completion over repeated re-executions.
-- Built 24 Nov on capstone-qemu branch `sublet/interruptible-crevoke` (da49602d76de), from address-space-root 9289114e06:
+- Built 24 Nov on capstone-qemu branch `sublet/interruptible-crevoke` (da49602d76de, then 3a9fc391678e), from address-space-root 9289114e06:
   - `cap_rev_kill_step(store, id, chunk, chunks)` is one execution, and `cap_rev_kill` runs it to the end with chunk 256.
   - The CPU property `x-capstone-crevoke-chunk=N` makes each CREVOKE release one chunk of N and re-execute. Each
     stop is traced as `capstone_crevoke_partial`.
@@ -169,6 +181,8 @@ position.
   - The guest suites pass as built and with `x-capstone-crevoke-chunk=1`: sublet-format 72/72, sublet-lifetimes 76/76,
     trap-route 26/26, address-space-root 23/23. 5 stops were traced.
   - lifetimes.S cases 1 and 14 encoded the old order of the free list, and now read the reverse order.
+  - 3a9fc391678e moves the back-link check into the forward scan. The broken-link cases now give 29 at the first
+    execution with nothing written. A new mutant, scan-no-back-link, must fail them. sublet-format is 73/73.
 - Tests in the model's §8 style:
   1. the chain and fan shapes at N = 1, K, K+1 and 65,532, stopped after every chunk, give the same final table as one
      uninterrupted revoke;
