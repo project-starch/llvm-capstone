@@ -45,9 +45,11 @@ o = x[rs1]; !o.tag: 24; table invalid: 29; !live(o.id): 25; r = record of o.id
 locate the run's last record t        (the scan below; a saved position may resume it)
 repeat:
     take up to K records ending at t, walking previous links: each must have depth > d,
-        and a record with depth 0, a link of 0, or a walk that reaches a record with
-        depth <= d other than r: 29, before any release in this chunk
-    release them in reverse list order (3.4); let p = the record before the chunk
+        a previous link other than 0, and a previous record whose next is that record;
+        a record with depth <= d other than r, a link of 0 or a broken back link: 29,
+        before any release in this chunk
+    release them in reverse list order, each as the walk reaches it (3.4's release of
+        one record); let p = the record before the chunk
     splice: p.next = after; if after: after.prev = p
     t = p
     if t == r: break
@@ -67,8 +69,18 @@ r.prev.next = after; if after: after.prev = r.prev; release r
 - **Forward progress.** The interrupt is looked at only after a chunk commits, never before the first chunk. Every
   execution therefore releases at least one chunk, and the total work is bounded by the records that exist.
 - **Corruption.** A free record has depth 0 and previous 0; a retired one is {2^32-1, zeros}; a run member always has
-  depth > d >= 0. So a free or retired record met in the run is 29, and so is a 0 link. Within one execution, visits
-  still count against next, as today.
+  depth > d >= 0. So a free or retired record met by the backward walk is 29, and so is a 0 link or a previous record
+  whose next is not the record it was reached from. Within one execution, visits still count against next, as today.
+  Corrected 24 Nov, on the model: the forward scan that finds t ends the run at the first record with depth <= d,
+  as §4.3 does today, so a free record reached through a next link ends the run early and is not 29. That case is
+  unchanged by this design. The back-link check is new: without it, a wrong previous link that names another deeper
+  record would release a record outside the run (mutant `chunk-no-back-link`).
+- **The order of release is a change to §4.3.** §4.3 releases the run in list order. Here each record is released
+  when the backward walk reaches it, so the run leaves in reverse list order, then r. The free list therefore holds
+  the run's slots in the opposite order from today's, and later CDERIVEs take them in that order. In exchange, the
+  free list after a CREVOKE does not depend on K or on where an execution stopped. The model shows it on every shape
+  and size tested. With each chunk released front to back instead, it does depend on K (mutant
+  `chunk-front-to-back`). The B5b-1 unit releases in list order, so 4(b)'s RTL changes that too.
 - **The one weakening against today.** A 29 found in chunk j leaves chunks 1 to j-1 released and r live. Today the check
   pass makes a 29 all-or-nothing. That state is still a legal one, by the suffix rule above.
 
@@ -145,6 +157,18 @@ position.
 - QEMU's walk_run (capstone-qemu c1985bb529, `cap_rev_tree.c:258-291`, `cap_rev_kill :232-246`) becomes the chunked
   backward loop. A test property forces a stop after every chunk, since QEMU takes no interrupt inside a helper. It runs
   the same instruction to completion over repeated re-executions.
+- Built 24 Nov on capstone-qemu branch `sublet/interruptible-crevoke` (da49602d76de), from address-space-root 9289114e06:
+  - `cap_rev_kill_step(store, id, chunk, chunks)` is one execution, and `cap_rev_kill` runs it to the end with chunk 256.
+  - The CPU property `x-capstone-crevoke-chunk=N` makes each CREVOKE release one chunk of N and re-execute. Each
+    stop is traced as `capstone_crevoke_partial`.
+  - Host checks: `tests/sublet-format/revoke-chunk-checks.c` covers tests 1 to 5 below, with chain, fan and random
+    shapes of 0 to 65,532 records at chunks 1, 7, 256 and 1,000. Test 1 compares the whole RAM image against an
+    uninterrupted CREVOKE.
+  - Three mutants must fail them: the back-link check removed, the splice removed, and front-to-back release inside
+    a chunk. Test 6, the saved position, is microarchitectural and has no model.
+  - The guest suites pass as built and with `x-capstone-crevoke-chunk=1`: sublet-format 72/72, sublet-lifetimes 76/76,
+    trap-route 26/26, address-space-root 23/23. 5 stops were traced.
+  - lifetimes.S cases 1 and 14 encoded the old order of the free list, and now read the reverse order.
 - Tests in the model's §8 style:
   1. the chain and fan shapes at N = 1, K, K+1 and 65,532, stopped after every chunk, give the same final table as one
      uninterrupted revoke;
@@ -159,5 +183,9 @@ position.
 ## Open
 
 - K and the measured per-record cost on 2a.
+- CRENEW still releases its run in list order, in one execution, in the model and in B5b-1. One walker should serve
+  both instructions. The proposal is that CRENEW releases its run backward like CREVOKE, uninterruptible at first.
+  A CRENEW stopped after a chunk would also leave a legal state: r live, with a shorter run. Its own new lifetime
+  begins only after the last chunk.
 - Option B only if option A's bound proves insufficient on a real workload. The case to measure is a revoke stopped
   repeatedly while another context switches in and stops its own revoke.
