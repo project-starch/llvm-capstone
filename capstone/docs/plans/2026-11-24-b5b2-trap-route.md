@@ -1379,6 +1379,65 @@ rows and runs on the base, 8a and 8b.
 | -ctxint | an integer-base LDC in a checked mode = 24 | the context only | b5b2-sref U (srevroot = tbl) a0 |
 | -ctxoob | a tagged out-of-bounds LDC in a checked mode = 28 | the context only | b5b2-sref S a5; b5b2-raw reading 30 |
 
+### b5b2-ctxport: read (2026-11-25)
+
+capstone-ariane b5b2-step8b 15b637630; 22abb11ea adds the retired tests' cover lines.
+- **Readings, as pre-registered on all three trees:** the base (core = 7997b51a2, 5 files swapped), 8a (fbb60c546,
+  4 files swapped) and 8b (clean).
+
+  | arm | cause, pc - cp_ldc, data[8], data[16], data[24] \| traps |
+  |---|---|
+  | f4 | 0x19 0 0 0 0 \| 1 |
+  | f4ctl | 0 0 0x77 0 0 \| 0 |
+  | widelo | 0 0 0x80000000 0x8000206 0x8000208 \| 0 |
+  | widehi | 0 0 0x80000000 0xfffffe06 0xfffffe08 \| 0 (slot 0x7FFFFF03) |
+  | edgem | \| 3 |
+
+- **edgem with +R43_TRACE, on each tree:** edgem-r43-check.py exits 0, with EDGE-FLUSHPEND 2 and EDGE-PEND 0. The
+  +EDGE_MUT_KEEP_PEND mutant (on 8b) reads EDGE-PEND 1, so the detector fires.
+- **The model rebuilt per tree:** each run's first test took about 40 s against about 14 s for later ones, the same as
+  the define-change runs.
+- **Two VOID runs first, both mine:**
+  1. `git checkout <rev> -- core` replaced the worktree's symlinked submodule paths, and every run refused to start.
+  2. A port defect, failing on both trees alike: my extraction of sublet-ns.S's page-table block dropped the
+     `li t0, -1` before pmpaddr0, so S had no fetch grant and the handler looped. Fixed in 15b637630, where an
+     unexpected trap now ends the run with its cause.
+- No arm failed on 8a alone, so there is no finding about 8a. All nine retired tests name their covers per arm.
+
+### The gate on step 8b: read (board lane, 2026-11-25; board/meas-pw 28f46c2b80a5), PASS 4/4
+
+36fbc9e7c, against 8a's gate. dcp sha16 198a0c9f68b1eeb6.
+- **Key 1:** TM 4,955.4 MB (-367.5); guard peak 24.77 GB.
+- **Key 2:** loops 0 everywhere, each toy firing; 8-326 0.
+- **Key 3:** core LUT 122,922.
+- **Key 4:** the dom_switcher census reads 0 instances and 0 primitives (the base reads 1 and 14,333); there is no
+  utilization row; core LUT 122,922 against the 135,785 limit.
+- **MISSED bands** (reported rows; no key moves):
+  - core LUT -22,863 (predicted -11,900..-16,400) and core FF -9,786 (predicted -2,800..-4,500);
+  - csr_regfile_i -3,360 LUT / -3,763 FF, a LARGER drop, so the semantics owner's "below band" condition did not fire;
+  - commit_stage_i -313 (318 -> 5; predicted -50..-300);
+  - i_pmp_data_if +0, where I predicted -100..-250: its 351 is the standard PMP, and the CPMP checks were already
+    gone.
+- **Where the FFs went** (the board lane's census by name, each total equal to the utilization report's):
+  - csr_regfile_i loses 54 stems whole (3,539 FF): the 16 cpmp entries (2,592), the supervisor's seal, base,
+    save_base and event set, the CCSR copies (cepc, cih, ctvec), runv_frame and capmode.
+  - csr_regfile_i's partial shrinks are each CSR's writable mask. medeleg 64 -> 19 is csr_regfile.sv:1693-1721's mask
+    exactly: the 12 standard delegable causes plus Q-24's 24-30, which survive. Before 8b the switcher's register
+    channel could write all 64 bits (:2114). mideleg is 3 and mie/mip 6, likewise.
+  - i_scoreboard: the dom_switch_req payload in all 8 entries (3,144 FF), which my band never counted. Also 31 of 97
+    pc_metadata bits per entry are now constant.
+  - commit_stage_i: the escape state and pc_revnode_valid/unk.
+  - lsu_i: the switcher response FIFO data, the load unit's dom-switch fields, and the PCC verdict tracking
+    (pcc_id_q, pcc_v_q, pcc_live_q).
+- **The three removed groups** the board lane flagged (facts theirs; reading mine; confirmation asked of the semantics
+  owner):
+  1. pc_metadata and IRO's pc_metadata_o: written only by deleted ops and the switcher; read by the PC check (M and
+     capmode) and the switch request.
+  2. The PCC tracking: served only commit's pcc_chk_o, gated on (M and capmode). The board lane confirmed this at
+     36fbc9e7c: commit_stage.sv:518, and capmode_d = 0 at csr_regfile.sv:349.
+  3. The escape state is the supervisor's, deleted in 35de150cef; pc_revnode is the PC tracker's.
+  The reference has no fetch or PC check. 8b's simulation reads identically to 8a.
+
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
 - **Interruptible CREVOKE** (Line B step 4(b)): spec-silicon 24ecb7b4daa4. Read at source on b5b1-step3:
