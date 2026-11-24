@@ -875,6 +875,76 @@ eff52e152, graded against 03902b250094. Base: step 5's gate.
   - Core FF +112; no row beyond ±2,500.
   - Guard peak 27.46 GB; dcp sha16 a82acbbe85801608.
 
+### Gate 6b (step 6 part 2): read (board lane, 2026-11-24), PASS 3/3; part 2 is kept
+
+0c9992bc6, graded against gate 6a (dcp sha16 a82acbbe85801608).
+- Key 1 (memory): TM peak 5,063.9 MB, against 5,063.9 (-0.0; ±505); whole-run peak 5,132.0 MB. PASS.
+- Key 2 (loops): 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy 1), LUTLP-1 0 (toy 1); in-flight PASS.
+  No loop growth on the missunit mem_data_o channel or anywhere else.
+- Key 3 (core LUT): 147,893, against 147,798 (+95; limit 150,298). PASS.
+- **The semantics owner's branch did not fire** (no loop growth, core LUT far inside key 3), so part 2 stays and CPTAG
+  enters the bitstream whole.
+- Reported:
+  - i_axi_adapter +94 LUT / +80 FF: at the prediction (a few hundred LUT, about 75 FF).
+  - **RAMB36 +2 (top 115, core 100, all in i_axi_adapter): a MISSED prediction** ("RAMB36 unchanged"). Board lane's
+    per-memory count on both dcps: the whole +2 is twc_ep_mem (2 -> 4 blocks); tbm_mem, twc_atag and twc_data are
+    identical. The port shapes are identical too (TDP 16K x 2, write A, read B, 14 address pins each); what changed is
+    live data bits: on 6a one written epoch bit was live, on 6b all 8 are written and read.
+    - **The cause, checked at source:** under CAPSTONE_TWC_FILL_TARGETED (on by default, config_pkg :62-64) a fill
+      invalidates its two shared words instead of bumping the epoch (wt_axi_adapter.sv:548-552). So up to 6a nothing
+      ever bumped twc_ep_q; 6a's .vds propagates it as a constant (Synth 8-3333). Part 2's clear bumps it
+      (:535-543, Sublet only), so it is a live 8-bit counter again, and the memory keeps its bits.
+    - **So the miss was in my prediction, not in the RTL:** I counted the epoch memory as already live.
+    - **Behaviour re-armed with it:** every 255th clear wraps the epoch and runs the 16K-entry scrub (every lookup
+      misses while it runs). A clear arriving during a scrub is dropped, which is safe: the scrub zeroes every entry.
+      Clear and fill-enter cannot coincide (TAG_QDONE vs TAG_IDLE).
+  - The cone sum 63,428, +0 in each of its four modules; ex_stage_i +1, lsu_i +1, i_store_unit +1, commit_stage_i +0;
+    core FF 55,589 (+81); top LUT 174,903 (-116); no row beyond ±2,500; LUTRAM +0.
+  - Guard peak 27.46 GB; dcp sha16 3986f0ae821b9832.
+
+## B5b-2's full build: pre-registration (written before the request, 2026-11-24)
+
+- **Hash:** capstone-ariane b5b2-step6 0c0458149: steps 1-6 batched (CPTAG whole), plus step 7's test and its
+  sim-only `ifndef NS_SIM_NOFLUSH`, which leaves the synthesised code unchanged with the macro undefined. So the
+  synthesised RTL is gate 6b's (0c9992bc6). The CCSRRW deletion (87aec16b4) is NOT in it: it is held for the boot-set
+  scan.
+- **Simulation evidence on the hash:**
+  - every step's arms, as recorded above;
+  - the 29-test regression, identical in value to step 5's run;
+  - step 7's must-pass, both directions with its mutant control;
+  - lint at REF on the Sublet build (LATCH 44, MULTIDRIVEN 3, UNOPTFLAT 39 with the 39 names, UNDRIVEN 25,
+    UNUSEDSIGNAL 1567, SELRANGE 100), 0 lines by name against step 6a;
+  - the ids55 build token-identical to B5b-1's base at 0c0458149 (359,790 tokens), so B5b-1's ids55 95-test sweep
+    carries.
+- **The base:** B5b-1's seal on d0afdb40f (sha256 38491cf4...). Readings: placed LUT 170,699, FF 77,561; routed clean;
+  placed congestion 4 with no router hotspot; check_timing, LUTLP-1 and TIMING-23 all 0; core clock clk_out1
+  WNS +1.851, design-wide +0.138 (a MIG path).
+- **The synthesis delta behind the area prediction:** d0afdb40f's gate (core LUT 145,492, FF 55,117) to gate 6b
+  (147,893, 55,589) is +2,401 LUT and +472 FF.
+
+| key | prediction | the failure branch |
+|---|---|---|
+| placed LUT | 173,100 ± 3,000 | outside: per-module placed rows against B5b-1's seal before anything else |
+| placed FF | 78,033 ± 2,000 | the same |
+| routed | 0 errors, 0 unrouted, 0 partial | a routing failure: placed area, congestion windows by module, the census; NO WNS is recorded |
+| congestion | <= 5 (placed and router) | above: the windows' modules, against B5b-1's |
+| loops | check_timing 0, LUTLP-1 0, TIMING-23 0, each with its toy control firing | any: members by stem |
+| WNS (clk_out1) | inside B5b-1's null band, [-1.89, +5.59] (+1.851 ± 3.74) | outside on the BAD side: worst-path family and per-stage depth before any board use; outside on the good side: reported, not graded |
+
+**Reported, not graded:**
+- design-wide WNS, TNS, WHS, failing endpoints, slices;
+- RAMB36 against B5b-1's seal (gate 6b's +2 in twc_ep_mem should carry);
+- the worst-20 family on clk_out1 (B5b-1's: i_issue_read_operands fu_data_q, 103 levels);
+- the three timing points the gates could not read, each as the worst clk_out1 path through it with a -through
+  positive control:
+  - the LSU's cap_exception cone (step 3's reorder, step 5's request-lane tag select);
+  - the CPTAG walk's beat-to-register path (cptag_* in i_axi_adapter);
+  - the rs1_tag_q gate into commit's cap_we, and the csr_scr_* lane (step 4);
+- the sha256.
+
+Flash is the delegated bitstream rule, agreed with runtime. B5b-1's seal stays the default until B5b-2's bare kits
+(below) read. Each kit is pre-registered from image simulations of THIS hash before its boot.
+
 ## Step 7: the namespace must-pass (2026-11-24)
 
 capstone-ariane b5b2-step6 eb8e32f08 (the arm and its mutant control), 0c0458149 (the arm's fix after its void first
