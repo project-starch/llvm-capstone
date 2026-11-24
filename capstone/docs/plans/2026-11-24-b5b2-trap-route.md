@@ -631,6 +631,91 @@ from the reference's own expectation):
 - 7 / 8 (MMIO: a tagged CSTRAW outside tagged RAM faults before changing bytes) needs the platform's taggable-memory
   map. The simulation has none (its NI rule is off without CAPSTONE_FPGA_NI); recorded as a silicon arm.
 
+## Step 5: CLDRAW and CSTRAW, built and read (2026-11-24)
+
+capstone-ariane b5b2-step5, on step 4 (eb03e7c99), not on the held CCSRRW deletion:
+- fcd169dc5, the change and b5b2-raw.S, pre-registered;
+- 39e83f3be, the decode gated on CAPSTONE_DYN_BYPASS as well;
+- 220fa584c, fix 2 and b5b2-rawlcc.S, pre-registered;
+- 4457a77a7, fix 2's port-1 index (lint).
+
+The design is the section above, with one encoding detail settled while building. The raw ops present rs1 to the LSU as
+an untagged lane, so lsu_cap_type is NOT_CAP: neither rule 1 nor the MMU's reference path sees them, with no new terms
+there. CSTRAW's "rs2 is tagged" flag rides that lane's bit 65. LDRAW and STRAW are appended to fu_op under the Sublet
+define (logic [7:0], width unchanged); Anvil's twin enum is untouched, because no unit receives them.
+
+**Readings** (script-checked against the headers):
+- **b5b2-raw.S** (37 readings, ported from tests/capstone-raw-moves/probe.S):
+  - the base (step 4's core) reads all 37 as pre-registered;
+  - fcd169dc5 read 35/37: readings 4 and 8 untagged where the reference keeps the tag;
+  - 4457a77a7's code (220fa584c) reads all 37.
+- **The divergence behind 4 and 8.** Every FLU/DYN instruction hands rs1 back at commit through cap_lane, which zeroes
+  lane[97:65] of an untagged rs1, raw_tag included. The reference's LCC writes nothing to rs1.
+  - Isolated by an uncommitted matched pair on fcd169dc5: an LCC of the raw register between cldraw and cstraw reads
+    untagged (7), and the same LCC on another register reads tagged (1).
+  - Forwarded and register-file paths, with or without a fence after the source's stc, kept the tag (4 more arms).
+  - The semantics owner ruled it a defect to fix: no divergence from the reference.
+- **Fix 2 (220fa584c),** the semantics owner's 1-bit variant:
+  - rs1_tag_q in issue_read_operands, one bit per scoreboard entry, outside mem_q, written at issue from the issued rs1
+    lane's tag;
+  - with it clear, commit drops the rs1 write on both ports and the entry is no rs1 forwarding source;
+  - the rs1 claim stays, so a reader waits for commit and reads the unchanged register. Retirement does not depend on
+    the write.
+  - b5b2-rawlcc.S (E: LCC of the raw register; F: E's control; G: MOVC with cstraw back to back, the forwarding gate; H:
+    the same after a delay, the commit gate) reads 1 1 1 1 with the fix and 7 1 7 7 on the pre-fix core, both as
+    pre-registered.
+- **Regression:** the other 27 tests (10 B5b-2 arms, 15 Sublet tests, the 2 context arms) are identical in value and
+  cycles to step 4's runs: on fcd169dc5, and again on 220fa584c.
+- **Static checks on 4457a77a7:**
+  - the Sublet lint gate passes; by name against step 4 it is 0 lines in both builds; ids55 is token-identical (359,790
+    tokens);
+  - 220fa584c had failed the gate on SELRANGE (32 -> 33, a [1] index in the dead port-1 block), fixed by 4457a77a7.
+
+**claim-auditor** (fcd169dc5): no functional defect in six areas: the request lane's consumers, the LDC-only paths, the
+CLDRAW lane's index alignment, CSTRAW's store and its 24, decode and issue, and loop-list terms. Items:
+- **Refuted claim,** withdrawn on the lane: "every other build keeps them illegal" (fcd169dc5's message). The decode
+  was gated on the raw-lane define alone, which stays on in the CAPSTONE_NO_DYN_BYPASS control, where the raw ops would
+  also have reached the DYN unit. 39e83f3be gates it on the bypass too.
+- **Timing:** one more gate level on the request lane's tag select in front of cap_exception, the LSU's dominant slack
+  term. The full build reads it. If it costs, the zeroing can move into issue_read_operands.
+- **Sim-only gap:** the S-07 retire-without-lane $error checks cover LDC/STC only.
+
+**Divergences on the list** (not step 5's to fix):
+- A PMP-denied access reads the access fault (5 / 7) where the reference raises 24 for a tagged CSTRAW source and 4 / 6
+  for a misaligned raw move. This is pre-existing and shared with plain LDC/STC.
+  - Cause: pmp_data_if.sv:374-390 overwrites any pending exception when PMP denies.
+  - Sized fix, capability causes only (24-28 before PMP): one condition on that overwrite.
+  - Misalignment before PMP for the raw moves and LDC/STC as well: the same line, plus an op scope or the change of
+    plain-access priority (the priv spec allows either), which then needs its own sweep.
+  - Ruling pending with the semantics owner.
+- A CSRUNV context's save and restore moves sscratch as an integer (step 4, residual d).
+
+### Synthesis-only gate on step 5: pre-registration (written before the request)
+
+Hash 4457a77a7 (b5b2-step5: fcd169dc5, 39e83f3be, 220fa584c, 4457a77a7, on eb03e7c99). Base: step 4's gate
+(b5b2s4-eb03e7c99-gate-out, dcp sha16 b05ca47912c75223). The CCSRRW deletion is NOT in it: it is held for the boot-set
+scan.
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within +/-505 MB of 5,066.5 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires), LUTLP-1 0 (the toy fires) |
+| 3 core LUT | at most the base + 2,500 (145,169 -> 147,669) |
+
+Reported, graded nothing (bands at the ±2,500 floor):
+- core FF: predicted about +16 (byp_raw_q and rs1_tag_q, NR_SB_ENTRIES each), ±300;
+- lsu_i (the request's lane mux, the STRAW 24 arm and the raw-op decodes in front of cap_exception), load_unit and
+  store_unit: a few hundred LUT. The auditor named the cap_exception cone the LSU's dominant slack term; this gate
+  cannot read slack, so the full build reads it;
+- dyn_unit + rev_node + i_scoreboard graded as one SUM (the census: the scoreboard-entry cone moves between the first
+  two), against the base's 15,670 + 3,241 + 17,244;
+- issue_read_operands and commit_stage: the rs1_tag gate, tens of LUT.
+The semantics owner's branches, fixed before the run:
+- PASS: fix 2 stays.
+- Loop growth (key 2) or core LUT beyond key 3: fall back to (b). Fix 2 comes out; the divergence (an FLU/DYN
+  instruction with a raw rs1 drops raw_tag) is recorded; b5b2-rawlcc stays a committed arm reading 7 1 7 7; (a)
+  becomes a later item.
+
 ## Silicon acceptance: bare kits
 
 No Linux kit can run until the runtime lane's integer-M monitor exists: the current one executes CAPENTER at init. So
