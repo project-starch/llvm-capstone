@@ -141,3 +141,50 @@ carries its image's sha256 prefix and rec.
 captures against `expected-vectors.json` with its own script. The B5b-2 seal stays resident on boards 1 and 3. The
 registry's default (R-75 (d)) and fallback (bitstream 1) are unchanged; whether B5b-2 becomes a candidate is for the
 board, rtl and runtime lanes to agree under the delegated rule.
+
+## N=2 on board 3 (2026-11-24): attempt 1 VOID (runner), attempt 2 15/15 AS PREDICTED
+
+rtl asked for this, and the runtime lane granted 20 minutes on board 3, where the seal was already resident.
+`orch-b5b2-b3n2.sh` runs the kit with RK_NOFLASH: the resident must already be the seal, otherwise the run STOPs with
+no flash and no load. It was dry-run through both branches.
+
+**Attempt 1, booking 1489 (16:21:53-16:21:56Z): VOID, no load reached the board.**
+- The readback named the seal. Then each of the 16 loads failed in about a second, before any console connection:
+  `FPGA_BOARD='3': the boards are ['1', '2']`.
+- The kit's pinned tree (126444a3325e, dev-based) carries a `fpga_console.py` with no board 3. Board 3's entries
+  exist only on origin/park-board3.
+- The dry runs stubbed the runner, so the board table was never resolved before the booking.
+- The grader reads it VOID: the control is NO READING.
+- The runner still exited 0, and its DONE line read "kit rc=0". The runtime lane caught this.
+
+**Fixes before attempt 2:**
+- Loads take the board driver from a second detached worktree, origin/park-board3 5980866f9f65 (RK_DRIVER_WT and
+  RK_DRIVER_SHA).
+  - Against the kit tree, its only differences are board 3's secret and lock, the shared-board watch, and the flash
+    "error" state.
+  - Its `run_sup_bare.py` is byte-identical to the kit's.
+- A precheck asks the driver itself to accept the board before any booking. On the kit tree with board 3 it STOPs.
+- Attempt 2 ran with the runner as it stood then. The load-count fix below was written and tested during the run and
+  installed afterwards.
+
+**Attempt 2, booking 1490 (16:23:21-16:34:43Z), run `run-b3n2b-20261124T1623`: 15/15 AS PREDICTED, the control
+exact.**
+- The resident read back as the seal, so there was no flash. It read back the same after the loads.
+- All 16 loads returned rc 0, each with a uart.txt.
+- `grade-b5b2kit.py` rc 0 gives every image the same verdict as board 1.
+- The control's ungraded positions 25-34 read nonzero words on this board, `0x2b00a084508028 … 0x41940500100c0001`,
+  where board 1's read zeros. That is consistent with uninitialised DRAM, which is why the PREREG does not grade them.
+
+**The runner's outcome now counts loads** (installed after attempt 2; `run-b5b2kit.sh` sha16 dbf1594a8fd7e8da,
+`orch-b5b2-b3n2.sh` 6b7f66a0eae0b8d2).
+- After the loads it logs "loads attempted N, reached the console C, with an SR line S". C counts loads whose runner
+  wrote a uart.txt.
+- It exits 3 with LOADS FAILED when C < N, and the DONE line leads with the count.
+- Negative test, attempt 1's shape for real: the actual `run_sup_bare.py`, the kit tree's driver, FPGA_BOARD=3.
+  - It read rc 3, 16/0/0, LOADS FAILED.
+  - That test mode runs only when the driver rejects the board. With the board-3 driver it refuses (rc 2).
+- Other branches: a normal dry run reads rc 0, 16/16/16. Stubbed loads with no uart.txt read rc 3, 16/0/0.
+
+**Status.** B5b-2's kit reads 15/15 AS PREDICTED on two boards (N=2). Default and fallback are unchanged, agreed by
+the rtl and runtime lanes: B5b-2's seal runs bare kits only until the integer-M monitor exists, because the current
+monitor executes CAPENTER at init. The seal is left resident on boards 1 and 3.
