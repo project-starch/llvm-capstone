@@ -87,7 +87,8 @@ The interruptible CREVOKE (Line B step 4(b), spec-silicon 24ecb7b4daa4) moves th
 - The custom-0 decode holds only the debug print. CLDRAW, CSTRAW and CPTAG are illegal there, and no per-page summary
   exists.
 - Board DRAM: 0x3c2d2000 usable bytes (caplifive.dts :46), so 246,482 4-KiB pages. The shadow-tag region starts at
-  CAP_TAG_MEM_BASE 0xBC2D2D2D. A sticky bit per page would have been about 30 KB; the ruling (step 6) needs none.
+  CAP_TAG_MEM_BASE 0xBC2D2D2D, one tag byte per 16-byte granule (ariane_pkg.sv:659). A per-page bitmap already exists
+  in the tag adapter (step 6).
 
 ## Steps (each gets a synthesis-only gate before anything is built on it)
 
@@ -146,7 +147,17 @@ The interruptible CREVOKE (Line B step 4(b), spec-silicon 24ecb7b4daa4) moves th
    - **Divergence from 9289114e06, recorded as a model freedom:** after a scalar store clears a page's last tag, the
      reference reads 1 until an acknowledge, and this RTL reads 0. A test that expects 1 there tests the reference's
      choice, not the contract. The acknowledge stays an encoding and returns the same exact value as the query.
-   - **Hardware:** one read of the page's 256 granule tags (32 bytes of the tag store). There is no new array.
+   - **Hardware: the existing page bitmap first, then the OR.** wt_axi_adapter.sv:122-135 (spec-silicon
+     `2026-11-12-tag-page-bitmap.md`) already keeps one bit per 4 KiB page (4096 x 64 bits, 8 BRAM36), set by a page's
+     first tagged store and cleared only at reset.
+     - **Bit 0:** the page has had no tagged store since reset, so every tag in it reads 0. CPTAG answers 0 without
+       touching DRAM. It MUST NOT read DRAM there: an unmarked page's tag bytes may be left over from an earlier boot
+       (the comment at :125-127), and a stale 1 would be a false positive.
+     - **Bit 1:** OR the page's 256 tag BYTES (one byte per granule, ariane_pkg.sv:659), read through the TWC or after
+       draining it. The run is not word-aligned (CAP_TAG_MEM_BASE ...2D2D), so it spans 33 words.
+     - The acknowledge does NOT clear the bitmap bit in the first cut. The result is exact without it, and clearing it
+       would break the TWC's invariant that no page is unmarked except at reset (:183-184; F2's targeted fill
+       invalidation relies on it). Clearing it is an optimisation that needs its own TWC invalidation.
    - **Binding condition:** the OR must see tags not yet written back. It reads through the tag cache, or drains the
      tag cache for that page first; a dirty tag missed is a false negative, the one forbidden outcome.
    - Faults as the reference: not 4 KiB-aligned or outside tagged RAM gives a load access fault, tval = rs1.
