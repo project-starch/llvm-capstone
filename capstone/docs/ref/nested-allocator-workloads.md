@@ -6248,3 +6248,74 @@ The answer is SPEC's `suns.out` (`01688ea0…`), as in the bodies half.
   reading; `fig10-pbrn2-z-heads`, 2,648,354,139).
 - Not read: cycles, since no bitstream decodes CRENEW, and memory (not measured in oneop).
 - The free lists hold the same words in the variant and the port, a renewed capability in place of the own pointer.
+
+### Result: CRENEW for hash entries and op slabs, and the three variants' fixtures (2026-11-24 12:50-13:06, read against 835248d344fa)
+
+Read with `fig10/read-renew3.py`, which was checked on a synthetic transcript with one mode altered (its checks fire).
+All nine boots ran. The fixture boot is `oneop/runs/fig10-pbrn3-fx`, and the suns.pl boots are `fig10/runs/fig10-pbrn3-*`.
+
+**Fixtures** (RET0 = returned 0 with no fault line; FAULT = the run added a fault line, every one cause 25):
+
+| image | m0 | m1 | m2 | m3 | m4 | m5 | m6 | m7 |
+|---|---|---|---|---|---|---|---|---|
+| bodies, bodren | RET0 | FAULT | FAULT | FAULT | FAULT | 2 | 2 | 2 |
+| bodies-nr | RET0 | RET0 | RET0 | RET0 | FAULT | 2 | 2 | 2 |
+| he, heren | RET0 | FAULT | FAULT | FAULT | FAULT | 2 | 2 | 2 |
+| he-nr | RET0 | RET0 | RET0 | RET0 | RET0 | 2 | 2 | 2 |
+| ops, opsren | RET0 | FAULT | FAULT | FAULT | FAULT | RET0 | RET0 | 3 |
+| ops-nr | RET0 | RET0 | RET0 | RET0 | FAULT | RET0 | RET0 | 3 |
+| heads (ops fixture) | RET0 | RET0 | RET0 | RET0 | FAULT | RET0 | RET0 | 3 |
+
+- **Prediction 1: met, all 15 checks.**
+  - Every renew arm faults in the same modes as its port arm, at the fixture's own read in `main`.
+  - The bodies pair faults at the same four pcs. The he and ops pairs' pcs differ by a constant 0x34 and 0x28
+    across modes, a constant shift, consistent with the renew images' longer code.
+  - Mode 0 reads its value in every image: `read cur=5`, `val_ok=1`, `ok=1 slabbed=1`.
+  - Mode 2 of the ops fixture prints `reused_slot same=1 o3_ok=1 o2_ok=1` in ops and opsren. The op made in the freed
+    op's slot reads, then the freed op faults. In opsren that slot is handed out as its renewed capability.
+  - Modes 5 and 6 print `errors=3` and `errors=0` in all four ops-fixture images.
+- **Not predicted:**
+  - heads faults in mode 4, a kept op after its CV is freed. The heads arm has no op lifetimes, so this fault comes
+    from elsewhere, not traced.
+  - Mode 7 fired: `boot failed parse=13` and exit 3 in all four ops-fixture images. So oneop, like the twin, refuses
+    `-e 0`'s `/dev/null`.
+  - It follows that the bodies and HE fixtures, which boot from `-e 0` and do not read the parse's status, ran on
+    an interpreter whose parse failed, as on the twin. Their controls read where predicted, so the C API reads they
+    make work. Their fixture code is the port's, unchanged here.
+- **Reading.** Replacing the revoke by a renew leaves the fixtures' protection unchanged in all three ports. This
+  includes the bodies variant, whose result above was read without a fixture.
+
+**suns.pl** (every answer `suns.out`; the opcount boots agree with the zone boots to within 13 instructions):
+
+| | image zone | CDERIVE | CREVOKE | CRENEW |
+|---|---:|---:|---:|---:|
+| heads (`fig10-pbrn2-z-heads`; opcount `fig10-pbrn3-posthoc-opc-heads`) | 2,648,354,139 | 2,119,561 | 1,737,086 | 0 |
+| he | 2,649,186,665 | 2,171,952 | 1,737,094 | 0 |
+| heren | 2,649,451,709 | 2,171,945 | 1,737,086 | 8 |
+| ops | 2,648,821,424 | 2,120,404 | 1,737,802 | 0 |
+| opsren | 2,648,823,355 | 2,120,270 | 1,737,086 | 716 |
+
+- **Prediction 2, answers: met.**
+- **Prediction 3, lifetime instructions: met for both.**
+  - CRENEW equals CREVOKE's fall exactly: 8 = 8, and 716 = 716.
+  - CDERIVE falls by 7 and 134, each at most the CRENEW count.
+- **Prediction 4, −2 to −14 instructions per removed CDERIVE: missed for both, with the sign reversed.** Both
+  variants cost instructions instead of saving them:
+  - heren +265,044 (+0.010 %) for 7 removed derives;
+  - opsren +1,931 for 134, +14.41 per removed derive.
+- **Why, for hash entries** (from the heads opcount, a boot added after the reading, not pre-registered):
+  - suns.pl hands out 52,391 hash entries (he's CDERIVE minus heads') and frees 8 of them (CREVOKE, likewise).
+  - The variant's bounds test runs at every issue. If all of the +265,044 is that test, it costs 265,044 / 52,391 =
+    **5.06 instructions per issue**, the size the bodies half's pre-registration put on it (4-5). The split is
+    inferred, not read from a per-function count.
+  - A renew can save at most a derive per freed entry, and suns.pl frees almost none.
+- **For op slabs:** 843 ops issued and 716 freed. The +1,931 is not traced. The test runs only on the reuse path, so
+  its cost per reused slot is not known from these counts.
+- **Reading.**
+  - On suns.pl, the hash-entry and op-slab ports have little free traffic: +832,526 and +467,285 image instructions
+    over heads, against the bodies port's +51.22 M.
+  - Their CRENEW variants therefore read only the fixed cost of telling a renewed capability from an arena pointer.
+  - What a renew saves where these allocators free often (test.pl, where hash entries cost +97.2 M on the twin) is not
+    measured: oneop cannot run test.pl.
+  - This result says nothing for or against the bodies variant's 10.04 saving.
+- Not read: cycles, and memory.
