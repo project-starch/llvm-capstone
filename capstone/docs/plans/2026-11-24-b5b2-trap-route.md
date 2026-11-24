@@ -1514,6 +1514,69 @@ Hash 904cd9c6b. Base: step 8b's gate (b5b2s8b-36fbc9e7c, dcp sha16 198a0c9f68b1e
 - Also reported: that the synthesised build carries no CAPSTONE_SIM_DEBUG_MINT, read from the synthesis log's
   define list or by the guard instance's absence. The guard makes a scaffolded synthesis fail outright.
 
+### The gate on step 9: read (board lane, 2026-11-25), PASS 3/3
+
+904cd9c6b, against 8b's gate. dcp sha16 1eebdc9602d3f0bf.
+- Keys: TM 4,954.8 MB (-0.6); loops 0, each toy firing; core LUT 122,911 (-11).
+- **No scaffold:** synth_design completed, and the trial .vds names the guard's module 0 times (Synth 8-439: 0).
+  - The real flow sets the guard's keys. The 8b gate's synth_1/ariane_xilinx.tcl:93-98 reads
+    corev_apu/fpga/src/genesysii.svh as a global include (GENESYSII, KINTEX7, run.tcl:57-58 and :77-78), and that
+    build's .vds carries the GENESYSII-only ddr3_dq ports 64 times.
+- **MISSED reported bands:** decoder +0, where I predicted tens down; ex_stage -28, so no fold.
+  - Consistent with the mechanism recorded at 8a: an illegal instruction keeps its op and fu fields beside the flag,
+    so synthesis cannot prove the FLU never sees those ops. Not attributed.
+  - Step 9's job is the decoded ISA, which the deletion arms test, not area.
+- **The family census by name cannot fire:** 8b's dcp carries no cell or net named for the family's ops, while the
+  query form is proven on csr_buffer. Its zero on step 9 carries no information and is reported as "cannot fire".
+
+## The next full build: 8a + 8b + the CCSRRW deletion + step 9, pre-registered (2026-11-25, before the request)
+
+- **Hash:** capstone-ariane b5b2-step9 904cd9c6b, the same hash as the new kit's image sims.
+- **The base:** B5b-2's seal (0c0458149, sha256 b44291ba...b53b9a). Readings: placed LUT 172,682, FF 78,043, routed
+  clean, congestion 4, clk_out1 WNS +0.286, RAMB36 115.
+- **The synthesis deltas along the gate chain** (6b -> CCSRRW -> 8a -> 8b -> 9): core LUT 147,893 -> 122,911
+  (-24,982), core FF 55,589 -> 45,777 (-9,812).
+
+| key | prediction | the failure branch |
+|---|---|---|
+| placed LUT | 147,700 +- 3,000 (172,682 - 24,982) | outside: per-module placed rows against B5b-2's seal |
+| placed FF | 68,231 +- 2,000 (78,043 - 9,812) | the same |
+| routed | 0 errors, 0 unrouted, 0 partial | a routing failure: placed area, congestion windows by module, the census; NO WNS |
+| congestion | <= 5, placed and router | above: the windows' modules |
+| loops | check_timing 0, LUTLP-1 0, TIMING-23 0, each with its toy firing | any loop: its members by stem |
+| removal | the dom_switcher census on the routed dcp reads 0 instances and 0 primitives, with B5b-2's routed dcp as the census's positive control | a nonzero: a census before anything else |
+| WNS (clk_out1) | inside B5b-2's null band, [-3.45, +4.03] (+0.286 +- 3.74) | outside on the BAD side: worst-path family and per-stage depth before any board use; outside on the good side: reported |
+
+**Reported, not graded:**
+- design WNS, TNS, WHS, failing endpoints, slices, RAMB36 (115 expected);
+- the clk_out1 worst-20 family;
+- the family census by name, reported as "cannot fire" unless the base shows names;
+- per-module LUT and FF against 8b's and step 9's gates;
+- the sha256.
+
+**Flash:** the delegated rule, board 2 or 3. It waits for the bitstream to be sealed and the new kit pushed with its
+pre-registration. Board 1 stays on the nested lane's work.
+
+**The new kit, b5b2n-bare-2026-11-25: three findings from its first image sims, about the KIT, not the RTL.**
+- Tables keyed to CAPCREATE-era slots: CSMINT's root takes pool slot 3, so every pool id after it moves up.
+  - **b5b2-nsedge read exactly its mutant vector:** A and B land on {0,4} and {0,5}, which the T1/T2 records do not
+    describe.
+  - **ctxport-f4 and f4ctl both faulted 25 at the cderive** (x19 = {0,6}, a retired record), so F4 was never reached.
+  - **sref and sref-gen's a6 arm read 0 / 0xffffffff** with its cross-check flag 0.
+- **The semantics owner's ruling: re-key all three, with four conditions:**
+  1. Each re-keyed test checks the root CSMINT returned against its table's assumption before any table use, and ends
+     with its own sentinel on a mismatch. A deliberately off-by-one sim must read the sentinel.
+  2. Discrimination is shown again:
+     - nsedge's pass vector, and its NS-flush mutant reading the mutant vector;
+     - sref-gen's a6 at a non-zero generation with the flag at 1;
+     - ctxport-f4 with a reached-F4 marker.
+  3. A PREREG per test.
+  4. The full build on the kit sims' hash.
+  If a re-keyed sim turns up anything RTL-side before synthesis ends, the build stops.
+- Read as predicted: b5b2-illegal (sites 19-23 and 25 trap 2/1/1, count 0x19: step 9's deletion with no scaffold),
+  raw position 16 (layout), ctxport-wide data[8] (_start at 0x80001000), sublet-life's pool dump (the shift). Eleven
+  images read identically to their in-tree runs.
+
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
 - **Interruptible CREVOKE** (Line B step 4(b)): spec-silicon 24ecb7b4daa4. Read at source on b5b1-step3:
