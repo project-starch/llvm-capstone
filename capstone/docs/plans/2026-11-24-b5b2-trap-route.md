@@ -255,6 +255,50 @@ How the list was made: `git grep -w -E 'capmode(_[a-z]+)?' -- core`, excluding t
 
 The LDC/STC verdict gate (load_store_unit.sv:1604-1616) has no capmode term; the comment at :1604-1607 says so.
 
+## Step 2: the LSU admission gate by privilege (2026-11-24)
+
+capstone-ariane b5b2-step2 94cbc880e (on c36facb5a; the arm pre-registrations fc2c24817 and 7690e761b were pushed before
+their runs). Under CAPSTONE_SUBLET_FMT only. The ids55 preprocess is byte-identical.
+- The rule: protected U checks every LOAD/STORE-fu access, and an untagged base raises 24. S with srevroot != 0 checks a
+  tagged base (rule 1); an untagged one is plain. M is plain, and so is anything with srevroot == 0. The privilege is the
+  hart's: M with MPRV is plain, as in the reference.
+- The order is capstone_check_access's: 24, lifetime (25 / replay), 26, 27, 28. A checked access's capability cause
+  outranks misalignment and a non-canonical address (the claim-auditor's F1/F2).
+- Protected U joins the table namespace (vctx_table_o). The claim-auditor enumerated every consumer, and only the
+  reference's behaviour changes: U's lifetime ops and probes resolve in srevroot's table.
+- The precondition, confirmed by the semantics owner and read here: the kernel's twin runs with
+  x-capstone-trap-route=true (native-kernel-new-qemu, capstone/kernel/tests/{trap-route,syscall-boot}/boot.py:6).
+- Readings, as pre-registered:
+  - b5b2-uprot reads 25 / 24 / 28 / 25 in protected U, all plain with srevroot 0 and in M, and 25 / 28 on S's tagged
+    base; traps 6 (base: every access plain, traps 0).
+  - -DUP_MIS: 0x18 0x1c 0x4 0x19. Before the F1 fix, and on the base: 4 4 4 4.
+  - b5b2-illegal and the 15 Sublet directed tests are identical to step 1. Lint is at REF, with 0 by-name lines.
+- Recorded, not changed: the AMO/LR/SC permission arm (write only, against the reference's LR read / SC write / AMO
+  both) is unreachable while Sublet capabilities decode with every right (the semantics owner: re-open if rights
+  return). The ea + size bounds sum can wrap near 2^64 (pre-existing).
+- The ids55 lint's LOOP-NAMES-RC=1 (39 = 39) is the Sublet REF's long-standing port-name difference (edf925592), the
+  same on b5b1-step3. It is not B5b-2's.
+
+### Synthesis-only gate on steps 1 and 2: pre-registration (written before the request)
+
+Hash 94cbc880e. Base: d0afdb40f's own synthesis-only gate (b5b3-d0afdb40f-gate). Its core/ is identical to b5b1-step3
+27e75c38a's.
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within +/-505 MB of 5,446.4 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 combinational loops (as the base) |
+| 3 core LUT | at most the base + 2,500 (145,492 -> 147,992); FF reported |
+
+Reported, not graded (the per-module floor is +/-2,500; the ex_stage + issue + lsu stem is read summed):
+- lsu_i, predicted within +/-500 of 24,089. The new gate replaces the capmode term with two flop-derived bits and
+  reorders an existing chain; the F1 override is one priority term.
+- csr_regfile_i, predicted within +/-200.
+
+Timing is not graded by a synthesis-only run. The auditor's open point: the reorder puts the lifetime lookup and the
+same-cycle invalidation ahead of the 64-bit bounds compare inside cap_exception, the LSU's dominant slack term. That is
+read at B5b-2's full build, where steps 1-6 are batched into one bitstream.
+
 ## Silicon acceptance: bare kits
 
 No Linux kit can run until the runtime lane's integer-M monitor exists: the current one executes CAPENTER at init. So
