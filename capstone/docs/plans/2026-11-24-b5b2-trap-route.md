@@ -1091,6 +1091,13 @@ The kit b5b2-bare-2026-11-24 on the seal `…-r75d-b5b2_0c0458149.bit`, board 1 
 - Graded twice from the raw UART: by the board lane's grade-b5b2kit.py and by a separate script here, which reads the
   PREREG's JSON from git and whose negatives fired before the run.
 - The flash checked the seal's local sha256; the resident name was read back after the power cycle and after the loads.
+- **N=2 (board 3, booking 1490, board/meas-pw cc868076e8bb):** 15/15 AS PREDICTED, the control exact, the seal resident
+  (read back three times). Graded here from the raw captures too.
+  - The control's ungraded positions 25-34 read NONZERO DRAM there, where board 1 read zeros, so their exclusion was
+    right.
+  - Attempt 1 (booking 1489) was VOID: the kit tree's console driver had no board 3, and the runner still exited 0. The
+    board lane fixed both: the runner now exits 3 when a load does not reach the console, and a precheck asks the
+    driver to accept the board.
 - **Which bitstream is the default stays unchanged** (R-75 (d), fallback bitstream 1). B5b-2's seal runs bare kits
   only: CAPENTER is illegal under the Sublet format, and the current monitor executes it at init. It becomes a
   default candidate with the integer-M monitor.
@@ -1196,6 +1203,83 @@ the SOURCES to constants under CAPSTONE_SUBLET_FMT and leaves the consumers to f
 comes after the tests are ported to CSMINT.
 
 **Batching:** 8a, 8b and the CCSRRW deletion (7997b51a2) go into the next bitstream together, each gated alone first.
+
+## Step 8: the semantics owner's rulings, the CCSRRW gate, and step 8a built and read (2026-11-25)
+
+**Rulings** (the runtime lane):
+1. CSUPCTL bits 2 and 3 go with CSUPCTL. Under the evaluated configuration M is never checked, so the integer-M monitor
+   needs no M table namespace. The only flush it needs is the one an srevroot write gives: table changes go through
+   CREVOKE/CDERIVE/CSMINT/CRENEW, whose invalidations are the hardware's.
+2. 8a is reference-exact. Its boot-set condition: the encoding scan for CSRUNV and every CSU* access, with a planted
+   CSRUNV and a planted CSUPCTL access as positive controls. It covers the kernel rebuild, the image-gp userland and
+   today's fw_jump, and later the board's trap-route firmware before its first boot.
+3. CAPCREATE becomes **step 9**, in the same next bitstream: the tests and the bare wrapper's recorder move to CSMINT
+   first. If it misses that bitstream, it is recorded as a dated divergence with the reason. The lead's rule is no
+   divergences.
+4. CSNODEFREE (0xFC4) is deleted with the rest: it was never in the reference.
+
+**The CCSRRW gate (7997b51a2, against 6b): PASS 3/3** (board lane; grade-b5b2cc.txt read here).
+- TM 5,066.3 MB (+2.4); loops 0 with the toys firing (Synth 8-326 keyed for the first time); core LUT 148,024 (+131;
+  limit 150,393).
+- decoder 448 -> 467 (+19), id_stage +19, core FF +56, commit_stage +68 LUT, the cone sum +29; dcp sha16
+  1a6edf7848a30e29.
+- **Wording correction for steps 1-6b's gates:** their graders read and printed Synth 8-326 but did not key it. It
+  read 0 in every .vds (re-counted by the board lane), so no verdict moves.
+
+**Step 8a: capstone-ariane b5b2-step8a 0ef489f1d** (decoder +3, csr_regfile +10, all under CAPSTONE_SUBLET_FMT), and
+fbb60c546 (its readings' follow-ups).
+- **Boot set, by encoding:**
+  - 0 CSRUNV and 0 accesses to 0x7C3/0x7C4/0xFC0-0xFC4 in the kernel rebuild, the image-gp userland and today's
+    fw_jump;
+  - a planted CSRUNV and planted CSUPCTL/CSUPSTATUS accesses after a c.nop each read 1;
+  - the kernel's 22 srevroot accesses are the control.
+- **The pre-registered arms read exactly**, script-checked, on the base (core = 7997b51a2) and on 8a:
+  - RUNV: 0xff / 2 / 0, count 0 -> 2 / 1 / 1, count 1;
+  - CSUP (M):
+    - the reads of all seven CSRs and the writes of 0x7C3 and 0x7C4 move from retire to 2;
+    - the read-only writes trap 2 on both trees, and the srevroot read retires on both (the controls);
+    - the count moves 5 -> 14.
+- **Every other B5b-2 test** reads the same as the CCSRRW tip.
+- **MISSED: the regression.** The design said it would be "otherwise unchanged". It was not:
+  - 9 of 29 regression tests moved: va-runv-snap and sublet-ns with its seven arms. Each enters a context with CSRUNV.
+  - On 8a each takes ILLEGAL_INSTR there. Traced: sublet-ns at 0x8000100c, S mode, mcause 2; its handler skips the
+    site.
+  - The tests that do not execute CSRUNV read the same.
+  - These nine test the deleted feature, so they are retired from the Sublet regression and stay runnable.
+    b5b2-illegal-runv is the deletion's control, and b5b2-nsedge covers the namespace outside contexts.
+  - What would have caught it: grepping every test the gate runs for the op before pre-registering, as was done for
+    CCSRRW.
+- **sup-mswap.S** reads CSNODEFREE. It runs only in testlist_sup.yaml (the ids55 sweep), and its header now says so.
+- **ids55** is token-identical (359,790).
+- **Lint:** the Sublet gate passes at a moved reference, UNUSEDSIGNAL 1567 -> 1569. The two names are CSNODEFREE's
+  inputs, rev_node_head_i and rev_node_free_len_i, now unread under Sublet. ids55's by-name list is unchanged.
+
+### Synthesis-only gate on step 8a: pre-registration (written before the request)
+
+Hash fbb60c546. Its core/ equals 0ef489f1d's; the rest is the lint reference and tests. Base: the CCSRRW gate
+(b5b2cc-7997b51a2, dcp sha16 1a6edf7848a30e29).
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within ±505 MB of 5,066.3 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (the toy fires), LUTLP-1 0 (the toy fires) |
+| 3 core LUT | at most the base + 2,500 (148,024 -> 150,524) |
+
+**Reported, graded nothing:**
+- decoder: tens of LUT.
+- csr_regfile_i (7,439 / 6,603): the CSU* read mux and write cases go, so down by tens to a few hundred LUT. The
+  supervisor FFs stay, because 8a removes no writer.
+- **dom_switcher (11,517 / 1,323): predicted UNCHANGED, within ±500.** A decode-illegal CSRUNV still flows through the
+  issue pipeline's registers as an op, so synthesis cannot prove the switcher's request constant. Folding it is 8b's
+  job. A large drop here would mean 8a already does part of 8b, and it would be reported as such.
+- Core FF 0 ± 300; no row beyond ±2,500.
+
+**Step 8b (sizing from the CCSRRW gate, board lane):**
+- The removable cones: dom_switcher 11,517 LUT / 1,323 FF; the supervisor and CPMP state inside csr_regfile_i
+  (7,439 / 6,603); the PC check inside commit_stage_i (own 399 / 336); i_pmp_data_if 351 / 0.
+- controller_i is already absent from the checkpoint (the board lane's reading: its logic is absorbed), so nothing is
+  saved there.
+- 8b's prediction is written with its code, before its request.
 
 ## Kept on the list (runtime lane, 2026-11-24), not in B5b-2
 
