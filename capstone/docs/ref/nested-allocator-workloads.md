@@ -6572,3 +6572,54 @@ All nine boots ran. The fixture boot is `oneop/runs/fig10-pbrn3-fx`, and the sun
     measured: oneop cannot run test.pl.
   - This result says nothing for or against the bodies variant's 10.04 saving.
 - Not read: cycles, and memory.
+
+## perlbench item 3: the full port, bodies, hash entries and op slabs together on the heads port (2026-11-25)
+
+### Pre-registration: the combined image's fixture, test.pl and memory on the twin (written 2026-11-25 00:32, before the runs)
+
+**Question.** Each of the three allocator ports was priced alone on the twin, with its own fixture. The board pair
+of stock against the whole port needs one image that carries all three. This section checks that image on the twin
+before any board pre-registration: protection, answers, instructions and memory.
+
+**The images** (`nested/perlspec/fx2/build-full.sh`, `build-full-fixtures.sh`):
+- **full** (`perlbench_r.full.strip.dom` `ce3a48e5…`, full `44ce64f2…`):
+  - a copy of prot6's tree, then the committed `port-sv-bodies.py`, `port-he.py` and `port-op-slabs.py` (revision 4);
+  - every object recompiled with prot6's compile lines plus `-DPERL_CAPSTONE_SUBLET_BODIES -DPERL_CAPSTONE_SUBLET_HE
+    -DPERL_CAPSTONE_SUBLET_OPS`, linked with prot6's link line;
+  - stripped as prot6 was. The same strip of prot6's full image reproduces prot6's `.dom` (control, IDENTICAL).
+- **Census against prot6:** CDERIVE 72 → 100 (+28) and CREVOKE 9 → 16 (+7). The CREVOKE rise equals the three
+  arms' own (+3, +3, +1).
+- **full-nr**, the control (`7d6bb54e…`): full rebuilt with `PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE` and
+  `PERL_CAPSTONE_SUBLET_OPS_NOREVOKE` on all 69 compiles. Its CREVOKE count is prot6's 9, so all seven of the ports'
+  CREVOKEs are gone (the census fires).
+- **Fixtures:** the committed `make-{bodies,he,ops}-fixture.py`, each generated from the tree's own `perlmain.c`,
+  compiled with its `perlmain.o` line and linked in its place, then stripped. Six images, `fixture-full/bin`.
+- **Twin stage** `stage-full`: `stage-pt6` with only the prot image replaced (`diff -rq`: the `.xz` and plan.json's
+  note).
+
+**Runs** (`nested/census/chain-full.sh`, slot 28, 2^20 records, `dom_grant_root`):
+1. Fixture `perlfxfull-ce3a48e5`, 35 commands: bodies and HE modes 0-4 on full and full-nr; ops modes 0-7 on full
+   and 0-6 on full-nr.
+2. test.pl zones `zperl-full-ce3a48e5` (zones4, `perl-full.syms`).
+3. Memory `rss-full-ce3a48e5`, only if test.out and makerand.out equal the stock twin run's.
+- The chain's gate took both branches in an echo dry run: on ops4's results it ran the memory step, and on revision 1's
+  and on a missing directory it did not.
+
+**Predictions.**
+1. **Fixture**, each as its own arm read alone:
+   - bodies on full: mode 0 reads, modes 1-4 fault with cause 25;
+   - bodies on full-nr: modes 0-3 read, and mode 4 faults (the segment's end);
+   - HE on full: mode 0 reads, modes 1-4 fault;
+   - HE on full-nr: modes 0-4 read;
+   - ops on full: mode 0 reads, modes 1-4 fault, mode 5 returns `errors=3`, mode 6 `errors=0`, and mode 7 prints
+     `FIXTURE boot failed` and exits 3;
+   - ops on full-nr: modes 0-3 read, mode 4 faults, and modes 5-6 return as on full.
+   - Any other reading is reported as itself, and the board pair is not pre-registered until it is explained.
+2. **Answers:** test.out and makerand.out byte-equal to the stock twin run's (specdiff 1/2, the twin's three known
+   scripts).
+3. **Image zone:** the arms' sum is +636.4 M (bodies) + 97.2 M (HE) + 628.0 M (ops) = +1,361.7 M over prot6's
+   86,774,090,874 (+1.569 %). Predicted within ±15 % of that sum: +1,157 M to +1,566 M (+1.33 % to +1.80 %).
+   - Below the band: the ports share work (the HE arm already carved from the bodies' segments).
+   - Above it: they interact, for example through the lookup paths.
+4. **Memory:** peak used within ±1 % of prot6's 102,620 kB (101,594-103,646 kB). Each arm read alone moved it by less
+   than 250 kB.
