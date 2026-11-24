@@ -6667,3 +6667,127 @@ before any board pre-registration: protection, answers, instructions and memory.
    - Above it: they interact, for example through the lookup paths.
 4. **Memory:** peak used within ±1 % of prot6's 102,620 kB (101,594-103,646 kB). Each arm read alone moved it by less
    than 250 kB.
+
+### Result: the combined image passes its fixture, keeps stock's answers and costs +1,384.1 M in the image zone, inside the band (twin, 2026-11-25 00:32-02:17, read against e9cdb6841c9e)
+
+**1. Fixture `perlfxfull-ce3a48e5`: met, all 35 commands as predicted.** Serial log sha256 `1f639564…`.
+
+| arm | full | full-nr (no CREVOKE) |
+|---|---|---|
+| bodies | mode 0 reads (`cur=5`); modes 1-4 fault, cause 25 | modes 0-3 read (1 and 3 read the freed body, 2 the old body); mode 4 faults, cause 25 |
+| HE | mode 0 reads; modes 1-4 fault, cause 25 | modes 0-4 read (1-2 `read_after_delete`, 3-4 `read_after_free`) |
+| ops | mode 0 reads; modes 1-4 fault, cause 25; mode 5 `errors=3`, mode 6 `errors=0`; mode 7 `FIXTURE boot failed parse=13 run=0`, rc 3 | modes 0-3 read (1-3 `read_after_free`); mode 4 faults, cause 25; modes 5 and 6 as on full |
+
+- Every fault is `kind=2 cause=25` with rc 139. Modes 3 and 4 fault only after their live reads (4,999, 2,999 and 3,000
+  good reads, 0 bad), so the live objects stay readable while the freed ones fault.
+- So each of the three ports' protection holds in the combined image, and removing the seven CREVOKEs is what lets
+  the stale reads through. The control's two faults (bodies mode 4, at the segment's end, and ops mode 4) were
+  predicted, as registered, and do not depend on a revoke.
+- stderr carries the harness's `Can't open /dev/null: Permission denied`, as in the earlier perl fixtures.
+
+**2. Answers: met.** `zperl-full-ce3a48e5`'s test.out and makerand.out are byte-equal to the stock twin run's
+(`zperl-stock`), specdiff 1/2 as there, and the chain's gate ran the memory step.
+
+**3. Image zone: +1,384.1 M, met** (band +1,157 M to +1,566 M).
+
+| zone | prot6 | full | full − prot6 |
+|---|---:|---:|---:|
+| image | 86,774,090,874 | 88,158,235,556 | **+1,384,144,682 (+1.595 %)** |
+| user | 5,638,059,112 | 5,666,285,925 | +28.2 M |
+| kernel | 26,155,713,688 | 26,279,319,186 | +123.6 M |
+| firmware | 23,300,788 | 23,286,332 | −0.01 M |
+
+- `capmix.txt` sha256 `61f4deeb…`.
+- It is 22.4 M (1.6 %) above the arms' sum of +1,361.7 M: within the band, so neither a shared-work saving nor an
+  interaction is read.
+
+**4. Memory: met.** `rss-full-ce3a48e5`: peak used 101,844 kB, −776 kB (−0.76 %) against prot6's 102,620 kB (band
+101,594-103,646 kB), and +3.96 % against stock's 97,968 kB. The three arms read alone were −156 kB (bodies), −116 kB
+(HE) and −236 kB (ops 4), −508 kB together. The sampler's VmHWM field reads 2,868 kB against prot6's 2,724; it is
+reported, not read.
+
+**5. Lifetime instructions, counted for the board pair** (not a prediction): `opc-full-ce3a48e5` (opcount, slot 29,
+`nested/p1pf/opc29.sh`, run beside the memory run; the queued `opc.sh` was stopped before it started) against
+`opc-prot6-37381b03`:
+
+| executed on test.pl (image) | prot6 | full | full − prot6 |
+|---|---:|---:|---:|
+| all instructions | 86,774,070,441 | 88,158,232,696 | +1,384,162,255 |
+| CDERIVE (funct7 0x51) | 34,414,810 | 53,440,173 | +19,025,363 |
+| CREVOKE (funct7 0x52) | 30,966,183 | 45,503,771 | +14,537,588 |
+
+- So the three allocators execute **33,562,951** more lifetime instructions than the heads port, 1.29 times the heads
+  port's own 26,043,473 (pairn).
+- The opcount's all-instruction difference agrees with the zones' (+1,384,144,682) to 17,573, 0.001 %.
+
+**So the board pair is pre-registered** (next section): every check on the combined image came out as registered.
+
+
+### Pre-registration: perlbench test.pl on P1, u = stock and f = the full port, one boot on board 1 (written 2026-11-25 02:28, before the boot)
+
+**Question.** pair6 read the heads port (prot6) against stock on test.pl: +13,583.8 M in-context cycles, +5.08 %. (The
+paper's figure is still prot2's +5.84 %; a change is the lead's.) The full port adds the three allocators (bodies, hash
+entries, op slabs). This boot reads the full port
+against stock in one boot (F−U), and, through pair6's boot, the three allocators' cost over the heads port (F−P6).
+
+**The images.**
+- u: stock `c1744e87…` (the paper's Full image), as in pair6 and pairn.
+- f: `perlbench_r.full.strip.dom` `ce3a48e5…`, the twin result above: protection fixture met (35 of 35), answers equal
+  to stock's, image zone +1,384.1 M twin instructions over prot6, memory 101,844 kB (−0.76 % against prot6).
+- **Lifetime instructions** (twin opcode counts on test.pl, `opc-full-ce3a48e5` against `opc-prot6-37381b03`):
+  +1,384,162,255 instructions in all, of which +19,025,363 CDERIVE and +14,537,588 CREVOKE: **ΔL = 33,562,951**.
+
+**Configuration.**
+- Bitstream P1 (`…-pagedtbl_d83d3a633`). Board 1 holds another seal (B5b-2) at this writing, so the chain flashes P1
+  from its sealed bit, sha256 checked against `SEAL-…-pagedtbl_d83d3a633.sha256`, and reads the resident name back
+  before the bake. The runtime lane reserved board 1 for this boot.
+- Kit `nested/kits/bkit91-rec1m` (2^20 records, SHA256SUMS verified), pairn's.
+- Chain: `nested/p1pf/p1pf.conf` and `p1pf.list` on `nested/p1s100/nat-run3p.sh`, list line `pairf 86400 660`, so
+  `BAKED_TIMEOUT=345600`, as in pair6 and pairn. Expected: about 7.5 h of commands, plus the flash.
+- Stage `nested/p1pf/pairf` (`pairf.SHA256SUMS`, 574 files), the kit's `make-train-stage.sh` around `fx2/stage-pairf`.
+  Against pairn's board stage (`diff -rq`) one file differs, the prot `.xz`. So run.sh, the commands and the u image are
+  pair6's byte for byte. Commands: makerand.pl then test.pl, for u, then for f.
+- Checked off the board (rule 8, `nested/p1n/recheck-p1k.sh` with `RD=nested/p1pf`):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on pair6's real transcript and on its cut, PASS all 9 steps, `BAKED_TIMEOUT=345600`;
+  - real firmware build 23,760,392 B (`95b1c6ce…`);
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/p1pf/dry.log`).
+  - **Disclosed:** the recheck relinked the shared kernel tree `perf/k2n/linux-board-k2n-native-hpm2tree` with
+    bkit91-rec1m's `node_flat_records=1048576`. The next 262,144-record bake from that tree recompiles the four
+    `CONFIG_CMDLINE` objects (the mechanism seen in M-16's tsu-r2). This boot's own bake relinks it the same way.
+- Read by `nested/p1pf/read-pairf.py` (`2906ef92…`): this boot's transcript, pair6's, and SPEC's references.
+  - On pair6's own transcript as both inputs it reproduces pair6's +13,583.8 M and exits 0.
+  - On a transcript cut after the first arm it exits 1.
+
+**Rules.**
+- Answers: every command rc 0, and both arms' makerand.out and test.out byte-equal to SPEC's references, with empty
+  `.err` files. Otherwise nothing is read.
+- Stock check: u's test.pl in-context cycles within ±1 % of pair6's u (267,219.2 M).
+  - Outside it, F−U is still read within this boot.
+  - F−P6 is not read: it needs pair6's P.
+
+**Predictions** (test.pl, in-context cycles).
+Prices from pairn (test.pl, P1, same kit): the heads port's code at 3.726 cycles per twin instruction (stock mean
+3.169), and its lifetime instructions at 172.4 cycles each all in (P−N 4,490.9 M over 26,043,473, walks and replays
+included), of which 129.1-133.9 is the remainder after the walks and replays.
+1. **F−P6: +8,700 M to +11,800 M, point +10,945 M.**
+   - Point: 3.726 × 1,384.16 M = 5,157 M of code, plus 172.4 × 33.56 M = 5,788 M of lifetimes.
+   - Low edge: the code at the stock mean (4,386 M) and the lifetimes at the remainder-only price 129.1 (4,333 M).
+   - High edge: the code at 3.726 and the lifetimes at 1.15 times the all-in price (6,656 M), for a larger record
+     working set than the heads port's alone.
+2. **F−U: +22,300 M to +25,400 M (+8.3 % to +9.5 %), point +24,529 M (+9.18 %)**: pair6's P6−U6 (+13,583.8 M) plus 1.
+3. **Records:** F's hpm3 (record-TLB misses) and hpm4 (walk cycles) above pair6's P, each against its own boot's u.
+   F's L1D misses (hpm8) above pair6's P.
+
+**What each outcome says** (the reading is the lifetime price left over after the code at 3.726: (F−P6 − 5,157 M)
+over 33,562,951):
+- **Within ±15 % of 172.4** (146.6-198.3 cycles): the allocators' lifetimes cost what the heads' do per instruction.
+- **Below:** the allocators' records are cheaper, for example because they share pages with the heads' records.
+- **Above:** the record working set grows with the extra lifetimes, as on test.pl against suns.pl.
+- If the stock check fails, only F−U is read.
+
+**Limits.**
+- One run per arm, u first, not interleaved, as in pair6 and pairn.
+- F−P6 is cross-boot: this boot's F against pair6's P6, each taken against its own boot's u. pairn's u reproduced pair6's
+  to −0.051 %.
+- The prices come from pairn (one boot) and the twin's counts. Kernel + other is printed but not part of any prediction.
