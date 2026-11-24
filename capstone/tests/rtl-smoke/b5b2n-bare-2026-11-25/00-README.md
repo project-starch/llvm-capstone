@@ -12,7 +12,8 @@ as bare JTAG images. Design, rulings and readings: llvm-capstone capstone/docs/p
 - Three slot-keyed tests (nsedge, sref, ctxport) are re-keyed for CSMINT's root slot and carry a key check. See
   PREREG.md, "the kit's three findings".
 
-**Images:** 22, sublet-life (the control) first. `build.sh` builds them with riscv64-unknown-elf-gcc and checks:
+**Images:** 22 graded, sublet-life (the control) first, plus `b5b2-cptag-diag` (added after board 2's first run: the
+diagnostic for cptag's reading 21, a separate image; PREREG.md's amendment). `build.sh` builds them with riscv64-unknown-elf-gcc and checks:
 - no custom-3 encoding is in any image except b5b2-illegal's six deletion arms, which serve as the check's control;
 - `out/skew/` holds the key check's deliberately skewed builds, for simulation only.
 

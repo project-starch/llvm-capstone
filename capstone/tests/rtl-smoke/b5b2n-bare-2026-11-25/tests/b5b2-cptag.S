@@ -225,6 +225,34 @@ CPTAG(t1, a3, 0)
 rdcycle a6; ld x23, 0(a3); rdcycle a7; sub a7, a7, a6
 EQ(x23, a4)
 sub a6, a7, x31; slti a5, a6, 3; REC
+#ifdef CPT_DIAG
+# the diagnostic build (2026-11-25, after reading 21 read 0 on silicon, board 2, 904cd9c6b): 21a / 21b the cold
+# before- and after-deltas, raw; then the identical sequence twice, so the second pass runs with the code warm in the
+# I$, and 21c / 21d its raw deltas, 21e its flag. CPTAG runs on every pass. 21f: a warm-code D$ miss's cost.
+mv a5, x31; REC
+mv a5, a7; REC
+li t2, 2
+88:
+rdcycle a6; ld x22, 0(a3); rdcycle a7; sub x31, a7, a6
+CPTAG(t1, a3, 0)
+rdcycle a6; ld x23, 0(a3); rdcycle a7; sub a7, a7, a6
+addi t2, t2, -1
+bnez t2, 88b
+mv a5, x31; REC
+mv a5, a7; REC
+sub a6, a7, x31; slti a5, a6, 3; REC
+# 21f: the cost of a D$ miss with the code warm, the scale for the warm pass. A two-pass loop loads a never-touched
+# cache line far above the image (0x80200400, then 0x80200500: nothing loads or stores there, while the board
+# prologue rewrites every word of .data, so a .data line would hit); the pass-2 delta, raw.
+li t1, 0x80200400
+li t2, 2
+89:
+rdcycle a6; ld a5, 0(t1); rdcycle a7; sub a7, a7, a6
+addi t1, t1, 0x100
+addi t2, t2, -1
+bnez t2, 89b
+mv a5, a7; REC
+#endif
 # 22: protected U
 lla t0, tbl
 csrw SREVROOT, t0

@@ -2,7 +2,7 @@
 # B5b-2's next bitstream on silicon (8a + 8b + the CCSRRW deletion + step 9: capstone-ariane b5b2-step9 904cd9c6b): the
 # B5b-2 tests as bare M-mode images, with no custom-3 encoding anywhere (step 9 makes the family illegal on silicon).
 # Every test mints through CSMINT (-DCAP_MINT_CSMINT) and records and reports through plain M stores (inc/). The tests
-# are capstone-ariane verif/tests/custom/capstone/*.S at 2bed0dfe7, unchanged (checked equal to VP_SRC when given).
+# are capstone-ariane verif/tests/custom/capstone/*.S at c6195bea5, unchanged (checked equal to VP_SRC when given).
 # BOARD_R_CAP: the recorder's base, a register the test never names (pick-regs.py; b5b2-sref names all but tp).
 set -euo pipefail
 B=$(cd "$(dirname "$0")" && pwd); L=$B/../sup-bare-2026-10-03-ladder
@@ -42,6 +42,7 @@ build b5b2-ctxport-f4ctl   b5b2-ctxport.S  83 x16 -DCP_F4CTL
 build b5b2-ctxport-widelo  b5b2-ctxport.S  84 x16 -DCP_WIDE_LO
 build b5b2-ctxport-widehi  b5b2-ctxport.S  85 x16 -DCP_WIDE_HI
 build b5b2-ctxport-edgem   b5b2-ctxport.S  86 x16 -DCP_EDGEM
+build b5b2-cptag-diag      b5b2-cptag.S    87 x8 -DCPT_DIAG   # the diagnostic for cptag reading 21 (c6195bea5)
 (cd "$B/images" && sha256sum *.bin > SHA256SUMS)
 # simulation only, never booted: the key check's skew (the root assumed at slot 4), which must read the sentinel alone
 mkdir -p "$B/out/skew"

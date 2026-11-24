@@ -227,6 +227,48 @@ CAPCREATE-era slots. The semantics owner ruled a re-key for all three, with cond
 | `b5b2-sref-gen.bin` | `2c2bbeb93b36fd58ef669ac566f2f1419dc687d68f6cbdb9660545365099a82c` | `6d449998da2ac55330bc2f5fd94d2c70d068f0c245dd6f6ab111a0536a83cb2d` **(rebuilt)** |
 | `b5b2-sref.bin` | `a953d02c70c89f1135ccb90949e91084ec8f5483edfb884e0202e90aababfdfa` | `cc6b5db7c544779758cb888464186bfa9454e05e8ab62450919df22c496f8c97` **(rebuilt)** |
 
+## Amendment (2026-11-25, after board 2's first run and before any diagnostic run): b5b2-cptag reading 21 and its diagnostic
+
+**What was read.**
+- Board 2 on the seal (run-b2-20261124T2213): 21 of 22 AS PREDICTED, the control exact. The one MISS is b5b2-cptag
+  position 22, reading 21, which read 0 where 1 was predicted.
+- Repeats on board 2 read 1, 1, 0 (with Tier 1: 0, 1, 1, 0).
+- The same image on board 3 (the B5b-2 seal, 0c0458149) read 1, 1, 1.
+- Reading 21 is a cycle comparison: a load after CPTAG may cost at most 2 cycles more than the same load before it.
+- In the image sims both windows contain a first-time I$ line fetch (before 70 cycles, after 54). So the reading
+  compares two fetch misses more than the D$ line at rs1. Not attributed.
+
+**The diagnostic, `b5b2-cptag-diag.bin`:** a separate image, the original untouched. It is the test's -DCPT_DIAG build,
+capstone-ariane c6195bea5.
+- After reading 21 it records:
+  - the cold windows' raw deltas;
+  - the same before / CPTAG / after windows run twice, CPTAG on every pass, and the warm pass's raw deltas and flag;
+  - a warm-code D$ miss's cost, the load of a never-touched line at 0x80200500.
+- Identity: sha256 `2e0bfc3cf3d5e0cb031bc119a30a22bc948d185f159c435abfb32259cc5d75ec`, board_rec 0x80010240, SR 30. Simulated on 904cd9c6b's RTL with no scaffold
+  (`.sup/cpdiag2`):
+```
+0x1d 0x0 0x0 0x0 0x1 0x1 0x0 0x1 0x0 0x5 0x1 0x5
+0x1 0x5 0x1 0x5 0x1 0x0 0x0 0x2 0x1 0x1 0x46 0x36
+0x4 0x4 0x1 0x65 0x2 0x6
+```
+- **Graded exactly:** positions 1-21, 29 and 30.
+- **Positions 22-28 are timing, decided by this rule** (in the sim: 0x1, 70, 54, 4, 4, 1, 101):
+  - 22: the original reading 21, recorded;
+  - 23 and 24: the cold before and after deltas, recorded;
+  - 25 and 26: the warm before and after deltas;
+  - 27: the warm flag;
+  - 28: the warm-code D$ miss cost.
+  - **VALID** only if position 28 >= position 25 + 10, so the miss scale did miss.
+  - **H-fetch** (the instruction-fetch / layout reading): 26 − 25 < 3 and 27 = 1. The CPTAG pass leaves the warm load
+    unchanged, so the original's 0 came from the cold fetch windows.
+  - **H-line** (CPTAG disturbs the D$ line at rs1): 26 − 25 >= (28 − 25) / 2, at least half this board's own miss
+    penalty.
+  - Anything else is UNDETERMINED and reported as such.
+- The sim reads H-fetch: 4 / 4, flag 1, miss cost 101.
+- The proposed load: the control, then the original b5b2-cptag ×1 and the diagnostic ×3, on board 2 (904cd9c6b) and on
+  board 3 (0c0458149) alike. The diagnostic runs there too, since 0c0458149 decodes CSMINT
+  (decoder.sv:1337-1344).
+
 ## The grading rule
 
 - **Before each image:** its sha256 and board_rec must equal the table. The resident name read back must be the seal's.
