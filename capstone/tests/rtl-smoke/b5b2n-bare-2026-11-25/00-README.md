@@ -22,8 +22,10 @@ and the grading rule; `expected-vectors.json` holds the same for graders. Runner
 
 ## Silicon readings
 
-- **Board 2, booking 1493 (2026-11-24, 22:13-22:35Z, run-b2-20261124T2213): 21 of 22 graded images AS PREDICTED with the
-  control exact.**
+- Board 2, booking 1493 (2026-11-24, 22:13-22:35Z, run-b2-20261124T2213).
+  **904cd9c6b CONFIRMED ON SILICON, N=1 (board 2): Tier 1 20/21 as pre-registered, the control exact; b5b2-cptag
+  reading 21 MISS, classified by the pre-registered diagnostic (70dbac168818) as an instrument artifact: H-fetch 6/6 on
+  both seals, warm delta 0 against a measured miss of 43-47 cycles.** (The semantics owner's wording, 2026-11-25.)
   - The seal …-r75d-b5b2n_904cd9c6b.bit was flashed with its sha256 checked, and read back after the flash and after
     the loads.
   - Every RUN line carries its image's sha16 and rec.
