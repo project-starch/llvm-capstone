@@ -4399,6 +4399,38 @@ The runtime lane agreed to the pair on 2026-11-24, after the first boot's result
   - beats stop: the core or kernel stopped.
 - u1 failing does not stop the chain, because p1's boot is separate. The pair is read only if both return.
 
+### Amendment during the run, before any reading (written 2026-11-24 23:35): the heartbeat's `st.db` field reads nothing
+
+s100 (u1) has been running on board 2 since 15:31 (booking 1478). It was at uptime 28,322 s at the last beat, inside the
+registered band of 60,000-93,000 s. The runtime lane asked whether the run had overrun. It has not.
+- **Effective limits, read from the live runner:** `timeout 101800` around the driver, with `BAKED_TIMEOUT=100000`,
+  `BAKED_IDLE_S=100000` and `BOARD_TIMEOUT_MULT=4`. The beats print every 900 s, so the idle limit cannot fire, and
+  the 100,000 s batch budget is the cap, as registered.
+
+**The `st.db` field is void.**
+- Every beat so far reads `st.db=0`, from the first one at uptime 3,071 s. The cause is in the heartbeat's command:
+  `stat -c %s st.db 2>/dev/null || echo 0`.
+- The board's busybox has no `stat` applet, so the command fails and prints 0. The rootfs is this boot's
+  `image/rootfs.cpio`. Its applet table runs `sort`, `start-stop-daemon`, `strings` with no `stat`, while `sleep`,
+  `ls` and `wc` are present. The cpio has no other `stat` binary.
+- The dry run's heartbeat test checked that the beat runs during the command and stops after it. The reader was tested
+  on synthetic beats. Neither checked the size field against the board's busybox, so the field was never shown to
+  fire.
+- So a zero says nothing about whether speedtest1 writes its database. The registered branches "`st.db` grows"
+  against "`st.db` frozen" cannot be read.
+
+**What the beats still read.**
+- The native counters in each beat do grow, so the process is still being served by the module:
+  - `register` 241,347 at 3,071 s, 1,478,309 at 12,992 s, 1,842,154 at 28,322 s;
+  - since 15,697 s, a steady 15,735-15,741 per 900 s beat;
+  - `exchange` constant at 382 since 15,697 s.
+- **If u1 does not return within 100,000 s**, the three branches become two:
+  - **beats continue** with `register` growing: the program is still running and being served. This cannot tell
+    slow work from a loop;
+  - **beats stop:** the core or kernel stopped.
+- **If u1 returns,** the field never enters the reading. The answers, the time and the cost are read as registered.
+- The running stage is not changed. s100p carries the same heartbeat, so the same applies to it.
+
 ## PHP against a pristine second binary (2026-11-22)
 
 Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
