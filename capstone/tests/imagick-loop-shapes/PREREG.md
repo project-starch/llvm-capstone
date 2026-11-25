@@ -111,3 +111,17 @@ The images were rebuilt with the revised compiler:
 
 The inner-loop sizes are unchanged (lsr 29 / 31 / 11, both 28 / 30 / 11), so the predictions stand as written. The
 preheader compare and select run once per loop entry, and the bounds in prediction 4 cover them.
+
+## Amendment 2, after the first boot and before any count was read: one boot per variant
+
+The first boot (2026-11-26 00:17, 11 s after the lock) ran all four variants. Each loads at the same base,
+0x3ff7c00000, because they are builds of one image. So the single FINAL table sums their per-pc counts, and no
+variant's count can be read from it. Nothing from that table is read.
+- The item-3 profile separated its processes by load address only because its images differed; that was not
+  rechecked when four builds of one image went into one boot.
+- What that boot does settle is **prediction 2: all four test_output.tga hashes are equal**
+  (3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb), and every run exited rc 0.
+
+The counts come from four boots, one variant each, in the order off, pool, lsr, both. The images, the command,
+the platform and the predictions are unchanged. Each boot's FINAL table holds one imagick process; the image range
+is separated from the shell and busybox at other addresses, as before.
