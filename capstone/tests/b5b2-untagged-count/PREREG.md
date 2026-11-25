@@ -47,3 +47,38 @@ A stage's count is END minus BEGIN. A stage cut at its bound gives a LOWER bound
 3. **imagick and x264 on all three arms:** count > 0.
 4. **Every other stage:** no count is predicted (exploratory). A stage that reads 0 is predicted to pass this rule on
    904cd9c6b/88db40027. A stage that reads > 0 is predicted to fault with cause 24 at its first FIRST pc.
+
+## Amendment 1, before the run (2026-11-25), at the semantics owner's request: less lock
+
+The question is whether each stage has a silent untagged op, and where the first one is. Totals are not needed now:
+the combined seal's re-read shows which stages pass.
+
+**What was read under the original procedure before it was stopped.** The B5T boot ran its control and its imagick
+stage. It was stopped in lbm, at the semantics owner's request, about 10 minutes into the boot.
+- Control: ctl0 +0; ctl1 +1750 (cinc 500, cincimm 1000, scc 250, u 1750). Prediction 1 holds.
+- B5T imagick: +1103 (cinc 60, cincimm 1043). The first FIRST line in the process is pc 0x3ff7c3ad62 op 1, and the
+  process entered at 0x3ff7c00000. That is vaddr 0x4ad62, CINCOFFSETIMM, the board-3 fault pc, so prediction 2
+  holds for imagick.
+
+**Procedure from here.**
+- One boot for all three arms. Every arm's lbm, mcf, nab, xz, perlbench and gcc run first, then every arm's imagick,
+  then every arm's x264.
+- x264's yuv is now copied rather than moved, since three stages share it.
+- The host ends a stage by writing KILLSTAGE to the serial console, which a watcher in /init turns into a kill of the
+  stage's process group:
+  - 1 s after the stage's first counted op;
+  - or 600 s after the stage begins with none. That stage is recorded as "0 in the first 600 s (a lower bound on
+    clean)".
+  The guest's own 660 s bound is the backstop.
+- The stage's first op is read from the counter's new LEAD line (capstone-qemu 741be49bb0, binary eadd3a36316605af).
+  LEAD logs any counted op that follows at least 1 s without one, so it fires even when FIRST is silent because an
+  earlier arm's image used the same pc.
+- Smoke, kill path: a stage running untag-ctl.dom then sleeping 700 s was killed (rc 137) 1 s after its LEAD line,
+  n=1751. FIRST was silent for it, since the control's earlier run had used the same pc.
+
+**Predictions, unchanged in substance.**
+1. The control reads as in prediction 1.
+2. B5T x264's first op is vaddr 0x4967a, CINCOFFSET. B5T imagick reads vaddr 0x4ad62 again.
+3. imagick and x264 have a first op on all three arms.
+4. Each of the other 18 stages reads either a first op (predicted cause 24 at that pc on 904cd9c6b/88db40027) or "0 in
+   the first 600 s". No outcome is predicted for them.
