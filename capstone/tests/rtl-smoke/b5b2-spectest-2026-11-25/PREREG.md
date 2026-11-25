@@ -141,3 +141,25 @@ It is flashed on the board that frees first, after rtl's wapflu kit.
 
 **Classification.** If x264 or imagick still faults with 24 at the same pc, the shape-match classification is
 REFUTED. If mcf wedges with any other aperture pattern, its instance is not S-35's shape.
+
+## Amendment 5 (2026-11-25): perlbench test makerand-only, and the g4 boots withdrawn
+
+**Readings that prompted it:**
+- B5T-g4 (board 3, 904cd9c6b): run0 (makerand) rc 0 in 289 s.
+- run1 (SPEC's test.pl harness, about 140 perl subprocesses) had not ended at the 3,600 s bound: NO READING.
+- One test.pl child faulted with cause 28 at vaddr 0x11480 (`sd a4, 0x10(a3)`, address 0x88 below its code base). That is recorded as a finding, attributed to nothing; nested is mapping it.
+- B5TL0-g4 was stopped during its load (no reading). B5TL1-g4 is skipped. Both are withdrawn.
+
+**The rule this applies:** test.pl took 12,581 s on board for riscv-base, and the P1 campaign excluded it (train PREREG
+Addendum 80: makerand only). The lead's rule keeps such long inputs out until the final campaign.
+
+**The new stages.** compiler's makerand-only perlbench test stages (c4/b5b2spec/perl-mk, made by make-stage.py
+`--commands 0` plus make-native-stage.py, with no hand edit):
+- in/ is the full stage's minus test.pl, every shared file byte-identical;
+- run.sh differs only in the test.pl command and its blocks;
+- the images are the board stages' own (B5T 38ce666f, B5TL0 e0fc73e0, B5TL1 f3c8c80d).
+Images B5T-g4mk, B5TL0-g4mk and B5TL1-g4mk are in `SHA256SUMS.g4mk` and `overlay-files.g4mk.sha256`.
+
+**Run:** board 3, after chain 3, in the order B5T, B5TL0, B5TL1.
+**Predicted:** C `rc=7`, then makerand rc 0 with a specdiff pass, B5T near 289 s (boot B5T-g4's run0, the same image and
+input), and the other arms' times as first readings.
