@@ -588,3 +588,16 @@ On a5c45a46d and b42c8c644:
 - a clean full-length run of T seconds weighs about exp(-T/tau) against "not fixed", and only cumulatively, across boards and re-runs. It is never a pass/fail on one run.
 
 The board lane records each run's exposure: board, seal, mcf entry, end (completion, watchdog or silence), seconds, and outcome. Exposure is taken from each capture, not rounded. The diagnostic full-length B5T-g1b on 28fcbb646 is the first full-length unfixed calibration point. The discriminating pair is ldcexc2 (b5b2-ldcfix-bare-2026-11-25), but only on a board where the pre-fix seal reproduces its wedge.
+
+**Gate read (board lane, 2026-11-25): B5B2R77-GATE PASS 3/3.**
+- Mapping 4,968.2 MB (-0.0); loops 0 with each toy firing; core LUT 125,279 (-985).
+- Reported: load_store_unit 25,470 LUT (-462) and FF +0; load_unit +2 / +0; no FSM change; 0 rows beyond the floor.
+- MY PREDICTION "within a few tens of cells" MISSED. It sized only the removed compare and mux. With the PRE arm gone the timeout compare is gated by sent_q, and its cone (the DEAD/tmo writes, pcc_tmo) re-optimises. That is a reduction inside the per-module floor, with the sim identical in values and cycles, so it is not attributed further.
+- The full build launched 16:16:41Z, centred on a5c45a46d's seal (151,406 / 69,500).
+
+**Kit vectors on b42c8c644:** every image of b5b2n (23), crevoke4b (17), wapflu (2) and b5b2-ldcfix (3) reads exactly its kit's `vector` column, each in `expected-vectors-b42c8c644.json`.
+
+**Silicon, for the FLU rule's record (board lane, board 2, 28fcbb646):**
+- x264 ran about 1,430 s on all three arms with no fault before the 3,600 s stage watchdog, where 904cd9c6b took cause 24 at a CINCOFFSET within seconds (x264_slicetype_mb_cost+0x146);
+- imagick passed specdiff on all three arms;
+- x264 has no PASS yet only because gen and run exceed the stage bound.

@@ -284,3 +284,9 @@ capstone-ariane c6195bea5.
 The same 23 images (byte-identical: SHA256SUMS unchanged; every ELF in `out/` reproduces its pinned `.bin`) were simulated on capstone-ariane b5b2-ldcfix a5c45a46d, rtl_dirty=no (s2fix-wt `.sup/finn`), with this kit's settings. Their vectors are in `expected-vectors-a5c45a46d.json`, which has the same fields as `expected-vectors.json` plus `sim_rtl`.
 
 **Every image reads exactly this kit's vector, in every position.** The grading rule above applies unchanged on that seal, with `expected-vectors-a5c45a46d.json`'s `vector` as the column. The kit cannot tell a5c45a46d's seal from 904cd9c6b's by values; the flash is shown by the readback and by the sibling kits whose columns differ (crevoke4b, wapflu).
+
+## Addendum 2026-11-25: the final candidate b42c8c644 (R-80 + R-77's PRE fix), pre-registered before its seal
+
+The same 23 images (byte-identical: SHA256SUMS unchanged) were simulated on capstone-ariane b5b2-prefix b42c8c644 (core = 7861abcfa), rtl_dirty=no (s2fix-wt `.sup/r77n`), with this kit's settings. Their vectors are in `expected-vectors-b42c8c644.json`, which has the same fields as `expected-vectors.json` plus `sim_rtl`.
+
+**Every image reads exactly this kit's vector, in every position.** The grading rule above applies unchanged on that seal, with `expected-vectors-b42c8c644.json`'s `vector` as the column.
