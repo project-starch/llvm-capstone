@@ -122,7 +122,7 @@ llvm/lib/TargetParser/TargetDataLayout.cpp | +46 -0 | static std::string compute
 llvm/lib/TargetParser/Triple.cpp | +21 -1 | case capstone32:     return "capstone32";
 llvm/lib/Transforms/InstCombine/InstructionCombining.cpp | +26 -1 | // capability cursor. It may lose its tag at an address-policy or bounds
 llvm/lib/Transforms/Scalar/LICM.cpp | +7 -0 | // Swapping the offsets creates a capability cursor the loop never formed.
-llvm/lib/Transforms/Scalar/LoopStrengthReduce.cpp | +443 -0 | // against an accessed capability cursor. Sharing a byte IV avoids adding a
+llvm/lib/Transforms/Scalar/LoopStrengthReduce.cpp | +448 -0 | // against an accessed capability cursor. Sharing a byte IV avoids adding a
 llvm/lib/Transforms/Scalar/LoopTermFold.cpp | +6 -0 | Expander.setNonIntegralHoistLimit(L);
 llvm/lib/Transforms/Scalar/SROA.cpp | +145 -0 | /// Capstone: does a value of type \p Ty hold a pointer wider than its index --
 llvm/lib/Transforms/Scalar/SeparateConstOffsetFromGEP.cpp | +6 -0 | // On a capability pointer, returning to the original final address cannot

@@ -204,10 +204,15 @@ static cl::opt<bool> CapabilityExitRuntimeEnd(
 // not enter L. None of them traps there: a capability GEP is CIncOffset, which
 // on an untagged source adds as an integer (capstone-ariane b42c8c644
 // capstone_flu_unit.anvil:36, :70; capstone-qemu helper_cscincoffset) and on a
-// tagged one writes an untagged result when the cursor leaves the format. A
-// tagged sealed or uninitialised base (cause 26) is the one exception: the
-// original faults on it only on an entry to L. A C pointer the program indexes
-// does not hold one.
+// tagged one writes an untagged result when the cursor leaves the format. Its
+// one trap on a tagged source, cause 26 for a sealed or uninitialised
+// reference (capstone_flu_unit.anvil:43, :80, :120), is unreachable under the
+// Sublet format, because no register can hold such a reference: SEAL and CALL,
+// SEALEDRET's producer, are illegal (core/decoder.sv:1324-1325, :1456), and
+// every loaded capability decodes as NONLIN (core/include/ariane_pkg.sv:1014).
+// So, like -lsr-capability-exit-runtime-end, this holds on b42c8c644 and later
+// Sublet seals and not on P1: P1 has types, and there the hoist could add a 26
+// on an outer iteration where the original has none.
 static cl::opt<bool> CapabilityExitEndHoist(
     "lsr-capability-exit-end-hoist", cl::Hidden, cl::init(false),
     cl::desc("With -lsr-capability-exit-runtime-end, build the run-time endpoint "

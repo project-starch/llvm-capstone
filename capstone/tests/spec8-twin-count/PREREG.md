@@ -87,3 +87,22 @@ well as the flags.
 - Cycles. These are instruction counts on the trap twin.
 - Workloads other than the SPEC test stages.
 - P1, where the run-time endpoint does not hold.
+
+## Amendment 1, before any count was read: the board form, and the hoist's scope
+
+The semantics owner ruled on both, after the pre-registration was pushed and while the first boot waited for the lock.
+
+**The board form is two images, not one.** LSHOFF is not B5TL1, so the board comparison is LSHOFF against LSHON. Both
+were built by the lane's compiler at 3eac93f488ec, so the cpugcc_r mcf.o swap above is in both arms. Both images run all
+eight stages at the end of board 3's b42c8c644 session, after ldcexc2, if predictions 2 and 3 hold. They are not
+compared against the session's B5TL1 rows.
+
+**The hoist is accepted for b42c8c644 and later Sublet seals, with P1 excluded,** on a stronger reason than the one its
+comment first gave:
+- CIncOffset's one trap on a tagged source, cause 26 for a sealed or uninitialised reference, is unreachable under the
+  Sublet format, because no register can hold such a reference;
+- SEAL and CALL, SEALEDRET's producer, are illegal (core/decoder.sv:1324-1325, :1456);
+- every loaded capability decodes as NONLIN (core/include/ariane_pkg.sv:1014);
+- the 26 is at capstone_flu_unit.anvil:43, :80 and :120.
+These were read at capstone-ariane b42c8c644. On P1, which has types, the hoist could add a 26 where the original has
+none. The comment now says this. The change is to the comment only, so the arms' images are unchanged.
