@@ -1,0 +1,229 @@
+{
+ "paired_with": "B5TL1 (b5b2spec/board-stages/B5TL1)",
+ "stages": [
+  {
+   "arm": "plain-matched",
+   "bench": "500.perlbench_r",
+   "images": [
+    {
+     "name": "perlbench_r_base.native",
+     "sha256": "d963f7251e5db89e373dbbaba4d7088b5bb32c3c4f1ed4899c42f565257657c5",
+     "source": "c4/plain/tree-plain-matched/SPEC17/benchspec/CPU/500.perlbench_r/exe/perlbench_r_base.plain-matched",
+     "b5tl1_partner_sha256": "f3c8c80d71844564593458bb7811d9534fb0c755303fda3b1f0d79920aad7488"
+    }
+   ],
+   "identical_to_b5tl1": 558,
+   "run_sh_sha256": "686d19d5f821d4cadd9e8df18b0c9e3e61120a69ebc4eb254a0d1b5b86950441"
+  },
+  {
+   "arm": "plain-matched",
+   "bench": "502.gcc_r",
+   "images": [
+    {
+     "name": "cpugcc_r_base.native",
+     "sha256": "2863bebea5da1826de9912befad51ea4832beae9f73ec2a9522add65e35accbc",
+     "source": "c4/plain/tree-plain-matched/SPEC17/benchspec/CPU/502.gcc_r/exe/cpugcc_r_base.plain-matched",
+     "b5tl1_partner_sha256": "f800e015d161c911b1469a9dad8d0db8f49e309431400eeb1c9eaf73c7aa082e"
+    }
+   ],
+   "identical_to_b5tl1": 3,
+   "run_sh_sha256": "9ae812714f20bdf7399e72f903a10a5ae219eae159499933b47f8a5394de9b9c"
+  },
+  {
+   "arm": "plain-matched",
+   "bench": "505.mcf_r",
+   "images": [
+    {
+     "name": "mcf_r_base.native",
+     "sha256": "8367f8f2490bf2bff79b90d19797c0b2248b0df547d2593ec4970a6a7943dbd7",
+     "source": "c4/plain/tree-plain-matched/SPEC17/benchspec/CPU/505.mcf_r/exe/mcf_r_base.plain-matched",
+     "b5tl1_partner_sha256": "a1daec395a9e7260e8be9644735ae6da5415d92b1344baea5a39590581606e97"
+    }
+   ],
+   "identical_to_b5tl1": 3,
+   "run_sh_sha256": "cc59d411004f7bf728aea3f763883402b0ce92ba2aabde2efa8b56aaa0682d38"
+  },
+  {
+   "arm": "plain-matched",
+   "bench": "519.lbm_r",
+   "images": [
+    {
+     "name": "lbm_r_base.native",
+     "sha256": "a96c5f98765390cf15f0e6712f4ab22bf824673ad89575759182dcb16bf4e558",
+     "source": "c4/plain/tree-plain-matched/SPEC17/benchspec/CPU/519.lbm_r/exe/lbm_r_base.plain-matched",
+     "b5tl1_partner_sha256": "0d9105dab2bccdfe251dfbf4c8ffda29e22836923b183d3bebf10afc64469743"
+    }
+   ],
+   "identical_to_b5tl1": 4,
+   "run_sh_sha256": "209371c4496c8b06861ef0b72f5a51a29bf395aa16fc89bac781a9201e9ab4f9"
+  },
+  {
+   "arm": "plain-matched",
+   "bench": "525.x264_r",
+   "images": [
+    {
+     "name": "x264_r_base.native",
+     "sha256": "094fcadb698de376932a330229f3b93627459092df30cac989ddfc1916bacc74",
+     "source": "c4/plain/tree-plain-matched/SPEC17/benchspec/CPU/525.x264_r/exe/x264_r_base.plain-matched",
+     "b5tl1_partner_sha256": "f686fe9679b04d6933b101136534a7ab009ab73ffb1eb509997437f020e7ec2c"
+    }
+   ],
+   "identical_to_b5tl1": 5,
+   "run_sh_sha256": "75532a9a96d145e7fdaaaefafbad1512ab93fc8a8eb7a456820c2ae7c3bba079"
+  },
+  {
+   "arm": "plain-matched",
+   "bench": "538.imagick_r",
+   "images": [
+    {
+     "name": "imagick_r_base.native",
+     "sha256": "5e12cf9d63dfac6abca987604764c721d4b7b2512ab1baf2b8b71145d9f12876",
+     "source": "c4/plain/tree-plain-matched/SPEC17/benchspec/CPU/538.imagick_r/exe/imagick_r_base.plain-matched",
+     "b5tl1_partner_sha256": "a666e331f10d73cc8b88bb3f0c4211dc0966df7883ace0817d115bcdc275ad6c"
+    }
+   ],
+   "identical_to_b5tl1": 6,
+   "run_sh_sha256": "2205c78c77e8f8567d93b784c71f5364106ed6dd22bf0ed7c6caf382d0a4c65b"
+  },
+  {
+   "arm": "plain-matched",
+   "bench": "544.nab_r",
+   "images": [
+    {
+     "name": "nab_r_base.native",
+     "sha256": "5c3e40db600da518ac00921e4c100d07fae1a2c9e0fc9726d185282a626d3008",
+     "source": "c4/plain/tree-plain-matched/SPEC17/benchspec/CPU/544.nab_r/exe/nab_r_base.plain-matched",
+     "b5tl1_partner_sha256": "da57e5473a33e6fd782c3b7185b79fad0f45706a529ba9b4bb2fb41ed9c581ee"
+    }
+   ],
+   "identical_to_b5tl1": 5,
+   "run_sh_sha256": "b5670df6e39066fbc935b8a382ab44f272fd59b55696bdf677c9183de0f0e4bc"
+  },
+  {
+   "arm": "plain-matched",
+   "bench": "557.xz_r",
+   "images": [
+    {
+     "name": "xz_r_base.native",
+     "sha256": "8e3a31f855b6d0e3f87185a6be94c3cd9702d1beed41b693d4dc2910f0c26c37",
+     "source": "c4/plain/tree-plain-matched/SPEC17/benchspec/CPU/557.xz_r/exe/xz_r_base.plain-matched",
+     "b5tl1_partner_sha256": "ecb70755f9ee1690b531ff3d583f1c985493202fe045e3bb712e44c728b1feb7"
+    }
+   ],
+   "identical_to_b5tl1": 4,
+   "run_sh_sha256": "6c14e24214820ff8995db2a252ab0de272671f326c78729d3b6a53d20174b18e"
+  },
+  {
+   "arm": "plain-paper",
+   "bench": "500.perlbench_r",
+   "images": [
+    {
+     "name": "perlbench_r_base.native",
+     "sha256": "779a8688f58c649b8dc4c818540e5489e69dab940bd97211d845517db5cf5fe1",
+     "source": "spec/tree-plain/SPEC17/benchspec/CPU/500.perlbench_r/exe/perlbench_r_base.plain-rv64",
+     "b5tl1_partner_sha256": "f3c8c80d71844564593458bb7811d9534fb0c755303fda3b1f0d79920aad7488"
+    }
+   ],
+   "identical_to_b5tl1": 558,
+   "run_sh_sha256": "686d19d5f821d4cadd9e8df18b0c9e3e61120a69ebc4eb254a0d1b5b86950441"
+  },
+  {
+   "arm": "plain-paper",
+   "bench": "502.gcc_r",
+   "images": [
+    {
+     "name": "cpugcc_r_base.native",
+     "sha256": "6385edb2ab2b20feab164f6e3f28e8850b5a74aa2f22f1645eead423a777e951",
+     "source": "spec/tree-plain/SPEC17/benchspec/CPU/502.gcc_r/exe/cpugcc_r_base.plain-rv64",
+     "b5tl1_partner_sha256": "f800e015d161c911b1469a9dad8d0db8f49e309431400eeb1c9eaf73c7aa082e"
+    }
+   ],
+   "identical_to_b5tl1": 3,
+   "run_sh_sha256": "9ae812714f20bdf7399e72f903a10a5ae219eae159499933b47f8a5394de9b9c"
+  },
+  {
+   "arm": "plain-paper",
+   "bench": "505.mcf_r",
+   "images": [
+    {
+     "name": "mcf_r_base.native",
+     "sha256": "2e1b522831e9020c1d15dc64db997fb8488cad294873e56cd3a2ebf7f75710e5",
+     "source": "spec/tree-plain/SPEC17/benchspec/CPU/505.mcf_r/exe/mcf_r_base.plain-rv64",
+     "b5tl1_partner_sha256": "a1daec395a9e7260e8be9644735ae6da5415d92b1344baea5a39590581606e97"
+    }
+   ],
+   "identical_to_b5tl1": 3,
+   "run_sh_sha256": "cc59d411004f7bf728aea3f763883402b0ce92ba2aabde2efa8b56aaa0682d38"
+  },
+  {
+   "arm": "plain-paper",
+   "bench": "519.lbm_r",
+   "images": [
+    {
+     "name": "lbm_r_base.native",
+     "sha256": "bd72cb22753b5c6065dfd4abc59bb5f513ffa5b9badc0c0a7f4d038187aae85e",
+     "source": "spec/tree-plain/SPEC17/benchspec/CPU/519.lbm_r/exe/lbm_r_base.plain-rv64",
+     "b5tl1_partner_sha256": "0d9105dab2bccdfe251dfbf4c8ffda29e22836923b183d3bebf10afc64469743"
+    }
+   ],
+   "identical_to_b5tl1": 4,
+   "run_sh_sha256": "209371c4496c8b06861ef0b72f5a51a29bf395aa16fc89bac781a9201e9ab4f9"
+  },
+  {
+   "arm": "plain-paper",
+   "bench": "525.x264_r",
+   "images": [
+    {
+     "name": "x264_r_base.native",
+     "sha256": "5adf7cac02e0a8ed6fa117e232ed05d0460f268cd4880b03232f9f87e6fa77fc",
+     "source": "spec/tree-plain/SPEC17/benchspec/CPU/525.x264_r/exe/x264_r_base.plain-rv64",
+     "b5tl1_partner_sha256": "f686fe9679b04d6933b101136534a7ab009ab73ffb1eb509997437f020e7ec2c"
+    }
+   ],
+   "identical_to_b5tl1": 5,
+   "run_sh_sha256": "75532a9a96d145e7fdaaaefafbad1512ab93fc8a8eb7a456820c2ae7c3bba079"
+  },
+  {
+   "arm": "plain-paper",
+   "bench": "538.imagick_r",
+   "images": [
+    {
+     "name": "imagick_r_base.native",
+     "sha256": "f7f3e78a5a4946590426babf490ebfd4dbbe8a73df56c9fc199e2bdace945e18",
+     "source": "spec/tree-plain/SPEC17/benchspec/CPU/538.imagick_r/exe/imagick_r_base.plain-rv64",
+     "b5tl1_partner_sha256": "a666e331f10d73cc8b88bb3f0c4211dc0966df7883ace0817d115bcdc275ad6c"
+    }
+   ],
+   "identical_to_b5tl1": 6,
+   "run_sh_sha256": "2205c78c77e8f8567d93b784c71f5364106ed6dd22bf0ed7c6caf382d0a4c65b"
+  },
+  {
+   "arm": "plain-paper",
+   "bench": "544.nab_r",
+   "images": [
+    {
+     "name": "nab_r_base.native",
+     "sha256": "d0c47f5c4a14b28a5b8618b2ede94205cbdb47f35d7a143ab05c321f7e34781b",
+     "source": "spec/tree-plain/SPEC17/benchspec/CPU/544.nab_r/exe/nab_r_base.plain-rv64",
+     "b5tl1_partner_sha256": "da57e5473a33e6fd782c3b7185b79fad0f45706a529ba9b4bb2fb41ed9c581ee"
+    }
+   ],
+   "identical_to_b5tl1": 5,
+   "run_sh_sha256": "b5670df6e39066fbc935b8a382ab44f272fd59b55696bdf677c9183de0f0e4bc"
+  },
+  {
+   "arm": "plain-paper",
+   "bench": "557.xz_r",
+   "images": [
+    {
+     "name": "xz_r_base.native",
+     "sha256": "b889d0f57fcd13b355cc38e3bce6bf6ffb6dba9e2b63d792b1405af9d6eb1c16",
+     "source": "spec/tree-plain/SPEC17/benchspec/CPU/557.xz_r/exe/xz_r_base.plain-rv64",
+     "b5tl1_partner_sha256": "ecb70755f9ee1690b531ff3d583f1c985493202fe045e3bb712e44c728b1feb7"
+    }
+   ],
+   "identical_to_b5tl1": 4,
+   "run_sh_sha256": "6c14e24214820ff8995db2a252ab0de272671f326c78729d3b6a53d20174b18e"
+  }
+ ]
+}
