@@ -22,9 +22,16 @@ stock firmware they do not. The board lane's records, with the result lines and 
 2. regs.S passes on silicon: 29 registers each still hold a reference of A's lifetime after two 40M-iteration
    timer-tick spins, a getpid call, a page fault from U and the test hook's call. Its check can fire: the x23 strip
    reads 23.
-3. The keep-tags firmware is necessary for it. The same kernel and initramfs under the stock firmware fault with
-   cause 24 at the first capability use after the spin. That the tag was lost at an M trap is the mechanism the
-   amendment names, consistent with the fault site. It is not itself observed.
+3. Keep-tags is needed for regs.S on 904cd9c6b. Under the flag-off firmware, the same payload faulted: byte-identical
+   from offset 0x200000, so the kernel and initramfs are the same, and the 82,425 differing bytes all lie in the
+   firmware region. a1 lost its tag (tval = its cursor 0x3f8b9eb000, non-zero: ex_stage.sv:555-563 puts the rs1 cursor
+   in tval) at the first capability use after the timer spin. The stock arm is N=1 boot (two programs); keep-tags is
+   N=3 boots (boots 2 and 3 here, boot 6 on 88db40027). Which M trap stripped the tag is inferred.
+   The firmware also changes MEDELEG, but delegation decides who handles a cause; it cannot untag a register with its
+   cursor intact, which only the stock save path predicts. (Correction 2026-11-25, after an adversarial audit: this
+   item first read "is necessary for it", without the counts.)
+   On disk, `linux-6.1/arch/riscv/boot/Image` has since been relinked for later images, so SHA256SUMS.boot34's Image
+   line no longer matches the file. The two payloads still verify.
 
 **Retraction** (Amendment 2, 90f2f5bc5e83): the twin's EPERM was not "a kernel or test issue". The twin's initramfs
 had been repacked as uid 1000, which made the setuid busybox run /init's shell with euid 1000. The twin's own `id`

@@ -11,11 +11,11 @@ the very end.
 |---|---|---|
 | B5b-2, the trap route on the Sublet format, 904cd9c6b | CONFIRMED N=2, bare kits | b5b2 plan, dev |
 | Linux on B5b-2 with the keep-tags firmware | boots; regs.S 0 (strip control 23); the stock firmware faults with 24 | `tests/rtl-smoke/b5b2-linux-2026-11-25/` (634fd5531e99) |
-| Interruptible CREVOKE 4(b), plus the store-queue drain and the CAP_WB guard | seal 88db40027, kit 17/17, stop 1,130 cycles; N=1 | d139d076f84e |
+| Interruptible CREVOKE 4(b), plus the store-queue drain and the CAP_WB guard | seal 88db40027, 16 arms plus the control as predicted (8 discriminating), stop 1,130 cycles; N=1 | d139d076f84e |
 | One-operand applications on B5b-2 | five, with stock's answers | nested-workloads ba26257f256a |
-| SPEC test on B5b-2 | gcc passes; x264 and imagick fault 24 (the untagged-CINCOFFSET rule, gated on vctx in the RTL, unconditional in the reference); mcf wedges | `tests/rtl-smoke/b5b2-spectest-2026-11-25/` (runtime/b5b2-linux) |
+| SPEC test on B5b-2 | gcc passes; x264 and imagick fault 24 with tval 0 (imagick a NULL increment; x264 consistent with one; the untagged-CINCOFFSET rule is the explanation that 28fcbb646 tests); mcf wedges | `tests/rtl-smoke/b5b2-spectest-2026-11-25/` (runtime/b5b2-linux) |
 | The FLU ungate (reference-exact untagged CINCOFFSET, CINCOFFSETIMM, SCC) | in the combined build 28fcbb646, not yet sealed | land/rtl-crevoke4b |
-| The mcf wedge | open: an LDC at the LSU head, four committed stores without a D$ grant, at least 1M cycles; distinct from M-16 on sw=221 | the 4(b) plan; board/meas-pw 57c5f32e3880 |
+| The mcf wedge | open: an LDC at the LSU head, four committed stores without a D$ grant, at least 1M cycles; M-16's LSU-head signature (sw=219/220), a different store port (sw=221) | the 4(b) plan; board/meas-pw 57c5f32e3880 |
 
 ## Before the final bitstream
 

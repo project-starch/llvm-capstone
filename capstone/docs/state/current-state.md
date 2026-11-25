@@ -9,19 +9,24 @@ The submitted paper measured P1 (d83d3a633). Line B, Section 5 as written, is no
 - **Linux boots on it** with the integer-M firmware (caplifive-opensbi `trap-route-keep-tags` eb85e21c: STC/LDC of the
   registers across M traps, causes 24-30 delegated) and the collaborator's trap-route kernel.
   - The trap-route test reads regs 0, with its strip control 23.
-  - With the stock firmware the same image faults with cause 24: the firmware is necessary.
+  - Under the flag-off firmware the same payload faults with cause 24, a1's tag lost with its cursor intact. Keep-tags
+    is needed for regs.S: stock N=1 boot, keep-tags N=3 boots on two bitstreams.
   - Kit: `tests/rtl-smoke/b5b2-linux-2026-11-25/`, dev 634fd5531e99.
-- **Interruptible CREVOKE (4(b)) on silicon**, seal 88db40027: kit 17/17 as pre-registered, a stop latency of 1,130
-  cycles (dev d139d076f84e). It also carries the committed-store-queue drain and the CAP_WB guard.
+- **Interruptible CREVOKE (4(b)) on silicon**, seal 88db40027: 16 arms plus the control as pre-registered (8 of them
+  discriminate the two bitstreams), a resumed-chunk stop latency of 1,130 cycles, N=1 (dev d139d076f84e). It also carries the committed-store-queue drain and the CAP_WB guard.
 - **The five one-operand applications** (SQLite, mruby, gcc, Perl makerand, tshark) ran on 904cd9c6b with stock's
-  answers. The M-16 stress form ran 1.17e8 protected allocations without a stop (bound < 2.6e-8 per allocation,
-  confounded with the wmem revision). Records: nested-workloads ba26257f256a, 5d902b54a271.
+  answers. The M-16 stress form ran 1.17e8 protected allocations without a stop (one boot; bound < 2.6e-8 per
+  fast allocation; hardware not separated from the one-operand wmem revision). Records: nested-workloads ba26257f256a, 5d902b54a271.
 - **SPEC test on Line B** (images: compiler's B5T/B5TL0/B5TL1 arms, dev 937208e0991f, ILLEGAL 0):
   - gcc passes;
-  - x264 and imagick fault with cause 24 in all three arms: the untagged-CINCOFFSET rule, which 904cd9c6b applies only
-    under vctx while the reference applies it always. The fix is the FLU ungate, in the combined build 28fcbb646;
+  - x264 and imagick fault with cause 24 in all three arms, tval 0. imagick's is a NULL increment by control flow, and
+    its twin passes. x264's is consistent with one (tval 0, three arms), but its source line and a completed twin run
+    are unverified. The rule that would explain both is the untagged-CINCOFFSET rule, which 904cd9c6b applies only under
+    vctx and the reference always. Its FLU ungate is in the combined build 28fcbb646, whose run on silicon is the
+    confirmation;
   - mcf went silent after about 46 min (boot 5): a wedge with an LDC at the LSU head and four stores queued without a
-    D$ grant, mechanism open. 28fcbb646 carries observation apertures for it.
+    D$ grant, mechanism open. It shares M-16's LSU-head signature (sw=219, sw=220) and differs
+    in the store port (sw=221 0xf8 against 0x02), across bitstreams; whether it is M-16's mechanism is open. 28fcbb646 carries observation apertures for it.
 - **C5** (the redundant-bounds flags as every virtual SDK's default) is on dev (e12fee7a561b), after the harness fix
   ba66310faf14.
 
