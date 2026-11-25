@@ -7745,3 +7745,66 @@ are compared directly, with that caveat.
 - The workload differs from P1's.
 - The exposure is an upper bound from oneop, not this route's count.
 - The apertures on B5b-2 are partly constant.
+
+## Note: B5T-g4's perl cause-28 is perl's own write past argv[0] (2026-11-25, CPU only)
+
+**The event.** B5T-g4 ran on board 3 (`904cd9c6b`). Inside SPEC's test.pl harness, one `.perl-native` child faulted
+(`b5b2linux/b3chain2-20261125T0716-B5T-g4/uart.txt`, the board lane's tree). The child is a copy of
+`perlbench_r_base` `38ce666f…`, and `perf/cclever/arms/B5T/exes/perlbench_r.full` (`67a24421…`) strips to it. The
+fault line:
+`sublet: fault cause=28 pc=0x3ff7c01480 address=0x3ff7bfff78 pid=246 ra=0x3ff7c342a6 code=0x3ff7c00000-0x3ff7e50000`.
+
+**Where it stops.**
+- **pc** vaddr 0x11480 is `memset`+0x64, the third `sd` of the 32-byte loop. The stores at a3 = `…ff68` and +8
+  passed, and +0x10 = `…ff78` faulted. So the capability ends in [`…ff78`, `…ff7f`].
+- **ra** vaddr 0x442a6 is in `Perl_magic_set`, at its `jal memset` with a1 = 0x20 and a2 = PL_origalen − len − 1.
+  That is SPEC's `mg.c:3170`, `case '0'`:
+  `memset(PL_origargv[0] + len + 1, ' ', PL_origalen - len - 1)`.
+- **Why the padding goes out of bounds.**
+  - `perl.c:1516-1602` sets PL_origalen to the whole contiguous argv[] + environ[] string area.
+  - On this route, argv[0]'s capability covers only its own string. That string is `/tmp/nt/sr/.perl-native`,
+    24 bytes. The store offsets put its start in (`…ff5b`, `…ff63`], so its end lands at the bound.
+  - The address sits 0x88 below the code base because the initial stack's string area lies just under the image.
+- **Neither deep recursion nor a small stack is involved.**
+
+**Which test: `t/op/leaky-magic.t`**, by two independent lines of evidence.
+- **Ordinal.** pid 246 is the 130th `.perl-native` of test.pl's command in the capture.
+  - The stage's test.pl command was replayed on the host. It ran under user-mode qemu-riscv64 8.2.2, built from the
+    release tarball (`847346c1…`), with the stage's own `natperl` (`5737866a…`) as the harness and as every child.
+  - `$^X` is a logging wrapper that re-enters through `qemu -0`, so grandchildren are logged too.
+  - Invocation 130 is `-I.. -MTestInit op/leaky-magic.t`.
+- **Mechanism.** In the stage's `in/` tree, a python search finds one write to `$0` that the harness runs:
+  leaky-magic.t lines 71-75 do `local $$_ = 'thew'` for each name in `qw< : ? ! - | ^ ~ = % . \ / ; 0 >`.
+  - The search's other hits do not write `$0` when the harness runs:
+    - `TestInit.pm:30`, `$0 =~ s/\.dp$//`, matches nothing here, and a failed `s///` sets no magic;
+    - `TestInit.pm:65` runs only from the top level, which the harness is not;
+    - `t/japh/abigail.t` runs only under torture.
+  - For the name `0`, that is a symbolic `local $0 = "thew"`.
+  - The search's patterns were checked against this line and against six forms of a direct write.
+- **Unexplained:** the replay made 317 invocations in all, while the board had made 372 when `/init` killed the stage
+  at 3,600 s. So after some point the board spawned children the native run did not. The ordinal match rests on the
+  two sequences agreeing up to 130. The mechanism evidence does not.
+
+**Native and twin.**
+- **Native:** in the replay, every test passes ("All tests successful", 208 s), op/leaky-magic.t included, and
+  `local $0 = "thew"` runs.
+- **Twin (B5T, the trap kernel):** queued behind this lane's corpus twin. The stage runs B5T's image against natperl, on
+  `-e 'local $0="thew"'` and on leaky-magic.t, with the board's default boot arguments. It is predicted to fault at the
+  same memset store; that is a prediction, not yet a reading.
+
+**Reading (the runtime lane's ruling).**
+- This is a spatial check catching perl's deliberate write past argv[0]'s string. C does not give argv[0] the
+  argv + environ block, so it is the protection working as designed, not a defect of the route.
+- Nothing is fixed. A perl port patch would change the workload. Widening argv[0]'s capability over the block is a
+  loader semantics change, and it would weaken exactly the check that fired.
+
+**Reach.** Does any perlbench train input write `$0`? None does. The python search covered all 941 files of
+`data/train/input` and `data/all/input`: diffmail, perfect, scrabbl, splitmail and suns, with `lib/`.
+- It found no direct write, list write, symbolic-name write, `local` of `$0` or `PROGRAM_NAME`, and each of those
+  patterns was checked against a positive control.
+- Its hits are comments, a `Config.pm` value and mail text in `lib/spam.pl`.
+- The symbolic dereference hits are reference variables (`$$data`, `$$abr`, …), not the name `0`.
+- So the fault cannot reach a measured train row. test.pl is not measured.
+
+**Files** (`<hdd>/capstone/nested/b5b2/perlfault/`): `run-native.sh`, `children.log` (the 317 invocations),
+`sr/test.out`, and the twin overlay `ovl/`.
