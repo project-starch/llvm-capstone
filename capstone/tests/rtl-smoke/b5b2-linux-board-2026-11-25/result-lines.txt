@@ -1,0 +1,14 @@
+capture: 141 lines, 7952 chars
+line 2: OpenSBI v1.3
+P1 AS PREDICTED: Capstone keep-tags line at line 12
+P2 AS PREDICTED: Boot HART MEDELEG = 0x000000007f00b109
+  Boot HART MIDELEG         : 0x0000000000000222
+  Boot HART ISA Extensions  : none
+  Platform Name             : ARIANE RISC-V
+line 59: Linux banner present
+P3 AS PREDICTED: Run /init at line 140; sublet line before it; captag line before it
+  sublet: 63-bit Sublet format, exact bounds 0
+  captag: bulk=0 (requires firmware S-mode CBZE permission)
+P4 NO READING: no TRAPTEST line at all; the kernel printed 'Warning: unable to open an initial console' at line 138, so /init ran with no stdout
+
+B5B2-LINUX P1=ok P2=ok P3=ok P4=NO-READING
