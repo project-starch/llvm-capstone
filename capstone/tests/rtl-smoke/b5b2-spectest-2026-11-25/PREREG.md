@@ -240,3 +240,21 @@ Line B. So:
 - a cause-25 fault at an LDC in mcf on a5c45a46d supports R-80 + R-77 as the pair;
 - a completion is consistent with either;
 - a silent wedge refutes R-80.
+
+## Amendment 9 (2026-11-25, before b42c8c644 is sealed): the final candidate's session, restated
+
+**Bitstream.** capstone-ariane b42c8c644 (core 7861abcfa) = a5c45a46d + the R-77 PRE-timeout fix: a probe that the
+lifetime unit has not yet accepted waits, and only POST (after acceptance) denies. In simulation (rtl, arms
+(b)/(b0)/(c)) the fix removes the false 25 on a live object behind a long walk; the 57 tests are identical in
+values and cycles to a5c45a46d. This replaces a5c45a46d as the FINAL candidate.
+
+**Sessions:**
+- a5c45a46d gets a short session (kits, then ldcexc2 last on board 3) as R-80's silicon evidence. Its SPEC 12 is
+  withdrawn from Amendment 7.
+- The full SPEC session of Amendment 7 runs on b42c8c644 instead (board 3: kits, Linux boot 3, the SPEC 12,
+  ldcexc2 last). The matched pair runs on board 2: 28fcbb646 against b42c8c644, the g2 three and B5T-g1b.
+
+**Predictions:** as Amendment 7, with Amendment 8's mcf classifier. One addition from the PRE fix: no stage on
+b42c8c644 shows a cause-25 fault at an LDC on a live object. compiler's CREVOKE scan count predicts every run at 0,
+so the PRE path is not expected to be reached by any SPEC row. A 25 at an LDC on b42c8c644 is therefore a finding
+against the fix, or a new mechanism, and is mapped and reported, not classified.
