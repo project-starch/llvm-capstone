@@ -119,3 +119,25 @@ seal. Stage order lbm, nab, xz, mcf.
 vctx. A cause-24 fault in nab is classified as that rule, not a new finding.
 
 This is not the drain's cost pair: that pair is board-constant on board 3 after the next reflash.
+
+## Amendment 4 (2026-11-25): the diagnostic seal of 28fcbb646
+
+**Bitstream.** capstone-ariane 28fcbb646 = 88db40027 + the FLU ungate (untagged CINCOFFSET, CINCOFFSETIMM and SCC as
+the reference does them) + the wedge apertures. Sealed by the board lane as a DIAGNOSTIC, not the final bitstream.
+It is flashed on the board that frees first, after rtl's wapflu kit.
+
+**Images,** all byte-identical to their earlier boots:
+- B5T-g2 (`d837e9fa…`), B5TL0-g2 (`ad19c4e7…`) and B5TL1-g2 (`3891f8e1…`), from SHA256SUMS.chain;
+- B5T-g1r (`452af6fc…`), from SHA256SUMS.chain2.
+
+**Predictions,** written before the seal exists:
+
+| Stage | 904cd9c6b / 88db40027 | Predicted on 28fcbb646 | Why |
+|---|---|---|---|
+| x264 and imagick, all three arms | cause 24, tval 0, at CINCOFFSET / CINCOFFSETIMM | rc 0 and specdiff pass | the FLU ungate; the twin applies the rule and passes imagick |
+| lbm and xz (B5T-g1r) | not yet read on silicon | rc 0 and specdiff pass | QEMU smoke (lbm); the untagged count reads 0 for lbm |
+| nab (B5T-g1r) | not yet read on silicon | rc 0 and specdiff pass | nab's free(v + nl) with v NULL is the rule's own example |
+| mcf (B5T-g1r, last) | silent wedge (boot 5) | a wedge whose new apertures read rtl's simulated S-35 pattern, pre-registered by rtl at its own commit before this seal boots; or PASS; or a named fault | S-35, the faulting LDC that never pops (RTL-simulated); mcf's untagged count is 0 (compiler's twin), so the FLU ungate does not touch mcf |
+
+**Classification.** If x264 or imagick still faults with 24 at the same pc, the shape-match classification is
+REFUTED. If mcf wedges with any other aperture pattern, its instance is not S-35's shape.
