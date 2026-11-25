@@ -352,3 +352,40 @@ The crevoke4b-bare-2026-11-25 kit (PREREG 77f0e191b97f) ran in the semantics own
   - No sbdrain exposure in the five shapes.
 
 Both runs were graded twice: by the board lane's grader, and here from the raw captures with an independent script whose positive control fires. The kit README has the full readings. Board 2 stays on 88db40027.
+
+## S-35's mechanism in simulation, and the pattern pre-registered for the diagnostic seal 28fcbb646 (2026-11-25, before that seal boots)
+
+**Reproduced.** b5b2-ldcexc2 (capstone-ariane b5b2-ldcfix, +SUP_AP_SWEEP, memory delay 12; predictions in its header before the run):
+- **The setup:** protected U, a backlog of 16 + 1 stores through a capability, then at once an LDC through an untagged base (24 from the LSU's capability check).
+- **The arm:** it runs to the cycle limit; WEDGE-WBUF reads "store refused: full=1, lookups done, no memory write pending".
+- **The control** (the same LDC through the valid base): completes, 0x0 with 0 traps, in 33,579 cycles.
+- **The misaligned variant** (b5b2-ldcexc, integer M) completes with cause 4 and one trap. That exception is registered once on the MMU path and the LDC stops re-presenting.
+
+**The mechanism, read in the trace:**
+1. The faulting LDC is not popped (load_unit SEND_TAG_LDC: kill, then IDLE), so it is re-presented every cycle as a capability-width read on load port 1 (RQDBG rd_req 010 held; 195/229 cycling IDLE <-> SEND_TAG_LDC).
+2. Each such read collides with the write buffer's cache update (wt_dcache_mem bank_collision's rd_cap term), so the update is never acked (192: return pending 1, update req 1, update ack 0), and no entry evicts.
+3. The buffer stays full (223: full 1, lookups done), the store port is refused, and the commit queue fills.
+4. The older store at the commit head waits for room (commit_stage :627-630), so the LDC never becomes the head and its exception is never taken. No timeout applies.
+
+**The silicon question.** Whether mcf's wedge (S-35) IS this mechanism is the diagnostic seal's question: B5T mcf re-run on 28fcbb646, with the snapshot tool reading the new bytes.
+
+**Pre-registered pattern** (stretched reading: a 0 was 0 for 2^20 cycles; a cycling state reads the OR of its codes; IDLE 0 | SEND_TAG_LDC 9 = 9):
+
+| switch | layout at 28fcbb646 | THIS mechanism reads | decisive |
+|---|---|---|---|
+| 192 | {wbuf return pending, cache-update req, its ack, write in flight, memory write req, its ack, ni_conflict, commit slot 0 valid} | 0xd1: bit 7 = 1, bit 6 = 1, bit 5 = 0 (the ack never), bit 4 = 1, bits 3-1 = 0, bit 0 = 1 | bit 6 = 1 with bit 5 = 0 |
+| 223 | {CAPSTONE port (2) controller state[3:0], wbuf full, S-07 gran_hazard, lookup req, its ack} | 0x08 (port 2 idle, full, lookups done) | full 1, lookup req 0 |
+| 209 | {load port (1) controller state[3:0], PTW port (0) state[3:0]} | 0x10 (READ \| IDLE = 1; PTW idle) | high nibble 1 |
+| 229 | {load_state[3:0], rd_req port 2, port 1, port 0, 0} | 0x94 (load state 9; port 1 requesting) | rq1 = 1, state nibble 9 |
+| 195 | {ldbuf flushed[1:0], ldbuf valid[1:0], load unit state[3:0]} | state nibble 9; the upper nibble recorded | state 9 |
+| 219 / 220 / 221 | as on 904cd9c6b | the LDC's op (0xd7) / 0x8c / 0xf8, as S-35 read them | |
+| 225 / 222 | as on 904cd9c6b | 0x80 / 0x00 | |
+
+**Grading:**
+- **AS PREDICTED:** 192 bits 6/5 = 1/0, 223 = 0x08, 209's high nibble = 1, and 229's rq1 = 1.
+- **A DIFFERENT SHAPE:** any of those four differs. The table's other candidates then name it.
+- **No wedge:** mcf completes. Then the trigger did not occur on that run, which is no evidence either way. If mcf passes, the FLU ungate may have removed the upstream fault, as the semantics owner predicts.
+
+**Read order if a snapshot gets cut short:** 192, 223, 209, 229, 195, then 221, 220, 219, 225, 222.
+
+**Prediction for the fixed seal** (the semantics owner's): mcf completes, or faults with a named cause and pc. A silent wedge there refutes the fix.
