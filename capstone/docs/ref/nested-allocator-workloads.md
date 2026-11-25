@@ -7716,7 +7716,12 @@ all three modes.
 - The apertures are read once, after the budget.
 - A return is a bound, not an absence.
 
-### Result: red1, BLOCK_FAST alone returns twice and the full form stops at P1's first stop point again; H1 refuted (board 1, 2026-11-25 22:34 to 2026-11-26 03:39, the stop near 23:37 on 11-25, read against 71eb7ac97286)
+### Result: red1, BLOCK_FAST alone returns twice and the full form stops in P1's first stop's window again; H1 refuted (board 1, 2026-11-25 22:34 to 2026-11-26 03:39, the stop near 01:35 on 11-26, read against 71eb7ac97286)
+
+**Corrected 2026-11-26** (an audit of the first version, e47c05659fd5):
+- the stop time was given as 23:37 on 11-25. That figure was the bake's start plus the watchdog's seconds, and the watchdog's clock starts at the upload (00:32).
+- "20 of 21 aperture rows equal" overstated the evidence. 15 of those rows read the same on all seven M-16 stops, so the state evidence is the window plus the serving index.
+- The boot is UNGATED (PREFLIGHT=0), as s1's was.
 
 Detail, lines and apertures: `tests/fpga-repros/M16-wmem-fast-alloc-stops-at-cderive/` ("On P1 again",
 `results/p1-board1-red1.txt`, `results/twin-red1.txt`).
@@ -7731,12 +7736,15 @@ Detail, lines and apertures: `tests/fpga-repros/M16-wmem-fast-alloc-stops-at-cde
   - **prediction 2 failed:** r1 returned.
 - The outcome matched the registered branch "r1 and r2 return and r3 stops".
 - **Beyond the registered branches:** r3 stopped after exactly the last line of P1's first stop (2026-11-25, s1 of
-  `tsapp-stress.c`), in the same 10,000-packet window. Of the 21 aperture rows, 20 are equal, including the three
-  rows labelled rev_node_* (`0x00001346400007fa`, `0x0071`, serving index `0x1381`). Those rows are not traced to a
-  driver. The serving index differed between every pair of tshark non-returns. The commit pc differs, and in each boot
-  it is that image's own CDERIVE.
+  `tsapp-stress.c`), in the same 10,000-packet window. The serving index `0x1381` is the same in both, and it differed
+  on every other M-16 stop. Of the other aperture rows, 15 read the same on all seven M-16 stops, and two follow the
+  stage's domain set. The rev-node rows are traced at `d83d3a633` in the folder. The commit pc differs, and in each
+  boot it is that image's own CDERIVE.
+- Both stress stops came about 360 s after their process started, so for mode a, position and elapsed time are
+  confounded.
 - **H1 is refuted.** Under H1, r1 returns with probability 0.0020 and r2 with 0.044. A stop of r3 in P1's window has
-  probability 0.035, computed after the boot. The hypothesis this leaves (H2, at N = 2) is that on P1 the stop is tied
+  probability 0.035, the maximum over every rate. Post hoc, "any window" gives 0.047 to 0.097. All of these were
+  computed after the boot. The hypothesis this leaves (H2, at N = 2) is that on P1 the stop is tied
   to a point in the full form's sequence, between packets 100,000 and 110,000.
 - r1 and r2 never exercise the file-scope BLOCK allocator or the free path (block = free = 0). So their returns say
   that BLOCK_FAST alone does not reach that state. They give no rate, and the registered "the file scope's

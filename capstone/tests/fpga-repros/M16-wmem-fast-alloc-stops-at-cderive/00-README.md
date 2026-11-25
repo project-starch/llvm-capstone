@@ -6,9 +6,9 @@ intermittent on bitstreams F and P1, and returns on the QEMU twin. This folder h
 instruction, after about 2·10^7 allocations: about 11 minutes on P1, against 40-68 minutes per sample with tshark.
 On bitstream B5b-2 (`…-r75d-b5b2n_904cd9c6b`), with tshark's one-operand allocator revision, it ran 1.17·10^8
 allocations in one boot on 2026-11-25 without stopping ("On B5b-2" below).
-On P1 it stopped a second time, in the reduction boot of 2026-11-25/26 (the stop near 23:37 on 11-25, +0800). The stop
-fell between the same two heartbeats, and every aperture read the same, apart from the pc, which is each image's own
-CDERIVE. In the same boot, BLOCK_FAST alone ran 1.9·10^8 allocations without stopping ("On P1 again" below). The
+On P1 it stopped a second time, in the reduction boot of 2026-11-25/26 (the stop near 01:35 on 11-26, +0800). The stop
+fell between the same two heartbeats, and the revocation unit's serving index read the same value, which differed on
+every other M-16 stop. In the same boot, BLOCK_FAST alone ran 1.9·10^8 allocations without stopping ("On P1 again" below). The
 hypothesis this leaves, at N = 2, is that on P1 the stop is tied to a point in the full form's allocation sequence
 rather than to a constant per-allocation rate.
 
@@ -92,11 +92,12 @@ reader is `src/read-stress.py` (`0384cfba…`); usage `read-stress.py <board.txt
   the driver is `assign lsu_head_debug_o = {lsu_ctrl.valid, lsu_ready_o, 2'b00, 4'(lsu_ctrl.fu)}`
   (`core/load_store_unit.sv:341` at `715bdd1fe`; `:412` at `904cd9c6b`, per the RTL lane). So `0x8c` is a valid op of
   unit 12 (CAPSTONE_DYN) at the LSU head with the LSU not ready. sw=219 `0xd7` = 215 is that op's `fu_op`; the RTL
-  lane decodes it as LDC from `ariane_pkg`'s enum with `CAPSTONE_SUBLET_FMT` defined (not re-derived here).
+  lane decodes it as LDC from P1's own commit `d83d3a633`'s `ariane_pkg` fu_op enum, which has no conditional members
+  there (not re-derived here).
 - The other apertures are driven at `715bdd1fe`: 193 `store_buffer.sv:101`, 194 `store_unit.sv:118`, 221
   `store_unit.sv:414`, 219 `load_store_unit.sv:342`, 222 the WT adapter's `tag_debug_o` (`cva6.sv:2378`).
-- **Not traced to a driver:** sw=224-228, the trap log (255), and the multi-byte rows (commit pc, mepc, tval, rev-node
-  words). At `715bdd1fe` each of their signals is connected to a submodule output port in `core/cva6.sv`, but they
+- **Not traced to a driver:** sw=224-228, the trap log (255), and the multi-byte rows (commit pc, mepc, tval). The
+  rev-node words are traced at `d83d3a633`, under "On P1 again". At `715bdd1fe` each of their signals is connected to a submodule output port in `core/cva6.sv`, but they
   are not traced to an assignment inside that module. sw=195's net was connected the same way and is dead, so read
   these rows' labels as unverified until they are. sw=227's bit 2 is `dom_switch_data_req.write_en`, the domain
   switcher's request, not the LSU's (`core/cva6.sv` 224-bank case `5'b00011`).
@@ -108,7 +109,7 @@ reader is `src/read-stress.py` (`0384cfba…`); usage `read-stress.py <board.txt
 - sw=227's differing bit is bit 2, `dom_switch_data_req.write_en` (see above).
 - sw=228 is the domain-switch index; the stress boot's domain set is not tshark's.
 - The serving index differed between every pair of tshark non-returns. The two stress-form non-returns on P1 (s1 and
-  red1's r3, both on 2026-11-25) read the same one, `0x1381` (see "On P1 again").
+  red1's r3, on 2026-11-25 and 2026-11-26) read the same one, `0x1381` (see "On P1 again").
 - **Caution on the pc:** it is scoreboard slot 0, which is exact only shortly after a flush. A hot allocator would also
   leave residue there. The pc names the site the allocation loop occupies; it does not prove the stop is that
   instruction.
@@ -157,10 +158,13 @@ revision.
   after the boot.
 - So the reductions below need a bitstream on which the stop has been seen. As of 2026-11-25 that is P1.
 
-## On P1 again: reduction boot red1, the full form stops at the same point (board 1, 2026-11-25/26)
+## On P1 again: reduction boot red1, the full form stops in the same window (board 1, 2026-11-25/26)
 
 **Run.** Pre-registration: nested-workloads `71eb7ac97286`.
-- One boot on P1 (`…-tagoverlap6c-pagedtbl_d83d3a633`, read back by name), board 1, 22:34-03:39 (+0800).
+- One boot on P1 (`…-tagoverlap6c-pagedtbl_d83d3a633`, read back by name), board 1. The chain started at 22:34 with
+  the bake; the board lease opened at 00:30 on 11-26 and the run ended at 03:39 (+0800).
+- **The boot is UNGATED:** its driver.log opens with `PREFLIGHT SKIPPED (PREFLIGHT=0)`. So did s1's boot on
+  2026-11-25. Neither boot's verdict passed the board preflight's C-gates.
 - The image is `src/tsapp-stress-red.c`, protected (Sublet). Four commands run in order, each a new process, with K 212
   and seed 1:
   - r0 = mode s, 100 packets;
@@ -179,21 +183,47 @@ revision.
 - **r3 did not return.** Its 11 STRESS lines equal the twin's. The last is
   `pkt=100000 fast=19432859 block=1767141 free=884810 sum=8b64d9b857f7aee5`. The twin's next is `pkt=110000
   fast=21375862`.
-- After that line the console stayed silent until the limit. By the watchdog's log the last UART line came about
-  3,781 s into the run, near 23:37 on 2026-11-25 (+0800).
+- After that line the console stayed silent until the limit. The last UART line came about 3,781 s on the
+  watchdog's clock, which starts at the upload (00:32:18). That puts it near 01:35 on 2026-11-26 (+0800), about 360 s
+  after r3 started.
 - The protected fast allocations completed in this boot number 210,254,059.
 
-**The stop is P1's first one, again.** On 2026-11-25, `tsapp-stress.c`'s s1 (`results/p1-board1-stress1.txt`) stopped
-after the same last line, checksum included: the same 10,000-packet window. Of the 21 aperture rows, 20 read the same
-in both boots, including:
-- trap log `0x89`;
-- sw=219 `0xd7` and sw=220 `0x8c`;
-- sw=221 `0x02` and sw=225 `0x92`;
-- sw=228 `0xb8`;
-- mepc `0xffffffff80007376` and tval `0x73`;
-- the three rows labelled rev_node_* (debug `0x00001346400007fa`, head `0x0071`, serving index `0x1381`). These rows
-  are not traced to a driver ("What it read"), so their labels are unverified. Their equality is the evidence here:
-  the serving index differed between every pair of tshark non-returns.
+**The stop falls in P1's first stop's window again.** On 2026-11-25, `tsapp-stress.c`'s s1
+(`results/p1-board1-stress1.txt`) stopped after the same last line, checksum included: the same 10,000-packet window,
+about 1.94·10^6 fast allocations wide.
+
+Of the 21 aperture rows, 20 read the same in both boots. **Most of that equality carries no information.** A census of
+the rows over the seven M-16 stops that have a block (red1, s1, tsu-r1, tsu-r2, tsu-p1, t-p1, t-p2) gives:
+- 15 rows read the same on all seven: sw=255, 224, 226, 229, 192-195, 219, 220, 221, 222, mepc, tval and rev_node_head.
+  So M-16's signature is in them, but no stop's position is.
+- sw=227 and sw=228 follow the stage's domain set: `0x07`/`0x9f` on every tshark stop, `0x03`/`0xb8` on both stress
+  stops.
+- sw=225 takes one of two values.
+- rev_node_debug_ex repeats across unrelated boots: tsu-r1 and t-p1 both read `0x0000067f40001131`, on different
+  bitstreams nine days apart.
+- **The serving index `0x1381` is the one row that singles out the stress stops.** It differed on every other M-16
+  stop.
+
+So the evidence that this is the same state is the heartbeat window plus that one value.
+
+**The rev-node rows, traced at P1's own commit `d83d3a633`** (by the RTL lane, citations re-checked here with
+`git show d83d3a633:core/anvil_build/capstone_rev_node.anvil`):
+- rev_node_debug_ex is `debug_out = {node_in.next, 1'b0, node_in.valid, revoke_index}`. It is set only at :19, the first
+  step of the walk (REVOKE_NODE), for every node the walk reads.
+  - Decoded, it is revoke_index `0x7fa`, valid, next `0x1346`: the last node read by the last revoke, kill or retire
+    walk.
+  - It cannot say whether that step ended the walk.
+- rev_node_head is the physical bump pointer: reset to 3 at :840, moved only at :398. Allocations made inside a context
+  go to the virtual table instead. So `0x71` is boot-time setup, the same on every boot, and it says nothing about the
+  loop.
+- serving_idx has three kinds of writer:
+  - a revoke request, which writes its own index (:798);
+  - a kill, which writes the killed node's chain predecessor (:624, :653, :665, :676);
+  - a retire, which writes the node's predecessor (:773).
+  - So `0x1381` is either the start node of the last revoke or the predecessor of the last killed or retired node. The
+    aperture cannot tell which op wrote it.
+  - The two flag bits above the index are cut off before the aperture (the RTL lane: `ex_stage.sv:121`).
+- Not visible in any row: the unit's stage register (idle or mid-walk), kill_mode, and the virtual free list.
 
 The commit pc differs, and in each boot it is that image's own CDERIVE in `wmem_block_fast_sublet_alloc`: `0x3ff676c9ee`
 in `tsapp-stress.c`'s image and `0x3ff676ca68` here (the reader's check: True).
@@ -203,12 +233,18 @@ boot only s0 ran. Every command is a new process: the stage's `run.sh` unpacks t
 command.
 
 **What it says.**
-- **H1 is refuted.** H1 was a per-allocation hazard at P1's 4.9·10^-8, the same in every mode. Under it:
+- **H1 is refuted.** H1 was a per-allocation hazard at P1's 4.9·10^-8, the same in every mode. Modes s and f run the
+  same CDERIVE word at +0x45c of `wmem_block_fast_sublet_alloc` once per allocation, on the common tail. Under H1:
   - r1 returns with probability 0.0020, and r2 with 0.044;
-  - a stop of r3 falls in the same window as P1's first stop with probability 0.035. This was computed after the
-    boot.
+  - a stop of r3 falls in the same window as P1's first stop with probability 0.035. That is also the maximum over
+    every rate.
+  - Post hoc, "two stops land in the same 10,000-packet window, any window" has probability about 0.047 at 4.9·10^-8,
+    and 0.097 at 1·10^-7.
+  - All of these were computed after the boot.
 - **The stop looks tied to a point in the full form's sequence.** Two runs of the same sequence on P1 both stopped
-  between packets 100,000 and 110,000, and the same values were read in every aperture row but the pc.
+  between packets 100,000 and 110,000, with the same serving index.
+  - **Position and time are confounded.** By the watchdog's clock both runs stopped about 360 s after their process
+    started. r1 and r2 ran longer without stopping, so a pure time trigger is ruled out for those modes only.
   - This is a hypothesis at N = 2 (H2), not a finding. It predicts that a third run with seed 1 stops in the same
     window, and that a change to the sequence moves the stop or removes it.
 - **BLOCK_FAST alone does not reach that point, at a fixed size or with the size mix.** r1 and r2 do not exercise the
@@ -229,9 +265,9 @@ command.
   smaller live heap, and no I/O beyond the heartbeat. It holds the same function, the same pc offset and M-16's
   aperture signature.
 - ~~**Hazard.** One stop after about 2.0·10^7 allocations gives about 4.9·10^-8 per allocation. The 95 % interval from
-  this single draw is 1.2·10^-9 to 1.9·10^-7.~~ **Withdrawn 2026-11-26.** A constant per-allocation rate does not
-  describe the stress form on P1. Its second run stopped in the same 10,000-packet window, with the same aperture
-  values ("On P1 again"). The two tshark-band figures (4.7·10^-8 to 7.4·10^-7) are M-16's tshark samples, and they
+  this single draw is 1.2·10^-9 to 1.9·10^-7.~~ **Withdrawn 2026-11-26.** A constant per-allocation rate is
+  disfavoured for the stress form on P1: p ≈ 0.035 for P1's first-stop window, about 0.05-0.1 post hoc, N = 2. Its second
+  run stopped in the same 10,000-packet window, with the same serving index ("On P1 again"). The two tshark-band figures (4.7·10^-8 to 7.4·10^-7) are M-16's tshark samples, and they
   are not affected.
 - **Not shown:**
   - which instruction stops: see the caution on the pc;
