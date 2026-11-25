@@ -146,3 +146,20 @@ The runtime lane classified these as the untagged-CINCOFFSET rule, which is stil
 classification rests on these readings, on the compiler lane's reading of the paths, and on the QEMU twin passing
 imagick. It is pending confirmation: the prediction is that x264 and imagick pass in all three arms on the combined seal
 28fcbb646, which carries the ungate.
+
+**Later chain-2 images and B5T-g1r on board 2.**
+- **B5T-g4 (board 3, 904cd9c6b).** perlbench is NO READING: the stage watchdog killed it at 3,600 s. run0 returned
+  rc 0 in 289 s; run1, SPEC's test.pl harness, was still running at the kill.
+  - One test.pl subprocess, pid 246 (`.perl-native`, a copy of perlbench_r_base.native 38ce666fe711d65a), faulted with
+    cause 28 at 2,241.6 s: vaddr 0x11480 `sd a4, 0x10(a3)`, at an address 0x88 below the domain's code base. It is
+    recorded as a finding, attributed to nothing.
+  - Under the runtime lane's ruling, test.pl stays off the boards and the g4 images are rebuilt makerand-only
+    (Amendment 5).
+- **B5TL0-g4 was stopped during its load.** It has no reading.
+- **B5T-g1r on board 2 (88db40027).**
+  - lbm PASS.
+  - nab MISS, exactly the runtime lane's prediction: cause 24 at vaddr 0x1fc5c `cincoffset a0, a0, a1`.
+  - xz NO READING: commands 0-5 returned rc 0; the 3,600 s stage watchdog killed command 6.
+  - mcf NO READING: the watchdog killed it at 3,600 s while the kernel ran on (ticks to 8,225 s, no silence, no
+    snapshot).
+  - Amendment 6 then set per-stage bounds (xz 7,200 s, mcf 30,000 s). `board2/B5T-g1r-88db40027.result-lines.txt`.

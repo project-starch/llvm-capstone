@@ -1,0 +1,39 @@
+# chain 2 image B5T-g4 (board 3, 904cd9c6b)
+(193 echoed "TRAPTEST: dmesg" lines dropped: the loader's enter lines for the test.pl subprocesses; the fault line is kept below)
+
+## grade
+capture: 42824 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955524 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5T-500.perlbench_r NO READING: watchdog kill at 3,600 s
+  TRAPTEST: stage B5T-500.perlbench_r begin
+  TRAPTEST: watchdog killed sh /stages/B5T-500.perlbench_r/stage/run.sh after 3600s
+  TRAPTEST: stage B5T-500.perlbench_r rc=137
+
+B5B2-SPECCHAIN C=ok B5T-500.perlbench_r=NO READING done=yes
+
+## end lines
+okTRAPTEST: control smoke.dom rc=7
+TRAPTEST: stage B5T-500.perlbench_r begin
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=60.72 up1=349.68 sys=0,0,0 nbench=0  :: (specdiff tail omitted: it quotes local paths)
+TRAPTEST: watchdog killed sh /stages/B5T-500.perlbench_r/stage/run.sh after 3600s
+@@QSTEP-END B5T-500.perlbench_r rc=137
+TRAPTEST: stage B5T-500.perlbench_r rc=137
+
+## kernel fault lines
+sublet: fault cause=28 pc=0x3ff7c01480 address=0x3ff7bfff78 pid=246 comm=.perl-native ra=0x3ff7c342a6 fp=0x3ff7e60240 entry=0x3ff7c00000 code=0x3ff7c00000-0x3ff7e50000
+
+## mapfaults.py
+fault cause=28 pid=246 comm=.perl-native pc=0x3ff7c01480 ra=0x3ff7c342a6 address=0x3ff7bfff78 code 0x3ff7c00000-0x3ff7e50000
+  image 500.perlbench_r/stage/bin/native/perlbench_r_base.native 38ce666fe711d65a: pc vaddr 0x11480, ra vaddr 0x442a6
+    1146c: 33 07 f7 02  	<unknown>
+    11470: 63 62 06 03  	bltu	a2, a6, 0x11494 <.text+0x1494>
+    11474: 93 07 f0 01  	li	a5, 0x1f
+    11478: 23 b0 e6 00  	sd	a4, 0x0(a3)
+    1147c: 23 b4 e6 00  	sd	a4, 0x8(a3)
+  > 11480: 23 b8 e6 00  	sd	a4, 0x10(a3)
+    11484: 23 bc e6 00  	sd	a4, 0x18(a3)

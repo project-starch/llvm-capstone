@@ -1,0 +1,42 @@
+# boots 7 (keep-tags 870ca3f2) and 8 (stock 248c932a) (Amendment 4), board 2, resident 88db40027
+boot 7 (keep): 3 MTRIP lines [(1929.87, 5.0, 1287.47), (1932.33, 5.0, 1287.71), (1943.72, 5.0, 1288.09)]; keep-tags banner present; done True
+boot 8 (stock): 3 MTRIP lines [(1137.84, 5.0, 1260.01), (1136.99, 5.0, 1258.63), (1149.14, 5.0, 1259.53)]; keep-tags banner absent; done True
+statistic: the median of the three runs for the two comparisons, chosen by the board lane BEFORE the run (2026-11-25;
+  the PREREG names none); the every-run checks use all three values
+  raw keep (boot 7)   rdtime   [1929.87, 1932.33, 1943.72] median 1932.33
+  raw keep (boot 7)   rdcycle  [5.0, 5.0, 5.0] median 5.0
+  raw keep (boot 7)   getppid  [1287.47, 1287.71, 1288.09] median 1287.71
+  raw stock (boot 8)  rdtime   [1137.84, 1136.99, 1149.14] median 1137.84
+  raw stock (boot 8)  rdcycle  [5.0, 5.0, 5.0] median 5.0
+  raw stock (boot 8)  getppid  [1260.01, 1258.63, 1259.53] median 1259.53
+  MISS  rdcycle < 5 (every run)
+  PASS  getppid equal within 3 % (1287.71 vs 1259.53, +2.24 %)
+  PASS  rdtime > 100 (every run)
+  MISS  rdtime keep - stock in [60, 600] (1932.33 - 1137.84 = +794.49)
+
+MTRIP 2/4 as predicted
+
+## boot 7 lines
+Capstone: register tags kept across M traps, causes 24-30 delegated
+Boot HART ISA Extensions  : none
+TRAPTEST: up, kernel 6.1.0
+MTRIP rdtime 1929.87 rdcycle 5.00 getppid 1287.47 cycles/op (N=20000 best of 5) sink=1
+TRAPTEST: mtrip 1 rc=0
+MTRIP rdtime 1932.33 rdcycle 5.00 getppid 1287.71 cycles/op (N=20000 best of 5) sink=1
+TRAPTEST: mtrip 2 rc=0
+MTRIP rdtime 1943.72 rdcycle 5.00 getppid 1288.09 cycles/op (N=20000 best of 5) sink=1
+TRAPTEST: mtrip 3 rc=0
+TRAPTEST: done
+MTRIP-ONE 3 lines, done True
+
+## boot 8 lines
+Boot HART ISA Extensions  : none
+TRAPTEST: up, kernel 6.1.0
+MTRIP rdtime 1137.84 rdcycle 5.00 getppid 1260.01 cycles/op (N=20000 best of 5) sink=0
+TRAPTEST: mtrip 1 rc=0
+MTRIP rdtime 1136.99 rdcycle 5.00 getppid 1258.63 cycles/op (N=20000 best of 5) sink=0
+TRAPTEST: mtrip 2 rc=0
+MTRIP rdtime 1149.14 rdcycle 5.00 getppid 1259.53 cycles/op (N=20000 best of 5) sink=0
+TRAPTEST: mtrip 3 rc=0
+TRAPTEST: done
+MTRIP-ONE 3 lines, done True

@@ -14,7 +14,9 @@ for m in re.finditer(r'sublet: fault cause=(\d+) pc=(0x[0-9a-f]+) address=(0x[0-
     seen.add(key)
     cause, pc, addr, pid, comm, ra, fp, entry, c0, c1 = m.groups()
     pc, ra, entry, c0, c1 = (int(x, 16) for x in (pc, ra, entry, c0, c1))
-    cands = [f for f in glob.glob(f'{ROOT}/*/stage/bin/native/*.native') if os.path.basename(f).startswith(comm.rstrip('.'))]
+    alias = {'.perl-native': 'perlbench_r_base.native'}   # run.sh copies the image under another name (perlbench's test.pl subprocesses)
+    want = alias.get(comm, comm.rstrip('.'))
+    cands = [f for f in glob.glob(f'{ROOT}/*/stage/bin/native/*.native') if os.path.basename(f).startswith(want)]
     print(f'fault cause={cause} pid={pid} comm={comm} pc={pc:#x} ra={ra:#x} address={addr} code {c0:#x}-{c1:#x}')
     if len(cands) != 1:
         print(f'  image: {len(cands)} candidates {[os.path.basename(c) for c in cands]}: NOT MAPPED'); continue

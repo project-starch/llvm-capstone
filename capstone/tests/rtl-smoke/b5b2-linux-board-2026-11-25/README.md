@@ -151,3 +151,17 @@ What the readings show:
 This is a reading of when and where it failed. That a1 lost its tag at an M-mode trap during the spin is the
 mechanism amendment 2 predicts, and the faulting instruction is consistent with it. The board did not observe the
 strip itself.
+
+## Boots 6, 7 and 8 (Amendments 3 and 4), board 2, resident 88db40027, no flash
+
+- **Boot 6** is fw3y 77de789fdd00, byte-identical to boot 3's image. It reads exactly as boot 3: P1-P4 AS PREDICTED;
+  regs 0, regs-strip23 23, enter 200. The matched pair (boot 3 on 904cd9c6b, boot 6 on 88db40027) is identical on the
+  trap-route test. `result-lines-boot6.txt`.
+- **Boots 7 and 8** are the mtrip pair: keep-tags 870ca3f2 and stock 248c932a, the same kernel and initramfs.
+  - Each boot printed three MTRIP lines and done, and the firmware identity checked: the keep-tags banner present on 7,
+    absent on 8.
+  - **2/4 as predicted.** getppid equal within ±3 % (+2.24 %); rdtime > 100 on every run.
+  - **MISS:** rdcycle reads exactly 5.00 on all six runs, against a prediction of < 5.
+  - **MISS:** median rdtime keep - stock = +794.49 cycles (1932.33 - 1137.84), against a band of [60, 600].
+  - The medians were chosen by the board lane before the run; the PREREG names no statistic.
+  - `result-lines-boot7-8.txt` holds all three raw values per op.
