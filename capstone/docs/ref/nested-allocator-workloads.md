@@ -6791,3 +6791,99 @@ over 33,562,951):
 - F−P6 is cross-boot: this boot's F against pair6's P6, each taken against its own boot's u. pairn's u reproduced pair6's
   to −0.051 %.
 - The prices come from pairn (one boot) and the twin's counts. Kernel + other is printed but not part of any prediction.
+
+### Result: F−U +25,600.5 M (+9.58 %), F−P6 +12,016.7 M; both just above their bands; 204.4 cycles per lifetime instruction (board 1, 2026-11-25 02:29-10:24, read against 3c0441a27b8e)
+
+**The boot.**
+- The chain `nested/p1pf/p1pf.*` (pid 2403759) found board 1 on another seal. It flashed P1 from its sealed bit: local
+  sha256 equal to the seal's, `FLASH END rc=0`, and the resident name read back as `…-pagedtbl_d83d3a633`. It booked
+  1492 and unbooked it at the end (HTTP 200). The board is left on P1.
+- The smoke passed all 9 steps. The watchdog sampled throughout (1,475 ALIVE/QUIET lines). The command line carries
+  `capstone_vm.node_flat_records=1048576`.
+- The stage still verifies against `pairf.SHA256SUMS` (rc 0). Its images decompress to the registered hashes: u
+  `c1744e87`, f `ce3a48e5`.
+- The chain's `SPEC rc=2` is the generic classifier, which does not read this stage's markers. It is not a verdict.
+- Transcript `…/out-nat-p1pf-perlbench-b1/pairf/board.txt` (sha256 `5a1597c46680ee7c…`). It was read by
+  `read-pairf.py` (`2906ef92…`) with pair6's transcript and SPEC's references, rc 0.
+- Board time: boot 02:31:34 to 10:24:02, 7 h 52 min, against about 7.5 h expected.
+
+**The checks.**
+- **Answers: met.** All four commands rc 0. Both arms' `makerand.out` (`539d02dc…`) and `test.out` (`b41ee90a…`) equal
+  SPEC's references, and every `.err` is empty.
+- **Stock check: met.** u's test.pl reads 267,243.5 M against pair6's u 267,219.2 M, +0.009 %. So F−P6 is read.
+
+**In-context cycles, test.pl:**
+
+| | cycles | difference |
+|---|---:|---:|
+| u (this boot) | 267,243,452,830 | |
+| f (this boot) | 292,843,972,843 | F−U **+25,600.5 M (+9.58 %)** |
+| P6 (pair6, against pair6's u) | 280,802,971,216 | P6−U6 +13,583.8 M (+5.08 %) |
+| | | F−P6 = F−U − P6−U6 **+12,016.7 M** (+4.50 % of u) |
+
+**Predictions.**
+1. **F−P6, +12,016.7 M: missed**, 216.7 M (1.8 %) above the band's high edge of 11,800 M. Point +10,945 M.
+2. **F−U, +25,600.5 M (+9.58 %): missed**, 200.5 M above the band's high edge of 25,400 M (+9.5 %). It is prediction 1
+   plus pair6's P6−U6, so it is the same miss counted once more.
+3. **Records: met.** Each is f's distance from its own boot's u, against pair6's P from its u:
+
+| counter | F−U | P6−U6 | ratio |
+|---|---:|---:|---:|
+| hpm3, record-TLB misses | +47,086,857 | +21,445,211 | 2.20 |
+| hpm4, walk cycles | +692,425,980 | +309,100,291 | 2.24 |
+| hpm5 | +587,350,062 | +247,290,028 | 2.38 |
+| hpm7, event-23 replays | +126,937,338 | +43,288,874 | 2.93 |
+| hpm8, L1D misses | +257,345,625 | +110,524,171 | 2.33 |
+
+**The reading** registered for this outcome is the lifetime price after the code at 3.726:
+(12,016.7 M − 5,157.4 M) / 33,562,951 = **204.4 cycles per lifetime instruction**. That is 1.185 times the heads'
+172.4, above the registered 146.6-198.3, so it is the registered outcome **"above"**.
+
+What the price depends on, stated before it is read:
+- **It is under-determined by the code price.** The full port's code is priced at the heads port's 3.726 cycles per
+  twin instruction, which was not measured for these allocators. At 3.873, 3.9 % more, the price reaches the band's edge,
+  198.3, and at 3.88 it is inside it (198.0). At the stock mean 3.169 it is 227.3. This boot cannot separate "the lifetimes cost more" from "the
+  allocators' code costs a few per cent more per instruction". Only an N-style instrument build of the full port
+  (its lifetime instructions replaced, as pairn did for the heads) would.
+- **The record counters do not show a larger record working set per lifetime instruction.** The registered gloss of
+  "above" was "the record working set grows with the extra lifetimes". The lifetime instructions grow 2.29 times over
+  the heads port's (26,043,473 + 33,562,951 against 26,043,473). The record-TLB misses grow 2.20 times and the walk
+  cycles 2.24 times, slightly less than the lifetime count. So the gloss is not supported. What grows faster than the
+  lifetime count is the event-23 replays (2.93 times): 2.49 per added lifetime instruction against 1.66 for the heads'.
+  No mechanism is claimed.
+
+**F−P6, attributed:**
+
+| part | cycles | share of F−P6 | price and its source |
+|---|---:|---:|---|
+| the allocators' code | 5,157.4 M | 42.9 % | 3.726 cycles per twin instruction × 1,384,162,255 (pairn's N−U price for the heads' code; **assumed**, not measured here) |
+| record-table walks | 383.3 M | 3.2 % | F−P6 hpm4, read as cycles (measured; each side against its own boot's u) |
+| event-23 replays | 1,422.0-1,673.0 M | 11.8-13.9 % | F−P6 hpm7, +83,648,464 at 17-20 cycles each (Addendum 1's RTL estimate, from source) |
+| the lifetime instructions and their other record traffic | 4,803.0-5,054.0 M | 40.0-42.1 % | F−P6 less the three rows above |
+| **not attributed** | **none at this resolution** | | the last row is the remainder by construction |
+
+- The remainder is **143.1-150.6 cycles per lifetime instruction**, against pairn's 129.1-133.9 for the heads'.
+- It carries the code row's assumption: every 0.1 cycle per twin instruction moves 138.4 M between the first and the
+  last rows, 4.1 cycles per lifetime instruction.
+
+**Memory**, from the twin (not measured on the board): 101,844 kB, +3.96 % against stock's 97,968 kB.
+
+**Reported, not part of any prediction:** kernel + other F−U +1,955.3 M (pairn's N−U +1,339.5 M); uptime span F−U
++1,133.0 s.
+
+**Limits.**
+- As registered: one run per arm, u first, not interleaved.
+- F−P6 is cross-boot: this boot's F against pair6's P6, each taken against its own boot's u. The two u's agree to
+  0.009 %.
+- Both misses are within 2 % of the band's edge, on one boot per arm. No run-to-run spread for f has been measured.
+- Reported, not read (no noise band was registered, so "missed" stands): the three boots' stock u's (pair6, pairn and
+  this one) span 267,083.1-267,243.5 M, 160.4 M. The misses are 200.5 and 216.7 M, and F−P6 is cross-boot.
+
+### Note: the s100 heartbeat (2026-11-25, board-free)
+
+The `@@BEAT` field of the s100 stages read `$(stat -c %s st.db 2>/dev/null || echo 0)`. The board's busybox has no `stat`
+applet, so every beat of the board-2 run read 0 and the fallback hid it ("The `st.db` field is void" above). The heartbeat line of `s100u/train/run.sh` and
+`s100p/train/run.sh` now reads the size with `wc -c` (present in the baked rootfs as `usr/bin/wc`), and prints `NA` when
+the file is absent, never a number. The manifests were regenerated (`sha256sum -c` rc 0). `read-s100pair.py` accepts
+`NA` and the padded `wc` output. It was tested on `pair-dry/ret-twin-u1.txt` and on a copy with `NA` beats. The s100
+rechecks predate the change, so rule 8 is re-run on them before the final campaign.
