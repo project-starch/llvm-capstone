@@ -8044,3 +8044,41 @@ Every stage ended rc 0, and the log holds 70 `@@CASE-END` lines.
   - the initramfs carries the ifconfig line 8 times, and the withdrawn one carries it 0 times.
 - Payload `b8882143…` is withdrawn before any board use (attic `payload-board-lo-down`).
 - The board's predictions come from `twin-board2`, which is queued.
+
+### memcached requalified, unpatched, on the msghdr-loader Image (2026-11-26)
+
+- Requested: runtime's ruling (above). Runtime's msgt directed test read on twin Image `749fed26…` (msgt.dom
+  `2c6c30f7…`, msgt.native `cba6b00a…`). Native and protected printed identical lines: sendmsg, recvmsg with the iov
+  split, an SCM_RIGHTS fd, MSG_TRUNC, fails=0. Runtime's own caveat: no negative control on a loader-free kernel.
+- `ovl-req`, the unpatched build of `out/`: stock `53538940…`, protected `4108e588…`, with trap-vexec `41fb8b58…`
+  (= runtime/trap-route-tools 081c21bd1f0e). The images are byte-identical to twin-all's M20/M21.
+- Run `twin-req`, Image `749fed2606e3ebca`, hashed before and after; lock 00:24:01, done 00:48:27.
+- **6 of 6 repetitions qualify** (read-mc.py against the native reference):
+  - every transcript equals native's 1,931,207 B;
+  - every server stops on `shutdown` with exit 0;
+  - identity reads `STAT pointer_size 128`;
+  - each run's exit line names its image (`53538940…` stock, `4108e588…` protected).
+- The pair: twin-all, on Image `4fc06dde…` without the loader, read 0 of 6 with the same images: 4,905 B transcripts and
+  every response `<EOF>`. The two runs also differ in the adapter, whose only change is a line printed at exit. So
+  the kernel change, which runtime describes as the msghdr loader, is what moves memcached from 0/6 to 6/6 on the twin. This is the negative control runtime's
+  msgt lacked, taken at the workload.
+- The board kernel carries the same loader (`trapk/fpga/linux-6.1`), unvalidated on silicon. A memcached board boot is
+  not pre-registered here.
+
+### CPython on the trimmed stdlib tree (2026-11-26)
+
+- The board stage was too big with the whole stdlib. `trim-tree.py` keeps `bench/` whole and, for each module and
+  parent package in a `-X importtime` run's list, the module's source and `.pyc`, byte-identical:
+  - the list comes from `twin-imp`, stock rc 0, answer `58211793…`;
+  - the result is 150 modules, 190 files;
+  - `ovl-trim` is 7,461,893 B, of which tree.tar.xz is 1,325,852 B.
+- The images are unchanged: the overlay's app.xz files decompress to stock `e47ab197…` and prot `a269a6b5…`.
+- Run `twin-trim`, Image `749fed26…`, lock 22:54:25, done 00:47:54:
+  - both arms rc 0 and `PYPERFORMANCE-OK 8`;
+  - both answers are `58211793977f706c…`, the native reference;
+  - no Error or Traceback line;
+  - twin wall time, from uptime: stock 263.4 s, prot 354.4 s.
+- Board payload `payload-trim` (DTB caplifive-b5b2-wide.dtb, `sublet.dom_wide_grants=1` present in the bytes):
+  - fw_payload.bin `ddee6d29e26b4d73…`, 23,754,760 B, under the 26,000,000 B cap;
+  - Image `33ce8624…`, the same tree relinked, with only `version-timestamp.o` recompiled;
+  - overlay `180aacaf…`, initramfs `bc3b311b…`.
