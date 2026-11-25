@@ -19,8 +19,9 @@ def trace():
     t.append(ev("r", 1, 133, 1, 0))                          # 5 release write: s133 dead in place (way 2 kept)
     t.append(ev("c", 0, 133, 1, 1, 2))                       # 6 two hits on a dead entry: deny_hit_dead 2, no probe
     t.append(ev("a", 1, 133, 2, 1))                          # 7 reissue at generation 2: same index, way 2 reused, live
-    t.append(ev("c", 0, 133, 2, 1))                          # 8 hit
-    t.append(struct.pack("<QQ", (K["E"] << 2) << 56, 0))      # 9 a namespace edge: LB empties
+    t.append(struct.pack("<QQ", (K["E"] << 2) << 56, 0))      # 7b an edge with the key unchanged (word 1 bit 0 = 0): no flush
+    t.append(ev("c", 0, 133, 2, 1))                          # 8 hit (a flush at 7b would make this a miss)
+    t.append(struct.pack("<QQ", (K["E"] << 2 | 1) << 56, 1))  # 9 a namespace edge, key changed (srevroot write): LB empties
     t.append(ev("c", 0, 133, 2, 1))                          # 10 miss
     t.append(ev("c", 0, 300, 9, 0, 2))                       # 11 a dead id: one probe, no install, one dead-record deny
     return b"".join(t)
@@ -44,6 +45,7 @@ EXPECT = {
     ("GC", "check"): dict(accesses=15, hits=9, misses=6, mem_reads=6, mem_writes=0),
     ("GC", "op"):    dict(accesses=2, hits=0, misses=2, mem_reads=0, mem_writes=2),
 }
+EOPS = [1, 1, 0, 0]   # E by op: 7b is op 0, 9 is op 1
 LBX = dict(probes=8, deny_hit_dead=2, dead_record=1, installs=8, invalidations=1, flushes=1)
 
 def main():
@@ -56,7 +58,7 @@ def main():
     os.unlink(path)
     if out.returncode != 0 or "END" not in out.stdout:
         print("RUN FAILED", out.returncode, out.stderr); return 1
-    bad = 0; cols = ["accesses", "hits", "misses", "mem_reads", "mem_writes"]
+    bad = 0; seen_e = False; cols = ["accesses", "hits", "misses", "mem_reads", "mem_writes"]
     for line in out.stdout.splitlines():
         f = line.split()
         if len(f) >= 7 and (f[0], f[1]) in exp:
@@ -68,7 +70,11 @@ def main():
             got = {f[i]: int(f[i + 1]) for i in range(1, len(f), 2)}
             for c, v in LBX.items():
                 if got.get(c) != v: print(f"MISMATCH LB {c}: got {got.get(c)} expected {v}"); bad += 1
+        if f[:3] == ["E", "by", "op"]:
+            got = list(map(int, f[3:7])); seen_e = True
+            if got != EOPS: print(f"MISMATCH E by op: got {got} expected {EOPS}"); bad += 1
     if exp: print("ROWS NOT PRINTED", sorted(exp)); bad += 1
+    if not seen_e: print("E BY OP NOT PRINTED"); bad += 1
     print("CONTROL", "PASS" if not bad else f"FAIL ({bad})"); return 1 if bad else 0
 
 if __name__ == "__main__":

@@ -28,6 +28,11 @@
 //   allocation (CDERIVE, CRENEW, CSMINT's create), r / v = release (CREVOKE: the 4(b) walk's reads and its writes), o =
 //   any other operation's record access. T = a table switch, E = a namespace edge (srevroot change, context entry or
 //   exit), I / PI = instruction counters (word 0 carries the value; word 1 is 0).
+//   E: op 0 = trap out of protected U, 1 = srevroot write, 2 / 3 = SRET / MRET into protected U (the nested lane's
+//   v2 tracer); word 1 bit 0 = 1 exactly when the RTL's namespace key changed, so LB flushes ONLY then. The key is
+//   {vctx_table, srevroot}: b42c8c644's revnode_ns_flush_o (ex_stage.sv:1891) fires on a change of either (or the
+//   csupctl bit-2 strobe), and under CAPSTONE_SUBLET_FMT vctx_table is 1 in S and U whenever srevroot != 0
+//   (csr_regfile.sv:3008-3011), so a U <-> S switch under one srevroot does not flush. Every E is counted by op.
 // Runs: a check run of N is N checks of one id; an operation run is ONE access, as rcm.c.
 // Exit 2 on an empty, malformed or unreadable trace: no data is an error.
 #include <stdio.h>
@@ -156,14 +161,14 @@ int main(int argc, char **argv) {
   uint64_t ne = sb.st_size / 16;
   const uint64_t *w = mmap(0, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
   if (w == MAP_FAILED) { perror("mmap"); return 2; }
-  uint64_t ev[8][4] = {{0}}, edges = 0, tables = 0, lastI = 0, lastP = 0, recs = 0;
+  uint64_t ev[16][4] = {{0}}, edges = 0, tables = 0, lastI = 0, lastP = 0, recs = 0;
   for (uint64_t i = 0; i < ne; i++) {
     uint64_t x = w[2 * i], y = w[2 * i + 1]; unsigned code = x >> 56, kind = code >> 2, op = code & 3;
     if (kind == K_T) { tables++; lb_flush(&LB); rc_flush(&RC); gc_flush(&GC); tlb_clear(&NC.tlb); continue; }
     if (kind == K_I) { lastI = x & ((1ULL << 56) - 1); continue; }
     if (kind == K_PI) { lastP = x & ((1ULL << 56) - 1); continue; }
-    if (kind == K_E) { edges++; lb_flush(&LB); continue; }    // the RTL's namespace flush; RC and GC flush only on T
-    if (kind > K_E || (y >> 33)) { fprintf(stderr, "malformed event at %llu\n", (unsigned long long)i); return 2; }
+    if (kind == K_E) { edges++; ev[K_E][op]++; if (y & 1) lb_flush(&LB); continue; }   // RC and GC flush only on T
+    if (kind > K_E || (y >> 33) || (kind == K_E && (y >> 1))) { fprintf(stderr, "malformed event at %llu\n", (unsigned long long)i); return 2; }
     uint64_t cnt = (x >> 32) & 0xffffff, slot = x & 0xffffffff; uint32_t gen = (uint32_t)y; int live = (y >> 32) & 1;
     if (cnt == 0) { fprintf(stderr, "zero-count run at %llu\n", (unsigned long long)i); return 2; }
     ev[kind][op] += cnt;
@@ -198,6 +203,8 @@ int main(int argc, char **argv) {
   printf("LB probes %llu deny_hit_dead %llu dead_record %llu installs %llu invalidations %llu flushes %llu\n",
          (unsigned long long)LB.probes, (unsigned long long)LB.deny_hit_dead, (unsigned long long)LB.dead_record, (unsigned long long)LB.installs,
          (unsigned long long)LB.inval, (unsigned long long)LB.edges_flushed);
+  printf("E by op %llu %llu %llu %llu\n", (unsigned long long)ev[K_E][0], (unsigned long long)ev[K_E][1],
+         (unsigned long long)ev[K_E][2], (unsigned long long)ev[K_E][3]);
   printf("RC flush_writebacks %llu\nEND\n", (unsigned long long)RC.flush_wb);
   return 0;
 }
