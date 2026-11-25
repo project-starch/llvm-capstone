@@ -6986,6 +6986,68 @@ independent of the rest of tshark.
   board it is estimated at 10-40 min. If the 3 h budget ends while the heartbeat still advances, that is reported as
   "no stop within T", not as a stop.
 
+### Result: the allocation path stops on its own; s1 holds the core at the stress image's CDERIVE between packets 100,000 and 110,000 (board 1, 2026-11-25 11:41-14:49, read against 6659e74b24ca)
+
+**Run.** P1 `…-pagedtbl_d83d3a633` read back by name before the boot and again at DONE. The chain ran its bake,
+smoke (PASS, all 9 steps) and the stage, and unbooked board 1 (`UNBOOK 1500: 200`). The transcript is
+`spec/board/out-nat-p1st-m16stress-b1/stress1/board.txt` (`6141714c…`). The reader (`read-stress.py`, `0384cfba…`) was
+run on it against the twin's serial (`153ffc99…`).
+
+**Readings.**
+- **s0: RETURNED.** rc 0, and all 12 STRESS lines equal the twin's, ending `done packets=100 fast=19360 block=1840
+  free=954 sum=1fe6df7c8e2b0e1f`. Span 4.7 s.
+- **s1: NO RETURN.** 11 STRESS lines, every one equal to the twin's. The last is `pkt=100000 fast=19432859
+  block=1767141 free=884810 sum=8b64d9b857f7aee5`. The twin's next line is `pkt=110000 fast=21375862`.
+  - So the stop falls between 19,432,859 and 21,375,862 fast allocations. That is 10.2 to 11.2 tshark runs' worth
+    (1,905,321 a run).
+- **It is a stop, not slow progress.** The heartbeats reached the console about 60-75 s apart (the watchdog's UART-age
+  resets, 15 s sampling). After the 100,000 line the console stayed silent for the rest of the 10,800 s budget. The
+  watchdog's last line reads `no UART for 10209s`.
+- **Apertures after the timeout, verbatim:**
+  - trap log `0x89`; sw=224 `0x05`; sw=225 `0x92`; sw=226 `0x00`; sw=227 `0x03`; sw=228 `0xb8`; sw=229 `0x00`;
+  - sw=192-195 all `0x00`; sw=219 `0xd7`; sw=220 `0x8c`; sw=221 `0x02`; sw=222 `0x00`;
+  - commit pc `0x0000003ff676c9ee`; trap-log mepc `0xffffffff80007376`, tval `0x73`;
+  - rev_node_debug_ex `0x00001346400007fa`, head `0x0071`, serving index `0x00001381`.
+
+**Against the predictions.**
+1. s0 returns, every line equal to the twin's: **met.**
+2. s1 does not return, and its last heartbeat lies before packet 400,000: **met.**
+   - The commit pc reads the stress image's CDERIVE, `0x3ff676c9ee`: **met.**
+   - sw=220 `0x8c`, as in every M-16 non-return: **met.**
+   - sw=225 `0x92` is tsu-r1's reading, not tsu-p1's `0x96`. The bit that differs is `stall`, as between M-16's own
+     boots. M-16 read both values, so the prediction ("as in M-16") is met.
+     - The reader compares sw=225 with tsu-p1's value only, so its line prints `[False, True]`. That is the reader's
+       reference, not a different reading.
+   - Trap log, mepc, sw=224, sw=226, sw=229, sw=192-195, sw=219, sw=221, sw=222 and head equal M-16's.
+   - Two apertures differ from M-16's:
+     - sw=227 `0x03` against `0x07`. The bit that differs is `data_req.write_en`.
+     - sw=228 `0xb8` against `0x9f`. It holds the domain-switch index; this boot's domain set is not tshark's.
+   - The serving index differs, as it did between every pair of M-16 non-returns.
+3. The registered median stop was packets 4,800-76,000. This stop came later, at 100,000-110,000. That is one draw.
+
+**What it says.**
+- **The stop needs nothing of tshark beyond this allocation path.** The program has no dissection, no capture input,
+  a far smaller live heap and no I/O beyond the heartbeat. It holds the core at the same instruction of the same
+  function, with M-16's aperture signature.
+- **The hazard.** One stop after about 2.0e7 allocations puts the per-allocation hazard at about 4.9e-8. The 95 %
+  interval from a single draw is 1.2e-9 to 1.9e-7.
+  - This lies at the low end of M-16's band (4.7e-8 to 7.4e-7).
+  - At the band's lower bound, a first stop this late has probability 0.37-0.40. At its upper bound it is below 1e-6.
+  - So this boot agrees with H1 at the lower part of M-16's rate, and argues against the upper part. It cannot
+    separate H1 from a hazard below M-16's band, because it is one draw.
+- **A reproducer.** As the pre-registration named, the stress program is now the hardware side's reproducer of M-16.
+  A stop came about 11 min into s1 here, against 40-68 min per tshark sample.
+  - It is not yet a directed test (CLAUDE.md rule 8). The next reduction is fewer allocator paths: BLOCK_FAST alone,
+    with no file scope, then a fixed size.
+
+**Limits.**
+- One boot and one stop. The stop's position is one draw from an exponential, so the hazard interval is wide.
+- No unprotected arm ran on the board (the cap, as registered). The unprotected control is the twin, where s1
+  returns, and M-16's board record, where the unprotected tshark returned in every boot.
+- The stress program is not tshark. It shares the allocators and their callers' shape and nothing else. Its stop
+  therefore says that the path suffices. It does not say that tshark's stops come from this path alone, although the
+  pc, sw=220 and the trap log agree.
+
 ## perlbench item 3: the full port's code without its lifetime instructions, test.pl on P1 (2026-11-25)
 
 ### Pre-registration: perlbench test.pl on P1, u = stock and n = the full port with its lifetime instructions neutralised, one boot on board 1 (written 2026-11-25 12:31, before the boot)
@@ -7181,6 +7243,55 @@ per-line timeout raised from 300 s to 3,600 s; log `f63c48cc…`):
 **Limits.**
 - One boot. The spans are from `/proc/uptime`, without in-context counters.
 - The arms are ABBA for SQLite and mruby, and one each for gcc.
+
+### Result: boot A, every arm returns with its reference answer; protected against stock −2.3 % SQLite, +5.2 % mruby, +9.0 % gcc in wall-clock time (board 2, 2026-11-25 13:18-14:06, read against de6399c1dfff)
+
+**Run.** The board lane ran the image on board 2 with its B5b-2 capture runner. Resident
+`…-r75d-b5b2n_904cd9c6b.bit`, read back by name before and after (rc 3 both times: the name matches and the console
+exposes no sha256, which the runner accepts). The run ended on `TRAPTEST: done` (rc 0), and board 2 was unbooked
+(`UNBOOK 1505: 200`).
+
+- **Deviation.** The registered gate, boot 5's control on board 3, did not run first. The runtime lane waived it for
+  this boot. The in-boot control, the same `smoke.dom` from boot 5, ran before every stage.
+- The console capture is `b5b2linux/b2bootA-20261125T0518/uart.txt` (`922be290…`, the board lane's tree). I re-ran
+  the reader (`48d72b29…`) on it: exit 0, with output identical to the board lane's grade file.
+
+**Readings.**
+- **Control:** `TRAPTEST: control smoke.dom rc=7`.
+- **N1 SQLite**, stage rc 0. Each arm rc 0, 32/32 STUDY-ORACLE phases equal to the native reference, stderr 0 B.
+  - Spans u1 35.57 s, p1 33.06 s, p2 33.42 s, u2 32.49 s. Mean p 33.24 s against mean u 34.03 s: **−2.32 %**.
+- **N2 mruby**, stage rc 0. Each arm rc 0, stdout `cfd73bb1…` (781 B) equal to the native reference, stderr 0 B.
+  - Spans u1 506.94 s, p1 532.93 s, p2 533.34 s, u2 507.03 s. Mean p against mean u: **+5.16 %**.
+- **N3 gcc**, stage rc 0. Each arm rc 0, `out.s` `58111208…` equal to SPEC's reference.
+  - stderr 68 B in both arms. It is the SPEC input's own warning (`t1.c:2:5: warning: conflicting types for built-in
+    function 'printf'`), as on the twin.
+  - Spans u1 7.20 s, p1 7.85 s: **+9.03 %**.
+- dmesg shows each image entering through the `.dom` loader (`sublet: <name>[pid] enters …`), one line per arm.
+
+**Against the predictions.**
+1. The control reads `smoke.dom rc=7`: **met.**
+2. Every arm returns rc 0 with its reference answer: **met**, all ten arms.
+3. Cost between −2 % and +30 % in each program:
+   - mruby (+5.2 %) and gcc (+9.0 %): **met**;
+   - SQLite (−2.3 %): **not met**, 0.3 points below the band's floor.
+   - All three are well below the twin's values (+9.0 %, +13.2 %, +18.7 %), which were the registered points.
+
+**What it says.**
+- **The one-operand revisions of SQLite, mruby and gcc run on B5b-2 silicon, on the trap route, with stock's answers.**
+  These are the first silicon rows for these three.
+- **mruby's cost is resolved.** The two stock arms agree to 0.09 s and the two protected arms to 0.41 s, against a
+  26 s gap. +5.2 % is the protected revision's wall-clock price in this boot.
+- **SQLite's is not.** The stock arms differ by 3.08 s between u1 and u2, and the protected arms lie between them. The
+  first arm of the boot is the slowest. So the −2.3 % sits inside this boot's own order effect, and it reads as "no
+  cost resolved at about ±5 %". It does not say the protected revision is faster.
+- **gcc's +9.0 %** is one arm each, so it has no spread of its own.
+- The twin's spans overstated every cost. Its clock is not the board's, as the pre-registration said; its spans were
+  never a prediction of silicon.
+
+**Limits.**
+- One boot. Wall-clock spans from `/proc/uptime`, including the kernel and the trap route's work. No in-context
+  counters.
+- SQLite is ABBA with a first-arm effect larger than the difference read. gcc is one arm each.
 
 ### Pre-registration: B5b-2 boots B-stock and B-prot, Fig. 10's Wireshark workload one arm per boot, with Perl makerand.pl, board 2 (written 2026-11-25 13:38, before the boots)
 
