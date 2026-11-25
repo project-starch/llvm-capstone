@@ -111,3 +111,38 @@ The runtime lane owns the attribution, so what this means is not decided here.
 - The board lane's runner (`run_sup_bare-linux4.py`, 6f17eb276c71c7e6) stops a boot after 1,200 s with no new console
   byte. Before writing the capture or powering off, it reads this same snapshot on its own live session.
 - A stalled stage is STALL / NO READING.
+
+## The chain (Amendments 1 and 2, runtime/b5b2-linux 5aaa7bbb2c6e and 9369457895ad), board 3, 904cd9c6b, no flash
+
+Each image's result lines are in `chain2/<image>.result-lines.txt`:
+- the grade's lines (the specdiff tails, which quote local paths, are cut);
+- the capture's `@@SPEC-END` / `@@QSTEP-END` lines and the kernel's `sublet: fault` lines;
+- `mapfaults.py`'s mapping of each fault to the image's instruction (the tool is in this folder; it takes its objdump
+  and stage paths from MAPF_OBJDUMP / MAPF_STAGES).
+
+How the chain ran:
+- **The gate.** Nested boot A's `control smoke.dom rc=7`, the same control on the same loader (Amendment 2).
+- **Each boot.** Its own booking, readbacks of the resident before and after, the incremental capture. The silence stop
+  takes the wedge snapshot first.
+- **The grader.** `grade-spec-chain.py`: compiler's `run-stage.py read` per stage, against each image's expected stage
+  list.
+
+| image | C | stages |
+|---|---|---|
+| B5T-g2 | ok | x264 MISS (run0 rc 139), imagick MISS (run0 rc 139, val0 rc 255) |
+| B5TL0-g2 | ok | x264 MISS, imagick MISS |
+| B5TL1-g2 | ok | x264 MISS, imagick MISS |
+| B5TL1-g3 | ok | gcc PASS (specdiff 1/1) |
+| B5TL0-g3 | ok | gcc PASS (specdiff 1/1) |
+| B5T-g3 | ok | gcc PASS (specdiff 1/1) |
+
+**The g2 faults.** In all three arms, x264 and imagick each die on a cause-24 fault (`address=0x0`, which the line
+reports as its tval). The fault lands at the same instruction in each arm, with the address shifted by the image:
+- x264 faults on `cincoffset a3, a3, s4`, whose a3 is the `ldc a3, 0x0(a3)` four instructions earlier. The vaddrs are
+  0x4967a (B5T), 0x49646 (B5TL0) and 0x4a3e2 (B5TL1).
+- imagick faults on `cincoffsetimm a0, a0, 0x2`, at 0x4ad62, 0x4ad22 and 0x4babe.
+
+The runtime lane classified these as the untagged-CINCOFFSET rule, which is still gated on vctx at 904cd9c6b. That
+classification rests on these readings, on the compiler lane's reading of the paths, and on the QEMU twin passing
+imagick. It is pending confirmation: the prediction is that x264 and imagick pass in all three arms on the combined seal
+28fcbb646, which carries the ungate.
