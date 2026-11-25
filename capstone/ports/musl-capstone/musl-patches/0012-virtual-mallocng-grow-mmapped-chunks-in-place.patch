@@ -19,6 +19,13 @@ stays in place: one copy of the old size, as with doubling. The room is
 address space until touched, because a native arena pins a page at its
 first access. Shrinking and small chunks are unchanged.
 
+On the trap route (renumbered 0012, after 0011-linux-trap-startup) both
+branches follow that route's realloc order: the new object is derived
+with heap_alloc_reissue, which can fail with ENOMEM, before the old one
+ends with the one-operand heap_alloc_end, so a failed growth returns
+NULL with the original intact. The moved branch frees the room it took
+when the derive fails.
+
 --- a/src/malloc/mallocng/realloc.c
 +++ b/src/malloc/mallocng/realloc.c
 @@ -4,6 +4,9 @@
@@ -31,7 +38,7 @@ first access. Shrinking and small chunks are unchanged.
  void *realloc(void *p, size_t n)
  {
  	if (!p) return malloc(n);
-@@ -21,6 +24,38 @@
+@@ -21,6 +24,42 @@
  	size_t avail_size = end-(unsigned char *)p;
  	void *new;
  
@@ -47,8 +54,9 @@ first access. Shrinking and small chunks are unchanged.
 +	// page at its first access.
 +	if (g->sizeclass==63 && n>=MMAP_THRESHOLD && n>=old_size) {
 +		if (n <= avail_size && !((uintptr_t)p & (heap_granule(n)-1))) {
-+			void *fresh = heap_alloc_issue(p, n);
-+			heap_alloc_end(p, issued);
++			void *fresh = heap_alloc_reissue(p, n);
++			if (!fresh) return 0;
++			heap_alloc_end(issued);
 +			set_size(p, end, n);
 +			return fresh;
 +		}
@@ -58,8 +66,11 @@ first access. Shrinking and small chunks are unchanged.
 +			unsigned char *q = heap_access(wide);
 +			struct meta *h = get_meta(q);
 +			unsigned char *qend = h->mem->storage + get_stride(h) - IB;
-+			void *fresh = heap_alloc_issue(q, n);
-+			heap_alloc_end(q, wide);
++			// the trap route's order: the new object exists before an
++			// old one ends, so a failed derive leaves the original intact
++			void *fresh = heap_alloc_reissue(q, n);
++			if (!fresh) { free(wide); return 0; }
++			heap_alloc_end(wide);
 +			set_size(q, qend, n);
 +			memcpy(fresh, p, old_size);
 +			free(issued);
