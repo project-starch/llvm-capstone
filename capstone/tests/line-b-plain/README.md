@@ -106,7 +106,25 @@ Built by trapk/plain/make-payload-plain.sh: the board's rootfs.cpio unchanged pl
 | g3 | gcc | 9a16de8eebde78ad | 21,661,704 |
 | g4 | perlbench | 32ca390b88110fe0 | 21,661,704 |
 
-## Recorded at build time
+## Plain-twin smoke (2026-11-25, before any board session)
 
-None of these images had run when this record was written. A functional smoke on the Plain twin (the Plain kernel,
-trapk/plain) comes before any board session.
+A functional smoke of the Plain-matched images on the QEMU twin, one boot, 22:28 to 22:39.
+- **The kernel is the trap-twin kernel, not the Plain kernel the boards run.** That is trapk linux-6.1, Image
+  749fed2606e3ebca (built 21:35, before the boot), with sbi-keep-run fw-y, -m 963M and sublet.dom_binfmt=1. It is
+  enough for a functional smoke of static plain processes, which use none of its Capstone series. It says nothing
+  about the Plain kernel or the Plain firmware, which only a board session runs.
+- **What ran:** the board's board-init (84aa5d1c4c91ef97, behind a wrapper setting STAGE_BOUND=1500), then
+  plain-smoke (42e1f6d1b289fa93), then six Plain-matched stages: lbm, imagick, mcf, gcc, xz, nab. The images are the
+  table's hashes, checked against the initramfs. board-init and plain-smoke are the four board images' /init and
+  /plain-smoke, by hash. x264 and perlbench were not in this boot.
+
+Results:
+- plain-smoke printed "ok" and exited 7, its pass value.
+- Every stage ran every command with rc 0, and the guest reached "done".
+- run-stage.py read, on each stage's text cut from the boot log, gave specdiff PASS everywhere: lbm 1/1, imagick 1/1,
+  mcf 2/2, gcc 1/1, xz 12/12, nab 1/1.
+- mcf and gcc keep plan.json beside the stage, not inside it, as their B5TL1 stages do, so the copied stage has none.
+  They were read with B5TL1's plan.json, whose commands are the same; their run.sh is byte-identical to B5TL1's apart
+  from the image hashes.
+- **The grader's control:** mcf's inp.out with one number changed in the decoded text (1998 to 1999) read specdiff
+  1/2, FAIL, exit 1.
