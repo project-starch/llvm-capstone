@@ -1,0 +1,32 @@
+#!/bin/sh
+# /init (Plain board images): each SPEC test stage's board run.sh, in /stages order, as ordinary Linux processes on
+# the Plain kernel. Same markers as the trap-route board /init (b5b2spec qemu1/init): @@QSTEP-BEGIN/END and TRAPTEST
+# lines. The kernel log is read by OFFSET, never cleared (dmesg -c erased the boot-time lines other tools read).
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+mkdir -p /tmp && mount -t tmpfs tmpfs /tmp
+export SPEC_INBAND_MAX=67108864
+echo "TRAPTEST: id $(id)"
+# this busybox has no timeout applet: run a command in its own session and kill the whole group after T seconds
+bounded() { t=$1; shift; setsid "$@" & p=$!; ( sleep $t; kill -9 -$p 2>/dev/null; echo "TRAPTEST: watchdog killed $* after ${t}s" ) & w=$!; wait $p; rc=$?; kill $w 2>/dev/null; return $rc; }
+klog=0
+newklog() { n=$(busybox dmesg | wc -l); [ "$n" -gt "$klog" ] && busybox dmesg | tail -n +$((klog+1)) | grep -E "Out of memory|oom|segfault|Unable to handle" | sed 's/^/TRAPTEST: dmesg /'; klog=$n; }
+echo "TRAPTEST: up, kernel $(uname -r), mem $(grep MemTotal /proc/meminfo)"
+( while :; do sleep 120; echo "TRAPTEST: tick $(cut -d' ' -f1 /proc/uptime)"; done ) &
+tick=$!
+mkdir -p /tmp/run && cd /tmp/run && cp /plain-smoke . && ./plain-smoke; echo "TRAPTEST: control plain-smoke rc=$?"; cd /
+newklog
+for s in /stages/*; do
+  n=$(basename $s)
+  echo "TRAPTEST: stage $n begin"
+  echo "@@QSTEP-BEGIN $n"
+  bounded ${STAGE_BOUND:-3600} sh $s/stage/run.sh
+  rc=$?
+  echo "@@QSTEP-END $n rc=$rc"
+  echo "TRAPTEST: stage $n rc=$rc"
+  newklog
+done
+kill $tick 2>/dev/null
+echo "TRAPTEST: done"
+busybox poweroff -f; echo "TRAPTEST: poweroff failed"; sleep 999999
