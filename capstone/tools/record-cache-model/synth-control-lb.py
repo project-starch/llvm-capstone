@@ -59,6 +59,21 @@ BAD = {
 }
 OK = {"E word1 1": struct.pack("<QQ", (K["E"] << 2 | 1) << 56, 1)}   # the accepting side of the same check
 
+# self_evict: one stretch installing five slots of set 1 displaces its own first (1); four slots, or five split by a
+# check, displace nothing of their own (0)
+def wr(s): return ev("a", 1, s, 1, 1)
+SELF = {
+    "five in one stretch": (b"".join(wr(s) for s in (1, 65, 129, 193, 257)), 1),
+    "four in one stretch": (b"".join(wr(s) for s in (1, 65, 129, 193)), 0),
+    "five split by a check": (b"".join(wr(s) for s in (1, 65, 129, 193)) + ev("c", 0, 1, 1, 1) + wr(257), 0),
+}
+
+def run_out(binary, body):
+    with tempfile.NamedTemporaryFile(suffix=".rt2", delete=False) as f:
+        f.write(body); path = f.name
+    out = subprocess.run([binary, path], capture_output=True, text=True).stdout
+    os.unlink(path); return out
+
 def run_one(binary, body):
     with tempfile.NamedTemporaryFile(suffix=".rt2", delete=False) as f:
         f.write(ev("c", 0, 5, 1, 1) + body); path = f.name
@@ -95,6 +110,10 @@ def main():
     for name, body in BAD.items():
         rc = run_one(binary, body)
         if rc != 2: print(f"MALFORMED ACCEPTED {name}: rc {rc}, expected 2"); bad += 1
+    for name, (body, want) in SELF.items():
+        got = [l.split() for l in run_out(binary, ev("c", 0, 9, 1, 1) + body).splitlines() if l.startswith("LB op_stretches")]
+        se = int(got[0][4]) if got else None
+        if se != want: print(f"MISMATCH self_evict {name}: got {se} expected {want}"); bad += 1
     for name, body in OK.items():
         rc = run_one(binary, body)
         if rc != 0: print(f"WELL-FORMED REFUSED {name}: rc {rc}, expected 0"); bad += 1

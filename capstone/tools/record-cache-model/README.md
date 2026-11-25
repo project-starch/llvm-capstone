@@ -101,20 +101,25 @@ outside run-to-run noise (which is not measured).**
 The record-cache decision for B5b-2 is made on EVENTS from this model and a MEASURED per-miss cost. The two-parameter cycle model above was refuted out of sample and is not used. The semantics owner's threshold: build only if misses x the measured cost is at least 1.0 % of cycles on one of gcc, mcf and Perl, with no organisation adding events beyond NC.
 
 **Organisations:**
-- LB: b42c8c644's own verdict cache. 64 x 4, set = slot[5:0], full-id tags. Installs on live record writes and live unit reads; same-index reuse, then the lowest free way, then round robin. A release clears liveness in place, so the entry is kept and later denies without a probe. A namespace edge empties it.
+- LB: b42c8c644's own verdict cache. 64 x 4, set = slot[5:0], full-id tags. Installs on live record writes and live unit reads; same-index reuse, then the lowest free way, then round robin. A release clears liveness in place, so the entry is kept and later denies without a probe. An E event with word 1 bit 0 set empties it (see the format below).
 - RC, GC, NC: as in `rcm.c`.
 - `rcm-lb.c`'s header has the exact rules and their source lines.
 
 **Trace format v2:** two u64 per event. Word 0 is `rcm.c`'s; word 1 is `{live[32], generation[31:0]}`.
 - Line B tags carry the generation, so a reissued slot is a different id.
 - Installs depend on whether the record read or written is live.
-- **Owed by the nested lane's Sublet tracer** (the twin under x-capstone-ids=63): checks (c), allocations (a: CDERIVE, CRENEW, CSMINT's create), releases (r/v: CREVOKE, including the 4(b) walk's reads), other operations (o), table switches (T) and namespace edges (E: an srevroot change, a context entry or exit).
-- There are no traces yet. Until they exist this tool has no reading.
+- **Produced by the nested lane's Sublet tracer** (capstone-qemu nested/record-trace-lb, on the twin's own QEMU 3a9fc39167; off unless CAPSTONE_RECTRACE_V2=<prefix>): checks (c), allocations (a: CDERIVE, CRENEW including its old record's release, CSMINT's create; their operand reads are op reads of kind a), releases (r/v: CREVOKE, including the 4(b) walk's reads), other operations (o), table switches (T) and edges (E).
+- **E:** op 0 = a trap out of protected U, 1 = an srevroot write, 2 / 3 = an SRET / MRET into protected U. Word 1 bit 0 = 1 exactly when the key {srevroot, mode != M && srevroot != 0} changed, which is when b42c8c644 flushes (revnode_ns_flush_o; under CAPSTONE_SUBLET_FMT vctx_table is 1 in S and U whenever srevroot != 0, so a U <-> S switch under one srevroot does not flush). The csupctl bit-2 strobe also flushes on the RTL; the twin has no csupctl, and Line B's runtime never writes 0x7C4 (the runtime lane's search, firmware and kernels, by source and by encoding).
+- **Raw, not deduplicated, and the twin's walk is not the RTL's.** `rcm.c`'s hardware pattern is NOT ported: it was derived from the rev_node unit, while b42c8c644's Line B unit is `capstone_sublet_life.sv`, which re-reads records on purpose (two passes; re-gets before each splice write) and writes a CRENEW-in-place operand twice (S_K_NODE0 live 0, S_K_NODE1 live 1). The tracer drops the two shapes the unit never makes: an allocation's second write of its record (S_D_WCH, S_C_W, S_K_FRESH write it once) and a re-read of the operand (S_RS_R reads it once). The twin's CREVOKE is the C reference's get/put per link and makes MORE accesses than the unit: the nested lane's host count of one cap_rev_kill_step with prev and stop non-zero reads 5n + 12 records (17, 22, 27 for n = 1, 2, 3) where my reading of the unit's states gives 3n + 6 (not yet measured in RTL simulation), and writes stop twice and the operand live 1 before its release.
+- **What that leaves usable.** A re-access of a slot LB already holds reuses its way, so LB's state after an operation depends only on each slot's first-install order and its final (generation, live), unless the operation displaces a slot it installed itself; `LB op_stretches ... self_evict ...` counts those. With self_evict 0, the LB check rows (the decision's input) are the RTL's IF each operation's first-install order and final states match the unit's; that per-operation comparison is owed before any LB number is used. The op rows (accesses, memory reads and writes) of every organisation are the TWIN's pattern, not the RTL's.
+- No trace has been read yet. Until one has, this tool has no reading.
 
 **Control:** `synth-control-lb.py rcm-lb` runs a synthetic v2 trace whose LB, RC, GC and NC counts were computed by hand, and asserts each one.
 - Its cases: eviction past 4 ways, the round-robin victim, a release in place, a hit-dead deny, a same-index reissue at generation 2, a namespace edge, and a dead id's one probe.
 - `--perturb` changes one expectation, and the control must then FAIL. Both were checked: PASS rc 0; perturbed FAIL rc 1.
-- A malformed trace exits 2.
+- self_evict: five installs of one set in one stretch count 1; four, or five split by a check, count 0. Builds that never count it, or never end a stretch, FAIL.
+- An edge with the key unchanged must not flush: a build that flushes on every E FAILS the control on six counts.
+- A malformed trace exits 2: six malformed traces (E word 1 = 2; T, I, PI with a non-zero word 1; a record with bit 33; kind 11) must each exit 2, and E word 1 = 1 must exit 0. f82523965196 checked word 1 after the marker branches, so the four marker cases were accepted; c156970f12cd fixed it and its build passes.
 
 **Measured per-miss cost** (RTL simulation, b42c8c644's core, memory delay 12; capstone-ariane b5b2-prefix bd3932800, b5b2-srvcost and -DSC_COLD):
 - warm record (in the D$): (P3 - P2) / 33 = 14.4 cycles per verdict miss;

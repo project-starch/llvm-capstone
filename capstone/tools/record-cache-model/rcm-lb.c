@@ -63,12 +63,33 @@ typedef struct {
   uint64_t slot[64][4]; uint32_t gen[64][4]; uint8_t occ[64][4], live[64][4], rr[64];
   tlb_t tlb; st_t s[NCL];
   uint64_t probes, deny_hit_dead, dead_record, installs, inval, edges_flushed;
+  uint64_t stretches, self_evict, untracked;
 } lb_t;
+// An op STRETCH is a maximal run of operation events (no check, edge or table switch between them). A re-access of a
+// slot LB already holds reuses its way and displaces nothing, so LB's state after a stretch depends only on the order
+// of each slot's first install and on each slot's last (generation, live) -- NOT on how many times the operation
+// reads or writes it -- EXCEPT when the stretch displaces a slot it installed itself. self_evict counts those. When
+// it is 0, LB's check counts are the same for any access pattern with the same first-install order and final states
+// (the twin's model walks differently from b42c8c644's unit, and this is what makes the LB rows usable anyway).
+#define SH 16384
+static uint64_t sh_key[SH]; static uint64_t sh_ep[SH]; static uint64_t sh_epoch = 1, sh_n; static int in_op;
+static int sh_has(uint64_t s) { for (uint64_t h = (s * 0x9e3779b97f4a7c15ULL) >> 50, k = 0; k < SH; k++, h = (h + 1) & (SH - 1)) {
+    if (sh_ep[h] != sh_epoch) return 0;
+    if (sh_key[h] == s) return 1;
+  }
+  return 0; }
+static void sh_add(uint64_t s, lb_t *c) { if (sh_n >= SH / 2) { c->untracked++; return; }
+  for (uint64_t h = (s * 0x9e3779b97f4a7c15ULL) >> 50, k = 0; k < SH; k++, h = (h + 1) & (SH - 1)) {
+    if (sh_ep[h] != sh_epoch) { sh_ep[h] = sh_epoch; sh_key[h] = s; sh_n++; return; }
+    if (sh_key[h] == s) return;
+  } }
+static void sh_end(void) { if (in_op) { sh_epoch++; sh_n = 0; in_op = 0; } }
 static void lb_install(lb_t *c, uint64_t slot, uint32_t gen) {
   unsigned set = slot & 63; int way = c->rr[set], reuse = 0;
   for (int w = 0; w < 4; w++) if (c->occ[set][w] && c->slot[set][w] == slot) { way = w; reuse = 1; }
   if (!reuse) for (int w = 3; w >= 0; w--) if (!c->occ[set][w]) { way = w; reuse = 1; }
-  if (!reuse) c->rr[set] = (c->rr[set] + 1) & 3;
+  if (!reuse) { if (in_op && sh_has(c->slot[set][way])) c->self_evict++; c->rr[set] = (c->rr[set] + 1) & 3; }
+  if (in_op) sh_add(slot, c);
   c->occ[set][way] = 1; c->slot[set][way] = slot; c->gen[set][way] = gen; c->live[set][way] = 1; c->installs++;
 }
 static void lb_invalidate(lb_t *c, uint64_t slot) {
@@ -170,6 +191,7 @@ int main(int argc, char **argv) {
     if (kind > K_E || (kind == K_E ? (y >> 1) != 0 : (kind >= K_T ? y != 0 : (y >> 33) != 0))) {
       fprintf(stderr, "malformed event at %llu\n", (unsigned long long)i); return 2;
     }
+    if (kind == K_T || kind == K_E || kind <= K_P) sh_end();   // a check, an edge or a table switch ends a stretch
     if (kind == K_T) { tables++; lb_flush(&LB); rc_flush(&RC); gc_flush(&GC); tlb_clear(&NC.tlb); continue; }
     if (kind == K_I) { lastI = x & ((1ULL << 56) - 1); continue; }
     if (kind == K_PI) { lastP = x & ((1ULL << 56) - 1); continue; }
@@ -187,6 +209,7 @@ int main(int argc, char **argv) {
       gc_check(&GC, slot, cl); if (cnt > 1) { GC.s[cl].acc += cnt - 1; GC.s[cl].hit += cnt - 1; }
       nc_access(&NC, slot, 0, cl, cnt);
     } else {
+      if (!in_op) { in_op = 1; LB.stretches++; }
       lb_op(&LB, slot, gen, write, live);
       rc_access(&RC, slot, write, cl);
       gc_op(&GC, slot, write, cl);
@@ -208,6 +231,8 @@ int main(int argc, char **argv) {
   printf("LB probes %llu deny_hit_dead %llu dead_record %llu installs %llu invalidations %llu flushes %llu\n",
          (unsigned long long)LB.probes, (unsigned long long)LB.deny_hit_dead, (unsigned long long)LB.dead_record, (unsigned long long)LB.installs,
          (unsigned long long)LB.inval, (unsigned long long)LB.edges_flushed);
+  printf("LB op_stretches %llu self_evict %llu untracked %llu\n", (unsigned long long)LB.stretches,
+         (unsigned long long)LB.self_evict, (unsigned long long)LB.untracked);
   printf("E by op %llu %llu %llu %llu\n", (unsigned long long)ev[K_E][0], (unsigned long long)ev[K_E][1],
          (unsigned long long)ev[K_E][2], (unsigned long long)ev[K_E][3]);
   printf("RC flush_writebacks %llu\nEND\n", (unsigned long long)RC.flush_wb);
