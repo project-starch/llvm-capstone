@@ -52,3 +52,29 @@ end of the run, not a reading.
 
 **Budget:** one boot on board 2 or 3, no flash. The upload is about 17 MB (about 135 s at about 130 KiB/s); the run is
 bounded at 900 s after the load.
+
+## Amendment 1 (2026-11-25, after boot 1, before boot 2)
+
+**Boot 1** (board 2, booking 1501, image `0e36edbb…`):
+- P1, P2 and P3 read as predicted: the banner line; `Boot HART MEDELEG 0x000000007f00b109`; Linux to
+  `Run /init as init process` at 19.47 s, with the sublet and captag lines.
+- P4: NO READING. Just before `/init` the kernel printed `Warning: unable to open an initial console`.
+  - The initramfs had no `/dev/console`: the recipe extracted the board's rootfs.cpio as a non-root user, and that
+    cannot create the node. So `/init` ran with no fds 0/1/2.
+  - The twin had a console because its kernel's INITRAMFS_SOURCE is empty: the default list creates the node, and the
+    initrd is unpacked over it.
+  - This is a defect of the image, not a reading.
+
+**Boot 2's image:**
+- The initramfs is the board's rootfs.cpio, copied unchanged as `base-rootfs.cpio` (it carries `dev/console` c 5,1,
+  root), concatenated with `overlay.cpio`. The overlay holds `/init`, `/regs` and `/enter`, owned by root (`cpio -R 0:0`);
+  the kernel unpacks both archives in order.
+- The embedded copy equals the source: `usr/initramfs_inc_data` gunzips to `initramfs.cpio`.
+- bootargs (DTS chosen) = `earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1`, aligned with the twin.
+  The twin's `panic=-1` is left out, so the board doesn't reboot.
+- New hashes in `SHA256SUMS`: the board image `fw_payload.bin` is `54d11b896b2a59e3…`.
+
+**Predictions:**
+- P1 and P2 are unchanged.
+- P3 is unchanged, plus `sublet: .dom loader registered`, which boot 1 printed as "off" without the parameter.
+- P4 is unchanged: as on the twin, `regs status 91` and `enter status 1`.

@@ -7,7 +7,7 @@
   model = "eth,ariane-bare";
   chosen {
     stdout-path = "/soc/uart@10000000:57600";
-    bootargs = "earlycon console=ttyS0,57600";
+    bootargs = "earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1";
   };
   cpus {
     #address-cells = <1>;
