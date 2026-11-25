@@ -126,3 +126,31 @@ on 904cd9c6b; sha256 bdff45d0…) is resident on board 2. rtl's crevoke4b kit re
 - any other reading is a finding about 88db40027 against 904cd9c6b;
 - the board differs from boot 3 (board 2, as boot 3), so the pair is matched in board and image and differs only in
   the bitstream.
+
+## Amendment 4 (2026-11-25): boots 7 and 8, the cost of an M round trip from U
+
+**The question.** The board has no time CSR. Its OpenSBI banner reads `Boot HART ISA Extensions : none`, where the twin
+reads `time`. So every rdtime, in the kernel's sched_clock and in user code, traps to M for emulation. On Line B each
+such trap also runs the keep-tags save path (31 STC, a compare and 31 LDC) and empties the verdict cache (rtl,
+b5b2-srvcost). This pair reads the firmware's part on silicon. The verdict refill is rtl's sim reading.
+
+**Program.** `/mtrip` (`build/mtrip.c`, static RISC-V, buildroot GCC 12.3, -O2, ILLEGAL 0). It reports cycles per op,
+best of 5 repeats of 20,000 ops each, for:
+- rdtime: one M trip each;
+- rdcycle: no trap, the control;
+- getppid: a U-to-S syscall, no M, the second control.
+`/init` (`build/init-mtrip`) runs it three times.
+
+**Images** (`SHA256SUMS.mtrip`): the same kernel and initramfs; only the firmware differs.
+- boot 7: keep-tags, `870ca3f2…`;
+- boot 8: the same tree with the flag off, `248c932a…`.
+
+**Board:** whichever of 2/3 is free, both boots on that one board, no flash. The record names the resident bitstream.
+
+**Predictions:**
+- rdcycle under 5 cycles on both;
+- getppid equal on both firmwares within ±3 % (no M on that path);
+- rdtime above 100 cycles on both: a full trap, OpenSBI's C emulation and mret;
+- rdtime(keep) - rdtime(stock) between 60 and 600 cycles: the keep-tags entry and exit, 62 capability memory ops plus
+  31 compares, against stock's 31 sd and 31 ld.
+- A difference outside that band is read for what it is, not stretched to fit.
