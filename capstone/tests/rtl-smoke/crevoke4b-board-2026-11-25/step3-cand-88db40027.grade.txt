@@ -1,0 +1,19 @@
+01-sublet-life           AS PREDICTED           
+02-b5b2-crevint          AS PREDICTED           recorded p2=0x14a1
+03-b5b2-crevint-mt       AS PREDICTED           recorded p2=0x1777 p8=0x5 p9=0x5
+04-b5b2-crevint-sh       AS PREDICTED           recorded p2=0x1abf p4=0x100000047 p5=0x800000cf p8=0x2 p9=0x2 p10=0x1 p11=0x9227b3d4c7c6bfb1
+05-b5b2-crevint-lat      AS PREDICTED           latency band PASS: lat [1222, -119, 565, -130, 565, -130, 0, 0] ticks; cycles/ticks 30062/15031; positive after the first in cycles [(2, 1130), (4, 1130)] (bound 15,000; first 1222 recorded); recorded p2=0x1a23 p8=0x6 p9=0x6 p13=0x4c6 p14=0xffffffffffffff89 p15=0x235 p16=0xffffffffffffff7e p17=0x235
+06-b5b2-crevsv-none      AS PREDICTED           recorded p2=0x1a0c p8=0x6 p9=0x6 p10=0x3
+07-b5b2-crevsv-srev      AS PREDICTED           recorded p2=0x1f6d p8=0x6 p9=0x6 p10=0x3
+08-b5b2-crevsv-straw     AS PREDICTED           recorded p2=0x1f31 p8=0x6 p9=0x6 p10=0x3
+09-b5b2-crevsv-derive    AS PREDICTED           recorded p2=0x1fe4 p4=0x800000cf p5=0x800000ce p8=0x6 p9=0x4 p10=0x3 p11=0xd443b2166d8185e1
+10-b5b2-crevsv-kill      AS PREDICTED           recorded p2=0x1d6e p3=0x80000008 p4=0x800000d0 p5=0x800000cf p8=0x6 p9=0x4 p10=0x3 p11=0x5323b3b7586ffcf6
+11-b5b2-sbdrain-none     AS PREDICTED           
+12-b5b2-sbdrain-fill     AS PREDICTED           
+13-b5b2-sbdrain-fence    AS PREDICTED           
+14-b5b2-sbdrain-mint     AS PREDICTED           
+15-b5b2-sbdrain-sret     AS PREDICTED           
+16-b5b2-sbdrain-cost0    AS PREDICTED           recorded p2=0xe7a
+17-b5b2-sbdrain-cost     AS PREDICTED           recorded p2=0xee9
+
+C4BKIT cand 16/16 AS PREDICTED; 

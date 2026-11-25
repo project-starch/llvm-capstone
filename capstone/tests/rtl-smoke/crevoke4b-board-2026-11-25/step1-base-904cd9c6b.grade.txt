@@ -1,0 +1,19 @@
+01-sublet-life           AS PREDICTED (base)    
+02-b5b2-crevint          AS PREDICTED (base)    recorded p2=0x1083
+03-b5b2-crevint-mt       AS PREDICTED (base)    recorded p2=0x12cc p8=0x5 p9=0x0
+04-b5b2-crevint-sh       AS PREDICTED (base)    recorded p2=0x12f9 p4=0x80000008 p5=0x80000009 p8=0x2 p9=0x0 p10=0x0 p11=0x3365444f5c1c0d1
+05-b5b2-crevint-lat      AS PREDICTED (base)    latency band VOID (no positive latency after the first); recorded p2=0x12d0 p8=0x2 p9=0x0 p13=0x806 p14=0xffffffffffffff8a p15=0x0 p16=0x0 p17=0x0 p18=0x0 p19=0x0 p20=0x0 p21=0x756e p22=0x3ab7
+06-b5b2-crevsv-none      AS PREDICTED (base)    recorded p2=0x12f3 p8=0x2 p9=0x0 p10=0x0
+07-b5b2-crevsv-srev      AS PREDICTED (base)    recorded p2=0x132b p8=0x2 p9=0x0 p10=0x0
+08-b5b2-crevsv-straw     AS PREDICTED (base)    recorded p2=0x1312 p8=0x2 p9=0x0 p10=0x0
+09-b5b2-crevsv-derive    AS PREDICTED (base)    recorded p2=0x14af p4=0x8000000a p5=0x8000000b p8=0x4 p9=0x0 p10=0x0 p11=0xe3377a44a5c188c1
+10-b5b2-crevsv-kill      AS PREDICTED (base)    recorded p2=0x134b p3=0x80000008 p4=0x80000009 p5=0x8000000a p8=0x2 p9=0x0 p10=0x0 p11=0xf3372c44d23f41be
+11-b5b2-sbdrain-none     AS PREDICTED (base)    
+12-b5b2-sbdrain-fill     AS PREDICTED (base)    
+13-b5b2-sbdrain-fence    AS PREDICTED (base)    
+14-b5b2-sbdrain-mint     AS PREDICTED (base)    
+15-b5b2-sbdrain-sret     AS PREDICTED (base)    
+16-b5b2-sbdrain-cost0    AS PREDICTED (base)    recorded p2=0xe3a
+17-b5b2-sbdrain-cost     AS PREDICTED (base)    recorded p2=0xebf
+
+C4BKIT base 16/16 AS PREDICTED; 
