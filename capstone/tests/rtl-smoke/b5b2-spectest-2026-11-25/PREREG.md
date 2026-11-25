@@ -43,3 +43,34 @@ the board is slower than the bound was sized for. Its no-probe list is empty.
 - A watchdog kill at 3,600 s is NO READING for that stage.
 
 The `capstone_vm` counters the stage prints read `absent` on this kernel; that is expected, not a reading.
+
+## Amendment 1 (2026-11-25, while boot 5 runs): the chain of the other 11 images
+
+**Gate.** The chain starts only if boot 5 reads `TRAPTEST: control smoke.dom rc=7`. If it doesn't, nothing here runs.
+
+**Board.** All of it runs on board 3, the board of boot 5, so every arm of a benchmark is read on one board.
+
+**Order.** One image per boot, in this order: B5TL0-g1, B5TL1-g1, B5T-g2, B5TL0-g2, B5TL1-g2, B5TL1-g3, B5TL0-g3,
+B5T-g3, B5T-g4, B5TL0-g4, B5TL1-g4. The arms are interleaved by group, and g3's order is reversed. Images and their
+stages are in `SHA256SUMS.chain`; every overlay file is in `overlay-files.chain.sha256`.
+- Each image is `make-payload.sh` over smoke.dom, an empty probe list, `init-boot5` (byte-identical) and that group's
+  stage directories from compiler's `board-stages/<ARM>/<bench>` (MANIFEST.json; images ILLEGAL 0 / DELIN 0).
+- The groups: g1 = lbm, mcf, nab, xz; g2 = x264 (its ldecod helper is a plain RISC-V binary), imagick (its
+  imagevalidate_538 is plain); g3 = gcc; g4 = perlbench (natperl is plain).
+
+**Predictions, every boot:**
+- C `control smoke.dom rc=7`;
+- each stage `@@SPEC-END rc=0` and a specdiff pass, by compiler's `run-stage.py read`, the tool boot 5 is graded by;
+- `up1 - up0` per stage as a first reading.
+
+**Classification.** As for boot 5. A failed C voids that boot only. A stage whose image differs only by arm and whose
+specdiff fails in one arm alone is a finding about that arm.
+
+**Arms and their comparability.**
+- B5T: bring-up, not comparable.
+- B5TL0: the measured allocator minus mapping reuse.
+- B5TL1: the measured allocator with the CRENEW mapping cache. Its residuals are the mprotect hook never firing, the
+  out-of-place renewal unobserved, and the alias same_address miss (runtime/trap-alloc-lean 075cf6e6c688).
+
+None of these rows is a cost against Plain yet. They are the first functional and timing readings of the trap route on
+silicon, and the matched baseline for the next bitstream (4(b) and the store-drain fix).

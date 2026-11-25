@@ -1,0 +1,11 @@
+d837e9fa52d8f4cc12317d8a3ca2cb93cc7c3a26de6ac485006aa4fbacc64666  spec/B5T-g2/out/fw_payload.bin  21657608  B5T-525.x264_r B5T-538.imagick_r 
+c40b8ce9bc02a414415ffd5a59c72043e1b336172229f25890176b4f64d98dde  spec/B5T-g3/out/fw_payload.bin  21657608  B5T-502.gcc_r 
+1ba38caac9d63d7bf0cd4a9da7d385be1c97a241a1120ade9d10d4fc96fb55ae  spec/B5T-g4/out/fw_payload.bin  21657608  B5T-500.perlbench_r 
+5b7f65e004beaa1f11c404a93697b24a9292e96a47cbd7a40f62310bdd03c9eb  spec/B5TL0-g1/out/fw_payload.bin  19560456  B5TL0-505.mcf_r B5TL0-519.lbm_r B5TL0-544.nab_r B5TL0-557.xz_r 
+ad19c4e7d09389b9a2688d4176e7aca3cf9a98e3203e528d60f812e5f2387fcd  spec/B5TL0-g2/out/fw_payload.bin  21657608  B5TL0-525.x264_r B5TL0-538.imagick_r 
+ab7fe83214dda4e71cd64c60633d01c6d9611f81fcea5aeeedfb4a9a451342d1  spec/B5TL0-g3/out/fw_payload.bin  21657608  B5TL0-502.gcc_r 
+9f855907a9bfbd38c75738ee8e6ef87df0ac093f48603dd7a40acd5ba7f8fa01  spec/B5TL0-g4/out/fw_payload.bin  21657608  B5TL0-500.perlbench_r 
+9fe449816c87fb855f9cc63794c91b2bd7edd19df2ccf15224c56828a12c47b0  spec/B5TL1-g1/out/fw_payload.bin  19560456  B5TL1-505.mcf_r B5TL1-519.lbm_r B5TL1-544.nab_r B5TL1-557.xz_r 
+3891f8e13c737626358a7f75234226733bba2978dddf1b712e2495c8f9aaac18  spec/B5TL1-g2/out/fw_payload.bin  21657608  B5TL1-525.x264_r B5TL1-538.imagick_r 
+ce0ca633c490c4713cbde33f88ba4c2d474b21907273b273c989067d00c94ef8  spec/B5TL1-g3/out/fw_payload.bin  21657608  B5TL1-502.gcc_r 
+80efb46037b6357322327583ea3469a15080f3b4daac8165436cbe3414321e07  spec/B5TL1-g4/out/fw_payload.bin  21657608  B5TL1-500.perlbench_r 
