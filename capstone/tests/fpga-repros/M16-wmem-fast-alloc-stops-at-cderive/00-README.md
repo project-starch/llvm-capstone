@@ -7,7 +7,7 @@ instruction, after about 2·10^7 allocations: about 11 minutes on P1, against 40
 
 **Wrong symptom? Siblings, so a reader with a neighbouring symptom is redirected:**
 - `../R27-revnode-orphan-response/`: a silent deadlock after a pipeline flush during the DYN unit's revocation-node
-  query, fixed in RTL at `66c4e7517`. M-16 shares the shape: silent, no trap, a CAPSTONE_DYN op valid at the bypass
+  query, fixed in RTL at `66c4e7517`. M-16 shares the shape: silent, no trap, a CAPSTONE_DYN op valid at the LSU
   head. It was observed on P1, which descends from that fix, so it is not that instance unless the fix is incomplete.
   Nothing here shows which.
 - `../S13-o1-dyn-rev-node-hang/`: a hang in the DYN/rev-node path at `-O1` with no exception. It is not reproducible
@@ -73,7 +73,7 @@ reader is `src/read-stress.py` (`0384cfba…`); usage `read-stress.py <board.txt
 |---|---|---|---|
 | commit pc (slot 0) | `0x3ff676c9ee` (this image's CDERIVE) | `0x3ff6780f04` (tshark's CDERIVE) | `0x3ff6780f04` |
 | trap log (sw=255) | `0x89` | `0x89` | `0x89` |
-| sw=220 `{lsu_ctrl.valid,bypass_empty,0,0,fu}` | `0x8c` (CAPSTONE_DYN at the bypass head) | `0x8c` | `0x8c` |
+| sw=220 `{lsu_ctrl.valid,lsu_ready_o,0,0,fu}` | `0x8c` (a valid CAPSTONE_DYN op at the LSU head, `lsu_ready_o` = 0) | `0x8c` | `0x8c` |
 | sw=225 `{tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}` | `0x92` | `0x92` | `0x96` (`stall` set) |
 | sw=227 | `0x03` | `0x07` | `0x07` |
 | sw=228 `{1,dom_switch_idx}` | `0xb8` | `0x9f` | `0x9f` |
@@ -81,7 +81,24 @@ reader is `src/read-stress.py` (`0384cfba…`); usage `read-stress.py <board.txt
 | mepc / rev-node head | `0xffffffff80007376` / `0x0071` | same | same |
 | serving index | `0x1381` | `0x14b9` | `0x11de` / `0x19fb` |
 
-- sw=227's differing bit is `data_req.write_en`.
+- **sw=220's bit 6 is `lsu_ready_o`, not "bypass empty".** The runner's label and the port comment say bypass empty;
+  the driver is `assign lsu_head_debug_o = {lsu_ctrl.valid, lsu_ready_o, 2'b00, 4'(lsu_ctrl.fu)}`
+  (`core/load_store_unit.sv:341` at `715bdd1fe`; `:412` at `904cd9c6b`, per the RTL lane). So `0x8c` is a valid op of
+  unit 12 (CAPSTONE_DYN) at the LSU head with the LSU not ready. sw=219 `0xd7` = 215 is that op's `fu_op`; the RTL
+  lane decodes it as LDC from `ariane_pkg`'s enum with `CAPSTONE_SUBLET_FMT` defined (not re-derived here).
+- The other apertures are driven at `715bdd1fe`: 193 `store_buffer.sv:101`, 194 `store_unit.sv:118`, 221
+  `store_unit.sv:414`, 219 `load_store_unit.sv:342`, 222 the WT adapter's `tag_debug_o` (`cva6.sv:2378`).
+- **Not traced to a driver:** sw=224-228, the trap log (255), and the multi-byte rows (commit pc, mepc, tval, rev-node
+  words). At `715bdd1fe` each of their signals is connected to a submodule output port in `core/cva6.sv`, but they
+  are not traced to an assignment inside that module. sw=195's net was connected the same way and is dead, so read
+  these rows' labels as unverified until they are. sw=227's bit 2 is `dom_switch_data_req.write_en`, the domain
+  switcher's request, not the LSU's (`core/cva6.sv` 224-bank case `5'b00011`).
+- **sw=195 and sw=229 carry no information.** Both show `load_state`, which comes from `load_unit.sv`'s `state_o`.
+  That output is declared (`core/load_unit.sv:102` at `715bdd1fe`, `:109` at `904cd9c6b`) and never assigned, so
+  both apertures read 0 on every boot, wedged or not. Found by the RTL lane on 2026-11-25 and checked here with
+  `git show <rev>:core/load_unit.sv` and the `load_state` mux lines in `core/cva6.sv` (`5'b00011` in the 192 bank, `5'b00101` in the 224 bank).
+  Read nothing into their 0x00.
+- sw=227's differing bit is bit 2, `dom_switch_data_req.write_en` (see above).
 - sw=228 is the domain-switch index; the stress boot's domain set is not tshark's.
 - The serving index has differed between every pair of non-returns so far.
 - **Caution on the pc:** it is scoreboard slot 0, which is exact only shortly after a flush. A hot allocator would also
