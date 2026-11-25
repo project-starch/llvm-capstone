@@ -17,7 +17,7 @@ Platform:
 - QEMU: qemu-crv build at da49602d76.
 - Firmware: sbi-keep-run fw-y (trap-route-keep-tags eb85e21c).
 - Kernel: trapk linux-6.1 (native-kernel-new-qemu 6d4504f8b073, TRAP + TRAP_TEST, no SMP), booted with
-  `sublet.dom_binfmt=1`, 2 GiB.
+  `sublet.dom_binfmt=1`, with 963 MiB of RAM (the board DTS gives Linux 0x3c2d2000 bytes; amended before the boot at the runtime lane's request, so that a row needing more memory fails here as it would on silicon).
 - Each image runs as an ordinary task. A fault is the kernel's `sublet: fault cause=` line.
 
 Images: `renew-probe.c` and `mapping-reuse-probe.c`, built against eight SDK variants of this branch.
