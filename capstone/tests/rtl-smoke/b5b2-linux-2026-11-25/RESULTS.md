@@ -56,3 +56,35 @@ The probable reason, not yet shown: this core's D$ is write-through, so each of 
 is a firmware fast path for the rdtime emulation that touches two registers instead of 31. It goes into BOTH arms'
 firmware, so no divergence favours either. On Line B the verdict cache's refill after every M trip comes on top of the
 794 (rtl's sim: about 470 cycles over 33 ids).
+
+## Boots 9-12: the firmware's rdtime fast path (Amendment 5)
+
+Board 2, resident 28fcbb646, no flash, 2026-11-25 16:13-16:33Z. The kernel and initramfs are the mtrip images.
+The firmware is caplifive-opensbi trap-route-keep-tags 25b14da6, built four ways: keep-tags or stock, each with
+FW_FAST_RDTIME off or on. Before the boots the fast build passed the keep-tags QEMU suite: keep-timer 0, keep-call 0,
+stock 152/152, the strip control 53. Read from the UART captures (`b2mtrip2-20261125T1613-boot{9..12}`). Boot 11's
+image is out-fy, 3cabb79f42a9e6d7.
+
+| Boot | Firmware | regs / strip23 / enter | rdtime (3 runs) | getppid | cycles_per_tick, backwards |
+|---|---|---|---|---|---|
+| 9 | keep, full path | 0 / 23 / 200 | 1940.84, 1942.97, 1950.14 | 1309.0-1310.0 | 1.99, 0 |
+| 10 | stock, full path | 139 / 139 / 200 | 1151.55, 1155.39, 1139.37 | 1278.4-1279.9 | 1.99, 0 |
+| 11 | keep, fast path | 0 / 23 / 200 | 119.29, 119.19, 119.31 | 1259.1-1260.0 | 1.99, 0 |
+| 12 | stock, fast path | 139 / 139 / 200 | 119.66, 119.77, 119.77 | 1252.4-1252.9 | 1.99, 0 |
+
+What this establishes:
+1. **The fast path cuts an emulated rdtime from about 1,150 cycles (stock) and 1,940 (keep-tags) to about 119, on
+   both firmwares.** keep minus stock on the fast path is -0.48 cycles, so keep-tags adds nothing there. Its full
+   cost (about +790 cycles a trip, boots 7/8) remains on every other M trap.
+2. **The values are right.** cycles_per_tick, read against the independent rdcycle counter, is 1.99 on every run of
+   both paths. No read goes backwards.
+3. **The trap-route contract holds under the fast path:** boot 11 reads like boot 9.
+4. **Stock still loses register tags at M traps.** Boots 10 and 12 fault with cause 24 at pc 0x1021c (`sd zero,0(a0)`),
+   one instruction later than boot 4's 0x10218. On 28fcbb646 the CINCOFFSET of an untagged a1 yields an integer (the
+   FLU ungate), and the store through it then faults. The PREREG's "every boot: regs 0" over-applied to the stock
+   arms; boot 4 had already shown this reading.
+5. getppid's spread over the four boots, 1.0452, exceeds the 1.03 predicted, with the keep-full boot highest, as on
+   boot 7. Recorded as read.
+
+**Consequence for the campaign:** both arms' firmware carries FW_FAST_RDTIME=y, so neither pays the M trip for
+rdtime. Plain's firmware stays stock apart from that flag.
