@@ -171,7 +171,18 @@ static cl::opt<bool> CapabilityByteIV(
 // application code runs (capstone-qemu target/riscv/cap.h:199-233;
 // design/sublet-reference-model.md sections 2.1 and 5; bounds are NOT
 // limited, so the basis is the cursor). The access must survive codegen: see
-// LiveAccessOnly. A count at or above the period visits a
+// LiveAccessOnly.
+// The cursors are made only by cursor moves the rule covers: the IV is a PHI
+// this pass creates, of the anchor's base (or a GEP of it) and a GEP of the IV,
+// and every access is a GEP of the IV. A capability GEP lowers to CIncOffset
+// (CapstoneISelLowering.cpp, ISD::PTRADD), so no IV comes from an LDC. A
+// tagged base has a cursor below 2^38 by the format; an untagged one traps at
+// the first access in both loops. On silicon the rule is capstone-ariane
+// b42c8c644 and later Sublet seals: CINCOFFSET, CINCOFFSETIMM, SCC and INIT
+// clear the tag for a cursor with bits [63:38] set (core/ex_stage.sv:2760-2766,
+// :2809; fmt_cursor_unrep, core/include/ariane_pkg.sv:1086-1100), and LDC
+// decodes 38 address bits (ariane_pkg.sv:967-973). The option does not hold on
+// P1 (39-bit cursor, another format). A count at or above the period visits a
 // whole cycle of cursors, spread over 2^64 - 2^ctz(step) bytes, so one of them
 // lies at or above 2^38 and the original traps at that access, which the
 // rewritten loop reaches too. Below the period the exits coincide, as without
