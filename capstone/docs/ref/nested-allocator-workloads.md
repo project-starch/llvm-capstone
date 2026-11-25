@@ -7048,6 +7048,26 @@ run on it against the twin's serial (`153ffc99…`).
   therefore says that the path suffices. It does not say that tshark's stops come from this path alone, although the
   pc, sw=220 and the trap log agree.
 
+### Note: what M-16's apertures can and cannot say (2026-11-25, board-free)
+
+This corrects the labels in the stress result above and in M-16's earlier non-return readings. The drivers are traced
+in `capstone-ariane` at `715bdd1fe` (P1's line); the details are in `tests/fpga-repros/M16-wmem-fast-alloc-stops-at-cderive/`
+(d402073e4b14).
+- **sw=220's bit 6 is `lsu_ready_o`, not "bypass empty"** (`load_store_unit.sv:341`). So `0x8c` reads: a valid
+  CAPSTONE_DYN op at the LSU head, with the LSU not ready. Wherever this doc says "valid at the bypass head", read
+  "at the LSU head, LSU not ready".
+- **sw=195 and sw=229 are undriven.** Both read `load_unit.sv`'s `state_o`, which is declared and never assigned. Their
+  0x00 carries no information.
+- **sw=227's differing bit** (stress `0x03` against tshark's `0x07`) is `dom_switch_data_req.write_en`, the domain
+  switcher's request. It is not the LSU's `data_req.write_en`, as the stress result above names it.
+- **Not traced to an assignment:** sw=224-228, the trap log and the multi-byte rows. They are connected to submodule
+  ports only, so their labels are unverified.
+- **On B5b-2 (`904cd9c6b`) some rows are constants.** The rev-node debug word, head and serving index, and the switcher's
+  bits of 225-228, are tied off (`capstone_sublet_life.sv:226-229`, `cva6.sv:2398-2411`). There they are no reading.
+
+None of these changes a prediction or a verdict above. The stress stop was graded on the commit pc and sw=220, and
+sw=220's value is unchanged; only its meaning is corrected.
+
 ### Pre-registration: the stress form on B5b-2, protected only, 100 then 2 × 300,000 packets in one boot on board 2 (written 2026-11-25 15:18, before the boot)
 
 **Question.** Does M-16 exist on B5b-2, the design going forward? On P1 the stress form stopped after about 2·10^7
@@ -7454,3 +7474,43 @@ rc=7, Perl's `acbf40c2…`, tshark's 169 inputs with 0 nonzero, and `b190069b…
 **Limits.**
 - The cost is cross-boot, one boot per arm, spans only.
 - Perl is does-it-run only.
+
+### Result: boots B-stock and B-prot, Wireshark and Perl run with stock's answers; tshark prot against stock +2.5 % (board 2, 2026-11-25 14:06-15:56, read against 17d859cc89e4)
+
+**Run.** The board lane ran each image on board 2, `…-r75d-b5b2n_904cd9c6b.bit`, read back by name before and after each
+boot (rc 3: the name matches, no sha256 exposed). Each run ended on `TRAPTEST: done` and board 2 was unbooked
+(`UNBOOK 1506: 200`, `1508: 200`). The captures are `b5b2linux/b2bootB-20261125T0540-{stock,prot}/uart.txt`
+(`f36522b0…`, `4ac7b197…`, the board lane's tree). I re-ran the reader (`122f1974…`) on each: exit 0, and the output is
+identical to the board lane's grade files.
+
+**Readings.**
+
+| boot | control | Perl makerand.pl | tshark arm | 169 inputs, nonzero | answer | span |
+|---|---|---|---|---|---|---|
+| B-stock | `rc=7` | perl-stock: rc 0, `acbf40c2…` (43,824 B), 276.4 s | u1 | 169, 0 | `b190069b…` (34,055,148 B) | 1,766.43 s |
+| B-prot | `rc=7` | perl-p0002: rc 0, `acbf40c2…`, 272.2 s | p1 | 169, 0 | `b190069b…` | 1,811.13 s |
+
+- tshark's stderr is 1,758,495 B in both arms. It is the same dissector-registration `OOPS` lines in both, starting
+  `dissector table "arcnet.protocol_id" doesn't exist`. The twin's arms wrote 1,758,498 B each. The 3-byte
+  difference was not read further: the answer, which is stdout, is equal.
+- Heartbeats: 8 per arm, each every 20 captures.
+
+**Against the predictions.**
+1. Both controls read `rc=7`: **met.**
+2. Both Perl arms answer `acbf40c2…` with rc 0: **met** (does-it-run only).
+3. Both tshark arms answer `b190069b…` with 169 inputs and 0 nonzero: **met.**
+4. Cost between −5 % and +15 %, point +2.3 %: **met.** Prot against stock is **+2.53 %** (1,811.13 s against
+   1,766.43 s), cross-boot.
+
+**What it says.**
+- **Fig. 10's Wireshark revision runs on B5b-2 silicon, on the trap route, with stock's answer, and so does Perl 5.36.**
+  With boot A, all five one-operand applications have a silicon row with stock's answers.
+- **The protected tshark returned on B5b-2 in its one boot.** Its protected wmem path issues about 1.9·10^6
+  allocations a run. At P1's stress-form estimate (4.9·10^-8 per allocation), a run returns with probability about
+  0.91. So this return says little about M-16 on B5b-2; the stress boot S is the test for that.
+- The +2.53 % lies at oneop's image-instruction point (+2.3 %). It comes from one boot per arm, across boots.
+
+**Limits.**
+- One boot per arm, so the cost carries the boot-to-boot spread, which is not measured here.
+- The wall-clock spans include the kernel and the trap route.
+- The Perl arms are does-it-run only.
