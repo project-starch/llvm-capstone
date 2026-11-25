@@ -339,3 +339,16 @@ This bitstream is diagnostic (the wedge apertures) plus 4(b) plus the FLU rule. 
 Its kit:
 - **crevoke4b-bare-2026-11-25**, whose 17 vectors read identically on 47d749153 in sim (all 17, every position);
 - **b5b2-untagged as a bare image** (to build). That is the B5b-2 kit's first exercise of this rule in U.
+
+## 4(b) on silicon: AS PREDICTED, board 2, N = 1 (2026-11-25)
+
+The crevoke4b-bare-2026-11-25 kit (PREREG 77f0e191b97f) ran in the semantics owner's granted sequence on board 2. The board lane's records are board/meas-pw 6e07527a8a98.
+- **The control, 904cd9c6b resident, no flash:** 17/17 exact on the base column.
+- **The flash of 88db40027's seal** (sha256 bdff45d0...8d9a, checked first, its name read back after the flash and after the loads).
+- **The 17 on the seal: 17/17 exact on every E position.**
+  - No VOID arm.
+  - Stop latency 1,130 cycles at each resumed-chunk stop on silicon (565 ticks at 2.0 cycles/tick), against the 15,000 bound. Sim read 3,692.
+  - Every recorded id and checksum equals the sim.
+  - No sbdrain exposure in the five shapes.
+
+Both runs were graded twice: by the board lane's grader, and here from the raw captures with an independent script whose positive control fires. The kit README has the full readings. Board 2 stays on 88db40027.

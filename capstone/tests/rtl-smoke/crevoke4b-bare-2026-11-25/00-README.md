@@ -21,3 +21,17 @@ This kit claims nothing about the B5T mcf / M-16 wedge. That wedge is open, and 
 - Timing-dependent positions (cycles, timer-trap counts, latencies) are measured, not graded.
 
 `build.sh` builds with riscv64-unknown-elf-gcc. Recorder registers come from pick-regs.py. `images/SHA256SUMS` pins the images. `PREREG.md` holds the vectors simulated from THESE images on both trees, and the grading and void rules. `expected-vectors.json` carries the same data for graders, with the class of every position. Runner: `sup-bare-2026-10-03-ladder/run_sup_bare.py` (`SUP_IMG`, and `SUP_REC_ADDR` from each `.rec`).
+
+## Silicon readings
+
+- **Board 2, 2026-11-25, the board lane's runs in the semantics owner's granted sequence** (records board/meas-pw 6e07527a8a98, capstone/tests/rtl-smoke/crevoke4b-board-2026-11-25/).
+- **The instrument control, 904cd9c6b resident, no flash** (booking 1512, 08:59-09:15Z): 17/17 exact on every E position of the 904cd9c6b column.
+  - This was graded here from the raw captures with an independent script (it reads SR/SV, not the board lane's grader), and agrees with the board lane's 16/16 plus the control.
+  - The script's positive control: the same captures graded against the 88db40027 column read 9/17.
+  - Only the eight crevint/crevsv arms other than kill can tell the two bitstreams apart. sublet-life, crevsv-kill and the seven sbdrain arms carry E values equal on both trees.
+- **The flash:** the seal (sha256 bdff45d0a96f68ad1ea3f2077c7ca350960047a1f394d21849bd4a003da58d9a) was checked before the flash, power-cycled, and its name read back after the flash and after the loads (booking 1513).
+- **The seal, 09:17-09:33Z: 88db40027 AS PREDICTED, 17/17 exact on E** (graded here the same way; it agrees with the board lane's 16/16 plus the control). All 17 image sha16 values are in the session log.
+  - No VOID arm. Timer traps at the site: crevint-mt 5, -sh 2, -lat 6, crevsv 6/6/6/4/4.
+  - The latency band PASSES: 565 ticks x 2.0 cycles/tick = 1,130 cycles at each resumed-chunk stop, against the 15,000 bound. Sim read 3,692 at memory delay 12. The first latency (the fresh scan) is 1,222 ticks.
+  - Every R value equals the 88db40027 sim: crevint-sh, crevsv-derive and crevsv-kill ids and checksums.
+- N = 1, one board.
