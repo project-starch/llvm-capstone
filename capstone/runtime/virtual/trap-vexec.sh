@@ -106,6 +106,7 @@ run() {
     log=$(dmesg | grep -E "$RECORDS|sublet: kernel fault |sublet: .*\[$child\] enters |\[$child\]: unhandled signal |\] epc : |\] status: ")
     kernel_faults "$child" "$image"
     if [ $rc -le 128 ] || [ $rc -gt 192 ]; then
+        exited "$image"
         exit $rc
     fi
     report "$child" "$image"
@@ -217,6 +218,17 @@ $log
 EOF_LOG
     [ -n "$found" ] || return 0
     emit_stderr "capstone-exec: unhandled signal=$signal code=$code cause=$(hex_dec "$cause") pc=$(hex "$pc") address=$(hex "$address") ra=$(hex "$ra") image=$2"
+}
+
+# exited IMAGE: the image's identity on a run that ENDS, the launcher's line (runtime/virtual/exec.c)
+#   capstone-exec: exit image=IMAGE sha256=HEX
+# under the same gate as its fault record: stderr is a terminal or CAPSTONE_EXEC_DIAGNOSTICS is set. A judge that reads a
+# probe's successful run (the putenv probe) checks the transcript against this digest. One more process, on that gate only.
+exited() {
+    if [ -t 2 ] || [ -n "$CAPSTONE_EXEC_DIAGNOSTICS" ]; then
+        digest=$(sha256sum "$1" 2>/dev/null)
+        echo "capstone-exec: exit image=$1 sha256=${digest%% *}" >&2
+    fi
 }
 
 # signal_words S code 0xC at 0xADDR ...; epc_words PC ra : RA ...

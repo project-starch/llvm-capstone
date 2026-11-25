@@ -1,7 +1,9 @@
 #!/bin/sh
 # test-vexec.sh: trap-vexec.sh on the host, with a fake dmesg and parameter directory.
 #   1. An image that the "kernel" kills with a Sublet fault: the launcher line, death by SIGSEGV (139).
-#   2. Control: an image that exits 3 prints no line and exits 3.
+#   2. An image that exits 3: exits 3 and prints the launcher's identity line, `capstone-exec: exit image=IMAGE
+#      sha256=HEX`, the image's own digest. Control: without CAPSTONE_EXEC_DIAGNOSTICS (stderr not a terminal) no line.
+#      Control: the faulting image of 1 prints no exit line.
 #   3. Control: --platform refuses when dom_binfmt is not Y.
 #   4. --stats prints the numeric parameters as JSON and skips the others.
 #   5. A kernel access fault of the child: the kernel-fault line, and the child's own exit status 0.
@@ -58,9 +60,17 @@ rc=$(cd "$work" && sh "$vexec" fault.dom > /dev/null 2>&1; echo $?)
 want="capstone-exec: domain fault cause=25 pc=0x4000001010 address=0x55 ra=0x0 fp=0x0 entry=0x4000000100 code=0x4000000000-0x4000000000 image=./fault.dom"
 if [ "$rc" = 139 ] && [ "$out" = "$want" ]; then echo "PASS fault line and SIGSEGV"; else echo "FAIL fault: rc=$rc out=$out"; fail=1; fi
 
+out=$(cd "$work" && sh "$vexec" fault.dom 2>&1 | grep "exit image")
+if [ -z "$out" ]; then echo "PASS control: a fault prints no exit line"; else echo "FAIL fault exit line: $out"; fail=1; fi
+
+three=$(sha256sum "$work/three.dom" | cut -d' ' -f1)
 out=$(cd "$work" && sh "$vexec" three.dom 2>&1)
 rc=$?
-if [ "$rc" = 3 ] && [ -z "$out" ]; then echo "PASS control: exit 3, no line"; else echo "FAIL control: rc=$rc out=$out"; fail=1; fi
+want="capstone-exec: exit image=./three.dom sha256=$three"
+if [ "$rc" = 3 ] && [ "$out" = "$want" ]; then echo "PASS exit 3 with the identity line"; else echo "FAIL exit: rc=$rc out=$out"; fail=1; fi
+out=$(cd "$work" && env -u CAPSTONE_EXEC_DIAGNOSTICS sh "$vexec" three.dom 2>&1)
+rc=$?
+if [ "$rc" = 3 ] && [ -z "$out" ]; then echo "PASS control: no diagnostics, exit 3, no line"; else echo "FAIL control: rc=$rc out=$out"; fail=1; fi
 
 sh "$vexec" --platform > /dev/null 2>&1
 rc=$?
@@ -74,7 +84,8 @@ case $out in
 esac
 out=$(cd "$work" && sh "$vexec" kfault.dom 2>&1)
 rc=$?
-want="capstone-exec: kernel fault cause=25 address=0x4000002000 nr=63 image=kfault.dom"
+want="capstone-exec: kernel fault cause=25 address=0x4000002000 nr=63 image=kfault.dom
+capstone-exec: exit image=./kfault.dom sha256=$(sha256sum "$work/kfault.dom" | cut -d' ' -f1)"
 if [ "$rc" = 0 ] && [ "$out" = "$want" ]; then echo "PASS kernel fault line, exit 0, other pid ignored"; else echo "FAIL kernel fault: rc=$rc out=$out"; fail=1; fi
 
 rm -f "$work/record"
