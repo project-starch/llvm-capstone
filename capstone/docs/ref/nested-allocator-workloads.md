@@ -7048,6 +7048,107 @@ run on it against the twin's serial (`153ffc99…`).
   therefore says that the path suffices. It does not say that tshark's stops come from this path alone, although the
   pc, sw=220 and the trap log agree.
 
+### Pre-registration: the stress form on B5b-2, protected only, 100 then 2 × 300,000 packets in one boot on board 2 (written 2026-11-25 15:18, before the boot)
+
+**Question.** Does M-16 exist on B5b-2, the design going forward? On P1 the stress form stopped after about 2·10^7
+allocations (result above). B5b-2 is a different bitstream, `…-r75d-b5b2n_904cd9c6b`. It is also a different
+allocator revision. B5b-2's trap route makes the two-operand CREVOKE illegal, so the image carries Fig. 10's wmem
+0001, the one-operand revision from trap/eval, not the dev-era revision that P1 ran. **So a difference between the two
+boots cannot be given to the hardware alone.**
+
+**The image.** `nested/b5b2/build-stress-trap.sh` (`f928ae1c…`) builds `tsapp-stress.c` (unchanged, `42b7ad10…`) in
+each B5b-2 tshark tree (`b5b2/tshark/{stock,prot}`, as `build-tshark.sh` built them for boots B):
+- compiled with the tree's own `tshark.c.o` compile line;
+- linked with the tree's recorded image link (`image/commands.json` [2] and [3]), with `tsapp_stress.o` in
+  `tshark.c.o`'s place.
+- **Controls, both trees:**
+  - the recorded compile line recompiles `tshark.c` to the tree's `tshark.c.o` byte for byte;
+  - the recorded link reproduces `image/tshark.dom` byte for byte.
+- Images:
+  - prot `118ac0e7…`, strip `12c63983…` (20,982,240 B);
+  - stock `074f2756…`, strip `8647e28f…`.
+- Scan (`scan_illegal.py`): ILLEGAL=0 in both. CDERIVE is 24 in prot and 4 in stock. Both carry the trap runtime
+  (`trap_altstack`).
+- **The site.** `wmem_block_fast_sublet_alloc` holds word `0xa283955b`, the CDERIVE that P1's stop names, at offset
+  0x4f0, vaddr `0x7cc234`. In P1's image it was offset 0x45c. The same search on P1's image finds P1's `0x77c9ee`.
+  - The twin's loader places vaddr 0x10000 at `0x3ff6000000` (`sublet: stress[…] enters 0x3ff6000000`). So this
+    image's CDERIVE runs at **`0x3ff67bc234`**.
+
+**Payload.** `nested/b5b2/boardS/out/fw_payload.bin`, sha256
+`2b19fc2abae4916851cf028b4a2a51fd15c820e52b15196ad197995dd65b3ef5`, 21,657,608 B, under the 26,000,000 B cap. Built by
+`trapk/fpga/make-payload.sh` (KEEP=y), with compiler's boot-5 `/init` and `smoke.dom` unchanged, and an empty probe list.
+- **The unprotected image did not ride along.** Both images put the payload at 27,949,064 B, over the cap (that build
+  is set aside in `attic/boardS-both`).
+- The overlay (`make-boardS.py`, `dc44c9f2…`) has two stages; each runs under `/init`'s 3,600 s watchdog:
+  - **N2:** p0 = `100 212 10 1`, then p1 = `300000 212 10000 1`;
+  - **N3:** p2 = `300000 212 10000 1`, with the image read from N2's stage.
+- Each command runs in a fresh tmpfs, with stdout live on the console.
+- `/init`'s 120 s tick continues while the kernel runs. So a stop in the program (ticks continue) and a stop of the
+  core or kernel (ticks stop) read differently. On P1 the console went silent.
+
+**Twin.** The trap-route twin (`twinS`, `trapk/run-trap.sh`'s recipe with `boot-3600.py`; log `c9522bec…`) ran this
+exact overlay:
+- the control reads `smoke.dom rc=7`;
+- all three commands return rc 0;
+- every STRESS line equals the P1 native twin's (`pkt=100000 … sum=8b64d9b857f7aee5`, `pkt=300000 … sum=f6ed64e0d51b9d04`);
+- spans 1.9 / 369.5 / 371.1 s of guest time.
+
+The unprotected arm's twin (`twinS-both`, the over-cap overlay) is still running at this writing, and is reported with
+the result.
+
+**Reader** `nested/b5b2/read-boardS.py` (`d22d1262…`), run as `read-boardS.py <console log> twinS/boot.log`:
+- **RETURNED:** rc 0, with every STRESS line equal to the twin's;
+- **NO RETURN:** the last heartbeat, the twin's next one, and whether ticks continued after it;
+- **OTHER:** a line differs, or rc is nonzero;
+- **NOT RUN:** the command is absent.
+
+It was tested five ways:
+- the twin's log as both inputs: 3 RETURNED, exit 0;
+- a copy cut after p1's packet-100,000 line, with two ticks appended: NO RETURN, "the kernel ran on";
+- the same cut with no ticks: NO RETURN, "the core or kernel stopped";
+- the cut with a watchdog line: reported as the stage bound;
+- a copy with one checksum digit changed: OTHER, exit 1.
+
+**Run.** Board 2, after boot B-prot. The board lane runs it with its B5b-2 capture runner. Runtime granted the board
+for this run in its own message. The resident bitstream is read back before and after, and the bound is 2.5 h.
+- After a stop, before any reset, the board lane reads the aperture snapshot M-16 was read with:
+  - commit pc, trap log, mepc and tval;
+  - sw=219, 220, 221, 222, 224-229 and 192-195 (193 is `store_buf_commit_cnt`);
+  - rev-node head and serving index;
+  - then it parks the switches at 0.
+- The labels come from cva6.sv at 715bdd1fe; their meaning on B5b-2 is the RTL lane's to confirm.
+
+**The hypothesis (H1 on B5b-2).** The stop is a per-allocation hazard of this path, at P1's rate.
+- p0 + p1 + p2 issue 116,616,408 fast allocations.
+- At P1's estimate, 4.9·10^-8:
+  - 5.7 stops are expected, and a return of all three has probability 0.0033;
+  - the first stop falls in p1 with probability 0.94, with its median near packet 72,800.
+- At the lower end of P1's single-draw interval, 1.2·10^-9, a return has probability 0.87. So a return cannot show
+  that M-16 is absent on B5b-2.
+
+**Predictions.**
+1. The control reads `smoke.dom rc=7`, and p0 returns equal to the twin's lines.
+2. **Under H1, p1 does not return.** Its last heartbeat lies before packet 300,000, and the commit pc reads
+   `0x3ff67bc234` with sw=220 `0x8c`.
+
+**What each outcome says.**
+- **A stop at `0x3ff67bc234` with M-16's signature:** M-16 exists on B5b-2 too, with this allocator revision.
+  Whether the ticks continue says whether the kernel survives it.
+- **A stop elsewhere, or with another signature (sw=221, for example):** reported as itself. It is not merged with
+  M-16, nor with the B5T mcf wedge (sw=221 `0xf8`).
+- **All three return, equal to the twin:** no stop in 1.17·10^8 allocations. The hazard on B5b-2 with this revision
+  is below 2.6·10^-8 (95 %).
+  - That is about half P1's point estimate, and inside P1's interval. It is a bound, not an absence.
+  - It does not say whether the hardware or the allocator revision made the difference.
+- **A watchdog line while the heartbeat still advances:** "no stop within T" for that stage, not a stop.
+
+**Limits.**
+- One boot.
+- No unprotected arm on the board (the cap).
+- The allocator revision differs from P1's.
+- The board's speed on this route is not known before the boot. At P1's speed, 10,000 packets take about 65 s, so
+  a stage takes about 1,950 s, under the 3,600 s watchdog.
+
 ## perlbench item 3: the full port's code without its lifetime instructions, test.pl on P1 (2026-11-25)
 
 ### Pre-registration: perlbench test.pl on P1, u = stock and n = the full port with its lifetime instructions neutralised, one boot on board 1 (written 2026-11-25 12:31, before the boot)
