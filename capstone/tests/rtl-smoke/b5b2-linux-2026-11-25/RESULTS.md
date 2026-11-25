@@ -101,3 +101,8 @@ holds its keys. Checks:
   the bring-up kernel's (2). `sublet_copy_msghdr_from_user` is present (1).
 - Not yet run: a boot of this kernel (twin or board) with a .dom program. Without TRAP_TEST the regs.S test cannot
   run; its first boot needs a .dom smoke program as the control.
+
+The +Spatial twin of that kernel is `build/build-kernel-final-spatial.sh` (tree `trapk/fpga-final-spatial`): its .config
+differs from the Full kernel's only in CONFIG_RISCV_CAPSTONE_SPATIAL_ONLY=y (and the initramfs path). Its smoke image,
+the same overlay as boot 13, is `trapk/fpga-final-spatial/smoke-out/fw_payload.bin` b2e2c905521d2e68…, for rtl's
+spatial-only seal once it exists. Not yet booted.
