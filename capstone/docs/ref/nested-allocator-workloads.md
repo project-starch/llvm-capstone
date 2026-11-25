@@ -7912,6 +7912,11 @@ four cases:
   (Image `749fed26…`). Unpatched memcached is requalified on that Image once runtime's directed test reads.
 - A build with sendmsg rewritten as writev (`out-w`, stock `c165e169…`, protected `5fd5093c…`) is a twin diagnostic
   only: a patched workload, not a measured arm.
+- That diagnostic's twin reading (`ovl-w`, Image `749fed26…`, lock 22:47:06, done 00:17:33): 6 of 6 repetitions
+  qualify, stock and protected. Each transcript equals the native reference (1,931,207 B), each server stops on
+  `shutdown` with exit 0, and identity reads `STAT pointer_size 128`. So once responses leave by writev, nothing else
+  on the route stands between memcached and its oracle. It does not measure the unpatched server and does not
+  exercise the msghdr loader. The overlay predates the exit-line adapter (it carries the earlier trap-vexec).
 
 **trap-vexec.sh's exit line** (for case 25):
 - The C launcher's line is `capstone-exec: exit image=<path> sha256=<hex>` (runtime/virtual/exec.c:1307). trap-vexec.sh
@@ -7999,3 +8004,43 @@ So the rule moves one cell, pools 31, and pools reads **CAUGHT 28, MISSED 5**, a
 - it is queued on the twin with wide grants, as twin-all was.
 
 Its readings are the board's predictions.
+
+### twin-board read, and a correction to the board kit (2026-11-26)
+
+`twin-board` ran `ovl-board` on Image `749fed26…` with wide grants. The lock was asked 22:48:10 and released 00:37:06.
+Every stage ended rc 0, and the log holds 70 `@@CASE-END` lines.
+
+- **SQLite**: both pools match twin-all case for case in verdict, cause, pc and function. malloc reads 29 MISSED and
+  4 NO-READING; pools reads 27 CAUGHT and 6 MISSED before the cause-24 rule. The rule moves 31 as registered, so
+  pools reads 28 CAUGHT and 5 MISSED. The one difference is case 11 (malloc): it is NO-READING both times, with the
+  reason now "infra" where twin-all gave "inconclusive".
+- **PHP temporal**: the table is identical to twin-all's.
+- **PHP asan-blind**: three rows differ, in all four arms.
+  - **25 (crash-084)**: was MISSED, now out-of-denominator. This is the expected change. The exit line lets the putenv
+    probe read ABSENT, so the case's declared platform precondition is not met.
+  - **30 (crash-092)**: was infra, now not-reached. Both are NO-READING, and this is the timing case (§ above).
+  - **32 (crash-097)**: was MISSED, now **setup-fault**. The stock arm faults with cause 28 in memchr, before the case's
+    marker, after `stream_socket_server(): unable to connect to udp://127.0.0.1:0 (Address not available)`.
+    - Cause: the loopback interface. /init never brings `lo` up. In twin-all, the memcached stages (M20/M21, whose
+      run.sh starts `ifconfig lo 127.0.0.1 up`) ran before the PHP stages in stage order, and the board kit has no
+      memcached stage.
+    - So the earlier statement that ovl-board "differs from twin-all's corpus stages only in capstone-vexec" holds for
+      the files and not for the boot. The boot's history differs.
+    - With lo up, twin-all and the reference run18 read 32 MISSED on all four arms.
+  - Tallies (CAUGHT/MISSED), stock, block, object, exact: 5/28, 12/20, 25/9, 29/3. twin-all read 5/30, 12/22, 25/11,
+    29/5. The moved rows are 25 and 32, which leave the denominator, and 30, which was already outside it.
+- The kernel change (the msghdr loader, which adds only sendmsg and recvmsg to the calls the route admits) is not
+  needed to explain these rows. For 32 the loopback explanation is a hypothesis until `twin-board2` reads: same
+  Image, lo up. Its prediction is 32 MISSED on all four arms.
+
+**Correction to the board kit.**
+- make-php-ovl.py now starts each PHP stage with `ifconfig lo 127.0.0.1 up`, as the memcached stage does.
+- `ovl-board2` is `ovl-board` with that line added to the eight PHP run.sh files and no other difference
+  (diff -r: 8 files, one added line each).
+- Its payload `payload-board2` (DTB caplifive-b5b2-wide.dtb):
+  - fw_payload.bin `cf97af22f3713f5c…`, 21,657,608 B;
+  - Image `029712a8c62d1a69…`, relinked from the same tree with only `init/version-timestamp.o` recompiled;
+  - overlay `8ca92ec3…`, initramfs `5f2c872d…`;
+  - the initramfs carries the ifconfig line 8 times, and the withdrawn one carries it 0 times.
+- Payload `b8882143…` is withdrawn before any board use (attic `payload-board-lo-down`).
+- The board's predictions come from `twin-board2`, which is queued.
