@@ -21,6 +21,8 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
 #include <queue>
@@ -36,6 +38,22 @@ STATISTIC(NumPoolChainsBelowBase,
           "Constant-pool chains refused: a displacement below the base");
 STATISTIC(NumPoolChainsBeyondImm,
           "Constant-pool chains refused: a displacement beyond 2047");
+STATISTIC(NumPoolChainsAtEntry,
+          "Constant-pool chains given the entry block's shared base");
+
+// The rebase below leaves one PseudoLLA/PseudoCapGlobalBase pair per chain and
+// counts on Early MachineLICM to hoist them. Under high GPR pressure it does
+// not ("Can't remat / high reg-pressure": PseudoLLA is not rematerializable),
+// so the pair, and the constant-pool load it feeds, stay in the loop; MachineCSE
+// later merges the pair into one base anyway, too late for any LICM to move the
+// load. imagick's HorizontalFilter reloads a double every iteration that way.
+// With this option the rebase builds the one shared base itself, in the entry
+// block, and points every rebased load at it. The loads' operand is then
+// invariant, and MachineLICM hoists an invariant load even under high pressure.
+static cl::opt<bool> PoolBaseAtEntry(
+    "capstone-pool-base-at-entry", cl::init(false), cl::Hidden,
+    cl::desc("Under the image-gp ABI, give every rebased constant-pool load "
+             "one shared base built in the entry block (default off)."));
 #define Capstone_FOLD_MEM_OFFSET_NAME "Capstone Fold Memory Offset"
 
 namespace {
@@ -506,7 +524,43 @@ static bool rebaseConstantPool(MachineFunction &MF, MachineRegisterInfo &MRI) {
       LoadMI->getOperand(2).setImm(LoadMI->getOperand(2).getImm() + Disp);
     Changed = true;
   }
-  return Changed;
+  if (!PoolBaseAtEntry)
+    return Changed;
+
+  // Every chain now on entry B, the base's own included, shares one pair built
+  // at the top of the entry block, which dominates every load. Its cursor is
+  // &cp#B, the address the argument above already covers on every path. The
+  // chains' own pairs are left without uses and erased.
+  SmallVector<Candidate *, 16> Shared;
+  for (Candidate &Cand : Candidates)
+    if (Cand.LLA->getOperand(1).getIndex() == BaseCPI)
+      Shared.push_back(&Cand);
+  if (Shared.size() < 2)
+    return Changed;
+  const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+  MachineBasicBlock &Entry = MF.front();
+  MachineBasicBlock::iterator At = Entry.getFirstNonPHI();
+  Register OldAddr = BaseCand->LLA->getOperand(0).getReg();
+  Register OldCap =
+      MRI.use_instr_nodbg_begin(OldAddr)->getOperand(0).getReg();
+  Register Addr = MRI.cloneVirtualRegister(OldAddr);
+  Register Cap = MRI.cloneVirtualRegister(OldCap);
+  BuildMI(Entry, At, DebugLoc(), TII->get(Capstone::PseudoLLA), Addr)
+      .addConstantPoolIndex(BaseCPI);
+  BuildMI(Entry, At, DebugLoc(), TII->get(Capstone::PseudoCapGlobalBase), Cap)
+      .addReg(Addr, RegState::Kill);
+  for (Candidate *Cand : Shared) {
+    Register ChainAddr = Cand->LLA->getOperand(0).getReg();
+    MachineInstr *ChainBase = &*MRI.use_instr_nodbg_begin(ChainAddr);
+    for (MachineInstr *LoadMI : Cand->Loads) {
+      LoadMI->getOperand(1).setReg(Cap);
+      LoadMI->getOperand(1).setIsKill(false);
+    }
+    ChainBase->eraseFromParent();
+    Cand->LLA->eraseFromParent();
+    ++NumPoolChainsAtEntry;
+  }
+  return true;
 }
 
 bool CapstoneFoldMemOffset::runOnMachineFunction(MachineFunction &MF) {
