@@ -53,8 +53,8 @@ ariane_pkg.sv: 238 entries, with the `CAPSTONE_SUBLET_FMT` block after index 235
 | 255 trap summary | 0x89 | seen 1, mcause 9 (ecall from S) |
 | trap-log mepc / tval | 0xffffffff80006040 / 0x73 | the last nontrivial M trap, an S-mode ecall in the kernel |
 | 224 | 0x0c | ex_commit 0, load/store syncers 0, **lsu_ready 0**, dyn_ready 1, flu_ready 1, flush 0, privM 0 |
-| 225 | 0x80 | trace_buf_empty only: no dyn waits, no stall_issue, no mem_write/mem_wait |
-| 226 / 227 / 228 | 0 / 0 / 0x80 | no dom-switch traffic; dom_switch_idx 0 |
+| 225 | 0x80 | bit 7 trace_buf_empty is a constant 1 (no tracer); bit 3 dom_switch_busy a constant 0; the driven bits read no dyn waits, no stall_issue, no mem_write/mem_wait |
+| 226 / 227 / 228 | 0 / 0 / 0x80 | the switcher's side is tied to constants under the Sublet format (cva6.sv:2398-2411); the driven bits (226: the LSU's data ack and response valid, the register acks; 227: commit's switch valid, the three register-response valids) read 0. 228 is the constant 0x80 |
 | 192 | 0x01 | commit slot 0 valid |
 | commit pc (230-237) | 0x3ff7fe3506 | inside mcf's domain (enters 0x3ff7fe0000); slot 0, stale after a flush |
 | 193 | 0x04 | store_buf_commit_cnt 4 |
@@ -64,7 +64,7 @@ ariane_pkg.sv: 238 entries, with the `CAPSTONE_SUBLET_FMT` block after index 235
 | 220 lsu_head_debug | 0x8c | lsu_ctrl.valid 1, lsu_ready 0, fu 12 = CAPSTONE_DYN |
 | 221 store_debug | 0xf8 | commit queue valid 1111, **data_req 1, data_gnt 0**, no_st_pending 0 |
 | 222 | 0 | adapter_tag_debug, constant '0 in this build |
-| rev_node debug / head / serving | 0 / 0 / 0 | |
+| rev_node debug / head / serving | 0 / 0 / 0 | **no reading**: constant 0 in the Sublet build (capstone_sublet_life.sv:226-229) |
 
 **Correction (2026-11-25, after the first push of this record, 57c5f32e3880).** The row above for sw=195 and sw=229
 first read "store and load states idle". `load_state` has no driver: `load_unit.sv:109` declares `state_o` and never
@@ -72,10 +72,22 @@ assigns it (904cd9c6b; the same holds at 715bdd1fe). So both apertures read 0 on
 load unit. The rtl lane found it, after reading sw=195 = 0 as "the load unit was idle with the LDC presented, so the
 LDC never issued, so not R-29"; that reading is withdrawn, and R-29's involvement is open. sw=192, 193 and 194 are
 driven (`commit_instr_id_commit[0].valid`; store_buffer.sv:110 `commit_status_cnt_q`; store_unit.sv:123 `state_q`).
-Only 219-221 also have their drivers checked (load_store_unit.sv:412-413, store_unit.sv:480); 222 is a constant. The
-rows for 224-228, 255 and the multi-byte reads are labelled from the mux expression only, with no driver checked, and
-are not citable until one is. What this check missed: it took each aperture's label from the mux, and never looked for
-the driver behind it.
+What this check missed: it took each aperture's label from the mux, and never looked for the driver behind it.
+
+**Every aperture's driver at 904cd9c6b (traced after the correction, at the runtime lane's request).** Each net was
+followed from the mux down to its `assign` or procedural write. The Anvil units' outputs were followed in the generated
+`.anvil.sv` of 904cd9c6b's synthesis tree: `capstone_dyn_unit.anvil.sv:19227-19230`, its syncers' req_set at :19823,
+and `capstone_flu_unit.anvil.sv:5361`. The tracer was first shown to find `load_state` undriven and `store_state`
+driven.
+- **Driven:** 255; 224 (all eight bits); 192, 193, 194; 219, 220, 221; the commit pc (scoreboard.sv:149); the trap-log
+  mepc and tval (cva6.sv's procedural log); 225 bits 6-4, 2-0; 226 bits 6, 5, 2, 1; 227 bits 7, 5, 4, 3.
+- **Constant in this build:** 225 bit 7 (trace_buf_empty = 1, no tracer) and bit 3 (dom_switch_busy = 0); 226 bits 7,
+  4, 3, 0; 227 bits 6, 2-0; 228 (0x80); 222 (0); the rev_node debug word, head and serving index (0,
+  capstone_sublet_life.sv:226-229).
+- **Undriven:** 195 and 229 (load_state).
+
+The board lane's snapshot tool now prints each value with this status (run_sup_bare-linux4.py, cdad66bfa4eb71b6), so
+an undriven or constant value is never reported as a reading.
 
 Read as raw readings, attributed to nothing:
 - a valid LDC sits at the LSU head with the LSU not ready;
