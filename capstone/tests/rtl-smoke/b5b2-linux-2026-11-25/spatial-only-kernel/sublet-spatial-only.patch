@@ -1,0 +1,48 @@
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -734,3 +734,15 @@
+ 	  A test loader that turns the calling process into a protected
+ 	  program over two anonymous mappings, and a hook that holds a
+ 	  program reference in t6 across a sleeping page fault. Test only.
++
++config RISCV_CAPSTONE_SPATIAL_ONLY
++	bool "Run on a spatial-only Sublet processor (no lifetime table)"
++	depends on RISCV_CAPSTONE_TRAP
++	default n
++	help
++	  For the +Spatial arm: a processor that checks bounds but keeps no
++	  lifetime records (CSMINT writes none, CDERIVE children carry the
++	  parent's id, CREVOKE has no effect). The kernel then checks a
++	  reference by its tag and bounds only: R is accepted without its
++	  record, and a block operand counts as live at depth 1 with no
++	  descendants. Gives no temporal safety. Measurement only.
+--- a/arch/riscv/mm/sublet-table.c
++++ b/arch/riscv/mm/sublet-table.c
+@@ -416,7 +416,13 @@
+     local_irq_restore(flags); preempt_enable();
+ 
+     record = type == CV_TYPE_NONLIN ? sublet_table_record(c->table, CV_ID_SLOT(id)) : NULL;
++#ifdef CONFIG_RISCV_CAPSTONE_SPATIAL_ONLY
++    /* A spatial-only processor keeps no table, so the record may not even be mapped: the type
++     * and the answer are all there is. */
++    if (type != CV_TYPE_NONLIN || !answer || answer != id) {
++#else
+     if (!record || !answer || answer != id || !CV_REC_LIVE(record, id) || CV_REC_DEPTH(record) != 0) {
++#endif
+         pr_emerg("sublet: R reads back as type %lu, id 0x%lx (%s), and CSMINT answered 0x%lx: "
+                  "no supervisor references, or an unknown table format\n",
+                  type, id, record ? "recorded" : "no record", answer);
+@@ -795,6 +801,13 @@
+ 		"li t0, 0\n"
+ 		: [base] "=&r"(r->base), [end] "=&r"(r->end)
+ 		: [slot] "r"(slot) : "t0", "memory");
++#ifdef CONFIG_RISCV_CAPSTONE_SPATIAL_ONLY
++	/* No records: a tagged operand is a live block reference with no descendants. */
++	r->live = true;
++	r->depth = 1;
++	r->descendants = false;
++	goto out;
++#endif
+ 	record = sublet_table_record(c->table, CV_ID_SLOT(r->id));
+ 	r->live = record && CV_REC_LIVE(record, r->id);
+ 	if (!r->live)
