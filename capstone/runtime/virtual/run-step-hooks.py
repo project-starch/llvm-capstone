@@ -104,7 +104,7 @@ def app(name):
 # must acquire and release pins. (The pinned memory mode cannot supply the control: the ON
 # platform has no test CSRs, which pinned discovery reads.) Its lines are HOOK_LIVE_*, not a
 # *MEMORY_MODE line: the arm's own mode lines all say Y, and this one does too.
-LIVENESS = '''insmod capstone_vm.ko unpinned=1 || exit 1
+LIVENESS = '''insmod capstone_vm.ko unpinned=1''' + memory_mode.slots_arg() + ''' || exit 1
 echo "HOOK_LIVE_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo A)"
 ./capstone-vexec pthread.dom > /tmp/live.out 2>&1
 echo "HOOK_LIVE_STATUS:$?"
