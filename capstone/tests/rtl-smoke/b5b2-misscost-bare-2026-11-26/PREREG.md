@@ -29,4 +29,9 @@
    Without these the subtraction measures nothing.
 4. **FAIL:** anything else, reported with its values.
 
-**Silicon cost** is the cycles of rdcycle at the core clock. The decision converts misses per program (rcm-lb's LB probes) times this cost into a share of each program's cycles, against the 1.0 % threshold.
+**Silicon cost** is the cycles of rdcycle at the core clock.
+
+**The decision rule** (the semantics owner's, 2026-11-26, written before any board run):
+- It uses the SILICON readings, not the simulation's.
+- For each program, misses (rcm-lb's LB probes) times the per-miss cost, as a share of the program's cycles, is compared with the 1.0 % threshold.
+- Where two readings of one quantity disagree (warm: P3 against P7 of image 2; cold: P3 against P7 of image 3), the build goes ahead only if the threshold is met with BOTH. A pair that straddles the threshold makes the result UNDECIDED, and the next step is to trace the layout effect. The larger reading is never chosen, because that choice favours the cache.
