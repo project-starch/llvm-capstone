@@ -130,3 +130,41 @@ So:
 **Grading:**
 - a MUST-SAME test that changes, or a MUST-CHANGE position that stays at its Full value, is a FAIL against this list, each investigated;
 - a MUST-CHANGE position that changes to a value other than the one predicted is a MISS, reported with the value.
+
+## The 57 tests, read on 5ff493d0a (2026-11-26)
+
+**A VOID first run, recorded.** The first spatial run (`.sup/sp`) is VOID.
+- An earlier, unregistered run in the same worktree kept simulating: my stop had matched `docker ps`'s truncated Command column, so nothing was stopped.
+- Its trace interleaved with the registered run's shared trace file. Eight B5b-2 logs came back spliced: another test's tail, or no boot line.
+- The B5b-1 list and the control ran after it ended, and are as clean as the base by the same splice check.
+- The rerun (`.sup/sp2`, `.sup/sp21`, the tree checked idle with `docker ps --no-trunc` first) has exactly one boot per log in all 57. Every reading below is from it.
+
+**The control:** the same tree with `+define+CAPSTONE_LIFETIME_ON` (`.sup/spc`, `spc1`, the define confirmed in the model's file list) equals the base, 57/57 in every value. So every difference below is the spatial mode's.
+
+**Against the predictions above.**
+- **MUST-SAME held for:**
+  - illegal (3), ldchold, r79-cpmp, untagged, sublet-fmt, ctxport-f4ctl;
+  - cptag, cptag2, raw, rawlcc, rule2 (2), scratch;
+  - mtrap (8, including the timer counts);
+  - the MAY-CHANGE group: sublet-ns (8), va-runv-snap, mtrap-rules, ctxport-edgem.
+- **MUST-SAME that changed (prediction errors; the stub is right):**
+  - csmint-pmp and -pmp-vm position 15 (0x2 → 0x0) is `ld 24(0xbff00000)`, the pool header's allocations word: a table print (R4) I had not seen.
+  - ctxport-widehi and -widelo positions 4-5 are the derived children's raw id words (slot << 1). They echo their parent {0,2} as 0x4 (R2). On this core those arms no longer exercise the widened slots, by design.
+- **MUST-CHANGE, held:**
+  - crevint, crevsv-none and -kill exactly: ids 0x3, the dead-o 0x0, the checksum differs, M traps 0;
+  - CREVOKE's cost 0x68 / 0x69 / 0x32 cycles against 0x37f0-0x468e;
+  - ctxport-f4, mwrite, nsedge, sbdrain-fill, sbfwd-hold-cap exactly;
+  - srvcost's P3 = P7 = P2 = 0x83, no refill;
+  - csmint position 35 0x19 → 0x0, 36 → 0x3, 41-44 the pool words, 51 0xd → 0xc;
+  - sublet-life positions 4, 7, 12 → 0x0, and 15-34 the table.
+- **MUST-CHANGE, other values than predicted (prediction errors; the stub is right):**
+  - **A 25 is not always replaced by success.** The reference checks the tag, then liveness, then type, rights and bounds. An access that was both stale and out of bounds now reaches the bounds check: uprot and uprot-mis position 6, 25 → 28. A stale and misaligned access goes on to 4 (uprot-mis 12). A dead-parent CDERIVE goes on to its size check, 29 (sublet-life 11). The trap counts fall by the 25s that became no fault: uprot 6 → 4, uprot-mis 10 → 8.
+  - **The root in the table tests is {0,2}**, the physical pool's root x18, not CSMINT's {0,3}. sref and sref-gen's ids read 0x2 (positions 9-10, 12-13), and their check flag (position 15) still holds. sref-gen's position 14, the table's generation, reads 0 (R4).
+  - **Positions I had misread:**
+    - sbdrain-sret's position 3 is a TYPE word (1 = allocated), which stays 1;
+    - csmint's position 4 is the first root's raw hi word (3 << 1 = 0x6), which stays. The second mint (positions 6 and 8) moves 0x4 → 0x3 and 0x8 → 0x6;
+    - csmint-vm position 3 stays for the same reason. Its 20-21 move as csmint's 6 and 8, and 26-29 are the pool header.
+  - **crevint-mt and -sh** read 0 timer traps at the site (position 9). The arm's own VOID rule fires, as the list warned: a CREVOKE of a few cycles leaves no room for a timer.
+- **Not explained, recorded:** srvcost's D1 (64 sscratch writes in S), 0x591 → 0x379, and P1, 0x1572 → 0x11c5. P1 is the cold first pass with every probe gone. D1 times CSR writes that touch no lifetime state. A candidate, not traced: on Full the S setup's 32 CDERIVEs and their stores just before D1 leave record writes in flight that D1's flushing CSR writes wait behind.
+
+No stub defect was found: every deviation is explained by the stub's stated semantics, except D1's.
