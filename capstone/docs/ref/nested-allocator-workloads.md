@@ -7874,6 +7874,20 @@ command number, so the names c0, l1 and s2 need no change. In l1 it brackets a s
 - The elapsed time comes from the watchdog's clock, which times console arrival, not the core.
 - T is one form of a time trigger: a time counted from the process's start.
 
+**Amendment 1 (2026-11-26 06:49 host time (+08), before either boot).** The twin references no longer gate the boots;
+they gate the grading.
+- Why: the loc twins have not started. They wait on the shared QEMU lock, and each needs about 10 h of run time.
+  Board 1 is free in about 15 min (the board lane's word). The twins are deterministic and cannot see the board's
+  result, so reading them after the boot biases nothing. The one place the earlier text left a judgement to the
+  addendum is fixed here instead.
+- **"Close" is fixed now:** seed 2's counts are close to seed 1's if, at each of packets 100,000 and 110,000, its
+  `fast` and its `block` each lie within 2 % of seed 1's: fast 19,432,859 and 21,375,862, block 1,767,141 and
+  1,944,138. Otherwise a stop of s2 in that window is read against a count trigger, not UNDECIDED.
+- The addendum (serial hashes, the check of loc1's twin lines against the lines above, seed 2's counts, the reader's
+  re-test) is pushed before either boot is graded. A boot graded without it is not read.
+- The chain waits for the board lane's session marker on board 1 and starts only if that session's log ends
+  `SESSION END`.
+
 ## M-16's return rate on Line B: the protected tshark in repeated B5b-2 boots (2026-11-25)
 
 ### Pre-registration: Fig. 10's protected Wireshark workload in five boots on a Line B board, queued (written 2026-11-25 19:29, before any of the boots)
