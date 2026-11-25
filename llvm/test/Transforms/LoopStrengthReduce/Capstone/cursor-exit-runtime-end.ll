@@ -7,8 +7,10 @@
 ; - otherwise lsr.cap.never, the start cursor plus one byte, which no cursor of an even step reaches.
 ;
 ; With the second endpoint the loop leaves only by trapping, as the original must. Its anchor is accessed on every
-; iteration that reaches the test (the candidate filter), and a count at or above the period accesses a full cycle of
-; cursors, more than any capability's bounds. Below the period the exits coincide.
+; iteration that reaches the test (the candidate filter), and accessed cursors lie in [0, 2^38) by the format: a
+; reference whose cursor is at or above 2^38 is written as an untagged integer and traps at its access (capstone-qemu
+; target/riscv/cap.h:199-233, sublet-reference-model.md section 2.1; bounds are not limited). A count at or above the
+; period visits a full cycle of cursors, so one lies at or above 2^38. Below the period the exits coincide.
 ;
 ; cursor-exit.ll pins @unbounded, @repeating_cursor and @bound_bad as keeping the integer test. That is still the
 ; default. The guard was conservative, not wrong: with only a static bound, the one safe answer for a count that

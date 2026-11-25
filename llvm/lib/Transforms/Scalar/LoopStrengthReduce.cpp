@@ -164,12 +164,16 @@ static cl::opt<bool> CapabilityByteIV(
 // iteration can equal (the start plus one byte, which the step, a multiple of
 // two here, never reaches), so the loop leaves only by trapping.
 // That is the original loop's behaviour too. Its anchor is accessed on every
-// iteration that reaches the test (the candidate filter), and each access is
-// bounds-checked. A count at or above the period accesses a whole cycle of
-// cursors, 2^64 - 2^ctz(step) bytes, more than any capability's bounds, so the
-// original traps at the same access the rewritten loop does. Below the period
-// the two exits coincide, as without the option. Relies on no capability's
-// bounds reaching 2^63 bytes.
+// iteration that reaches the test (the candidate filter). Accessed cursors lie
+// in [0, 2^38) by the format: a Sublet cursor is the zero extension of 38
+// address bits, and a reference written with a cursor at or above 2^38 is an
+// untagged integer, which traps at its access (capstone-qemu target/riscv/cap.h
+// :199-233; design/sublet-reference-model.md section 2.1; bounds are NOT
+// limited, so the basis is the cursor). A count at or above the period visits a
+// whole cycle of cursors, spread over 2^64 - 2^ctz(step) bytes, so one of them
+// lies at or above 2^38 and the original traps at that access, which the
+// rewritten loop reaches too. Below the period the exits coincide, as without
+// the option.
 static cl::opt<bool> CapabilityExitRuntimeEnd(
     "lsr-capability-exit-runtime-end", cl::Hidden, cl::init(false),
     cl::desc("Move an unbounded loop's exit test onto its capability IV with an "

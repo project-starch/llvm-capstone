@@ -85,8 +85,11 @@ The replacement, -lsr-capability-exit-runtime-end, chooses the endpoint in the p
   trapping.
 
 The original traps too in that case: its anchor is accessed on every iteration, and a full cycle of cursors spans
-2^64 - 2^ctz(step) bytes, more than any capability's bounds. The basis it relies on: no capability's bounds reach 2^63
-bytes. Inside the loop nothing changes. The cost is a compare and a select in the preheader.
+2^64 - 2^ctz(step) bytes, so one of them lies at or above 2^38. Accessed cursors lie in [0, 2^38) by the format:
+a reference with a cursor at or above 2^38 is written untagged and traps at its access (capstone-qemu
+target/riscv/cap.h:199-233, sublet-reference-model.md section 2.1). An earlier draft of this amendment said the basis
+was that no capability's bounds reach 2^63 bytes; that is false, since Sublet bounds are not limited. The semantics
+owner gave the cursor rule. Inside the loop nothing changes. The cost is a compare and a select in the preheader.
 
 The test, cursor-exit-runtime-end.ll, covers:
 - the three pinned shapes, which keep their flag-off pins in cursor-exit.ll: @unbounded gets the run-time choice, and
