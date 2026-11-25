@@ -4679,6 +4679,88 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
+### R-81 — a lifetime-unit read whose response never arrives leaves the unit waiting forever: its memory engine has no timeout `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN; not constructed`
+
+Siblings: R-81, R-82 and R-83 are three ways the lifetime unit can stay busy forever; R-77 (whose PRE fix, capstone-ariane
+b5b2-prefix 7861abcfa, turns each of them into a CORE hang instead of a false 25 at about 1M cycles); R-80. All three were
+named by the claim-auditor reading the PRE fix (2026-11-25), and none has been constructed.
+
+**The path.** capstone_sublet_life.sv :356-363: one read outstanding (`rd_wait_q`), cleared only by `_mem_ch_read_res_valid`;
+nothing bounds the wait. A read that the D$ port 2 path (ex_stage.sv's page walker, pw_*, then wt_dcache) accepts and never
+answers keeps the unit out of S_IDLE, so no probe is accepted and every later lifetime op waits. Before the PRE fix such a
+hang ended for a waiting access in a false 25 at about 1M cycles; with it, the access waits too.
+
+**Common to all three on silicon** (aperture map of 28fcbb646, unchanged through b42c8c644; read from the emitters):
+- the lifetime unit's own state (st_q, rd_wait_q, wr_v_q) has NO aperture under the Sublet format: its debug endpoints
+  are tied to 0 (capstone_sublet_life.sv :289-293), so the rev_node debug bytes (bank 7, switches 241-254;
+  cva6.sv :1309-1325) read 0 and say nothing;
+- an access whose verdict missed waits at the commit head for a probe that is never accepted (commit_stage.sv
+  :966-967); the probe-pending flag has no aperture either. Commit slot 0 valid is 192 bit 0; the head's pc is 230-233;
+- the refusal record (204) stays EMPTY (0x02) or holds an earlier denial: on the fixed RTL nothing times out before
+  acceptance. A 204 of 0x21 (timeout) on b42c8c644 means a probe WAS accepted and its own read never answered (R-81).
+
+**Identifying it on silicon** (beyond the common bytes): 223[7:4], the port-2 D$ controller's state, constant non-IDLE
+(1 READ, 2 MISS_REQ, 3 MISS_WAIT, 6/7 REPLAY: the read lost inside the D$) or 0 (the response was dropped after the
+controller finished); 229 bit 3 (port 2's rd_req); 225 bit 4 (dyn_wait_rev_res) 1 if a DYN lifetime op waits on the unit;
+and the write side quiet (192 bits 6:5 and 221 bits 3:2 not stuck). A 204 of 0x21 says the probe's own read was the lost one.
+
+### R-82 — the lifetime unit's record write is never granted while the store unit holds port 3's request: the store port has strict priority and no bound `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN; not constructed`
+
+Siblings: R-81, R-82 and R-83 are three ways the lifetime unit can stay busy forever; R-77 (whose PRE fix, capstone-ariane
+b5b2-prefix 7861abcfa, turns each of them into a CORE hang instead of a false 25 at about 1M cycles); R-80. All three were
+named by the claim-auditor reading the PRE fix (2026-11-25), and none has been constructed.
+
+**The path.** cva6.sv :2600-2603: `dcache_req_ports_rev_wr_res.data_gnt &= !dcache_req_ports_ex_cache[2].data_req` -- the
+unit's write is granted only in a cycle the store unit does not request. The unit holds the write (`wr_v_q`,
+capstone_sublet_life.sv :363) until granted, and ex_stage.sv :2272-2277 gates its grant again through the page walker
+(`rv_wr_gnt` needs PW_IDLE with bypass, or pw_wr_issue). Only committed stores request port 3, and younger stores cannot
+commit past an older waiting instruction, so the store side should drain -- the auditor's reason for calling it
+unreached -- but nothing bounds it, and a store port that requests without ever being granted by the write buffer
+(R-80's shape on the store side) would hold the unit's write out forever. A starved unit, not a wedged one.
+
+**Common to all three on silicon** (aperture map of 28fcbb646, unchanged through b42c8c644; read from the emitters):
+- the lifetime unit's own state (st_q, rd_wait_q, wr_v_q) has NO aperture under the Sublet format: its debug endpoints
+  are tied to 0 (capstone_sublet_life.sv :289-293), so the rev_node debug bytes (bank 7, switches 241-254;
+  cva6.sv :1309-1325) read 0 and say nothing;
+- an access whose verdict missed waits at the commit head for a probe that is never accepted (commit_stage.sv
+  :966-967); the probe-pending flag has no aperture either. Commit slot 0 valid is 192 bit 0; the head's pc is 230-233;
+- the refusal record (204) stays EMPTY (0x02) or holds an earlier denial: on the fixed RTL nothing times out before
+  acceptance. A 204 of 0x21 (timeout) on b42c8c644 means a probe WAS accepted and its own read never answered (R-81).
+
+**Identifying it on silicon:** 221 bit 3 (the store port's data_req) 1 throughout the stretch window, with 221 bits 7:4
+the commit queue's valid entries; 192 bits 6:5 (the write buffer's cache-update request / ack) and 223 bit 3 (write buffer
+full) for why the store port is not drained; 229 bit 3 quiet (no unit read outstanding, unlike R-81); 225 bit 4 if a DYN
+lifetime op waits.
+
+### R-83 — a flush while CSMINT's create channel waits for its response returns the LSU's sequencer to IDLE, and the lifetime unit's create response is never acked `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN (argued from the flush sources, not exhaustively); not constructed`
+
+Siblings: R-81, R-82 and R-83 are three ways the lifetime unit can stay busy forever; R-77 (whose PRE fix, capstone-ariane
+b5b2-prefix 7861abcfa, turns each of them into a CORE hang instead of a false 25 at about 1M cycles); R-80. All three were
+named by the claim-auditor reading the PRE fix (2026-11-25), and none has been constructed.
+
+**The path.** load_store_unit.sv :2255-2256: `end else if (flush_i) begin cm_q <= CM_IDLE; // never expected: an issued
+CSMINT is the oldest instruction`. The ack to the unit is `csmint_create_res_ack_o = (cm_q == CM_CRS)` (:2245), the
+request `cm_q == CM_CRQ` (:2244), wired to the unit's create channel under the Sublet format (ex_stage.sv :2012-2018). A
+flush in CM_CRQ after the request was taken, or in CM_CRS, leaves the unit in S_RESP for OP_CREATE with nobody to ack it:
+it never returns to S_IDLE. The auditor's argument that it is unreachable: every flush source is commit-driven
+(controller.sv :111-115, :121-239) and the CSMINT, the oldest instruction, has not written back. Not proven exhaustively
+(debug-mode entry, an interrupt taken at the CSMINT, and a namespace flush are the cases to check).
+
+**Common to all three on silicon** (aperture map of 28fcbb646, unchanged through b42c8c644; read from the emitters):
+- the lifetime unit's own state (st_q, rd_wait_q, wr_v_q) has NO aperture under the Sublet format: its debug endpoints
+  are tied to 0 (capstone_sublet_life.sv :289-293), so the rev_node debug bytes (bank 7, switches 241-254;
+  cva6.sv :1309-1325) read 0 and say nothing;
+- an access whose verdict missed waits at the commit head for a probe that is never accepted (commit_stage.sv
+  :966-967); the probe-pending flag has no aperture either. Commit slot 0 valid is 192 bit 0; the head's pc is 230-233;
+- the refusal record (204) stays EMPTY (0x02) or holds an earlier denial: on the fixed RTL nothing times out before
+  acceptance. A 204 of 0x21 (timeout) on b42c8c644 means a probe WAS accepted and its own read never answered (R-81).
+
+**Identifying it on silicon:** the head pc (230-233) is the CSMINT's or a later lifetime op's; 225 bit 4 (dyn_wait_rev_res)
+1 if a DYN op waits behind it; the D$ side quiet (223[7:4] 0, 229 bit 3 0) and the write side quiet (221 bit 3 0), which
+is what separates it from R-81 and R-82 -- a unit busy with no memory traffic. The decisive state (cm_q, the unit's
+st_q) has no aperture. **What would settle it:** a must-fire SUP_TRACE line on `flush_i && cm_q inside {CM_CRQ, CM_CRS}`
+across the sweep.
+
 ### R-80 — an LDC whose access faults is not popped: it re-presents every cycle as a capability read on load port 1, starves the write buffer's cache update, and behind a store backlog wedges the core with its fault never taken `OPEN 2026-11-25 — DEMONSTRATED IN RTL SIMULATION (b5b2-ldcexc2, on 47d749153 and 28fcbb646; claim-audited); FIX IN RTL (capstone-ariane b5b2-ldcfix a5c45a46d, a faulting LDC pops), simulated; NOT YET SYNTHESISED OR ON SILICON; the silicon candidate is S-35 (B5T mcf on 904cd9c6b), its pattern pre-registered for the diagnostic seal 28fcbb646 (llvm-capstone land/rtl-crevoke4b c7877d008be7)`
 
 Siblings: S-35 (the silicon wedge whose shape this is). R-77 (the probe deny's 25 rides the same path and breaks a hang only for
@@ -4707,6 +4789,13 @@ So the class is the LSU's per-cycle capability-check arms on an LDC (24-28, the 
 behind a store backlog deep enough to fill the write buffer and the commit queue. A verdict-miss LDC waiting for its probe
 takes the same loop for the probe's duration: on 28fcbb646, b5b2-srvcost's first probe has port 1 requesting at every
 cycle 58618-58633.
+
+**A second trigger, needing no faulting access** (b5b2-crevint -DCI_YLDC on 28fcbb646, capstone-ariane b5b2-yldc
+ed1271736): an LDC whose verdict MISSES, issued during a CREVOKE walk. The replay marker takes the same path and the LDC
+re-presents (948,921 times); the walk's record writes cannot drain (WEDGE-WBUF at cycle 106,085: full, rd_req 1, rd_ack 0) and
+the CREVOKE never retires; the probe is never accepted, and R-77's PRE timeout about 1.05M cycles later does not end the
+wedge. LEDs 192 0xd0, 223 0x0a, 229 0x04, 195 0x99 (the commit head is the CREVOKE, not a store). On a5c45a46d the same arm
+completes, the LDC presenting once. Demonstrated in RTL simulation; not an attribution of any silicon instance.
 
 **The fix** (the semantics owner's ruling): `if (state_q == SEND_TAG_LDC) pop_ld_o = 1'b1;` in the exception block.
 - The LDC leaves the LSU as a faulting plain load does, and its exception is taken when it reaches the commit head.
@@ -5101,7 +5190,21 @@ Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the 
   The runtime lane's makerand perf null on (d) is its own reading.
 **Exposure.** The native module's `run()`/`run_x0()` (`capstone_vm.c:2009`, `:2021`, bkit91 kernel; the runtime lane's reading) put `csrw 0x5c1, zero` in the same asm statement as every CSRUNV. So the SPEC native route never takes an S trap with srevroot non-zero after an escape, and its service resumes (gcc train01: about 2,450 per run) complete on P1 silicon with every smoke 9/9. Any other CSRUNV caller, including B5b's replacement of CSRUNV, must keep that write or have this fixed.
 
-### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `OPEN 2026-11-20 — DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
+### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `OPEN 2026-11-20; FIX IN RTL 2026-11-25 (capstone-ariane b5b2-prefix 7861abcfa: the timeout counts only after acceptance; the final B5b-2 candidate b42c8c644), simulated, NOT YET SYNTHESISED; the false 25 DEMONSTRATED on the B5b-2 line in simulation (b5b2-crevint -DCI_YLDC (b)); was: DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
+
+**B5b-2 line, 2026-11-25 (the PRE fix).** The probe is accepted only when the lifetime unit is idle (capstone_sublet_life.sv
+:235, :251), and under CAPSTONE_DYN_BYPASS an independent LDC issues during a CREVOKE walk (issue_read_operands.sv
+:598-603). So a walk longer than the PRE bound turns a LIVE capability's access into a 25. b5b2-crevint -DCI_YLDC on
+a5c45a46d with a sim-only 4,000-cycle bound (b) reads `probe-timeout pend=00000007 sent=0` and the LDC faulting 25;
+(b0) without it completes. Silicon reaches the real bound at a run of fewer than about 40,000 members (CREVOKE costs
+about 26 cycles per run member warm on the 4(b) bitstreams, 21 on 904cd9c6b; board 2's crevint captures). The semantics
+owner ruled it a defect. The fix (7861abcfa): `rvc_timeout = rvc_pend_q && rvc_sent_q && rvc_wait_q ==
+RVC_PROBE_WAIT_POST`; (c) completes with no timeout; the 57-test lists are identical to a5c45a46d's in values and cycles;
+lint identical by name. Claim-audited PLAUSIBLE-BUT-UNPROVEN: no reachable hang found, by the auditor's bound (the unit
+is never idle while refusing the probe; nothing commits past the waiting access, so the 8-entry scoreboard bounds the
+younger queries); the LCC-race arm meant to test that bound (-DCI_YLCC) was VOID in both cuts. The hangs it leaves are
+R-81, R-82 and R-83, each of which used to end here in a false 25.
+
 
 > **Line B (B5b-2; 904cd9c6b and 28fcbb646; an rtl-oracle read 2026-11-25, decisive lines re-read by the rtl lane):
 > the timeout stays and still denies with 25.**
