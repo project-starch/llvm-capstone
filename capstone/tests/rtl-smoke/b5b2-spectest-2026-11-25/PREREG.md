@@ -74,3 +74,34 @@ specdiff fails in one arm alone is a finding about that arm.
 
 None of these rows is a cost against Plain yet. They are the first functional and timing readings of the trap route on
 silicon, and the matched baseline for the next bitstream (4(b) and the store-drain fix).
+
+## Amendment 2 (2026-11-25, after boot 5 went silent)
+
+**Boot 5** (board 3, `222cfdc5…`): the console grew by one `TRAPTEST: tick` line every 120 s from 04:58Z to about 05:44Z,
+which is consistent with the first stage (mcf, first by glob order) computing. Then nothing, for over 70 min. A wedged
+kernel or hart and a dropped console stream cannot be told apart from the runner. The board lane is taking the wedge
+snapshot through the debug apertures before any reset, then replaying the console. Its reading is recorded when it
+lands, attributed to nothing until read.
+
+**The gate.** nested's B5b-2 boot A (board 2, de6399c1dfff) read its own `control smoke.dom rc=7`, the same control
+image on the same loader path. That proves the loader on silicon, so the chain's gate is satisfied by that reading
+instead of boot 5's.
+
+**The ordering rule.** mcf is the stage boot 5 went silent in, so any image carrying it runs mcf LAST:
+- B5TL0-g1 and B5TL1-g1 are rebuilt with `init-ordered`, which is `init-boot5` plus one change: the stage list comes
+  from `/stages.order` when present. Their order is lbm, nab, xz, mcf;
+- B5T-g1r is added: boot 5's four stages, byte-identical, in that order, to read B5T's lbm, nab and xz.
+All three are in `SHA256SUMS.chain2` and `overlay-files.chain2.sha256`. The g1 images of Amendment 1 are withdrawn.
+
+**New chain order** (board 3): B5T-g2, B5TL0-g2, B5TL1-g2, B5TL1-g3, B5TL0-g3, B5T-g3, B5T-g4, B5TL0-g4, B5TL1-g4,
+then B5T-g1r, B5TL0-g1, B5TL1-g1. The g1 images go last, since each ends in mcf.
+
+**Silence stop** (the board lane's runner): if the capture grows by 0 bytes for 20 min while /init's 120 s tick is
+expected, read the wedge snapshot, end the boot and keep its capture. The stage it was in is then STALL / NO READING.
+Predictions are otherwise as in Amendment 1.
+
+**What a stall would read as:**
+- an mcf stall in every arm: a property of mcf on B5b-2;
+- stalls at a similar uptime in images without mcf: time-based (M-16-like hazards are per allocation, and the uptime
+  should then be checked);
+- a stall in one arm only: that arm's.
