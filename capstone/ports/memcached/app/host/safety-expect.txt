@@ -374,7 +374,9 @@ lifetimes   24  FAULT  temporal
 lifetimes   25  RETURN *
 
 # ---------------------------------------------------------------------------------------------
-# FIXTURE 26, registered 2026-11-25 BEFORE it was built or booted, and pushed before the run.
+# FIXTURE 26, registered 2026-11-25 before it was booted, and pushed before the run. (Corrected the same day: it
+# was first written "before it was built or booted", but the build that checked it compiles finished at 18:30:32,
+# before the registering commit at 18:30:56.)
 # Fixture 18's watcher write-after-free (e779381) with fixture 17's bounded reissue search. Since the
 # 2026-11-11 record (results/2026-11-11-sublet-crenew), fixture 18's single calloc after the free no
 # longer takes the freed storage, and 18 stops with its no-op mark. Fixture 18 and its predictions

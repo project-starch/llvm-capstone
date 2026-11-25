@@ -55,3 +55,25 @@ rc 127. It was stopped before any gate completed, and its partial output is kept
 kit-c5 boots caplifive-buildroot build-qemu's Image, firmware and rootfs (d04bd83b13cd). Dev's buildroot pin is
 8fd1ea1249a9, 18 commits later. Those commits change only modcapstone and the opensbi monitor pin, both on the
 physical route.
+
+## What IDENTICAL does and does not cover (added 2026-11-25, after an adversarial audit)
+
+- **Four gates print no per-check lines.** hosted, runtime, fp and pthread report "FAIL=0 PASS=0" because they print
+  no PASS/FAIL lines. compare.py reads each one's JSON record (its status, and every test whose value is not true)
+  and its exit rows, which count only as RAN or NOT RUN.
+  - An arm whose record changed is DIFFERENT (mutant 3 below).
+  - An exit value that changed while the record did not is NOT seen (mutant 2). The runner's record is what carries
+    an exit into the verdict.
+- **The memcached bar came after the data.** The bar (FAIL set exactly {fx18_prediction, fx18_trigger,
+  fx24_trigger}) was set in amendment 2, after run 2 had shown those three failing on the control. It is a bar on
+  the control's known state, not a prediction.
+- **compare.py can print DIFFERENT.** Until today it had never been shown doing so. Mutants were run offline on a copy
+  of the treatment output, each against the real control:
+
+| mutant | change to the treatment copy | compare.py |
+|---|---|---|
+| 1 | memcached.log: `PASS fx17_prediction` made `FAIL fx17_prediction` | memcached DIFFERENT, VERDICT: DIFFERENT, exit 1 |
+| 2 | runtime.log: `VM_EXIT:perl:0` made `VM_EXIT:perl:1`, record unchanged | runtime IDENTICAL (`exit 1 [same]`), VERDICT: IDENTICAL, exit 0 |
+| 3 | runtime.json: tests.perl made false, status FAIL | runtime DIFFERENT, VERDICT: DIFFERENT, exit 1 |
+
+The unmutated pair reads IDENTICAL, exit 0.
