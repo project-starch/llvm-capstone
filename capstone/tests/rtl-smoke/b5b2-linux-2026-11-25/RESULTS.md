@@ -33,3 +33,26 @@ unchanged rootfs, as the board images always did.
 
 **Not covered:** SMP (the kernel is !SMP); Sstc (absent); a fault from M; the stock firmware with protected
 programs other than regs.S.
+
+## Boots 7 and 8: the cost of an M round trip from U (Amendment 4)
+
+Board 2, resident 88db40027, no flash. The kernel and initramfs are the same; only the firmware differs. Cycles per op,
+best of 5 x 20,000, three runs per boot:
+
+| | rdtime (one M trip) | rdcycle (no trap) | getppid (U-S syscall) |
+|---|---|---|---|
+| boot 7, keep-tags | 1929.87 / 1932.33 / 1943.72 | 5.00 x 3 | 1287.47 / 1287.71 / 1288.09 |
+| boot 8, stock | 1137.84 / 1136.99 / 1149.14 | 5.00 x 3 | 1260.01 / 1258.63 / 1259.53 |
+
+Against the predictions (medians, chosen by the board lane before the run):
+- rdcycle < 5: MISS. It reads exactly 5.00, the boundary; the prediction was too tight.
+- getppid within ±3 %: PASS (+2.24 %).
+- rdtime > 100: PASS.
+- keep - stock in [60, 600]: MISS, +794 cycles.
+So the keep-tags save path costs about 794 cycles per M trip on silicon, 1.7 x stock's 1,138.
+
+The probable reason, not yet shown: this core's D$ is write-through, so each of the 31 STC is a DRAM write behind an
+8-entry write buffer. The rule said the difference would be "read for what it is, not stretched to fit". The next step
+is a firmware fast path for the rdtime emulation that touches two registers instead of 31. It goes into BOTH arms'
+firmware, so no divergence favours either. On Line B the verdict cache's refill after every M trip comes on top of the
+794 (rtl's sim: about 470 cycles over 33 ids).
