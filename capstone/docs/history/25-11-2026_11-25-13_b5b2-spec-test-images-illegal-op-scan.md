@@ -6,8 +6,7 @@ plan (`docs/plans/2026-11-24-b5b2-trap-route.md`, the integer-M monitor section)
 without that flag executed DELIN at 876 sites, and DELIN is illegal under the Sublet format. Train inputs are not
 built; the lead's rule keeps train for the final campaign.
 
-**Status: the images have never executed.** No QEMU or board run has checked their startup on the trap kernel's
-loader or their test outputs.
+**Status (amended the same day): one benchmark has executed on QEMU, the rest only on the boards to come.** See "QEMU smoke" below.
 
 ## The scan
 
@@ -89,9 +88,45 @@ code and read NO-DATA.
 The unstripped images read the same counts. The capability ops present in each are CDERIVE (4; 2 in
 imagevalidate), the one-operand CREVOKE (3), LCC, SCC, SHRINK, SHRINKTO, MOVC, CINCOFFSET(IMM), LDC and STC.
 
+## The lean arms (added the same day)
+
+The runtime lane asked for the measured allocator on the trap route, as a second build kept beside B5T, so that rows
+can be compared with the Full arm. Lane runtime/trap-alloc-lean carries it, on trap/eval:
+- alloc-lean's mallocng patches, renumbered 0012-0014 after 0011-linux-trap-startup. The grow-in-place patch is
+  ported to the trap route's realloc order: the new object is derived first, and can fail with ENOMEM.
+- memset-cap-zero.
+- The whole-mapping cache (HEAP_MAPPING_REUSE), ported as owner' = CRENEW(owner). Its QEMU qualification is
+  tests/trap-mapping-reuse/RESULTS.md: every pre-registered row as predicted. Residuals: the mprotect hook never
+  fired, because the trap kernel refuses mprotect through an object reference; the out-of-place renewal is
+  unobserved; the alias row's same_address read 0.
+
+Arms built with the same compiler and flags:
+- B5TL0 (no mapping reuse, ba87c530a8f6);
+- B5TL1 (with it, afeace3b2e0d).
+All 22 images of the two arms read ILLEGAL 0 / DELIN 0.
+
+## QEMU smoke (added the same day)
+
+The platform: capstone-qemu da49602d76, the trap-route-keep-tags firmware, the runtime lane's trap kernel
+(`sublet.dom_binfmt=1`) and 963 MiB, the board's DTS memory. Each arm's 519.lbm_r test stage ran unchanged from a
+tmpfs cwd:
+
+| arm | image | rc | specdiff |
+|---|---|---|---|
+| B5T | 906d7c735fa2988f | 0 | 1/1 PASS |
+| B5TL0 | 5dedb373ee975e94 | 0 | 1/1 PASS |
+| B5TL1 | 0d9105dab2bccdfe | 0 | 1/1 PASS |
+
+- The control, trap/eval's smoke.dom, exited 7, as its source returns.
+- The grader's control: the same text with lbm.out corrupted reads 0/1.
+- What this shows: the startup ABI and the loader path work for each SDK. The other seven benchmarks run only on the
+  B5b-2 boards (the runtime lane's kit), not on QEMU, to keep the shared QEMU lock free.
+
+The first boot attempt was void because of a harness defect: the initramfs was repacked as a normal user, so the
+setuid busybox ran as that user.
+
 ## Open
 
-- **Never run.** The next check is a QEMU trap kit (trap kernel, the B5b-2 firmware, trap_platform.py) running all
-  eight test inputs under the one lock, before any board time.
+- **Seven of eight not run.** perlbench, gcc, mcf, x264, imagick, nab and xz run on the boards.
 - **Scope of the scan:** it reads encodings, so it says nothing about an instruction's run-time legality beyond
   decode, and assumes protected U.
