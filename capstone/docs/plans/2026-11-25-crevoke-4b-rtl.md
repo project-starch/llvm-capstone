@@ -248,3 +248,47 @@ Reported, not graded (predicted before the run):
   - the post-synthesis estimate on clk_out1, and on the led_stretch endpoints, against 88db40027's gate, as an ESTIMATE (ungraded);
   - routed WNS exists only with a full build. There it is graded like 88db40027's: inside 904cd9c6b's null band [-1.47, +6.01] on clk_out1, with the led_stretch worst slack reported beside it.
 - **Failure branches:** if key 1 or 2 fails, the partition and loop members by stem, and no full build.
+
+## 88db40027's full build: sealed and graded (2026-11-25)
+
+The board lane sealed `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b_88db40027.bit`.
+- Size: 11,443,722 B.
+- **sha256 `bdff45d0a96f68ad1ea3f2077c7ca350960047a1f394d21849bd4a003da58d9a`**, recomputed here from the copy in bitstreams/ and equal to the build's verdict.
+- The build tree is at 88db40027, with no core change. Its synthesis rows equal 88db40027's own gate on every module (+0).
+
+**Graded here: PASS on every pre-registered full-build key** (the bf8fc0cfb section's table; 904cd9c6b's seal in brackets):
+
+| key | band | read |
+|---|---|---|
+| placed LUT | 149,038 +-3,000 | 149,188 (+1,150) |
+| placed FF | 68,831 +-2,000 | 69,534 (+1,303) |
+| routing | 0 errors, 0 unrouted, 0 partial | routed clean, 199,232/199,232 |
+| congestion | <= 5 | placed level 4 (3); router: no hotspot, with the control log parsing to 5 |
+| loops | 0, each toy firing | check_timing 0 in the report and on the routed dcp, TIMING-23 0, LUTLP-1 0, each toy 1 |
+| clk_out1 WNS | [-1.47, +6.01] | +0.510 (+2.266), inside the band |
+
+Reported:
+- design WNS +0.177, TNS 0, WHS +0.054, 0 of 212,404 endpoints failing;
+- slices 44,301 (86.95 %), RAMB36 115;
+- rev_node on the worst 500: 223 paths / 211 cells (904cd9c6b 258 / 309; control issue_read_operands 480 / 480);
+- the worst-20 family is fu_data_q cap_metadata -> fu_data_q / the scoreboard's cap_result, unchanged;
+- routed rows beyond +-2,500: dyn_unit/_spawn_0 +2,786 and rev_node -2,878, the same re-homing as both gates.
+
+The board lane's grade is <synth>/b5b2c4ff-88db40027-full-out/grade-board/grade-c4f-full.txt. This seal is the target of the crevoke4b-bare-2026-11-25 kit (PREREG 77f0e191b97f). It is the 4(b) candidate, not final.
+
+**The aperture gate on 47d749153: read (board lane, 2026-11-25).** PASS 3/3:
+- technology mapping 4,968.4 MB (-0.3);
+- loops 0, each toy firing;
+- core LUT 124,167 (+126, limit 126,541).
+
+Sizing against the predictions:
+- core LUT +126 (pred under +150) and FF +27 (pred about +34);
+- load_unit FF +8 (pred +8);
+- each wt_dcache_ctrl FF +3 (pred +4: one bit of each 4-bit copy merged with an equivalent register; Vivado merges only equivalent registers);
+- the write buffer FF +11 (pred +11);
+- wt_dcache's own row FF +3 (pred +3);
+- 0 rows beyond +-2,500.
+
+FSMs: state_q in wt_dcache_ctrl and __parameterized0 is inferred and encoded sequential in both .vds, so nothing was re-encoded. The post-synthesis timing estimate is UNAVAILABLE: the synth dcps carry no clocks. The led_stretch slack comes from the routed build. dcp sha16 47ed72426378903d.
+
+The full build of 47d749153 alone was disarmed before it started. The semantics owner ruled the FLU's untagged-x[rs1] rule ungated (reference-exact) in the same next build. That combined hash takes its own synthesis-only gate.
