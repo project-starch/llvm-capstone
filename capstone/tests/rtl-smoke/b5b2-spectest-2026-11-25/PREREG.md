@@ -284,3 +284,32 @@ CINCOFFSET refutes the ungate, as in Amendment 4. Amendment 9's cause-25-at-LDC 
 
 **The registered g2 images stay valid** for what they already read: imagick on 28fcbb646. The b42c8c644 sessions
 use g2b in their place.
+
+## Amendment 11 (2026-11-26, before any boot of these images): x264 in images of its own (x264b); g2b stops after imagick
+
+**Why.** B5T-g2b on b42c8c644 (board 3, 18:33-22:39Z) read C as predicted, imagick PASS, no cause-25 fault, and
+x264 NO READING again: `gen` rc 0 in 2,216.58 s, then `run` was still running, with no fault line and the kernel
+ticking (last tick at 14,377 s), when the 14,400 s stage bound (which covers gen and run together) cut it. So
+x264's test run needs more than about 12,180 s here, and every g2b image would spend about 4 h on x264 for no reading.
+No test-size x264 time is recorded on any board. The P1 record is train only: 30,671.49 s and 30,672.80 s encode,
+input generation 2,111 s (train PREREG Addendum 195, 47895e6d5b47). The test run encodes 156 frames.
+
+**Ruling (runtime, 2026-11-26).** The remaining g2b boots (board 3's B5TL0-g2b and B5TL1-g2b, board 2's three) run
+until imagick's stage line ends, and are then stopped by their STOP file, recorded as "x264 stopped by ruling". Their
+imagick readings count as registered and the partial captures are kept. B5T-g2b's reading stands as graded.
+
+**Images.** B5T-x264b, B5TL0-x264b, B5TL1-x264b: each is its arm's g2b overlay with imagick's stage directory removed,
+`/stages.order` = x264 alone, and `/stages.bound` = x264 43,200 s. Every other overlay file is byte-identical to g2b's
+(30 files compared, 6 differ: exactly the two stage files of each image; the comparison names the files that differ,
+so it can fire). Kernel from the pinned tree `trapk/fpga-v1` as g2b (`sublet_copy_msghdr_from_user` 0 symbols),
+firmware keep-tags with FW_FAST_RDTIME off (0 `fw_fast_mtime_addr` references) and caplifive-b5b2.dtb, all as g2b.
+Hashes: `SHA256SUMS.x264b`, `overlay-files.x264b.sha256`. fw_payload 783d3276… (B5T), 0b483e78… (B5TL0),
+b325125… (B5TL1), 21,657,608 B each.
+
+**Board.** Board 3, b42c8c644 resident and checked by readback, one image per boot, after board 3's current session.
+Boot bound 43,200 s plus upload and boot.
+
+**Predictions.** C `control smoke.dom rc=7`; x264 `gen` rc 0, then `run` rc 0 with specdiff pass on all three arms
+(Amendment 10's prediction, carried). The run time is not predicted. If the 43,200 s bound cuts it, that is NO READING
+with its elapsed time, not a fault. A cause-24 fault at CINCOFFSET refutes the FLU ungate, as in Amendment 4.
+Amendment 9's cause-25-at-LDC rule applies.
