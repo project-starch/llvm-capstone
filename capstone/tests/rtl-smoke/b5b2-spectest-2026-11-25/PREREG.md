@@ -217,3 +217,26 @@ registered:
 **The matched pair** comes later, on board 2, after its 28fcbb646 session: the same g2 images and B5T-g1b on
 a5c45a46d. Every stage that passes on both is predicted within ±1 % of its 28fcbb646 time (R-80's cost: sim -3 cycles
 over 198 probes). A row outside it is attributed by the R-80 diff before anything else.
+
+## Amendment 8 (2026-11-25, before a5c45a46d is sealed): what an mcf reading can say
+
+**Readings.** B5T-g1r on board 3 (904cd9c6b, chain 3): mcf ran its whole 3,600 s with the kernel alive, as on board 2
+(88db40027). Boot 5 on the same board and bitstream went silent 2,766 s into mcf. The wedge is intermittent: 1 in 2
+boots that reached that point on 904cd9c6b, 0 in 1 on 88db40027.
+
+**Correction to Amendment 7** (the board lane's point, adopted):
+- An mcf completion on a5c45a46d is CONSISTENT with R-80's fix, not evidence for it, since mcf did not wedge on
+  pre-fix bitstreams either.
+- The discriminating pair is rtl's ldcexc2: it must wedge on 28fcbb646 (board 2, the positive control) and complete
+  on a5c45a46d. If it completes on 28fcbb646 too, it discriminates nothing on silicon, and that is recorded.
+- "A silent mcf wedge on a5c45a46d refutes R-80 as mcf's mechanism" stands.
+
+**A new prediction**, written now: mcf has no faulting instruction on the twin (it ran to its end with no fault
+line, and its untagged count is 0). So the faulting LDC that S-35 needs on silicon must be a silicon-only exception.
+The candidate is R-77's verdict-probe timeout, which denies with 25, and timing makes it intermittent. If that is the
+mechanism, then on a5c45a46d, where the excepting LDC now writes back and pops, an mcf that would have wedged instead
+**faults with cause 25 at an LDC**. That is a named fault, and it would also be the first silicon instance of R-77 on
+Line B. So:
+- a cause-25 fault at an LDC in mcf on a5c45a46d supports R-80 + R-77 as the pair;
+- a completion is consistent with either;
+- a silent wedge refutes R-80.
