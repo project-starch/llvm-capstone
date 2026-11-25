@@ -34,3 +34,9 @@ Every position is class E, except sublet-life's pool slots 5-9 (positions 25-34)
 - **FAIL:** anything else.
 
 **What silicon cannot show.** Which link starved: that is read in sim only (ISSUES R-80). A wedge on a pre-fix seal can be read on the LED apertures (bytes 192, 223, 209, 229, 195) against the pattern pre-registered for mcf (llvm-capstone land/rtl-crevoke4b c7877d008be7). In sim this arm read 192 0xd1, 223 0x08, 209 0x10 and 229 0x94.
+
+## Addendum 2026-11-25: the final candidate b42c8c644 (R-80 + R-77's PRE fix), pre-registered before its seal
+
+The same 3 images (byte-identical: SHA256SUMS unchanged) were simulated on capstone-ariane b5b2-prefix b42c8c644 (core = 7861abcfa), rtl_dirty=no (s2pre-wt `.sup/r77`), with this kit's settings. Their vectors are in `expected-vectors-b42c8c644.json`, which has the same fields as `expected-vectors.json` plus `sim_rtl`.
+
+**Every image reads exactly this kit's `vector` column (the a5c45a46d / candidate column), in every position.** R-77's fix changes no value of this kit. On the b42c8c644 seal the rules above apply unchanged, with `expected-vectors-b42c8c644.json`'s `vector` as the column.
