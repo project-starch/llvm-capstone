@@ -164,11 +164,16 @@ int main(int argc, char **argv) {
   uint64_t ev[16][4] = {{0}}, edges = 0, tables = 0, lastI = 0, lastP = 0, recs = 0;
   for (uint64_t i = 0; i < ne; i++) {
     uint64_t x = w[2 * i], y = w[2 * i + 1]; unsigned code = x >> 56, kind = code >> 2, op = code & 3;
+    // word 1: a record event carries live[32] and generation[31:0] only; an E carries its flush bit only; T, I and
+    // PI carry nothing. Checked BEFORE the marker branches below, which continue (f82523965196 checked after them,
+    // so an E with word 1 = 2 was accepted; found by the nested lane).
+    if (kind > K_E || (kind == K_E ? (y >> 1) != 0 : (kind >= K_T ? y != 0 : (y >> 33) != 0))) {
+      fprintf(stderr, "malformed event at %llu\n", (unsigned long long)i); return 2;
+    }
     if (kind == K_T) { tables++; lb_flush(&LB); rc_flush(&RC); gc_flush(&GC); tlb_clear(&NC.tlb); continue; }
     if (kind == K_I) { lastI = x & ((1ULL << 56) - 1); continue; }
     if (kind == K_PI) { lastP = x & ((1ULL << 56) - 1); continue; }
     if (kind == K_E) { edges++; ev[K_E][op]++; if (y & 1) lb_flush(&LB); continue; }   // RC and GC flush only on T
-    if (kind > K_E || (y >> 33) || (kind == K_E && (y >> 1))) { fprintf(stderr, "malformed event at %llu\n", (unsigned long long)i); return 2; }
     uint64_t cnt = (x >> 32) & 0xffffff, slot = x & 0xffffffff; uint32_t gen = (uint32_t)y; int live = (y >> 32) & 1;
     if (cnt == 0) { fprintf(stderr, "zero-count run at %llu\n", (unsigned long long)i); return 2; }
     ev[kind][op] += cnt;

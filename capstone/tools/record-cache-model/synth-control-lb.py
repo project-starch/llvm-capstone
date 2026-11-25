@@ -4,7 +4,7 @@ hand, run through rcm-lb, each count asserted. --perturb changes one expectation
 (its positive control). Exit 0 only when every count matches."""
 import os, struct, subprocess, sys, tempfile
 
-K = dict(c=0, a=3, r=4, E=10)
+K = dict(c=0, a=3, r=4, T=7, I=8, PI=9, E=10)
 
 def ev(kind, op, slot, gen, live, cnt=1):
     return struct.pack("<QQ", ((K[kind] << 2 | op) << 56) | (cnt << 32) | slot, (live << 32) | gen)
@@ -48,6 +48,23 @@ EXPECT = {
 EOPS = [1, 1, 0, 0]   # E by op: 7b is op 0, 9 is op 1
 LBX = dict(probes=8, deny_hit_dead=2, dead_record=1, installs=8, invalidations=1, flushes=1)
 
+# malformed traces rcm-lb must refuse with exit 2 (each after one valid record event, so only the bad word decides)
+BAD = {
+    "E word1 2":   struct.pack("<QQ", (K["E"] << 2 | 1) << 56, 2),
+    "T word1 1":   struct.pack("<QQ", (K["T"] << 2) << 56, 1),
+    "I word1 1":   struct.pack("<QQ", (K["I"] << 2) << 56 | 5, 1),
+    "PI word1 1":  struct.pack("<QQ", (K["PI"] << 2) << 56 | 5, 1),
+    "c word1 b33": struct.pack("<QQ", ((K["c"] << 2) << 56) | (1 << 32) | 7, 1 << 33),
+    "kind 11":     struct.pack("<QQ", (11 << 2) << 56, 0),
+}
+OK = {"E word1 1": struct.pack("<QQ", (K["E"] << 2 | 1) << 56, 1)}   # the accepting side of the same check
+
+def run_one(binary, body):
+    with tempfile.NamedTemporaryFile(suffix=".rt2", delete=False) as f:
+        f.write(ev("c", 0, 5, 1, 1) + body); path = f.name
+    rc = subprocess.run([binary, path], capture_output=True, text=True).returncode
+    os.unlink(path); return rc
+
 def main():
     binary = sys.argv[1]; perturb = "--perturb" in sys.argv
     exp = {k: dict(v) for k, v in EXPECT.items()}
@@ -75,6 +92,12 @@ def main():
             if got != EOPS: print(f"MISMATCH E by op: got {got} expected {EOPS}"); bad += 1
     if exp: print("ROWS NOT PRINTED", sorted(exp)); bad += 1
     if not seen_e: print("E BY OP NOT PRINTED"); bad += 1
+    for name, body in BAD.items():
+        rc = run_one(binary, body)
+        if rc != 2: print(f"MALFORMED ACCEPTED {name}: rc {rc}, expected 2"); bad += 1
+    for name, body in OK.items():
+        rc = run_one(binary, body)
+        if rc != 0: print(f"WELL-FORMED REFUSED {name}: rc {rc}, expected 0"); bad += 1
     print("CONTROL", "PASS" if not bad else f"FAIL ({bad})"); return 1 if bad else 0
 
 if __name__ == "__main__":
