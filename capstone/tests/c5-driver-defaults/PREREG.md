@@ -83,3 +83,23 @@ two QEMU commits.
    set is equal, and no row is NOT RUN.
    - Any DIFFERENT gate blocks the landing until it is explained.
    - INCOMPLETE is not a pass.
+
+## Amendment 1, before the re-run (2026-11-25)
+
+The first control run (dev 634fd5531e99) read rc=1 on runtime, nodes, fp, pthread and memcached, so the stop rule
+fired and the treatment did not run. The cause was two harness defects, not the kit:
+- the module's one default supervisor slot on a 32-slot CPU, which refused every thread create;
+- node_count_reported, which no contract ever satisfied.
+Both are fixed by runtime/run-arm-supervisor-slots c51a2bb381ed, approved by the semantics owner. That fix is applied
+to both arms' trees:
+- **control:** dev d139d076f84e (no runtime/ports change since 634fd5531e99) plus c51a2bb381ed;
+- **treatment:** this branch, which carries the same commit as a15b5eea738f.
+The images are the ones built and hashed above (runner-only change). The first run's gate outputs are kept beside the
+new ones, under gates-run1-noslots.
+
+Predictions:
+1. **Positive control first** (control arm, GATES=pthread, CPU x-capstone-supervisor-slots=1): `SLOTS pthread` reads
+   [1], the guest logs "thread create refused, 1 supervisor slot in use", and pthread reads rc=1, as on the first run.
+2. **Control** (all nine gates, CPU default x-capstone-supervisor-slots=32): rc=0 on all nine, every `SLOTS` line [32],
+   no MODE_CHECK_FAILED. The stop bar is unchanged: anything else stops the run before the treatment.
+3. **Treatment then compare.py:** IDENTICAL.
