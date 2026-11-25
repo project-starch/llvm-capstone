@@ -7956,3 +7956,46 @@ faulting pc:
 - **Prediction:** pools 31 moves, and it is the only cell that does. 22 meets (c), but it cannot meet (a): the
   malloc arm has no reference catch, and its record is MISSED on virtual-malloc at both bounds settings (the
   2026-11-23 readings above). So the rule moves one cell, pools 27 → 28 CAUGHT, if (b) reads 28 for 31.
+
+### (b) read, and the rule applied (twin, Image `749fed26…`, 2026-11-25, both halves done by 22:47)
+
+The same 8 cases, the same images, the same kernel: `ovl-r60b` with `x-capstone-exact-bounds=true` and `ovl-r60off`
+without it. Fault lines, cause at pc:
+
+| cell | exact bounds on | off | off in twin-all (`4fc06dde…`) |
+|---|---|---|---|
+| pools 29 `sqlite3Get4byte` | 28 at +0x57c88, address …1fafa | 24, same pc and address | 24, same |
+| pools 30 (control) `vdbeRecordCompareInt` | 28 at +0xcc340 | 28 | 28 |
+| pools 31 `statDecodePage` | 28 at +0x1f7df4, address …1dde0 | 24, same pc and address | 24, same |
+| malloc 02, 05, 19, 20, 22 | 24 | 24, same pcs and addresses | 24 |
+
+- In both halves the control reads 28, so the property alone moves 29 and 31 from 28 to 24, at the same instruction
+  and address. This reproduces the 2026-11-23 pair on the trap route.
+- The five malloc cells read 24 with exact bounds too, so the compressed-bounds window does not explain them. Their
+  addresses (0x0, 0x17, …392b, an ASCII word) are untagged values loaded from memory.
+- The kernel change from twin-all's Image to this one does not move any of the 8 cells.
+
+**The rule (pre-registered above), applied to the 7 cause-24 cells:**
+- pools 31: (a), (b) and (c) all met, so **CAUGHT**;
+- pools 29: (a) and (b) met, (c) not, so it stays MISSED, recorded as "24 at an operand formed by a cincoffset in
+  the caller: excluded by rule (c) as registered";
+- malloc 22: (c) met, but not (b) (24 with exact bounds) and not (a);
+- malloc 02, 05, 19 and 20: none of the three is met.
+
+So the rule moves one cell, pools 31, and pools reads **CAUGHT 28, MISSED 5**, as predicted.
+
+**The putenv probe's positive control** (`ovl-r60off` stage N3, the new `capstone-vexec`):
+- The probe printed the ABSENT pattern and `capstone-exec: exit image=/tmp/nt/img/probe-putenv.dom sha256=fd2e1555…`.
+  That is the probe's own digest.
+- run-realphp's `transcript_image` reads the digest from this transcript and `putenv_probe_outcome` reads False
+  (ABSENT).
+- On twin-all's transcript of the same probe, the identity reads None. That is why case 25 was MISSED there.
+- The control fires both ways. It shows the identity can now be read; case 25's judgement is taken from the
+  board-overlay twin run below.
+
+**The board kit's own twin run.** `ovl-board` is the corpus overlay of the board payload `b8882143…`:
+- SQLite and PHP stages only;
+- it differs from twin-all's corpus stages only in `capstone-vexec`, which is 081c21bd's;
+- it is queued on the twin with wide grants, as twin-all was.
+
+Its readings are the board's predictions.
