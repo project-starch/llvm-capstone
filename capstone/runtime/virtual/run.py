@@ -177,8 +177,7 @@ def main():
                    help='Run the parallel pair immediately before rmmod, not mid-suite '
                         '(one-slot machines: the pair can end the guest)')
     a = p.parse_args()
-    if a.unpinned:
-        a.module_args += memory_mode.args(True)
+    a.module_args += memory_mode.args(a.unpinned)   # empty when pinned outside a gate, as before
     work = Path(tempfile.mkdtemp(prefix='virtual-app.', dir=os.environ['CAPSTONE_TMP_ROOT']))
     stage = work/'stage'; stage.mkdir()
     inputs = {'qemu': a.qemu, 'launcher': a.adapter/'capstone-vexec',

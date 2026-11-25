@@ -31,6 +31,11 @@ def main():
     a = p.parse_args()
     if a.supervisor_slots is not None and a.supervisor_slots < 1:
         p.error('--supervisor-slots must be positive')
+    gate_slots = memory_mode.slots_requested()
+    if gate_slots is not None and a.supervisor_slots is not None:
+        if a.supervisor_slots != gate_slots:
+            p.error(f'--supervisor-slots {a.supervisor_slots} disagrees with the gate\'s {memory_mode.SLOTS_ENV}={gate_slots}')
+        a.supervisor_slots = None   # memory_mode.args() already passes it
     if a.application.read_bytes().count(b'CPONVVM7') != 1:
         p.error('application has missing or ambiguous virtual ABI 7 magic')
     a.work.mkdir(parents=True, exist_ok=False)
