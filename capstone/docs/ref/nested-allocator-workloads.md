@@ -7687,3 +7687,61 @@ all three modes.
 - No unprotected arm on the board (the cap). On the twin, the protected and unprotected s and f lines are equal.
 - The apertures are read once, after the budget.
 - A return is a bound, not an absence.
+
+## M-16's return rate on Line B: the protected tshark in repeated B5b-2 boots (2026-11-25)
+
+### Pre-registration: Fig. 10's protected Wireshark workload in five boots on a Line B board, queued (written 2026-11-25 19:29, before any of the boots)
+
+**Status.** Queued, not granted. The runtime lane asked for this run, to go after the combined seal's kits. No board or
+time is granted for it yet, and this section claims none.
+
+**Question.** How often does the protected tshark return on Line B? On P1 it returned in 5 of 8 boots (tsu-p1, tsu-p2,
+the heartbeat boot and tsu-r1-r5; 95 % interval 0.245-0.915), and every non-return held the core at the CDERIVE of
+`wmem_block_fast_sublet_alloc`. On B5b-2 it has run once (boot B-prot) and returned. The stress form returned three
+times there (boot S), which bounds the per-allocation hazard below 2.6·10^-8.
+
+**Configuration.**
+- The bitstream is Line B's resident one, read back by name before and after each boot.
+  - If it is `…-r75d-b5b2n_904cd9c6b`, the payload is boot B-prot's, unchanged: `boardB-prot/out/fw_payload.bin`,
+    sha256 `2effea0096ee964f4239300ce66eeea707920acaf57d1e70d33bcc867fa4d9fa`. It holds Perl p0002 on makerand.pl, then
+    tshark prot (`4e01172f…`) on Fig. 10's 169 captures, with the default DTB.
+  - **If the resident is a later Line B bitstream, this section does not cover it as written.** The images must
+    first be re-scanned against that bitstream's illegal set, and an amendment must name the bitstream and the scan,
+    before the first boot.
+- Five boots, B-prot-r1 to B-prot-r5, one after another, read with `read-boardB.py` (`122f1974…`). Each boot is
+  bounded at 2 h, as B-prot was, and `/init` bounds each stage at 3,600 s.
+- On a non-return, before any reset or power-off, the board lane reads the aperture snapshot of boot S's request.
+  Its labels are read with the board lane's driven/constant table for 904cd9c6b. On B5b-2, sw=195, sw=229 and the
+  rev-node rows are no reading.
+
+**Exposure per boot.** In oneop, Fig. 10's workload issued 2,074,705 more CDERIVEs on prot than on stock (image zone,
+the oneop result above). Those are wmem's derives, BLOCK_FAST and BLOCK together. So about 2.07·10^6 is an upper bound
+on the boot's BLOCK_FAST allocations. P1's stage was a different workload, one tshark over 9,000 frames. Its BLOCK_FAST count is about
+1.9·10^6 a run, by the twin's zones (the figure `tsapp-stress.c`'s header records). The two exposures agree within about 10 %, so the per-boot rates
+are compared directly, with that caveat.
+
+**Predictions** (per-boot return probability p; Fig. 10's workload issues at most 2.07·10^6 allocations):
+
+| hypothesis | p per boot | P(5 of 5) |
+|---|---:|---:|
+| boot S's bound, below 2.6·10^-8 per allocation | at least 0.947 | at least 0.76 |
+| P1's stress-form estimate, 4.9·10^-8 | 0.903 | 0.60 |
+| P1's tshark rate, 5 of 8 | 0.625 | 0.095 |
+
+**What each outcome says.**
+- **5 of 5 return:** together with B-prot, that is 6 of 6, with a Clopper-Pearson 95 % interval of 0.54-1.00 on p.
+  P1's 0.625 lies inside it, so the rates are not shown to differ. Line B's p would be read as above about 0.5, not
+  as 1.
+- **A non-return:** reported with its heartbeat, its dmesg and its snapshot.
+  - It is M-16 on Line B only if the commit pc reads the image's CDERIVE in `wmem_block_fast_sublet_alloc` and
+    sw=220 reads `0x8c`. Anything else is reported as itself.
+  - That CDERIVE is computed from `4e01172f…`, as boot S's was. It is word `0xa283955b` at offset +0x4f0, vaddr
+    `0x7e2cd0`; the refusal branch is at +0x4f8. The loader places vaddr 0x10000 at `0x3ff6000000`, so it runs at
+    **`0x3ff67d2cd0`**.
+- **A control or Perl arm failing:** that boot is void and is not counted.
+
+**Limits.**
+- Five boots.
+- The workload differs from P1's.
+- The exposure is an upper bound from oneop, not this route's count.
+- The apertures on B5b-2 are partly constant.
