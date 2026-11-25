@@ -7261,6 +7261,34 @@ with the lifetime count, the replays faster.
 - n is an instrument. Its children are unprotected copies of their parents' capabilities, and one derive per body
   segment stays real.
 
+### Result: pairnf, board 1, P1 (2026-11-25 14:49-22:33)
+
+The chain (pid 461875) read P1 back by name and booted pairnf 14:49:52-22:33:46: BOOT rc 0, smoke PASS on all 9
+steps, unbooked (HTTP 200). The chain's `SPEC rc=2` is the generic classifier's known format gap (it wants
+`@@SPEC-DONE <n>`); the transcript has all four `@@SPEC-END` lines with rc 0 and `@@SPEC-DONE 500.perlbench_r test`.
+Read by `read-pairnf.py` (`3ed8e1d1…`, exit 0) with pairf's, pairn's and pair6's transcripts and `counts.txt`.
+
+- **Answers:** makerand.out and test.out equal SPEC's references for u and n (test.out `b41ee90a…`), with empty
+  stderr.
+- **Stock check met:** u 267,214.1 M against pair6's 267,219.2 M (−0.002 %). Under the same check, pairf is +0.009 %
+  and pairn −0.051 %.
+- **NF−U +13,556.0 M (+5.07 %)**, inside the predicted +13,500 to +16,800 M, at its low edge. The point was +14,249.
+  The span is +625.5 s, and kernel and other +1,826.9 M.
+- **The full port's code price:** 13,556.0 M / 3,820,703,050 = **3.548 cycles per twin instruction**, between the
+  stock mean 3.169 and the heads' 3.726.
+- **The allocators' code price:** c_a = (NF−N)/(Z_NF−Z_N) = (13,556.0 − 9,092.9) M / 1,380,147,727 = **3.234**.
+- **The allocators' own lifetime price:** ((F−NF) − (P6−N))/33,562,391 = (12,044.5 − 4,490.9) M / 33,562,391 =
+  **225.1 cycles per lifetime instruction**.
+  - The full port's lifetimes all in, (F−NF)/L_FULL, are 202.1. The heads' (P6−N)/L_HEADS reproduce 172.44.
+  - The identity with pairf's registered form holds: (12,016.7 − 3.234 × 1,380.15)/33.56 = 225.1.
+- **Outcome: the first branch.** c_a ≤ 3.885, so the price is ≥ 198.3. pairf's "above" stands, measured: the
+  allocators' lifetimes cost more per instruction than the heads' (225.1 against 172.4 ± 15 %, band 146.6-198.3).
+- **Records met:** n's distance from u in hpm3, hpm4 and hpm7 is −12.2 %, −10.8 % and −8.5 % of pairf's F−U in the
+  same counter, each under 15 % in size. All three are negative: n reads slightly fewer of those events than u. In
+  hpm8, which is not registered, n is +14.5 %.
+- Source of every cycle price above: P1's `run_cycles` for each command on board 1, as the pre-registration names.
+  The twin supplies only the instruction counts (`counts.txt`).
+
 ## Fig. 10's one-operand revisions for B5b-2 (2026-11-25)
 
 ### The images: rebuilt on the trap route, every one scanned clean
@@ -7788,9 +7816,18 @@ fault line:
 **Native and twin.**
 - **Native:** in the replay, every test passes ("All tests successful", 208 s), op/leaky-magic.t included, and
   `local $0 = "thew"` runs.
-- **Twin (B5T, the trap kernel):** queued behind this lane's corpus twin. The stage runs B5T's image against natperl, on
-  `-e 'local $0="thew"'` and on leaky-magic.t, with the board's default boot arguments. It is predicted to fault at the
-  same memset store; that is a prediction, not yet a reading.
+- **Twin (B5T, the trap kernel):** the stage `F1-perl-dollar0` ran B5T's image against natperl, with the board's default
+  boot arguments (no wide grants). It ran on `-e 'local $0="thew"'` and on leaky-magic.t, from the board's path
+  `/tmp/nt/sr/.perl-native`, on Image `749fed26…`. The run finished at 2026-11-25 22:39:26 (its lock.log).
+  - B5T faulted in both:
+    `sublet: fault cause=28 pc=0x3ff7c01480 address=0x3ff7bfff88 … ra=0x3ff7c342a6 code=0x3ff7c00000-0x3ff7e50000`,
+    rc 139.
+  - natperl returned rc 0 on both.
+  - So the twin reads the board's fault at the same memset store (vaddr 0x11480), from the same `jal memset`
+    (vaddr 0x442a6), in the same code window.
+  - The address is 0x10 higher than the board's `…ff78`. argv[0]'s string sits at a position set by the argv and
+    environ strings above it, and those differ between SPEC's harness child and this stage. That fits the mechanism,
+    but the twin's argv and environ were not read, so the 0x10 is not traced.
 
 **Reading (the runtime lane's ruling).**
 - This is a spatial check catching perl's deliberate write past argv[0]'s string. C does not give argv[0] the
