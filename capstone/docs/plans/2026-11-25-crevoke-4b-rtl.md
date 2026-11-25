@@ -292,3 +292,50 @@ Sizing against the predictions:
 FSMs: state_q in wt_dcache_ctrl and __parameterized0 is inferred and encoded sequential in both .vds, so nothing was re-encoded. The post-synthesis timing estimate is UNAVAILABLE: the synth dcps carry no clocks. The led_stretch slack comes from the routed build. dcp sha16 47ed72426378903d.
 
 The full build of 47d749153 alone was disarmed before it started. The semantics owner ruled the FLU's untagged-x[rs1] rule ungated (reference-exact) in the same next build. That combined hash takes its own synthesis-only gate.
+
+## The combined hash: apertures + the FLU's untagged-x[rs1] rule (capstone-ariane b5b2-wedgeap-flu 28fcbb646), pre-registered before its gate (2026-11-25)
+
+**The ruling.** The semantics owner ruled (2026-11-25): CINCOFFSET, CINCOFFSETIMM and SCC take the reference's CHERI rule on an untagged x[rs1] in every mode (capstone-qemu 9289114e06 op_helper.c :762-779).
+- The FLU applied it only under the CSRUNV-era virtual-context flag, which is constant 0 under the Sublet format.
+- So silicon raised 24 where the reference adds: B5T-g2's x264 and imagick faults.
+
+**The change.** 28fcbb646 = 47d749153 + capstone_flu_unit.anvil's three gates dropped, plus the FLU's vctx channel field and sampling loop (capstone_unit.anvilh, ex_stage's hookup).
+
+**The vctx audit.** It is in the commit message. The DYN unit's vctx is the live table-namespace flag. Its gated CDERIVE sites (:277, :286) are unreachable under Sublet: CDERIVE decodes to CDERIVE_S, whose refusals are unconditional.
+- **CORRECTION:** my first audit table called them live, with an M-mode exposure. Withdrawn the same hour, before any edit.
+- This is measured, not only read: b5b2-untagged's plain-M inexact child reads 29 on both trees.
+
+**Readings** (memory delay 12):
+- **b5b2-untagged:** all nineteen values as pre-registered on both trees. Its first cut's M arm was VOID (the child was exact) and was rewritten before the rerun.
+- **Regression:** the B5b-2 / B5b-1 lists, 56 other tests, are identical to 47d749153 in values and cycles.
+- **Lint:** Sublet gate PASS. By name identical to 47d749153's after Anvil's thread renumbering; ids55 the same.
+
+**Synthesis-only gate** (base: 47d749153's gate, dcp sha16 47ed72426378903d):
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within +-505 MB of 4,968.4 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy fires), LUTLP-1 0 (toy fires) |
+| 3 core LUT | at most 124,167 + 2,500 = 126,667 |
+
+Reported, not graded (predicted before the run):
+- **The FLU** (flu_unit, homed under ex_stage_i or with its egress): the revived integer arms are an imm add, a two-operand add that may share CINCOFFSET's existing adder, and a result mux. Predicted under +300 LUT; FF -1 (vctx_q gone).
+- **ex+issue** (the FLU egress lands in issue_read_operands / scoreboard, as with item 4): the stem sum within +-2,500 of 47d749153's. Per-module rows beyond +-2,500 are reported by stem.
+- **Item 4's October history** (the same egress drove technology mapping to 94 GB): any single Vivado process above 9 GB is reported with the partition it was mapping.
+- **Failure branch:** if key 1 or 2 fails, the partition and loop members by stem, and no full build.
+
+**Full build on a pass.** 88db40027's keys (the bf8fc0cfb table), centred on 88db40027's seal:
+- placed LUT 149,188 +-3,000;
+- placed FF 69,534 +-2,000;
+- routed clean;
+- congestion <= 5;
+- loops 0, each toy firing;
+- clk_out1 WNS inside 904cd9c6b's null band [-1.47, +6.01].
+
+Reported beside them: the led_stretch endpoints' worst slack (the apertures' cost, since the synth dcp has no clocks), the rev_node worst-500 count, and sha256.
+
+This bitstream is diagnostic (the wedge apertures) plus 4(b) plus the FLU rule. It is a final candidate only if the wedge is also resolved (the semantics owner's ruling 1).
+
+Its kit:
+- **crevoke4b-bare-2026-11-25**, whose 17 vectors read identically on 47d749153 in sim (all 17, every position);
+- **b5b2-untagged as a bare image** (to build). That is the B5b-2 kit's first exercise of this rule in U.
