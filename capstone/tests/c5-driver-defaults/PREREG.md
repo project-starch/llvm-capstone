@@ -103,3 +103,23 @@ Predictions:
 2. **Control** (all nine gates, CPU default x-capstone-supervisor-slots=32): rc=0 on all nine, every `SLOTS` line [32],
    no MODE_CHECK_FAILED. The stop bar is unchanged: anything else stops the run before the treatment.
 3. **Treatment then compare.py:** IDENTICAL.
+
+## Amendment 2, before the third control run (2026-11-25)
+
+The second control run (harness c51a2bb381ed) read rc=0 on eight gates. The positive control fired (SLOTS pthread
+['1'], 1 refusal line, pthread rc=1). Two defects remained:
+- my readback saw no slots line in the runtime gate, because run.py filters its log. Fixed in bf99f32040c6;
+- memcached's four _stderr checks failed on the launcher's own exit line. Fixed in 8ad5c6a7b805.
+Both are carried on this branch as 9d5336ea4e50 and 50b726f8bcbc. The slot-1 positive control is not re-run: neither
+commit touches the pthread gate's path.
+
+Predictions:
+1. **Control** (dev d139d076f84e + the three harness commits): rc=0 on hosted, runtime, nodes, malloc, pin-ahead, fp,
+   pthread and step-hooks. Every SLOTS line reads ['32'], including the runtime gate's.
+   - The memcached bar, ruled by the semantics owner: memcached's FAIL set is exactly {fx18_prediction, fx18_trigger,
+     fx24_trigger}.
+     - fx24 is the managed-mallocng record's unresolved fixture. fx18 is a regression since that record (82/83),
+       being filed separately.
+   - The SUMMARY carries no MODE_CHECK_FAILED.
+   - Anything else stops the run before the treatment.
+2. **Treatment then compare.py:** IDENTICAL.
