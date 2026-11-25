@@ -462,3 +462,82 @@ The grade is <synth>/b5b2waff-28fcbb646-full-out/grade-board/grade-waf-full.txt.
 **Its session** (board 2, in the semantics owner's order): the flash, then the wapflu kit, crevoke4b's 17, the three g2, and B5T-g1b with mcf last. If mcf wedges, its snapshot is graded against the pattern pre-registered above (c7877d008be7).
 - On this seal, crevoke4b cannot detect a missed flash: board 2 comes from 88db40027, whose column equals 28fcbb646's.
 - The flash checks are the readback and wapflu's b5b2-untagged (the board lane's note).
+
+## The final B5b-2 candidate: R-77's PRE fix on a5c45a46d (capstone-ariane b5b2-prefix b42c8c644, core = 7861abcfa), pre-registered before its gate (2026-11-25)
+
+**What it adds to a5c45a46d.** The verdict probe's timeout counts only after the lifetime unit ACCEPTS the probe: `rvc_timeout = rvc_pend_q && rvc_sent_q && rvc_wait_q == RVC_PROBE_WAIT_POST`. The ~1M-cycle PRE bound is removed. The semantics owner ruled a spurious 25 on a live object a correctness defect, and accepted the trade: a unit that never accepts now hangs, with the access at the commit head.
+
+**The evidence, b5b2-crevint -DCI_YLDC** (each cut pre-registered on the branch before its run; the readings are in the test header):
+
+| tree | condition | reading |
+|---|---|---|
+| 28fcbb646 (no R-80) | a verdict-miss LDC during a CREVOKE walk | WEDGES (see below) |
+| a5c45a46d (b0) | as is | completes, no 25; the LDC presents ONCE (948,921 times on 28fcbb646) |
+| a5c45a46d (b) | sim-only 4,000-cycle PRE bound | the probe times out unaccepted, and the LDC faults 25 on the LIVE object |
+| 7861abcfa (c) | the same bound, inert here | as (b0), with no timeout |
+
+The 28fcbb646 wedge, in order:
+- the replay-marked LDC re-presents on load port 1;
+- the walk's record writes cannot drain: WEDGE-WBUF at cycle 106,085, and the CREVOKE never retires;
+- the probe is never accepted, and its timeout about 1.05M cycles later does not end the wedge.
+This is R-80's second trigger. It needs no faulting access, and it is demonstrated in RTL simulation; it is not an attribution of the mcf instance. Its LED bytes are 192 0xd0, 223 0x0a, 229 0x04, 195 0x99, read beside c7877d008be7's pattern and not instead of it.
+
+Two cuts before each reading were VOID and are recorded:
+- the cache hit because p's own CDERIVE fills it;
+- the walk's forward scan read p, so its tap resolved the probe.
+My first void rule was also mis-stated: probe-sent prints on ACCEPTANCE.
+
+**Gates on 7861abcfa** (memory delay 12):
+- the ldcexc trio as on a5c45a46d;
+- the B5b-2 (40) and B5b-1 (17) lists identical in values AND cycles to a5c45a46d's, 57/57. The comparator's positive control against the 28fcbb646 run reads 4 differences.
+- Lint: Sublet gate PASS with every counter at baseline, and both configurations identical by name to a5c45a46d's (1,628 and 2,498 warnings; the same diff against an older hash shows 229 lines).
+
+**The claim-auditor** (read-only): PLAUSIBLE-BUT-UNPROVEN.
+- (1) the false 25 removed, and (3) nothing else changed (POST, refusal record, counter wrap, acceptance cycle): SUPPORTED.
+- (2) no reachable hang: SUPPORTED by a CORRECTED argument. My cited one was wrong: LCC sends a lifetime-unit query and is not in the empty-scoreboard gate.
+  - The bound that holds: the unit never sits idle refusing the probe.
+  - Nothing commits past the waiting access, so the 8-entry scoreboard bounds younger queries, with no speculative issue.
+- The auditor's LCC-race discriminator (-DCI_YLCC) could not construct the race in two cuts, both VOID by their condition and recorded:
+  - with the unit idle, the probe is accepted the cycle after the miss;
+  - during a walk, LCC cannot dispatch.
+- Hang classes that survive, each a pre-existing defect that used to end in a 25 at about 1M cycles:
+  - H1, a unit read with no rvalid;
+  - H2, the unit's write port starved;
+  - H3, CSMINT's create response unacked after a flush, which the auditor argues is unreachable without proving it exhaustively.
+
+**R-46 and the pending list** (closed with the semantics owner):
+- R-46's write side IS reachable: a taken CBNZ with a tagged rs2 (branch_unit.sv :100-103; CBNZ is legal, decoder.sv:1563-1569).
+- Every reader is unreachable under Sublet:
+  - pc_cap_check and the PC probe need capmode (commit_stage.sv:423, :518), and capmode_d = 0 (csr_regfile.sv:349);
+  - the switcher's pc_next is read only by CALL, RETURN and CSRUNV, all illegal (decoder.sv:1456, :1472);
+  - the escape needs sup_active.
+- CJALR is illegal (decoder.sv:1557), so pcc_tmo's acceptance wait is unreachable here and is inherited by any line with CJALR.
+- The fixes for R-70, R-57 and R-79 are ancestors of a5c45a46d.
+- No other RTL-ready item.
+
+**Synthesis-only gate** (base: a5c45a46d's gate, B5B2R80-GATE PASS):
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within +-505 MB of 4,968.3 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy fires), LUTLP-1 0 (toy fires) |
+| 3 core LUT | at most 126,264 + 2,500 = 128,764 |
+
+Reported, not graded:
+- load_store_unit LUT within a few tens of cells of a5c45a46d's (one 20-bit compare loses its PRE arm), FF +0;
+- no FSM re-encoded;
+- rows beyond +-2,500 by stem.
+On a key-1 or key-2 failure: the partition and loop members, and no full build.
+
+**Full build on a pass.** 88db40027's key table, centred on a5c45a46d's seal if it has graded PASS by then, else on 28fcbb646's (151,405 / 69,497):
+- placed LUT +-3,000;
+- FF +-2,000;
+- routed clean;
+- congestion <= 5;
+- loops 0 with each toy firing;
+- clk_out1 inside [-1.47, +6.01].
+Reported: the led_stretch worst slack and the rev_node worst-500 count.
+
+**Silicon.** The a5c45a46d sessions stand as R-80's and ldcexc2's evidence. On this seal:
+- the same kits, whose vectors are to be simulated on b42c8c644 before it is graded with them;
+- mcf, by exposure (the board lane's column): a wedge refutes the fix; a fault with 25 is now itself a defect reading.
