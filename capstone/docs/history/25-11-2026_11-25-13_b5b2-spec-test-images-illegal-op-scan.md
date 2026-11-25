@@ -125,8 +125,40 @@ tmpfs cwd:
 The first boot attempt was void because of a harness defect: the initramfs was repacked as a normal user, so the
 setuid busybox ran as that user.
 
+## B5T on board 3 (g2): cause 24 at a NULL pointer increment (2026-11-25)
+
+Board 3 ran the B5T stages on B5b-2 (capstone-ariane 904cd9c6b). x264_r and imagick_r both ended rc 139 with
+`sublet: fault cause=24` in protected U:
+- x264: pc vaddr 0x4967a, x264_slicetype_mb_cost+0x146, `cincoffset a3, a3, s4` after `ldc a3, 0x0(a3)`;
+- imagick: pc vaddr 0x4ad62, FrameImage+0xc4a, `cincoffsetimm a0, a0, 0x2`, 0.56 s after entry.
+
+Silicon cause 24 is UNEXPECTED_OPERAND_TYPE (riscv_pkg.sv:358 at 904cd9c6b). capstone_flu_unit.anvil:34, :68 and
+:109 apply the integer rule for an untagged rs1 (CINCOFFSET, CINCOFFSETIMM, SCC) only `if (*vctx_q == 1'b1)`.
+vctx is sup_active && (csupctl.virt || sup_runv) (csr_regfile.sv:3027), which is 0 on the trap route, so the trap
+fires. QEMU (qemu-crv op_helper.c helper_cscincoffset/imm, csscc) applies the rule with no profile check, so the QEMU
+twin cannot fault here.
+- imagick: `4ad82 beqz a0, 0x4ad5e` skips the store when a0 is 0 and falls to the faulting increment, so a0 is NULL
+  at the fault.
+- x264: the shape matches slicetype.c:258, `&frames[b]->lowres_mvs[1][p1-b-1][i_mb_xy]`, whose index is -1 when
+  b == p1 and reads an unallocated (NULL) slot. Read from source and codegen shape; the struct offset was not checked.
+- The measured arms ran on the vexec route (vctx 1) and never met this.
+
+QEMU twin (same images and board run.sh, one boot, -m 963M; x264's ldecod line replaced by an mv of a host-decoded
+BuckBunny.yuv whose sha256 c3a3d3e2... equals the board's own ldecod output):
+- imagick: run rc 0, imagevalidate rc 0, specdiff 1/1 PASS;
+- x264: no fault in 1,190 s, cut at its bound, not graded.
+
+Ruling (the semantics owner, 2026-11-25): the RTL is made reference-exact. The rtl lane drops the vctx gate on the
+three instructions and audits every other vctx_q use. No compiler or runtime change. Pre-registered: B5TL0 and B5TL1
+fault the same way on g2, and nab is at risk (free(v + nl) with v NULL).
+
+The untagged-op count on the twin (capstone/tests/b5b2-untagged-count, lane b5b2/untagged-count, amendment 1
+ac236e3d4c26; capstone-qemu sublet/untagged-arith-count) read B5T imagick's FIRST counted execution at vaddr 0x4ad62,
+CINCOFFSETIMM, which is the board fault pc.
+
 ## Open
 
-- **Seven of eight not run.** perlbench, gcc, mcf, x264, imagick, nab and xz run on the boards.
+- **QEMU ran lbm on all three arms, and imagick and x264 for B5T (above).** The board results are the runtime
+  lane's record (tests/rtl-smoke/b5b2-spectest-2026-11-25 on runtime/b5b2-linux).
 - **Scope of the scan:** it reads encodings, so it says nothing about an instruction's run-time legality beyond
   decode, and assumes protected U.
