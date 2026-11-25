@@ -7716,6 +7716,43 @@ all three modes.
 - The apertures are read once, after the budget.
 - A return is a bound, not an absence.
 
+### Result: red1, BLOCK_FAST alone returns twice and the full form stops at P1's first stop point again; H1 refuted (board 1, 2026-11-25 22:34 to 2026-11-26 03:39, the stop near 23:37 on 11-25, read against 71eb7ac97286)
+
+Detail, lines and apertures: `tests/fpga-repros/M16-wmem-fast-alloc-stops-at-cderive/` ("On P1 again",
+`results/p1-board1-red1.txt`, `results/twin-red1.txt`).
+- The smoke passed. P1 was read back by name, and the transcript sha256 is `9b032344068a31cf…`.
+- **r0, r1 and r2 returned with rc 0**, every STRESS line equal to the twin's:
+  - r1, s, 127,200,000 allocations in 1,583 s;
+  - r2, f, 63,600,000 allocations in 918 s.
+- **r3, a, did not return.** Its 11 lines equal the twin's, and the last is `pkt=100000 fast=19432859 … sum=8b64d9b857f7aee5`.
+- The commit pc is this image's CDERIVE `0x3ff676ca68` (True), and sw=220 is `0x8c` (True).
+- Predictions:
+  - prediction 1 held;
+  - **prediction 2 failed:** r1 returned.
+- The outcome matched the registered branch "r1 and r2 return and r3 stops".
+- **Beyond the registered branches:** r3 stopped after exactly the last line of P1's first stop (2026-11-25, s1 of
+  `tsapp-stress.c`), in the same 10,000-packet window. Of the 21 aperture rows, 20 are equal, including the three
+  rows labelled rev_node_* (`0x00001346400007fa`, `0x0071`, serving index `0x1381`). Those rows are not traced to a
+  driver. The serving index differed between every pair of tshark non-returns. The commit pc differs, and in each boot
+  it is that image's own CDERIVE.
+- **H1 is refuted.** Under H1, r1 returns with probability 0.0020 and r2 with 0.044. A stop of r3 in P1's window has
+  probability 0.035, computed after the boot. The hypothesis this leaves (H2, at N = 2) is that on P1 the stop is tied
+  to a point in the full form's sequence, between packets 100,000 and 110,000.
+- r1 and r2 never exercise the file-scope BLOCK allocator or the free path (block = free = 0). So their returns say
+  that BLOCK_FAST alone does not reach that state. They give no rate, and the registered "the file scope's
+  interleaving is needed" stands in that sense.
+- **Withdrawn (2026-11-26):** the constant-rate reading of the stress form.
+  - That covers P1's 4.9·10^-8 per allocation, and boot S's "hazard below 2.6·10^-8" read as a rate. Boot S reads
+    instead: on B5b-2, with the one-operand revision, the same full-form sequence passed this point twice without
+    stopping.
+  - The Line B Wireshark pre-registration below (19:29) took its first two prediction rows from that model. Those
+    rows are void. Its third row (P1's tshark 5 of 8) and its readings are unaffected.
+- Next (the folder's "Next reductions"):
+  - the twin locates the window at 100-packet resolution, which costs no board time;
+  - on P1, ordered with each command expected to return before the one expected to stop:
+    - a control cut before packet 100,000, then seed 1 with a fine heartbeat, last;
+    - another seed in a boot of its own, since it may also stop.
+
 ## M-16's return rate on Line B: the protected tshark in repeated B5b-2 boots (2026-11-25)
 
 ### Pre-registration: Fig. 10's protected Wireshark workload in five boots on a Line B board, queued (written 2026-11-25 19:29, before any of the boots)

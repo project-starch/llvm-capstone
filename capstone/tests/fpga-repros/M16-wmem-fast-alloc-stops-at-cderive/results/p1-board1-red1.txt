@@ -1,0 +1,151 @@
+# M-16 reduction boot red1, P1 (…-tagoverlap6c-pagedtbl_d83d3a633), board 1, 2026-11-25 22:34 - 2026-11-26 03:39 (+0800).
+# Result lines only, taken from the driver transcript board.txt (sha256 9b032344068a31cf…): the stage
+# line, each command's @@SPEC-BEGIN/@@SPEC-END lines (accounting tail dropped), every STRESS line, and the runner's
+# aperture block read after the 10,800 s budget, verbatim.
+@@SPEC-STAGE tsapp-stress-red nested arms=sublet commands=4 validations=0
+@@SPEC-BEGIN 0 run r0 0
+STRESS begin mode=s packets=100 K=212 report=10 seed=1
+STRESS pkt=10 fast=2120 block=0 free=0 sum=02bae51bc1f256fc
+STRESS pkt=20 fast=4240 block=0 free=0 sum=9436f7a565d7d218
+STRESS pkt=30 fast=6360 block=0 free=0 sum=ae5080b77aea5554
+STRESS pkt=40 fast=8480 block=0 free=0 sum=03e3f0f0d56c44b0
+STRESS pkt=50 fast=10600 block=0 free=0 sum=f9d21d8dc06ac52c
+STRESS pkt=60 fast=12720 block=0 free=0 sum=eebd370f610a8fc8
+STRESS pkt=70 fast=14840 block=0 free=0 sum=dfef08234a8d6284
+STRESS pkt=80 fast=16960 block=0 free=0 sum=3fe5d76d18862160
+STRESS pkt=90 fast=19080 block=0 free=0 sum=679806e11354305c
+STRESS pkt=100 fast=21200 block=0 free=0 sum=144131f731537378
+STRESS done packets=100 fast=21200 block=0 free=0 sum=144131f731537378
+@@SPEC-END 0 run r0 0 rc=0 up0=258.66 up1=263.06
+@@SPEC-BEGIN 1 run r1 0
+STRESS begin mode=s packets=600000 K=212 report=10000 seed=1
+STRESS pkt=10000 fast=2120000 block=0 free=0 sum=bfb2e8cd6fb5cfe0
+STRESS pkt=20000 fast=4240000 block=0 free=0 sum=19ae47604e74e7c0
+STRESS pkt=30000 fast=6360000 block=0 free=0 sum=cdb94e8c0d49ada0
+STRESS pkt=40000 fast=8480000 block=0 free=0 sum=aba13c3454126d80
+STRESS pkt=50000 fast=10600000 block=0 free=0 sum=b877105f2dd87560
+STRESS pkt=60000 fast=12720000 block=0 free=0 sum=81144de97d83c540
+STRESS pkt=70000 fast=14840000 block=0 free=0 sum=9e6ea8c86dfc5d20
+STRESS pkt=80000 fast=16960000 block=0 free=0 sum=13ed0201722a3d00
+STRESS pkt=90000 fast=19080000 block=0 free=0 sum=c7baffa244f564e0
+STRESS pkt=100000 fast=21200000 block=0 free=0 sum=b65840b8e945d4c0
+STRESS pkt=110000 fast=23320000 block=0 free=0 sum=f7e02d4baa038ca0
+STRESS pkt=120000 fast=25440000 block=0 free=0 sum=72c762511a168c80
+STRESS pkt=130000 fast=27560000 block=0 free=0 sum=2d0bb9a81466d460
+STRESS pkt=140000 fast=29680000 block=0 free=0 sum=9213ee0fbbdc6440
+STRESS pkt=150000 fast=31800000 block=0 free=0 sum=b8bbdb1f7b5f3c20
+STRESS pkt=160000 fast=33920000 block=0 free=0 sum=ba4a593f05d75c00
+STRESS pkt=170000 fast=36040000 block=0 free=0 sum=033ad70629d92be0
+STRESS pkt=180000 fast=38160000 block=0 free=0 sum=5d24f805b8e443c0
+STRESS pkt=190000 fast=40280000 block=0 free=0 sum=734a017d240509a0
+STRESS pkt=200000 fast=42400000 block=0 free=0 sum=1a5edfbc1319c980
+STRESS pkt=210000 fast=44520000 block=0 free=0 sum=a155dd34912bd160
+STRESS pkt=220000 fast=46640000 block=0 free=0 sum=8b6f632f81232140
+STRESS pkt=230000 fast=48760000 block=0 free=0 sum=b819a80e0de7b920
+STRESS pkt=240000 fast=50880000 block=0 free=0 sum=a0d1ab41aa619900
+STRESS pkt=250000 fast=53000000 block=0 free=0 sum=ed02cd441178c0e0
+STRESS pkt=260000 fast=55120000 block=0 free=0 sum=fd22038f461530c0
+STRESS pkt=270000 fast=57240000 block=0 free=0 sum=8381a895931ee8a0
+STRESS pkt=280000 fast=59360000 block=0 free=0 sum=069ae7b98b7de880
+STRESS pkt=290000 fast=61480000 block=0 free=0 sum=3dc9c5460a1a3060
+STRESS pkt=300000 fast=63600000 block=0 free=0 sum=9eb8c26631dbc040
+STRESS pkt=310000 fast=65720000 block=0 free=0 sum=26f91d1d6daa9820
+STRESS pkt=320000 fast=67840000 block=0 free=0 sum=7284ac3f706eb800
+STRESS pkt=330000 fast=69960000 block=0 free=0 sum=081378d008bc87e0
+STRESS pkt=340000 fast=72080000 block=0 free=0 sum=9a8f5ccc08139fc0
+STRESS pkt=350000 fast=74200000 block=0 free=0 sum=012d6fdedf8065a0
+STRESS pkt=360000 fast=76320000 block=0 free=0 sum=2ec40cc436e12580
+STRESS pkt=370000 fast=78440000 block=0 free=0 sum=6e20885a193f2d60
+STRESS pkt=380000 fast=80560000 block=0 free=0 sum=43a3f25569827d40
+STRESS pkt=390000 fast=82680000 block=0 free=0 sum=f8aec38352931520
+STRESS pkt=400000 fast=84800000 block=0 free=0 sum=790dd9c14758f500
+STRESS pkt=410000 fast=86920000 block=0 free=0 sum=c2660ff502bc1ce0
+STRESS pkt=420000 fast=89040000 block=0 free=0 sum=86db720487a48cc0
+STRESS pkt=430000 fast=91160000 block=0 free=0 sum=19710cce20fa44a0
+STRESS pkt=440000 fast=93280000 block=0 free=0 sum=7fde5a2061a54480
+STRESS pkt=450000 fast=95400000 block=0 free=0 sum=9ad748b2248d8c60
+STRESS pkt=460000 fast=97520000 block=0 free=0 sum=bb03e01a8c9b1c40
+STRESS pkt=470000 fast=99640000 block=0 free=0 sum=ae2480c904b5f420
+STRESS pkt=480000 fast=101760000 block=0 free=0 sum=551fbffd3fc61400
+STRESS pkt=490000 fast=103880000 block=0 free=0 sum=abe401270c5fe3e0
+STRESS pkt=500000 fast=106000000 block=0 free=0 sum=026714af3c02fbc0
+STRESS pkt=510000 fast=108120000 block=0 free=0 sum=284ba4ad3fbbc1a0
+STRESS pkt=520000 fast=110240000 block=0 free=0 sum=d3c33a48bf688180
+STRESS pkt=530000 fast=112360000 block=0 free=0 sum=896ff4cbc6128960
+STRESS pkt=540000 fast=114480000 block=0 free=0 sum=658d4a5736a1d940
+STRESS pkt=550000 fast=116600000 block=0 free=0 sum=cae7b6243bfe7120
+STRESS pkt=560000 fast=118720000 block=0 free=0 sum=9fd5b47c49105100
+STRESS pkt=570000 fast=120840000 block=0 free=0 sum=592f5ab118bf78e0
+STRESS pkt=580000 fast=122960000 block=0 free=0 sum=74818b14adf3e8c0
+STRESS pkt=590000 fast=125080000 block=0 free=0 sum=77f9c4f15395a0a0
+STRESS pkt=600000 fast=127200000 block=0 free=0 sum=53c790819c8ca080
+STRESS done packets=600000 fast=127200000 block=0 free=0 sum=53c790819c8ca080
+@@SPEC-END 1 run r1 0 rc=0 up0=400.71 up1=1983.89
+@@SPEC-BEGIN 2 run r2 0
+STRESS begin mode=f packets=300000 K=212 report=10000 seed=1
+STRESS pkt=10000 fast=2120000 block=0 free=0 sum=434708b9048060e2
+STRESS pkt=20000 fast=4240000 block=0 free=0 sum=7b11fc986624b71a
+STRESS pkt=30000 fast=6360000 block=0 free=0 sum=f97d634efcff4406
+STRESS pkt=40000 fast=8480000 block=0 free=0 sum=02693be75d8c68a6
+STRESS pkt=50000 fast=10600000 block=0 free=0 sum=fbb0843974e91442
+STRESS pkt=60000 fast=12720000 block=0 free=0 sum=0e21b59ea74c533b
+STRESS pkt=70000 fast=14840000 block=0 free=0 sum=fa40fcbd570a9574
+STRESS pkt=80000 fast=16960000 block=0 free=0 sum=be6aa96e49f58515
+STRESS pkt=90000 fast=19080000 block=0 free=0 sum=8b7fdec8713b518e
+STRESS pkt=100000 fast=21200000 block=0 free=0 sum=d2bed29b8a5368ec
+STRESS pkt=110000 fast=23320000 block=0 free=0 sum=c346412b3e7d69fe
+STRESS pkt=120000 fast=25440000 block=0 free=0 sum=d54227106f1c36d2
+STRESS pkt=130000 fast=27560000 block=0 free=0 sum=63fd608d6b2bf3a4
+STRESS pkt=140000 fast=29680000 block=0 free=0 sum=b58c2bd23ad50f6a
+STRESS pkt=150000 fast=31800000 block=0 free=0 sum=3f21f581f1fd597f
+STRESS pkt=160000 fast=33920000 block=0 free=0 sum=586f7cdbd0bc26bf
+STRESS pkt=170000 fast=36040000 block=0 free=0 sum=8fd4fcfc7b49c1db
+STRESS pkt=180000 fast=38160000 block=0 free=0 sum=e1cd98f44d95a8b2
+STRESS pkt=190000 fast=40280000 block=0 free=0 sum=2a8efb7be7072f87
+STRESS pkt=200000 fast=42400000 block=0 free=0 sum=0a200131bd366694
+STRESS pkt=210000 fast=44520000 block=0 free=0 sum=fabb829535ce335c
+STRESS pkt=220000 fast=46640000 block=0 free=0 sum=51ed011830d5a31b
+STRESS pkt=230000 fast=48760000 block=0 free=0 sum=ddbab2125b81a9ce
+STRESS pkt=240000 fast=50880000 block=0 free=0 sum=cbb1871bd23b63ef
+STRESS pkt=250000 fast=53000000 block=0 free=0 sum=5dc8b1d102bb6330
+STRESS pkt=260000 fast=55120000 block=0 free=0 sum=843e1079991fbb62
+STRESS pkt=270000 fast=57240000 block=0 free=0 sum=f7c947f5c0393801
+STRESS pkt=280000 fast=59360000 block=0 free=0 sum=fc86b3a37cc95b44
+STRESS pkt=290000 fast=61480000 block=0 free=0 sum=1f97f010312aa01a
+STRESS pkt=300000 fast=63600000 block=0 free=0 sum=b1ad28789dad93bd
+STRESS done packets=300000 fast=63600000 block=0 free=0 sum=b1ad28789dad93bd
+@@SPEC-END 2 run r2 0 rc=0 up0=2121.57 up1=3039.46
+@@SPEC-BEGIN 3 run r3 0
+STRESS begin mode=a packets=300000 K=212 report=10000 seed=1
+STRESS pkt=10000 fast=1942742 block=177258 free=88880 sum=65fe918b54f2e945
+STRESS pkt=20000 fast=3885859 block=354141 free=177305 sum=1122483cf78b4012
+STRESS pkt=30000 fast=5829517 block=530483 free=265649 sum=08cefb5ff25f74c6
+STRESS pkt=40000 fast=7772792 block=707208 free=353936 sum=a7362c908700a398
+STRESS pkt=50000 fast=9715530 block=884470 free=442530 sum=d2919ed037b15c0b
+STRESS pkt=60000 fast=11658576 block=1061424 free=531166 sum=1ca1b1b942a3435b
+STRESS pkt=70000 fast=13602418 block=1237582 free=619404 sum=0588659bf710acc4
+STRESS pkt=80000 fast=15545750 block=1414250 free=708214 sum=773647bd44e1138b
+STRESS pkt=90000 fast=17488746 block=1591254 free=796858 sum=de7213ec671e2772
+STRESS pkt=100000 fast=19432859 block=1767141 free=884810 sum=8b64d9b857f7aee5
+===== vbatch wedge apertures =====
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x89 10001001
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x05 00000101
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x92 10010010
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x00 00000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x03 00000011
+sw=228 {1,dom_switch_idx[6:0]} 0xb8 10111000
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x00 00000000
+sw=194 {000000,store_state} 0x00 00000000
+sw=195 {0000,load_state} 0x00 00000000
+sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0xd7 11010111
+sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x8c 10001100
+sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0x02 00000010
+sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+commit pc (scoreboard slot 0; stale after a flush) 0x0000003ff676ca68
+trap-log mepc 0xffffffff80007376
+trap-log tval 0x0000000000000073
+rev_node_debug_ex 0x00001346400007fa
+rev_node_head_ex 0x0071
+rev_node_serving_idx_ex 0x00001381
