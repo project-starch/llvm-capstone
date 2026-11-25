@@ -601,3 +601,37 @@ The board lane records each run's exposure: board, seal, mcf entry, end (complet
 - x264 ran about 1,430 s on all three arms with no fault before the 3,600 s stage watchdog, where 904cd9c6b took cause 24 at a CINCOFFSET within seconds (x264_slicetype_mb_cost+0x146);
 - imagick passed specdiff on all three arms;
 - x264 has no PASS yet only because gen and run exceed the stage bound.
+
+## The final candidate b42c8c644: sealed and graded (2026-11-26)
+
+The board lane sealed `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit`.
+- Size: 11,443,722 B.
+- **sha256 `6a09f34d50842e01deff19296c79c5e06021730ce0da37ec01d0fd86270b190a`**, recomputed here from bitstreams/.
+- The build tree is at b42c8c644; `git diff 7861abcfa HEAD -- core` is empty.
+
+**Graded here: PASS on every pre-registered full-build key** (the final candidate's section, centred on a5c45a46d's seal):
+
+| key | band | read |
+|---|---|---|
+| placed LUT | 151,406 +-3,000 | 150,303 (-1,103) |
+| placed FF | 69,500 +-2,000 | 68,506 (-994) |
+| routing | 0 errors, 0 unrouted, 0 partial | routed clean, 198,616/198,616 |
+| congestion | <= 5 | placed level 4; router no hotspot |
+| loops | 0, each toy firing | check_timing 0 (report and routed dcp), TIMING-23 0, LUTLP-1 0, each toy 1 |
+| clk_out1 WNS | [-1.47, +6.01] | +0.605 |
+
+The clk_out1 reading is inside the band but the lowest of the four B5b-2 seals (a5c45a46d +1.778, 28fcbb646 +1.516). The drop against a5c45a46d is about 1.2 ns, within the several-ns spread that null changes show on this flow, so it is not attributed.
+
+Reported:
+- design WNS +0.177, TNS 0, 0 failing endpoints, WHS +0.043;
+- rev_node on the worst 500: 303 paths / 198 cells;
+- led_stretch +8.179.
+
+The grade is at <synth>/b5b2r77f-b42c8c644-full-out/grade-board/grade-r77-full.txt.
+
+Its sessions (the semantics owner's allocation) are graded from each kit's `expected-vectors-b42c8c644.json`:
+- board 3: kits, boot 3, the SPEC 12, ldcexc2 last;
+- board 2: kits at N=2, the g2 three, B5T-g1b.
+mcf is read by exposure. A wedge snapshot is read by grade-mcfpat.py, read-walkvar.py and read-r8x.py:
+- an R-80 pattern is "R-80's fix not holding";
+- QUIET-UNIT is R-83 or a dropped R-81 response, the trigger for a unit-state aperture build.
