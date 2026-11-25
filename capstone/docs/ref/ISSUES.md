@@ -11842,12 +11842,39 @@ compared):** perlbench 0 of 69 differ (was 9), gcc 1 of 387 (was 24), imagick 0 
 the measured flags, are identical apart from `.comment`. Lit test `c87-cursor-read-fold-debug-use.ll`: on dev's
 unfixed compiler the run with debug information fails (an extra `mv a0, a0`) and the stripped run passes.
 
-**Residual, OPEN.** gcc's `calls.o`, function `emit_library_call_value_1`: Loop Strength Reduction (generic LLVM)
-reuses an existing `zext` for a loop's trip count under `-g` and forms `%wide.trip.count` without it, the first
-difference in the pass-by-pass comparison. Not Capstone code. Narrowed the same day: the loop enters LSR identical
-with debug stripped and leaves it different, so the divergence is inside LSR or the SCEV state it inherits; it
-reproduces under `llc` from the code-generation input of `calls.c` but not under `opt -passes=loop-reduce` alone on
-the module as LSR receives it.
+**Residual, OPEN.** gcc's `calls.o`, function `emit_library_call_value_1`, is the one object that still differs
+under `-g`. The site is in Loop Strength Reduction: generic LLVM code, but see the last bullet. The function reuses a
+different value for a loop's trip count:
+- with `-g`, the exit compare uses the `zext nneg` of `nargs` from for.body612's preheader;
+- without, it reuses the existing `%wide.trip.count1281`, which drops `nneg`.
+
+The loop enters LSR identical at the IR-text level, with debug information stripped, and leaves it different.
+
+**Localized, 2026-11-25** (dev's compiler 1a5d6f45, with env-gated diagnostic patches, since reverted; the measured
+build's cc1 lines; `.text` compared, the only executable section; the diagnostics are in c4/c87):
+- **The difference needs LSR's post-transform debug-salvage phase**, the loop at LoopStrengthReduce.cpp:7383 in
+  `ReduceLoopStrength` (upstream since 50724716cd70).
+  - That loop walks every top-level loop of the function, and calls `GetInductionVariable` and
+    `DbgRewriteSalvageableDVIs`, whose `SE.getSCEV` calls reach other loops' header PHIs.
+  - It runs only when `DbgGatherSalvagableDVI` recorded something (:7377), which needs debug records.
+- **Matched pair.** Run the gather, then drop its records just before :7377:
+  - the `-g` `.text` is byte-identical to the build without `-g`;
+  - the same switch without `-g` changes nothing;
+  - unpatched, the `-g` build still differs (18 symbols, all `emit_library_call_value_1` and its labels).
+  Skipping the gather entirely reads the same, but that also skips the salvage phase, so it does not separate the two.
+- **The Capstone pass that runs in the same function** (`reduceCapabilityIndexGroups`, :7375) runs before the gate
+  and is untouched by that switch.
+- **Mechanism NOT shown.** The leading candidate is ordering in ScalarEvolution's `ExprValueMap`.
+  `SCEVExpander::FindValueInExprValueMap` returns the first dominating value it holds, so the salvage scan of an
+  earlier-processed loop would put the preheader's `zext` into the map ahead of `%wide.trip.count1281`. This is an
+  inference from the code and the 2026-11-20 dumps. The visit order (loop 659 before 612) could predict the opposite
+  winner, and that is unresolved.
+- **Withdrawn, never recorded here.** A first "forget the new location-op SCEVs" variant was vacuous: it tested for
+  an existing SCEV after `getSCEV` had already made one. It said nothing about the mechanism.
+- **The earlier note "not under `opt -passes=loop-reduce` alone"** needs a qualifier. Under opt, both the `-g` and
+  the plain module take the `-g` shape (`%exitcond1282.not` on the preheader's `zext`). opt is therefore not a negative
+  control: its SCEV state differs from llc's, and its loop order is not llc's.
+- The adversarial audit's verdict: plausible but unproven, as stated here.
 
 **Before this fix**, a `-g` build of any of these benchmarks did not run the measured code: perlbench 9, gcc 24 and
 imagick 2 objects had different instructions.
