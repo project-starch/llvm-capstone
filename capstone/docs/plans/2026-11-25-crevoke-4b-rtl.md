@@ -541,3 +541,37 @@ Reported: the led_stretch worst slack and the rev_node worst-500 count.
 **Silicon.** The a5c45a46d sessions stand as R-80's and ldcexc2's evidence. On this seal:
 - the same kits, whose vectors are to be simulated on b42c8c644 before it is graded with them;
 - mcf, by exposure (the board lane's column): a wedge refutes the fix; a fault with 25 is now itself a defect reading.
+
+## R-80's seal a5c45a46d: sealed and graded (2026-11-25)
+
+The board lane sealed `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu-r80_a5c45a46d.bit`.
+- Size: 11,443,722 B.
+- **sha256 `9b46b14fb6252873696acc9762d7aecbc53271567447460207737c2366f1e36e`**, recomputed here from bitstreams/.
+- The build tree is at a5c45a46d with no core change.
+- Its gate read B5B2R80-GATE PASS 3/3:
+  - mapping 4,968.3 MB;
+  - core LUT 126,264 (+6);
+  - load_unit 417 LUT (+4) and 101 FF (+0), no FSM inferred or re-encoded.
+
+**Graded here: PASS on every pre-registered full-build key** (the R-80 section's keys, centred on 28fcbb646's seal):
+
+| key | band | read |
+|---|---|---|
+| placed LUT | 151,405 +-3,000 | 151,406 (+1) |
+| placed FF | 69,497 +-2,000 | 69,500 (+3) |
+| routing | 0 errors, 0 unrouted, 0 partial | routed clean, 200,931/200,931 |
+| congestion | <= 5 | placed level 4; router no hotspot |
+| loops | 0, each toy firing | check_timing 0 (report and routed dcp), TIMING-23 0, LUTLP-1 0, each toy 1 |
+| clk_out1 WNS | [-1.47, +6.01] | +1.778 |
+
+Reported:
+- rev_node on the worst 500: 340 paths / 199 cells;
+- led_stretch +9.412.
+
+The grade is at <synth>/b5b2r80f-a5c45a46d-full-out/grade-board/grade-r80-full.txt.
+
+Its sessions are R-80's and ldcexc2's silicon evidence, graded from the kits' `expected-vectors-a5c45a46d.json` and the ldcfix PREREG:
+- board 3: flash, the kits, the Linux boot-3 image, the SPEC chain, then ldcexc2 last;
+- board 2: the matched pair after its 28fcbb646 session and the ldcexc2 pre-mode control.
+
+mcf is read by exposure (the board lane's column). A wedge snapshot is read by grade-mcfpat.py, read-walkvar.py and read-r8x.py; an R-80 pattern on this seal is "R-80's fix not holding".
