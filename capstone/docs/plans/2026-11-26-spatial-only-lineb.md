@@ -74,3 +74,59 @@ The stub's answers, chosen so that every lifetime op "completes with no effect" 
   - clk_out1 inside [-1.47, +6.01]; the rev_node worst-500 count falls toward 0.
   - Slack is predicted inside the band, not better. P1's spatial-only seal moved WNS by +0.17 against the null band, and this core's worst family (issue read operands to fu_data) does not run through the removed logic.
 - **Silicon key:** the board's Line B boot (kernel, monitor, the SPEC chain) with the twin under the same rule. The first silicon question is a boot that completes. A +Spatial row is graded only after the table-reader census in point 1 is closed.
+
+## The 57 Line B tests: what MUST change, predicted before the run (2026-11-26; the tree is capstone-ariane b5b2-spatial 5ff493d0a)
+
+The base is the same 57 tests on 7861abcfa (b42c8c644's core): s2pre-wt `.sup/pf` (B5b-2 list, 40) and `.sup/pf1` (B5b-1 list, 17). The run is the committed spatial tree, plus the same tree with `+define+CAPSTONE_LIFETIME_ON` as the control, which must reproduce the base in every value.
+
+**The rules, from source.** Every cause 25 reachable on Line B is a lifetime verdict:
+- the LSU's four verdict arms (load_store_unit.sv :1545-1627, :1705-1715) need a hit-dead, a same-cycle invalidation, a DEAD record or a miss, and none survives `rvc_lu_hit = rvc_lu_nodeval = 1, rvc_inv_now = 0`;
+- the DYN unit's reachable 25s are the mrev, derive, kill and init statuses (capstone_dyn_unit.anvil :636, :651, :689, :718), which the stub answers 0;
+- the FLU raises none;
+- under DYN_BYPASS, LDC and STC do not reach the DYN unit's 25s;
+- the PC check (commit_stage.sv :449) needs capmode, which is 0.
+
+So:
+- R1: every cause 25 becomes no fault (0x0 where a cause is printed), and every trap count falls by the number of 25s it counted.
+- R2: a derived or renewed capability's id prints as its PARENT's id, and every CSMINT root's rd as 0x3. An LCC-8 id print is {generation[31:0] << 31 | slot}, so a child of the root {0,3} prints 0x3.
+- R3: CREVOKE has no effect. A later CDERIVE from the "revoked" object succeeds, and a later access through it reads memory.
+- R4: table memory is never written by the core. Every print of a table word (header, pool, record) or a checksum over the table pages reads what software wrote, and differs from Full.
+- R5: no 30 (out of slots) and no untagged-0 failure.
+- R6: a timed lifetime op or verdict miss gets cheaper. A CREVOKE costs tens of cycles, not 0x37f0.
+
+**MUST-SAME, every value and SR:**
+- b5b2-illegal, -illegal-runv, -illegal-csup, b5b2-ldchold, r79-cpmp: no lifetime op;
+- b5b2-untagged: the FLU rule; its CDERIVE's 29 is the format's, which comes after the stub's live check;
+- sublet-fmt, csmint-pmp, csmint-pmp-vm: one root at {0,3} in Full too, and no 25;
+- b5b2-ctxport-f4ctl, -widehi, -widelo: no 25 and no id printed;
+- b5b2-cptag, -cptag2, -raw, -rawlcc, -rule2, -rule2-pair, -scratch: CDERIVE without revocation, no 25, no id print;
+- b5b2-mtrap-s, -u, -call, -plain-s, -plain-u, -plain-call, -plain-detect: their status words (position 1). The timer-trap counts (positions 2-3) are timing and are recorded.
+
+**MUST-CHANGE** (position: Full → predicted; positions not listed are predicted unchanged):
+
+| test | prediction |
+|---|---|
+| sublet-life | 4, 7, 11, 12: 0x19 → 0x0 (R1, R3); 15-34, the pool and header words: differ (R4); 35 recorded |
+| b5b2-crevint | 2: cycles ≪ 0x37f0 (R6); 3-5: 0x80000007 0x800000cf 0x800000ce → 0x3 0x3 0x3 (R2); 6: 0x19 → 0x0 (R3); 11: checksum differs (R4); 12: 0x1 → 0x0 (R1) |
+| b5b2-crevint-mt | as crevint at 2-6, 11, 12; 8-9 (timer traps, at the site) recorded. The arm's own VOID rule (no trap at the site) may now fire, because the CREVOKE lasts a few cycles |
+| b5b2-crevint-sh | 3-5: 0x3 0x3 0x3; 6, 7: 0x19 0x19 → 0x0 0x0; 11 differs; 12: 0x2 → 0x0; 8-10 recorded (the arm may go VOID as -mt) |
+| b5b2-crevsv-none, -kill | 3-5 → 0x3 0x3 0x3; 6: 0x19 → 0x0; 11 differs; 12: 0x1 → 0x0; 8-10 recorded |
+| b5b2-ctxport-f4 | 1: 0x19 → 0x0, 2 → 0x0 (no fault), 6: 0x1 → 0x0; 3-5 read the data (recorded) |
+| b5b2-mwrite | 3: 0x19 → 0x0; 8: 0x2 → 0x1 |
+| b5b2-nsedge | 3, 7, 9, 11, 14, 15: 0x19 → 0x0; 17: 0x6 → 0x0 |
+| b5b2-uprot | 3, 6, 13: 0x19 → 0x0; 19: 0x6 → 0x3 |
+| b5b2-uprot-mis | 3, 6, 12, 17: 0x19 → 0x0; 23: 0xa → 0x6 |
+| b5b2-sref | 12-13 (LCC 8 of x23 and of x26): 0x6 0x6 → 0x3 0x3 |
+| b5b2-sref-gen | 12-14 (the generation-bearing ids): → 0x3-based values, differing from Full (R2) |
+| b5b2-sbdrain-fill | 0x1e 0x0 0x100 0x1 → 0x0 0x0 0x3 0x0 (R5, R2, R1) |
+| b5b2-sbdrain-sret | 1: 0x1 → 0x0 (no 30); 3: differs (R2) |
+| b5b2-sbfwd-hold-cap | 0x0 0x100 0x0 → 0x0 0x3 0x0 |
+| b5b2-srvcost | 1-4 (D1-D4) within a few cycles of Full; 5-10 (P1-P6): all within a few cycles of each other, so P3 no longer exceeds P2 (no refill after a namespace change, R6); 13 the trap count unchanged |
+| csmint | 4: 0x6 → 0x3 (the second root, R2); 35: 0x19 → 0x0; 36: 0x80000007 → 0x3; 41-50 table words differ (R4); 51: 0xd → 0xc |
+| csmint-vm, -vm-noncanon | 3: 0x6 → 0x3; 29-30: 0x3 0x6 → 0x3 0x3; 26-28 table words differ |
+
+**MAY-CHANGE, recorded and not predicted:** sublet-ns and its six variants, va-runv-snap, b5b2-mtrap-rules, b5b2-ctxport-edgem. They use CREVOKE or LCC with prints whose meaning I did not trace before writing this.
+
+**Grading:**
+- a MUST-SAME test that changes, or a MUST-CHANGE position that stays at its Full value, is a FAIL against this list, each investigated;
+- a MUST-CHANGE position that changes to a value other than the one predicted is a MISS, reported with the value.
