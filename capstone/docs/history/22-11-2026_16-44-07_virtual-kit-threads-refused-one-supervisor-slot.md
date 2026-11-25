@@ -101,3 +101,32 @@ to the runtime lane. Neither is new with delegate-pre-tls: the same images fault
 
 Not run: the same tests on the physical or delegated SDK. This kit boots the virtual profile, and the physical
 route refuses threads by design (the inventory above), so that arm cannot tell the hypotheses apart.
+
+## Addendum 2026-11-25: the same two gaps on the trap route (Line B)
+
+Read from source on trap/eval; nothing was run.
+- **PI futexes: a KNOWN GAP, refused by design.** The trap kernel's futex binder (patch 0051,
+  kernel/tests/threads/README.md on trap/eval) "refuses PI commands", and its host test pins that refusal. So
+  `pthread_mutexattr_setprotocol(PTHREAD_PRIO_INHERIT)` reads ENOSYS there too, as on the virtual profile.
+  - Ruling (the runtime lane, 2026-11-25): leave it refused. The kernel side is the collaborator's design, and 0051
+    states its reason.
+  - Two ways to close it, if a workload ever needs it:
+    1. **Binder admission.** The trap route's futex word holds a real Linux tid, and 0051 already routes futex
+       compare-exchange and wake-op atomics through a reference (t6). So admitting FUTEX_LOCK_PI, UNLOCK_PI and
+       TRYLOCK_PI with the same reference-based user access may let Linux's own PI implementation serve them. That
+       is a kernel change.
+    2. **musl-side emulation over WAIT/WAKE,** as the delegated runtime does (ports/musl-capstone/runtime/delegate.c,
+       the `dl_futex_lock_pi`/`dl_futex_unlock_pi` pair): the word holds tid | FUTEX_WAITERS | FUTEX_OWNER_DIED, and
+       no priority is inherited. It needs no kernel change, so it is the route if a campaign workload turns out to
+       need it.
+  - No campaign workload is known to need it. memcached 1.6.45 with its libevent, and CPython 3.13.7, never call
+    `pthread_mutexattr_setprotocol` and never name PTHREAD_PRIO_INHERIT, PTHREAD_PRIO_PROTECT or FUTEX_LOCK_PI.
+    That was a source search; as its control, the same search finds their `pthread_mutex_init`/`pthread_mutex_lock`
+    calls.
+- **tkill: no gap expected.** Trap-route threads are real Linux threads with their own kernel tids (patch 0050), so
+  musl's tid is the kernel's, and tkill/tgkill name real threads. Not run.
+- **The virtual-profile fixes this note describes** (a tkill hook in virtual/exec.c after linux/exec.c's
+  context_tkill; delegate.c's PI emulation ported into __capstone_virtual_futex) are scoped and parked: the virtual
+  route is not in the final campaign.
+- The one-slot cause this note found also stopped dev's own nine-gate control on 2026-11-25. run-arm.sh now passes
+  the CPU's count to every module load and reads it back (ba66310faf14), the Q-32 rule slot-match-gate.py checks.
