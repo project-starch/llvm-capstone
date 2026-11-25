@@ -82,7 +82,10 @@ the branch the select became; why MachineLICM left it is not shown.
 
 ## Instrument identity
 
-- Compiler: llvm-sinkland at 99f138ebace6 (amendment 1's images); flag-off identity with B5TL1's board image as in
-  PREREG.md.
+- Compiler: llvm-sinkland, the lane's head code (clang reports 55066522c370; 80136543f163 after it changes only a
+  comment). The counted lsr and both images were built at 00:09, a minute before bc38212981f2 (the covering-access
+  requirement) was committed, and pool at 23:46, before the LSR option was replaced. All four were rebuilt with this
+  compiler after the count, and each full ELF is identical to the counted one: off bc421f6de8b7bc2e (B5TL1's own),
+  pool 3a4197ab312041d2, lsr 2dfba4cec525dc0a, both 58688202417cd8b7.
 - Reader: count.py (the per-variant table reader), controlled on the item-3 table: 30 / 32 / 12 and 94,483,597,
   exact. The run's scripts stay with the run's local files, because they carry host paths.
