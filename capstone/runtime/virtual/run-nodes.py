@@ -94,9 +94,10 @@ def main():
               'growth': 'NODE_EXIT:growth:0' in log and 'NODE_GROWTH_OK' in log,
               'two_live_populations': (log.count('NODE_LIVE:0:%d' % a.node_count) == 2 and
                                        log.count('NODE_LIVE:1:%d' % a.node_count) == 2),
-              # the domain prints the count it used; if that line is missing the run is not
-              # comparable with any other, so its absence is a failure and not a zero
-              'node_count_reported': log.count('NODE_COUNT_USED %d' % a.node_count) >= 1,
+              # node_count_reported (removed 2026-11-25) required `NODE_COUNT_USED <n>`, which no
+              # node-contract.c has ever printed: `git log --all -S NODE_COUNT_USED -- capstone` finds the
+              # string only in this runner and two docs, never in a .c file. The count the domain used
+              # is already read back by two_live_populations (NODE_LIVE:<i>:<n>) and recorded below.
               'stale': 'NODE_EXIT:stale:139' in log and 'NODE_STALE_ACCESS' in log,
               'stale_site': len(stale_sites) == 1 and
                   'cap_node_stale' in symbols and 'domain_main' in symbols and

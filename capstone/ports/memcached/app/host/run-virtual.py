@@ -22,6 +22,18 @@ judge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(judge)
 
 
+
+# The guest exports CAPSTONE_EXEC_DIAGNOSTICS=1, and since 6f57d1987420 (2026-10-28) the launcher then ends its stderr
+# with its own exit line (exec.c: `capstone-exec: exit image=<path> sha256=<hex>`). That line is not the server's
+# stderr, so the _stderr checks compare without it: only that exact line, anchored, and only while the guest asks for
+# diagnostics. Any other stderr difference still fails.
+EXEC_DIAGNOSTICS = True
+LAUNCHER_EXIT_LINE = re.compile(rb'^capstone-exec: exit image=\S+ sha256=[0-9a-f]{64}$\n?', re.M)
+
+
+def launcher_stderr_stripped(err):
+    return LAUNCHER_EXIT_LINE.sub(b'', err) if EXEC_DIAGNOSTICS else err
+
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -122,7 +134,7 @@ def main():
         check('oracle_detects_' + label, reference != native[label]['transcript.norm'])
     script = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1',
               'insmod capstone_vm.ko' + memory_mode.args(a.unpinned) + ' || exit 1', memory_mode.echo('MC_'), 'chmod 666 /dev/capstone-vm',
-              'export CAPSTONE_EXEC_DIAGNOSTICS=1',
+              'export CAPSTONE_EXEC_DIAGNOSTICS=1' if EXEC_DIAGNOSTICS else ':',
               'echo MC_BEGIN:pthread', './capstone-vexec ./pthread.dom', 'echo MC_END:pthread:$?']
     predicted_arm = 'lifetimes' if a.arm == 'sublet' else 'sublet'
     predictions = {}
@@ -182,13 +194,14 @@ def main():
             job = json.loads(files.get('job.json', b'{}'))
             expected_exit = re.search(rb' exit=(\d+)', n['status.txt'])
             check(label + '_exit', expected_exit and job == dict(version=1, kind='exit', value=int(expected_exit[1])))
+            verr = launcher_stderr_stripped(files.get('server.err', b''))
             if label == 'marker':
                 nc, vc = worker_counts(n['server.err']), worker_counts(files.get('server.err', b''))
                 check('four_workers', nc == vc and set(vc) == set(range(4)))
                 check('worker_gate_control', nc != worker_counts(b''))
-                stderr = re.sub(rb'^MC-WORKER \d+ conn\n', b'', files.get('server.err', b''), flags=re.M)
+                stderr = re.sub(rb'^MC-WORKER \d+ conn\n', b'', verr, flags=re.M)
             else:
-                stderr = files.get('server.err', b'')
+                stderr = verr
             check(label + '_stderr', stderr == re.sub(rb'^MC-WORKER \d+ conn\n', b'', n['server.err'], flags=re.M) and not files.get('fault.txt'))
         else:
             job = json.loads(files.get('job.json', b'{}'))
