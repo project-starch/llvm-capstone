@@ -211,3 +211,46 @@ nested's boots, or board 3's late branch). Bound 900 s.
 3. No `sublet: fault` or `sublet: call` line.
 4. `TRAPTEST: done`.
 A failure of 1 or 4 voids the kernel for the campaign until it is explained; a reading outside 2 is reported as read.
+
+## Amendment 7 (2026-11-26, before the boot): boot 14, the +Spatial final kernel on the spatial-only seal
+
+**Image** `trapk/fpga-final-spatial/smoke2-out/fw_payload.bin`, sha256
+c975128ba1f22f570f1418c8453bff828bde78d9a3d8039207353c120a390be1, 17,467,912 B. Its parts:
+- kernel: `build/build-kernel-final-spatial.sh` (the Full final kernel of Amendment 6 plus
+  CONFIG_RISCV_CAPSTONE_SPATIAL_ONLY=y; the two configs differ only in that key and the initramfs path),
+  Image 2d48cd2d358014c5…;
+- firmware: keep-tags with FW_FAST_RDTIME=y, caplifive-opensbi 25b14da6; two `fw_fast_mtime_addr` references in
+  fw_payload.elf, as in boot 13's image. (A first build of this image without `FW_EXTRA=FW_FAST_RDTIME=y` had 0 and
+  was discarded before any use; the payload script now prints the count and warns on 0.)
+- DTB caplifive-b5b2.dtb;
+- overlay: `build/init-final-spatial-smoke` (sha256 eaf6d6d7…), smoke.dom and mtrip (byte-identical to boot 13's),
+  msgt.dom 2c6c30f7… and msgt.native cba6b00a… (the msghdr-loader directed test, byte-identical to the twin pair's).
+  Order: control, mtrip three times, msgt native, msgt protected last.
+- Not b2e2c905 (`smoke-out`, f9a0c520ac32): same kernel config, no msgt.
+
+**Board and seal:** board 1, rtl's spatial-only seal 14f2ef81a (b42c8c644 plus 5ff493d0a and a lint baseline;
+b42c8c644 is an ancestor), after rtl's kit boot in the same session. Bound 900 s.
+
+**Twin check before the boot** (capstone-qemu sublet/spatial-only with x-capstone-spatial-only=on, firmware keep-tags
+fw-y, the same /init and files; `trapk/run-sfin-*`), a matched pair that differs only in the kernel:
+- +Spatial final Image: `ok`, control rc=7; mtrip three runs rc 0, backwards 0; msgt native and protected both rc 0,
+  `fails=0`, the five MSGT lines identical; no `sublet: fault`/`call` line; `TRAPTEST: done`.
+- Full final Image (boot 13's): `sublet: R reads back as type 1, id 0x3 (no record), and CSMINT answered 0x3`, then
+  `load failed after the point of no return: -95` and control rc=139; the same for msgt protected (rc 139); native
+  msgt rc 0. So the control itself reaches the spatial-only root check: the option is what lets any protected
+  program start on this processor, and msgt adds the sendmsg path on top.
+The twin's mtrip cycle counts are QEMU's and are not predictions.
+
+**Predictions:**
+1. The control prints `ok` and `TRAPTEST: control smoke.dom rc=7`, with no `R reads back` line.
+2. mtrip, three runs, as Amendment 6's bands (rdtime 100-140, rdcycle 5.00-5.2, getppid 1,221-1,297, MTRIP-TIME
+   cycles_per_tick 1.99 and backwards 0). Nothing on these paths touches the lifetime unit, so the spatial-only core
+   is not predicted to move them; a reading outside is reported as read.
+3. msgt native and protected: rc 0, `MSGT done fails=0`, and the five MSGT lines identical to the twin's.
+4. No `sublet: fault`, `sublet: call` or `R reads back` line.
+5. `TRAPTEST: done`.
+
+**Reading.** A failure of 1, 3 or 5 voids the +Spatial kernel for the campaign until explained. Boot 13 (the Full
+final kernel, board 2) may not yet be graded when this boot runs. If it is not and this boot fails 1 or 5, the cause
+is UNDECIDED between the shared kernel base and the spatial-only option until boot 13 reads. A pass here is
+evidence about the shared base too, but it does not replace boot 13 for the Full arm.
