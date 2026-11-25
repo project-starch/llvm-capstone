@@ -190,3 +190,30 @@ They replace the not-yet-run B5TL0-g1 and B5TL1-g1 in the chain on board 3, and 
 - mcf: pass within 30,000 s, OR a silence-stop wedge whose snapshot is read against boot 5 (904cd9c6b) and rtl's S-35
   pattern (28fcbb646 only, whose apertures exist);
 - on 28fcbb646: nab passes (the FLU ungate).
+
+## Amendment 7 (2026-11-25, before a5c45a46d is sealed): the final candidate's SPEC session
+
+**Bitstream.** capstone-ariane a5c45a46d = 28fcbb646 + R-80's fix: a faulting LDC writes back its exception and leaves
+the LSU, and a verdict-miss LDC replays through commit. Its synthesis-only gate passed 3/3 (core LUT +6). This is the
+FINAL candidate.
+
+**Board 3 session** (after the reflash, with kits first), in order, all images byte-identical to the ones already
+registered:
+- B5T-g2, B5TL0-g2, B5TL1-g2 (SHA256SUMS.chain);
+- B5T-g3, B5TL0-g3, B5TL1-g3 (SHA256SUMS.chain);
+- B5T-g1b, B5TL0-g1b, B5TL1-g1b (SHA256SUMS.g1b);
+- B5T-g4mk, B5TL0-g4mk, B5TL1-g4mk (SHA256SUMS.g4mk).
+
+**Predictions:**
+
+| Stage | Predicted on a5c45a46d | Basis |
+|---|---|---|
+| x264, imagick, nab (all arms) | rc 0 and specdiff pass | the FLU ungate, as on 28fcbb646; the twin count's first ops are no longer faults |
+| gcc, lbm (all arms) | pass | they passed on 904cd9c6b; the untagged count is 0 |
+| xz (all arms) | pass within 7,200 s | its six commands passed on 88db40027; the count is 0 on the lean arms |
+| mcf (B5T, B5TL1) | completes within 30,000 s with specdiff pass, OR faults with a named cause and pc | R-80's fix removes the S-35 loop; a fault, if any, is now taken. **A silent wedge (the silence stop) refutes R-80 as mcf's mechanism.** |
+| perlbench makerand (all arms) | pass | B5T's run0 passed on 904cd9c6b (289 s) |
+
+**The matched pair** comes later, on board 2, after its 28fcbb646 session: the same g2 images and B5T-g1b on
+a5c45a46d. Every stage that passes on both is predicted within ±1 % of its 28fcbb646 time (R-80's cost: sim -3 cycles
+over 198 probes). A row outside it is attributed by the R-80 diff before anything else.
