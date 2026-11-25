@@ -345,9 +345,11 @@ Its kit:
 The crevoke4b-bare-2026-11-25 kit (PREREG 77f0e191b97f) ran in the semantics owner's granted sequence on board 2. The board lane's records are board/meas-pw 6e07527a8a98.
 - **The control, 904cd9c6b resident, no flash:** 17/17 exact on the base column.
 - **The flash of 88db40027's seal** (sha256 bdff45d0...8d9a, checked first, its name read back after the flash and after the loads).
-- **The 17 on the seal: 17/17 exact on every E position.**
+- **The 17 on the seal: 17/17 exact on every E position.** That is 16 arms plus the control. Eight of the arms discriminate the
+  two bitstreams: the crevint and crevsv arms other than kill.
   - No VOID arm.
   - Stop latency 1,130 cycles at each resumed-chunk stop on silicon (565 ticks at 2.0 cycles/tick), against the 15,000 bound. Sim read 3,692.
+    The first stop, in the fresh O(n) scan, is 1,222 ticks = 2,444 cycles: recorded, not bounded.
   - Every recorded id and checksum equals the sim.
   - No sbdrain exposure in the five shapes.
 
