@@ -158,15 +158,23 @@ static cl::opt<bool> CapabilityByteIV(
 // replaceCapabilityLatchTest moves an integer exit test onto the capability IV
 // only when the constant max backedge-taken count is below the cursor period,
 // 2^(64 - ctz(byte step)). A loop bounded by an unrestricted i64 (imagick's
-// HorizontalFilter: i < n) has max count 2^64 - 2 and keeps its counter. When
-// the anchor GEP is inbounds and executed on every iteration, every executed
-// anchor lies inside one allocated object, which LLVM bounds below 2^63 bytes,
-// so no two of the compared cursors can coincide whatever the max count.
-static cl::opt<bool> CapabilityExitInBounds(
-    "lsr-capability-exit-inbounds", cl::Hidden, cl::init(false),
-    cl::desc("Let an inbounds anchor accessed on every iteration stand in for "
-             "the max-backedge-count bound when moving a loop's exit test "
-             "onto its capability IV (default off)"));
+// HorizontalFilter: i < n) has max count 2^64 - 2 and keeps its counter. With
+// this option such a loop gets a run-time endpoint instead, chosen in the
+// preheader: the real one when the count is below the period, else a cursor no
+// iteration can equal (the start plus one byte, which the step, a multiple of
+// two here, never reaches), so the loop leaves only by trapping.
+// That is the original loop's behaviour too. Its anchor is accessed on every
+// iteration that reaches the test (the candidate filter), and each access is
+// bounds-checked. A count at or above the period accesses a whole cycle of
+// cursors, 2^64 - 2^ctz(step) bytes, more than any capability's bounds, so the
+// original traps at the same access the rewritten loop does. Below the period
+// the two exits coincide, as without the option. Relies on no capability's
+// bounds reaching 2^63 bytes.
+static cl::opt<bool> CapabilityExitRuntimeEnd(
+    "lsr-capability-exit-runtime-end", cl::Hidden, cl::init(false),
+    cl::desc("Move an unbounded loop's exit test onto its capability IV with an "
+             "endpoint chosen at run time, the real one below the cursor period "
+             "and an unreachable one at or above it (default off)"));
 
 // The flag adds instruction count to solutions cost comparison.
 static cl::opt<bool> InsnsCost(
@@ -7085,7 +7093,6 @@ static bool capabilityAnchorAccessedEveryIteration(
 static bool replaceCapabilityLatchTest(Loop *L, const SCEVAddRecExpr *Index,
                                        Value *Base, Type *ElementTy,
                                        const APInt &ByteStep, PHINode *IV,
-                                       bool AnchorInBounds,
                                        ScalarEvolution &SE) {
   if (!L->getHeader()->getModule()->getTargetTriple().isCapstone64() ||
       ByteStep.isZero() || L->getExitingBlock() != L->getLoopLatch())
@@ -7138,11 +7145,16 @@ static bool replaceCapabilityLatchTest(Loop *L, const SCEVAddRecExpr *Index,
   unsigned PeriodBits = 64 - ByteStep.countr_zero();
   const auto *MaxCount =
       dyn_cast<SCEVConstant>(SE.getConstantMaxBackedgeTakenCount(L));
-  if ((!MaxCount || MaxCount->getAPInt().getActiveBits() > PeriodBits) &&
-      !(CapabilityExitInBounds && AnchorInBounds))
+  bool CountBounded =
+      MaxCount && MaxCount->getAPInt().getActiveBits() <= PeriodBits;
+  if (!CountBounded && !CapabilityExitRuntimeEnd)
     return false;
 
   Type *IndexTy = Index->getType();
+  // The run-time test below compares the whole count: it must fit the index.
+  if (!CountBounded && SE.getTypeSizeInBits(Count->getType()) >
+                           SE.getTypeSizeInBits(IndexTy))
+    return false;
   const SCEV *Iterations = SE.getAddExpr(
       SE.getTruncateOrZeroExtend(Count, IndexTy), SE.getOne(IndexTy));
   const SCEV *EndIndex = Index->evaluateAtIteration(Iterations, SE);
@@ -7154,6 +7166,26 @@ static bool replaceCapabilityLatchTest(Loop *L, const SCEVAddRecExpr *Index,
                                         Preheader->getTerminator());
   IRBuilder<> StartBuilder(Preheader->getTerminator());
   Value *End = StartBuilder.CreateGEP(ElementTy, Base, Offset, "lsr.cap.end");
+  if (!CountBounded) {
+    // PeriodBits < 64 here (an odd step's period exceeds every count), so the
+    // step is even and the start plus one byte is never a cursor of this IV.
+    assert(PeriodBits < 64 && "an unbounded count needs an even byte step");
+    const SCEV *WideCount = SE.getNoopOrZeroExtend(Count, IndexTy);
+    if (!Expander.isSafeToExpandAt(WideCount, Preheader->getTerminator()))
+      return false;
+    Value *CountV = Expander.expandCodeFor(WideCount, IndexTy,
+                                           Preheader->getTerminator());
+    Value *Fits = StartBuilder.CreateICmpULT(
+        CountV,
+        ConstantInt::get(IndexTy, APInt::getOneBitSet(
+                                      IndexTy->getIntegerBitWidth(), PeriodBits)),
+        "lsr.cap.fits");
+    Value *Start = IV->getIncomingValueForBlock(Preheader);
+    Value *Never = StartBuilder.CreateGEP(StartBuilder.getInt8Ty(), Start,
+                                          ConstantInt::get(IndexTy, 1),
+                                          "lsr.cap.never");
+    End = StartBuilder.CreateSelect(Fits, End, Never, "lsr.cap.end.sel");
+  }
   IRBuilder<> Builder(Branch);
   Value *Next = IV->getIncomingValueForBlock(L->getLoopLatch());
   Value *Done = Builder.CreateICmp(
@@ -7198,9 +7230,6 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
     Type *ElementTy;
     APInt ByteStep;
     PHINode *IV;
-    // The anchor is inbounds and accessed on every iteration (the latter is
-    // what the candidate filter checks when byte IVs are off).
-    bool AnchorInBounds;
   };
   SmallVector<CursorExitCandidate, 4> ExitCandidates;
   for (WeakVH &Candidate : Candidates) {
@@ -7287,8 +7316,7 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
                                      ConstantInt::get(IndexTy, ByteStep),
                                      "lsr.cap.next");
       IV->addIncoming(Next, Latch);
-      ExitCandidates.push_back({Index, Base, ElementTy, ByteStep, IV,
-                                Anchor->isInBounds()});
+      ExitCandidates.push_back({Index, Base, ElementTy, ByteStep, IV});
     }
     for (auto [GEP, Offset] : Uses) {
       Value *Residual = Expander.expandCodeFor(Offset, IndexTy, GEP);
@@ -7322,7 +7350,7 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
     SE.forgetLoop(L);
     for (const CursorExitCandidate &C : ExitCandidates)
       if (replaceCapabilityLatchTest(L, C.Index, C.Base, C.ElementTy, C.ByteStep,
-                                     C.IV, C.AnchorInBounds, SE))
+                                     C.IV, SE))
         break;
     DeleteDeadPHIs(Header);
     SE.forgetLoop(L);
