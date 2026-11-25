@@ -95,3 +95,28 @@ not of the cost fit. B5a's mcf mechanism is open.
 
 **Do not use the cost model for a lever choice until it is refitted on more than two programs, with a held-out point
 outside run-to-run noise (which is not measured).**
+
+## Line B (the Sublet format): `rcm-lb.c` (2026-11-26, the rtl lane)
+
+The record-cache decision for B5b-2 is made on EVENTS from this model and a MEASURED per-miss cost. The two-parameter cycle model above was refuted out of sample and is not used. The semantics owner's threshold: build only if misses x the measured cost is at least 1.0 % of cycles on one of gcc, mcf and Perl, with no organisation adding events beyond NC.
+
+**Organisations:**
+- LB: b42c8c644's own verdict cache. 64 x 4, set = slot[5:0], full-id tags. Installs on live record writes and live unit reads; same-index reuse, then the lowest free way, then round robin. A release clears liveness in place, so the entry is kept and later denies without a probe. A namespace edge empties it.
+- RC, GC, NC: as in `rcm.c`.
+- `rcm-lb.c`'s header has the exact rules and their source lines.
+
+**Trace format v2:** two u64 per event. Word 0 is `rcm.c`'s; word 1 is `{live[32], generation[31:0]}`.
+- Line B tags carry the generation, so a reissued slot is a different id.
+- Installs depend on whether the record read or written is live.
+- **Owed by the nested lane's Sublet tracer** (the twin under x-capstone-ids=63): checks (c), allocations (a: CDERIVE, CRENEW, CSMINT's create), releases (r/v: CREVOKE, including the 4(b) walk's reads), other operations (o), table switches (T) and namespace edges (E: an srevroot change, a context entry or exit).
+- There are no traces yet. Until they exist this tool has no reading.
+
+**Control:** `synth-control-lb.py rcm-lb` runs a synthetic v2 trace whose LB, RC, GC and NC counts were computed by hand, and asserts each one.
+- Its cases: eviction past 4 ways, the round-robin victim, a release in place, a hit-dead deny, a same-index reissue at generation 2, a namespace edge, and a dead id's one probe.
+- `--perturb` changes one expectation, and the control must then FAIL. Both were checked: PASS rc 0; perturbed FAIL rc 1.
+- A malformed trace exits 2.
+
+**Measured per-miss cost** (RTL simulation, b42c8c644's core, memory delay 12; capstone-ariane b5b2-prefix bd3932800, b5b2-srvcost and -DSC_COLD):
+- warm record (in the D$): (P3 - P2) / 33 = 14.4 cycles per verdict miss;
+- cold record (D$ evicted): (P3 - P4) / 33 = 70.0 cycles, and independently (P7 - P2) / 33 = 71.5 cycles (P7's probes read records evicted before P4).
+- These are simulation costs at a fixed 12-cycle memory. The silicon cost comes from the same images run as a bare kit on the board, as the matched pair.
