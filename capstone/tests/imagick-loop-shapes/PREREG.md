@@ -8,7 +8,7 @@ only for a fix that shows 0.2 % or more on a row.
 | option | shape | cause (in the commit) |
 |---|---|---|
 | -capstone-pool-base-at-entry | the filter weight reloaded with fld every iteration | Early MachineLICM: "Can't remat / high reg-pressure" on PseudoLLA |
-| -lsr-capability-exit-inbounds | an integer exit counter beside the capability IV | replaceCapabilityLatchTest's max-count guard: max BTC 2^64 - 2 against a 60-bit period |
+| -lsr-capability-exit-runtime-end (amendment 1; was -lsr-capability-exit-inbounds) | an integer exit counter beside the capability IV | replaceCapabilityLatchTest's max-count guard: max BTC 2^64 - 2 against a 60-bit period |
 
 The commits on compiler/imagick-loop-shapes: 9a2c32d47972 and 99f138ebace6.
 
@@ -63,3 +63,48 @@ One boot on the trap twin, as the item-3 profile boot:
 
 If 3 holds and 4 fails, code outside the loops costs more than the loops save. That is read per function, not
 explained in advance.
+
+## Amendment 1, before the run: the LSR option replaced, after the semantics ruling
+
+The semantics owner ruled (2026-11-25) that inbounds alone is not an acceptable basis on Capstone. C code here
+computes out-of-object pointers often, and inbounds is a frontend promise, not a hardware fact. The proposed basis was
+a load or store through the anchor that dominates the latch. The candidate filter already requires exactly that.
+
+That basis is not enough either, so the option was redesigned rather than retested.
+- The endpoint is computed from the count, not from an accessed cursor, so at or above the period it can alias an
+  early cursor before any out-of-bounds access happens.
+- cursor-exit.ll's @repeating_cursor shows it. Its access dominates the latch, the count is 2 and the step 2^63, so
+  the real endpoint is the second cursor. The cursor test then exits after one iteration, where the original traps at
+  its second load.
+- The same holds for an unbounded count of 2^61 + 1 on an 8-byte step over a 16-byte object. The original traps at
+  its third load; the cursor test exits after the first.
+
+The replacement, -lsr-capability-exit-runtime-end, chooses the endpoint in the preheader:
+- the real one when the backedge count is below the period;
+- otherwise the start cursor plus one byte, which no cursor of an even step reaches, so the loop leaves only by
+  trapping.
+
+The original traps too in that case: its anchor is accessed on every iteration, and a full cycle of cursors spans
+2^64 - 2^ctz(step) bytes, more than any capability's bounds. The basis it relies on: no capability's bounds reach 2^63
+bytes. Inside the loop nothing changes. The cost is a compare and a select in the preheader.
+
+The test, cursor-exit-runtime-end.ll, covers:
+- the three pinned shapes, which keep their flag-off pins in cursor-exit.ll: @unbounded gets the run-time choice, and
+  @repeating_cursor and @bound_bad the constant unreachable endpoint;
+- a statically bounded loop, which gets no run-time choice;
+- two negative controls that keep the integer test: an access under a condition, and an anchor without inbounds.
+Its ON checks fail against the option-off output.
+
+Lit: CodeGen/Capstone, LoopStrengthReduce and LICM pass with both options off.
+
+The images were rebuilt with the revised compiler:
+
+| variant | stripped sha256 |
+|---|---|
+| off | a666e331f10d73cc (unchanged; still byte-identical to B5TL1's board image) |
+| pool | f8dfaf92927c6db8 (unchanged) |
+| lsr | 4b71218d648689cf (was 56e3385c05ca42fc) |
+| both | 2d2220ac2417d52c (was 6d61d2d5924e02c8) |
+
+The inner-loop sizes are unchanged (lsr 29 / 31 / 11, both 28 / 30 / 11), so the predictions stand as written. The
+preheader compare and select run once per loop entry, and the bounds in prediction 4 cover them.
