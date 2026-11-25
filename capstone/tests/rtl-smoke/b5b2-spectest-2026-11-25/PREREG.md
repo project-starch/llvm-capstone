@@ -105,3 +105,17 @@ Predictions are otherwise as in Amendment 1.
 - stalls at a similar uptime in images without mcf: time-based (M-16-like hazards are per allocation, and the uptime
   should then be checked);
 - a stall in one arm only: that arm's.
+
+## Amendment 3 (2026-11-25): B5T-g1r on the 88db40027 seal, board 2
+
+**Image:** B5T-g1r (`452af6fc…`, Amendment 2), run after b5b2-linux boot 6 on board 2, which carries the 88db40027
+seal. Stage order lbm, nab, xz, mcf.
+**Predicted:**
+- C `rc=7`;
+- lbm, nab and xz: rc 0 with specdiff pass;
+- mcf: no prediction. Boot 5 went silent in it on 904cd9c6b, and 88db40027 carries no change to the LSU, load unit or
+  D$ (rtl: zero diff). So mcf reads either PASS or STALL / NO READING; a stall gets the silence stop and the snapshot.
+**Note:** nab is at risk of the untagged-CINCOFFSET rule (free(v + nl) with v NULL), which this bitstream still gates on
+vctx. A cause-24 fault in nab is classified as that rule, not a new finding.
+
+This is not the drain's cost pair: that pair is board-constant on board 3 after the next reflash.

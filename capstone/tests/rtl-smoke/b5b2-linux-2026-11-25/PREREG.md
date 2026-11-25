@@ -114,3 +114,15 @@ For boot 4, any of the following counts as the firmware's contract mattering on 
 shows that no M trap landed while references were held. The 2 x 40M-iteration spins span many machine-timer ticks, so
 the second reading would itself need explaining. Boot 3 runs first. If its strip control does not read 23, boot 4 is
 not run.
+
+## Amendment 3 (2026-11-25): boot 6, the same stack on the 88db40027 seal
+
+The 88db40027 seal (capstone-ariane: 4(b) interruptible CREVOKE, the committed-store-queue drain and the CAP_WB guard,
+on 904cd9c6b; sha256 bdff45d0…) is resident on board 2. rtl's crevoke4b kit read 16/16 on it (board lane, 09:33Z).
+
+**Boot 6:** board 2, no flash, image `fw3y` `77de789fdd00…`, byte-identical to boot 3's.
+**Predicted:** exactly boot 3's readings: P1-P3; `regs status 0`; `regs-strip23 status 23`; `enter status 200`; `done`.
+**Classification:**
+- any other reading is a finding about 88db40027 against 904cd9c6b;
+- the board differs from boot 3 (board 2, as boot 3), so the pair is matched in board and image and differs only in
+  the bitstream.
