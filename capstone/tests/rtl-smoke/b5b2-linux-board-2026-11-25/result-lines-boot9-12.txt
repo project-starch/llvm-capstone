@@ -1,0 +1,58 @@
+# b5b2-linux boots 9-12 (Amendment 5, runtime/b5b2-linux ffc5dd10b765), board 2, resident 28fcbb646, no flash
+
+LXM2 2026-11-25 16:13:21 start; PREREG ffc5dd10b765 runtime/b5b2-linux Amendment 5 (read by the board lane 2026-11-25T12:42:31Z); firmware caplifive-opensbi 25b14da6; seal 28fcbb646
+LXM2 2026-11-25 16:18:45 boot 9 (out2-y): 44 RUN END rc=0 [lx 00:18:44] end: TRAPTEST: done seen; 8974 chars 45 GRADE rc=0 MTRIP2-ONE 6/6 done True 
+LXM2 2026-11-25 16:23:48 boot 10 (out2-n): 48 RUN END rc=0 [lx 00:23:47] end: TRAPTEST: done seen; 9258 chars 48 GRADE rc=1 MTRIP2-ONE 4/6 done True 
+LXM2 2026-11-25 16:28:47 boot 11 (out-fy): 46 RUN END rc=0 [lx 00:28:45] end: TRAPTEST: done seen; 8968 chars 47 GRADE rc=0 MTRIP2-ONE 6/6 done True 
+LXM2 2026-11-25 16:33:40 boot 12 (out-fn): 40 RUN END rc=0 [lx 00:33:39] end: TRAPTEST: done seen; 9252 chars 40 GRADE rc=1 MTRIP2-ONE 4/6 done True 
+LXM2 2026-11-25 16:33:40 four: rc=1 MTRIP2 22/27 as predicted
+
+boot 9 out2-y:
+  PASS  regs status 0: 0
+  PASS  regs-strip23 status 23: 23
+  PASS  enter status 200: 200
+  PASS  three MTRIP + three MTRIP-TIME lines: 3 + 3
+  PASS  backwards 0 on every run: [0, 0, 0]
+  raw rdtime   [1940.84, 1942.97, 1950.14] median 1942.97
+  raw rdcycle  [5.09, 5.09, 5.09] median 5.09
+  raw getppid  [1309.95, 1309.26, 1309.02] median 1309.26
+  raw cycles_per_tick [1.99, 1.99, 1.99] ticks [19413771, 19500144, 19508057] median 1.99
+boot 10 out2-n:
+  MISS  regs status 0: 139
+  MISS  regs-strip23 status 23: 139
+  PASS  enter status 200: 200
+  PASS  three MTRIP + three MTRIP-TIME lines: 3 + 3
+  PASS  backwards 0 on every run: [0, 0, 0]
+  raw rdtime   [1151.55, 1155.39, 1139.37] median 1151.55
+  raw rdcycle  [5.05, 5.05, 5.71] median 5.05
+  raw getppid  [1279.25, 1279.89, 1278.41] median 1279.25
+  raw cycles_per_tick [1.99, 1.99, 1.99] ticks [11522847, 11740886, 11396037] median 1.99
+boot 11 out-fy:
+  PASS  regs status 0: 0
+  PASS  regs-strip23 status 23: 23
+  PASS  enter status 200: 200
+  PASS  three MTRIP + three MTRIP-TIME lines: 3 + 3
+  PASS  backwards 0 on every run: [0, 0, 0]
+  raw rdtime   [119.29, 119.19, 119.31] median 119.29
+  raw rdcycle  [5.0, 5.0, 5.0] median 5.00
+  raw getppid  [1259.14, 1259.28, 1259.97] median 1259.28
+  raw cycles_per_tick [1.99, 1.99, 1.99] ticks [1197744, 1197741, 1193240] median 1.99
+boot 12 out-fn:
+  MISS  regs status 0: 139
+  MISS  regs-strip23 status 23: 139
+  PASS  enter status 200: 200
+  PASS  three MTRIP + three MTRIP-TIME lines: 3 + 3
+  PASS  backwards 0 on every run: [0, 0, 0]
+  raw rdtime   [119.66, 119.77, 119.77] median 119.77
+  raw rdcycle  [5.0, 5.0, 5.0] median 5.00
+  raw getppid  [1252.85, 1252.44, 1252.66] median 1252.66
+  raw cycles_per_tick [1.99, 1.99, 1.99] ticks [1201969, 1201512, 1201893] median 1.99
+PASS  cycles_per_tick equal across boots within +-1 %: medians [1.99, 1.99, 1.99, 1.99], max/min 1.0000
+PASS  boot 9 rdtime within +-3 % of boot 7's 1,932.33: 1942.97 (+0.55 %)
+PASS  boot 10 rdtime within +-3 % of boot 8's 1,137.84: 1151.55 (+1.20 %)
+PASS  boot 11 rdtime below 600: 119.29
+PASS  boot 12 rdtime below 600: 119.77
+PASS  keep-fast minus stock-fast below 200 (boot 11 - boot 12): -0.48
+MISS  getppid within +-3 % across the four (max/min of the medians at most 1.03): [1309.26, 1279.25, 1259.28, 1252.66], max/min 1.0452
+
+MTRIP2 22/27 as predicted

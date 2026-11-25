@@ -1,0 +1,139 @@
+# board 3, the a5c45a46d (R-80) SHORT session (orch-r80-b3.sh), then the reruns of its two loads that FAILED TO START
+
+## session log
+2026-11-25T15:25:55Z armed
+2026-11-25T15:54:56Z gates PASS: seal a5c45a46d sha 9b46b14fb6252873; plan ARMED by the board lane after reading every pin below (sha16 985898414d2bdf0e)
+2026-11-25T16:18:40Z b5b2n: kit rc=3 14 FLASH END caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynb 14 READBACK after flash = caplifive_ids55-native-tagcache-mlp-fpieee-h  B5B2N-KIT 19/21 AS PREDICTED; MISS ['15-b5b2-cptag-r1']; KEY-CHECK FAILURE []; NO READING ['16-b5b2-cptag2-r1']
+2026-11-25T16:36:12Z crevoke4b: kit rc=3  C4BKIT cand 15/16 AS PREDICTED; NO READING ['04-b5b2-crevint-sh']
+2026-11-25T16:37:50Z wapflu: kit rc=0  WFKIT cand 1/1 AS PREDICTED; 
+2026-11-25T16:40:04Z ldcexc2: kit rc=0  LDCKIT fixed AS PREDICTED
+2026-11-25T16:40:04Z SESSION END
+
+## b5b2n
+-- b5b2-cptag-diag (grade-diag.py) --
+01-sublet-life-r1          AS PREDICTED      SR [35]
+15-b5b2-cptag-r1           MISS              SR [24]; position 22 (reading 21) = 0; differ at [22]
+23-b5b2-cptag-diag-r1      H-fetch           raw 22-28: 0 | cold 18 25 | warm 4 4 flag 1 | miss 43 (warm delta 0; half the miss scale 19.5)
+
+DIAG wap-flu-r80_a5c45a46d: control exact; diag loads ['H-fetch']
+-- the 22 graded images (grade-b5b2nkit-l.py) --
+readback: caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80_a5c45a46d.bit | after loads: caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80_a5c45a46d.bit
+01-sublet-life-r1            AS PREDICTED      SR 35; ungraded positions 25-34: 0x0 0x200000000 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+02-b5b2-illegal-r1           AS PREDICTED      SR 76
+03-b5b2-illegal-runv-r1      AS PREDICTED      SR 4
+04-b5b2-illegal-csup-r1      AS PREDICTED      SR 46
+05-b5b2-uprot-r1             AS PREDICTED      SR 19
+06-b5b2-uprot-mis-r1         AS PREDICTED      SR 23
+07-b5b2-rule2-r1             AS PREDICTED      SR 14
+08-b5b2-rule2-pair-r1        AS PREDICTED      SR 21
+09-b5b2-sref-r1              AS PREDICTED      SR 20
+10-b5b2-sref-gen-r1          AS PREDICTED      SR 20
+11-b5b2-scratch-r1           AS PREDICTED      SR 54
+12-b5b2-mwrite-r1            AS PREDICTED      SR 8
+13-b5b2-raw-r1               AS PREDICTED      SR 38
+14-b5b2-rawlcc-r1            AS PREDICTED      SR 5
+15-b5b2-cptag-r1             MISS              SR [24] (expected 24), SV 24; 1 graded positions differ: pos 22: read 0x0, expected 0x1
+16-b5b2-cptag2-r1            NO READING        no uart.txt
+17-b5b2-nsedge-r1            AS PREDICTED      SR 17
+18-b5b2-ctxport-f4-r1        AS PREDICTED      SR 6
+19-b5b2-ctxport-f4ctl-r1     AS PREDICTED      SR 6
+20-b5b2-ctxport-widelo-r1    AS PREDICTED      SR 6
+21-b5b2-ctxport-widehi-r1    AS PREDICTED      SR 6
+22-b5b2-ctxport-edgem-r1     AS PREDICTED      SR 6
+
+control sublet-life AS PREDICTED on its graded positions
+B5B2N-KIT 19/21 AS PREDICTED; MISS ['15-b5b2-cptag-r1']; KEY-CHECK FAILURE []; NO READING ['16-b5b2-cptag2-r1']
+
+## crevoke4b
+01-sublet-life           AS PREDICTED           
+02-b5b2-crevint          AS PREDICTED           recorded p2=0x14a1
+03-b5b2-crevint-mt       AS PREDICTED           recorded p2=0x1760 p8=0x5 p9=0x5
+04-b5b2-crevint-sh       NO READING             no uart.txt
+05-b5b2-crevint-lat      AS PREDICTED           latency band PASS: lat [1222, -118, 565, -130, 565, -130, 0, 0] ticks; cycles/ticks 30062/15031; positive after the first in cycles [(2, 1130), (4, 1130)] (bound 15,000; first 1222 recorded); recorded p2=0x1a29 p8=0x6 p9=0x6 p13=0x4c6 p14=0xffffffffffffff8a p15=0x235 p16=0xffffffffffffff7e p17=0x235
+06-b5b2-crevsv-none      AS PREDICTED           recorded p2=0x1a21 p8=0x6 p9=0x6 p10=0x3
+07-b5b2-crevsv-srev      AS PREDICTED           recorded p2=0x1f7f p8=0x6 p9=0x6 p10=0x3
+08-b5b2-crevsv-straw     AS PREDICTED           recorded p2=0x1f2e p8=0x6 p9=0x6 p10=0x3
+09-b5b2-crevsv-derive    AS PREDICTED           recorded p2=0x1fe4 p4=0x800000cf p5=0x800000ce p8=0x6 p9=0x4 p10=0x3 p11=0xd443b2166d8185e1
+10-b5b2-crevsv-kill      AS PREDICTED           recorded p2=0x1d6f p3=0x80000008 p4=0x800000d0 p5=0x800000cf p8=0x6 p9=0x4 p10=0x3 p11=0x5323b3b7586ffcf6
+11-b5b2-sbdrain-none     AS PREDICTED           
+12-b5b2-sbdrain-fill     AS PREDICTED           
+13-b5b2-sbdrain-fence    AS PREDICTED           
+14-b5b2-sbdrain-mint     AS PREDICTED           
+15-b5b2-sbdrain-sret     AS PREDICTED           
+16-b5b2-sbdrain-cost0    AS PREDICTED           recorded p2=0xe7f
+17-b5b2-sbdrain-cost     AS PREDICTED           recorded p2=0xee9
+
+C4BKIT cand 15/16 AS PREDICTED; NO READING ['04-b5b2-crevint-sh']
+
+## wapflu
+01-sublet-life           AS PREDICTED           
+02-b5b2-untagged         AS PREDICTED           
+
+WFKIT cand 1/1 AS PREDICTED; 
+
+## ldcexc2
+01-sublet-life        SR 35 SV 0x0 0x0 0x0 0x19 0x0 0x0 0x19 0x0 0x0 0x0 0x19 0x19 0x2 0x2 0x8000000000010000 0x6 0x300000003 0x8 0x0 0x0 0x1000000000 0x100000000 0x1400000000 0x400000000 0x0 0x200000000 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x6
+02-b5b2-ldcexc2-ctl   SR 2 SV 0x0 0x0
+03-b5b2-ldcexc2       SR 2 SV 0x18 0x1
+snapshot (arm): none (no wedge, or the snapshot was not taken)
+
+LDCKIT fixed AS PREDICTED
+
+## reruns (the runtime lane's grant): log
+RR 2026-11-25 16:59:48 crevoke4b rerun: kit rc=3 C4BKIT cand 15/16 AS PREDICTED; NO READING ['15-b5b2-sbdrain-sret']; load timeouts: 15-b5b2-sbdrain-sret 
+RR 2026-11-25 17:01:25 b5b2n cptag2 rerun: kit rc=0 01-sublet-life-r1 AS PREDICTED SR [35];01-sublet-life-r1 AS PREDICTED SR 35; ungraded positions 25-34: 0x0 0x200000000 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0;16-b5b2-cptag2-r1 AS PREDICTED SR 13;; load timeouts: 
+RR 2026-11-25 17:01:25 REPEAT TIMEOUT 15-b5b2-sbdrain-sret: 43 RUN 15-b5b2-sbdrain-sret BEGIN image b5b2-sbdrain-sret sha cf43854116560f2d rec 8000c000 on a5c45a46d
+RR 2026-11-25 17:01:25 END
+
+## rerun crevoke4b
+01-sublet-life           AS PREDICTED           
+02-b5b2-crevint          AS PREDICTED           recorded p2=0x14a1
+03-b5b2-crevint-mt       AS PREDICTED           recorded p2=0x1767 p8=0x5 p9=0x5
+04-b5b2-crevint-sh       AS PREDICTED           recorded p2=0x1abf p4=0x100000047 p5=0x800000cf p8=0x2 p9=0x2 p10=0x1 p11=0x9227b3d4c7c6bfb1
+05-b5b2-crevint-lat      AS PREDICTED           latency band PASS: lat [1222, -119, 565, -130, 565, -130, 0, 0] ticks; cycles/ticks 30062/15031; positive after the first in cycles [(2, 1130), (4, 1130)] (bound 15,000; first 1222 recorded); recorded p2=0x1a23 p8=0x6 p9=0x6 p13=0x4c6 p14=0xffffffffffffff89 p15=0x235 p16=0xffffffffffffff7e p17=0x235
+06-b5b2-crevsv-none      AS PREDICTED           recorded p2=0x1a0e p8=0x6 p9=0x6 p10=0x3
+07-b5b2-crevsv-srev      AS PREDICTED           recorded p2=0x1f6c p8=0x6 p9=0x6 p10=0x3
+08-b5b2-crevsv-straw     AS PREDICTED           recorded p2=0x1f45 p8=0x6 p9=0x6 p10=0x3
+09-b5b2-crevsv-derive    AS PREDICTED           recorded p2=0x1fea p4=0x800000cf p5=0x800000ce p8=0x6 p9=0x4 p10=0x3 p11=0xd443b2166d8185e1
+10-b5b2-crevsv-kill      AS PREDICTED           recorded p2=0x1d6d p3=0x80000008 p4=0x800000d0 p5=0x800000cf p8=0x6 p9=0x4 p10=0x3 p11=0x5323b3b7586ffcf6
+11-b5b2-sbdrain-none     AS PREDICTED           
+12-b5b2-sbdrain-fill     AS PREDICTED           
+13-b5b2-sbdrain-fence    AS PREDICTED           
+14-b5b2-sbdrain-mint     AS PREDICTED           
+15-b5b2-sbdrain-sret     NO READING             no uart.txt
+16-b5b2-sbdrain-cost0    AS PREDICTED           recorded p2=0xe7a
+17-b5b2-sbdrain-cost     AS PREDICTED           recorded p2=0xee9
+
+C4BKIT cand 15/16 AS PREDICTED; NO READING ['15-b5b2-sbdrain-sret']
+
+## rerun b5b2n
+-- b5b2-cptag-diag (grade-diag.py) --
+01-sublet-life-r1          AS PREDICTED      SR [35]
+
+DIAG wap-flu-r80_a5c45a46d: control exact; diag loads []
+-- the 22 graded images (grade-b5b2nkit-l.py) --
+readback: caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80_a5c45a46d.bit | after loads: caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80_a5c45a46d.bit
+01-sublet-life-r1            AS PREDICTED      SR 35; ungraded positions 25-34: 0x0 0x200000000 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+02-b5b2-illegal-r1           NO READING        no uart.txt
+03-b5b2-illegal-runv-r1      NO READING        no uart.txt
+04-b5b2-illegal-csup-r1      NO READING        no uart.txt
+05-b5b2-uprot-r1             NO READING        no uart.txt
+06-b5b2-uprot-mis-r1         NO READING        no uart.txt
+07-b5b2-rule2-r1             NO READING        no uart.txt
+08-b5b2-rule2-pair-r1        NO READING        no uart.txt
+09-b5b2-sref-r1              NO READING        no uart.txt
+10-b5b2-sref-gen-r1          NO READING        no uart.txt
+11-b5b2-scratch-r1           NO READING        no uart.txt
+12-b5b2-mwrite-r1            NO READING        no uart.txt
+13-b5b2-raw-r1               NO READING        no uart.txt
+14-b5b2-rawlcc-r1            NO READING        no uart.txt
+15-b5b2-cptag-r1             NO READING        no uart.txt
+16-b5b2-cptag2-r1            AS PREDICTED      SR 13
+17-b5b2-nsedge-r1            NO READING        no uart.txt
+18-b5b2-ctxport-f4-r1        NO READING        no uart.txt
+19-b5b2-ctxport-f4ctl-r1     NO READING        no uart.txt
+20-b5b2-ctxport-widelo-r1    NO READING        no uart.txt
+21-b5b2-ctxport-widehi-r1    NO READING        no uart.txt
+22-b5b2-ctxport-edgem-r1     NO READING        no uart.txt
+
+B5B2N-KIT VOID: 02-b5b2-illegal-r1: RUN BEGIN missing or sha/rec differ; 03-b5b2-illegal-runv-r1: RUN BEGIN missing or sha/rec differ; 04-b5b2-illegal-csup-r1: RUN BEGIN missing or sha/rec differ; 05-b5b2-uprot-r1: RUN BEGIN missing or sha/rec differ; 06-b5b2-uprot-mis-r1: RUN BEGIN missing or sha/rec differ; 07-b5b2-rule2-r1: RUN BEGIN missing or sha/rec differ; 08-b5b2-rule2-pair-r1: RUN BEGIN missing or sha/rec differ; 09-b5b2-sref-r1: RUN BEGIN missing or sha/rec differ; 10-b5b2-sref-gen-r1: RUN BEGIN missing or sha/rec differ; 11-b5b2-scratch-r1: RUN BEGIN missing or sha/rec differ; 12-b5b2-mwrite-r1: RUN BEGIN missing or sha/rec differ; 13-b5b2-raw-r1: RUN BEGIN missing or sha/rec differ; 14-b5b2-rawlcc-r1: RUN BEGIN missing or sha/rec differ; 15-b5b2-cptag-r1: RUN BEGIN missing or sha/rec differ; 17-b5b2-nsedge-r1: RUN BEGIN missing or sha/rec differ; 18-b5b2-ctxport-f4-r1: RUN BEGIN missing or sha/rec differ; 19-b5b2-ctxport-f4ctl-r1: RUN BEGIN missing or sha/rec differ; 20-b5b2-ctxport-widelo-r1: RUN BEGIN missing or sha/rec differ; 21-b5b2-ctxport-widehi-r1: RUN BEGIN missing or sha/rec differ; 22-b5b2-ctxport-edgem-r1: RUN BEGIN missing or sha/rec differ
