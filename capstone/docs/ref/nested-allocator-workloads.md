@@ -7514,3 +7514,49 @@ identical to the board lane's grade files.
 - One boot per arm, so the cost carries the boot-to-boot spread, which is not measured here.
 - The wall-clock spans include the kernel and the trap route.
 - The Perl arms are does-it-run only.
+
+### Result: boot S, M-16's stress form returns three times on B5b-2; no stop in 1.17·10^8 protected allocations, so the hazard there is below 2.6·10^-8 (95 %) (board 2, 2026-11-25 15:57-16:57, read against 9b7c370ba5c7)
+
+**Run.** The board lane ran the payload (`2b19fc2a…`, 21,657,608 B) on board 2, `…-r75d-b5b2n_904cd9c6b.bit`, read back
+by name before and after (rc 3: the name matches, no sha256 exposed), with no flash. The run ended on `TRAPTEST: done`
+and board 2 was unbooked (`UNBOOK 1510: 200`). The capture is `b5b2linux/b2bootS-20261125T0723/uart.txt` (`796a8769…`,
+the board lane's tree). I re-ran the reader (`d22d1262…`) on it against `twinS/boot.log`: exit 0, and the output is
+identical to the board lane's grade file. There was no stop, so no aperture snapshot was taken.
+
+**Readings.**
+
+| command | args | verdict | STRESS lines equal to the twin's | last line | span (uptime) |
+|---|---|---|---|---|---|
+| p0 | `100 212 10 1` | RETURNED, rc 0 | 12 of 12 | `done packets=100 fast=19360 … sum=1fe6df7c8e2b0e1f` | 3.7 s |
+| p1 | `300000 212 10000 1` | RETURNED, rc 0 | 32 of 32 | `done packets=300000 fast=58298524 … sum=f6ed64e0d51b9d04` | 1,432.4 s |
+| p2 | `300000 212 10000 1` | RETURNED, rc 0 | 32 of 32 | the same line as p1 | 1,432.7 s |
+
+- The control reads `TRAPTEST: control smoke.dom rc=7`. Both stages end `@@QSTEP-END … rc=0`, with no watchdog line.
+  The console carries 27 of `/init`'s 120 s ticks.
+- The protected commands completed 116,616,408 fast allocations, the number the pre-registration computed.
+- Speed: 47.7 s per 10,000 packets on this route, against about 65 s on P1's native route. The twin took 369.5 s of
+  guest time for p1.
+
+**Against the predictions.**
+1. The control reads `rc=7`, and p0 returns equal to the twin's lines: **met.**
+2. **Under H1, p1 does not return: not met.** p1 and p2 both returned, with every heartbeat equal to the twin's. At P1's
+   point estimate (4.9·10^-8), the probability of this was 0.0033.
+
+**What it says.** This is the pre-registration's third outcome:
+- **No stop in 1.17·10^8 allocations. The hazard on B5b-2 with this allocator revision is below 2.6·10^-8 at 95 %.**
+  That is about half P1's point estimate, and inside P1's single-draw interval (1.2·10^-9 to 1.9·10^-7). It is a
+  bound, not an absence.
+- **The two boots do not yet show different rates.** P1 had one stop in about 2.0·10^7 allocations, and B5b-2 none
+  in 1.17·10^8. If both boots shared one rate, the single stop would fall in P1's boot with probability
+  2.0/(2.0 + 11.7) = 0.15 (one-sided, conditional on one stop in all). This test is computed after the boot; the
+  pre-registration did not name it.
+- It does not say whether the hardware or the allocator revision made the difference, as pre-registered. B5b-2 runs
+  the one-operand wmem 0001 and the trap route; P1 ran the dev-era revision natively.
+
+**Limits.**
+- One boot.
+- No unprotected arm on the board (the payload cap). On the twin (`twinS-both`), the unprotected u0 and u1 returned,
+  and u1's last line carries the same counts and `sum=8b64d9b857f7aee5` as the protected commands' `pkt=100000`
+  heartbeat. Its p1 took
+  358.7 s against u1's 21.4 s for a third of the packets, so the protected path is 5.6× slower per packet there.
+- No aperture reading, since nothing stopped.

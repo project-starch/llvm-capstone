@@ -1,0 +1,95 @@
+# M-16 stress boot S, B5b-2 (…-r75d-b5b2n_904cd9c6b), board 2, 2026-11-25 15:57-16:57 (+0800), trap route.
+# Result lines only, taken from the console capture uart.txt (sha256 796a8769f4edf1a8…): the control line, the stage
+# and command markers, every STRESS line, and /init's end line. Read with src/read-boardS.py against the twin's lines.
+TRAPTEST: control smoke.dom rc=7
+@@QSTEP-BEGIN N2-stress-prot
+@@SPEC-STAGE b5-stress-prot arms=p0,p1 commands=2 validations=0
+@@SPEC-BEGIN 0 run p0 0
+STRESS begin packets=100 K=212 report=10 seed=1
+STRESS pkt=10 fast=1950 block=170 free=80 sum=e82afe8bc6e12542
+STRESS pkt=20 fast=3890 block=350 free=181 sum=912365869cedfe6b
+STRESS pkt=30 fast=5808 block=552 free=291 sum=9fc5e7057300f108
+STRESS pkt=40 fast=7752 block=728 free=387 sum=9889ad0e8caadcf8
+STRESS pkt=50 fast=9678 block=922 free=476 sum=a0a901b2b5e4699a
+STRESS pkt=60 fast=11615 block=1105 free=580 sum=046ed9a8bf7984a4
+STRESS pkt=70 fast=13554 block=1286 free=683 sum=9308d9a2d2fb9185
+STRESS pkt=80 fast=15496 block=1464 free=774 sum=933cb699f7199845
+STRESS pkt=90 fast=17418 block=1662 free=867 sum=0ffd86e8c84a0366
+STRESS pkt=100 fast=19360 block=1840 free=954 sum=1fe6df7c8e2b0e1f
+STRESS done packets=100 fast=19360 block=1840 free=954 sum=1fe6df7c8e2b0e1f
+@@SPEC-END 0 run p0 0 rc=0 up0=166.97 up1=170.69
+@@SPEC-BEGIN 1 run p1 0
+STRESS begin packets=300000 K=212 report=10000 seed=1
+STRESS pkt=10000 fast=1942742 block=177258 free=88880 sum=65fe918b54f2e945
+STRESS pkt=20000 fast=3885859 block=354141 free=177305 sum=1122483cf78b4012
+STRESS pkt=30000 fast=5829517 block=530483 free=265649 sum=08cefb5ff25f74c6
+STRESS pkt=40000 fast=7772792 block=707208 free=353936 sum=a7362c908700a398
+STRESS pkt=50000 fast=9715530 block=884470 free=442530 sum=d2919ed037b15c0b
+STRESS pkt=60000 fast=11658576 block=1061424 free=531166 sum=1ca1b1b942a3435b
+STRESS pkt=70000 fast=13602418 block=1237582 free=619404 sum=0588659bf710acc4
+STRESS pkt=80000 fast=15545750 block=1414250 free=708214 sum=773647bd44e1138b
+STRESS pkt=90000 fast=17488746 block=1591254 free=796858 sum=de7213ec671e2772
+STRESS pkt=100000 fast=19432859 block=1767141 free=884810 sum=8b64d9b857f7aee5
+STRESS pkt=110000 fast=21375862 block=1944138 free=973149 sum=0d0c03e3bdca9408
+STRESS pkt=120000 fast=23319492 block=2120508 free=1061474 sum=305beeb51620b2bc
+STRESS pkt=130000 fast=25262909 block=2297091 free=1149771 sum=49aef48d2f438ec2
+STRESS pkt=140000 fast=27205490 block=2474510 free=1238728 sum=b19a82563783d5b5
+STRESS pkt=150000 fast=29148417 block=2651583 free=1327429 sum=aac835e9df0ee177
+STRESS pkt=160000 fast=31091350 block=2828650 free=1415722 sum=f0721639c246c0c8
+STRESS pkt=170000 fast=33034663 block=3005337 free=1504103 sum=a923c2686750afca
+STRESS pkt=180000 fast=34977645 block=3182355 free=1592489 sum=cfa389c37d2304b0
+STRESS pkt=190000 fast=36921215 block=3358785 free=1680438 sum=3cdddee8955e3d16
+STRESS pkt=200000 fast=38864290 block=3535710 free=1769112 sum=b1dc59b518fd6cc6
+STRESS pkt=210000 fast=40807639 block=3712361 free=1857495 sum=4652fad8477318a7
+STRESS pkt=220000 fast=42751665 block=3888335 free=1945456 sum=37c13097fdddbd98
+STRESS pkt=230000 fast=44695054 block=4064946 free=2033776 sum=7f6409d630e0b88f
+STRESS pkt=240000 fast=46639091 block=4240909 free=2121688 sum=604e1e79646d7f28
+STRESS pkt=250000 fast=48582309 block=4417691 free=2210266 sum=4bbe1c79241c24c4
+STRESS pkt=260000 fast=50525679 block=4594321 free=2298585 sum=38b4d6c0ce02caf3
+STRESS pkt=270000 fast=52469071 block=4770929 free=2386968 sum=4522400f32d99387
+STRESS pkt=280000 fast=54412621 block=4947379 free=2475521 sum=412610d9e172b5dc
+STRESS pkt=290000 fast=56355666 block=5124334 free=2563989 sum=440bb50baea6eb5b
+STRESS pkt=300000 fast=58298524 block=5301476 free=2652582 sum=f6ed64e0d51b9d04
+STRESS done packets=300000 fast=58298524 block=5301476 free=2652582 sum=f6ed64e0d51b9d04
+@@SPEC-END 1 run p1 0 rc=0 up0=310.74 up1=1743.15
+@@SPEC-DONE b5-stress-prot
+@@QSTEP-END N2-stress-prot rc=0
+@@QSTEP-BEGIN N3-stress-prot
+@@SPEC-STAGE b5-stress-prot2 arms=p2 commands=1 validations=0
+@@SPEC-BEGIN 0 run p2 0
+STRESS begin packets=300000 K=212 report=10000 seed=1
+STRESS pkt=10000 fast=1942742 block=177258 free=88880 sum=65fe918b54f2e945
+STRESS pkt=20000 fast=3885859 block=354141 free=177305 sum=1122483cf78b4012
+STRESS pkt=30000 fast=5829517 block=530483 free=265649 sum=08cefb5ff25f74c6
+STRESS pkt=40000 fast=7772792 block=707208 free=353936 sum=a7362c908700a398
+STRESS pkt=50000 fast=9715530 block=884470 free=442530 sum=d2919ed037b15c0b
+STRESS pkt=60000 fast=11658576 block=1061424 free=531166 sum=1ca1b1b942a3435b
+STRESS pkt=70000 fast=13602418 block=1237582 free=619404 sum=0588659bf710acc4
+STRESS pkt=80000 fast=15545750 block=1414250 free=708214 sum=773647bd44e1138b
+STRESS pkt=90000 fast=17488746 block=1591254 free=796858 sum=de7213ec671e2772
+STRESS pkt=100000 fast=19432859 block=1767141 free=884810 sum=8b64d9b857f7aee5
+STRESS pkt=110000 fast=21375862 block=1944138 free=973149 sum=0d0c03e3bdca9408
+STRESS pkt=120000 fast=23319492 block=2120508 free=1061474 sum=305beeb51620b2bc
+STRESS pkt=130000 fast=25262909 block=2297091 free=1149771 sum=49aef48d2f438ec2
+STRESS pkt=140000 fast=27205490 block=2474510 free=1238728 sum=b19a82563783d5b5
+STRESS pkt=150000 fast=29148417 block=2651583 free=1327429 sum=aac835e9df0ee177
+STRESS pkt=160000 fast=31091350 block=2828650 free=1415722 sum=f0721639c246c0c8
+STRESS pkt=170000 fast=33034663 block=3005337 free=1504103 sum=a923c2686750afca
+STRESS pkt=180000 fast=34977645 block=3182355 free=1592489 sum=cfa389c37d2304b0
+STRESS pkt=190000 fast=36921215 block=3358785 free=1680438 sum=3cdddee8955e3d16
+STRESS pkt=200000 fast=38864290 block=3535710 free=1769112 sum=b1dc59b518fd6cc6
+STRESS pkt=210000 fast=40807639 block=3712361 free=1857495 sum=4652fad8477318a7
+STRESS pkt=220000 fast=42751665 block=3888335 free=1945456 sum=37c13097fdddbd98
+STRESS pkt=230000 fast=44695054 block=4064946 free=2033776 sum=7f6409d630e0b88f
+STRESS pkt=240000 fast=46639091 block=4240909 free=2121688 sum=604e1e79646d7f28
+STRESS pkt=250000 fast=48582309 block=4417691 free=2210266 sum=4bbe1c79241c24c4
+STRESS pkt=260000 fast=50525679 block=4594321 free=2298585 sum=38b4d6c0ce02caf3
+STRESS pkt=270000 fast=52469071 block=4770929 free=2386968 sum=4522400f32d99387
+STRESS pkt=280000 fast=54412621 block=4947379 free=2475521 sum=412610d9e172b5dc
+STRESS pkt=290000 fast=56355666 block=5124334 free=2563989 sum=440bb50baea6eb5b
+STRESS pkt=300000 fast=58298524 block=5301476 free=2652582 sum=f6ed64e0d51b9d04
+STRESS done packets=300000 fast=58298524 block=5301476 free=2652582 sum=f6ed64e0d51b9d04
+@@SPEC-END 0 run p2 0 rc=0 up0=1886.05 up1=3318.73
+@@SPEC-DONE b5-stress-prot2
+@@QSTEP-END N3-stress-prot rc=0
+TRAPTEST: done

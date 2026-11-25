@@ -4,6 +4,8 @@
 intermittent on bitstreams F and P1, and returns on the QEMU twin. This folder holds a 74-line program,
 `src/tsapp-stress.c`, that runs only tshark's wmem allocation path. It stops the core in the same way, at the same
 instruction, after about 2·10^7 allocations: about 11 minutes on P1, against 40-68 minutes per sample with tshark.
+On bitstream B5b-2 (`…-r75d-b5b2n_904cd9c6b`), with tshark's one-operand allocator revision, it ran 1.17·10^8
+allocations in one boot on 2026-11-25 without stopping ("On B5b-2" below).
 
 **Wrong symptom? Siblings, so a reader with a neighbouring symptom is redirected:**
 - `../R27-revnode-orphan-response/`: a silent deadlock after a pipeline flush during the DYN unit's revocation-node
@@ -105,6 +107,47 @@ reader is `src/read-stress.py` (`0384cfba…`); usage `read-stress.py <board.txt
   leave residue there. The pc names the site the allocation loop occupies; it does not prove the stop is that
   instruction.
 
+## On B5b-2: no stop in 1.17·10^8 allocations (board 2, 2026-11-25)
+
+**What differs from P1.** The bitstream is B5b-2, `…-r75d-b5b2n_904cd9c6b`. Its trap route makes the two-operand CREVOKE
+illegal, so the program links tshark's one-operand wmem 0001 (Fig. 10's revision), not the revision P1 ran. A
+difference between the two boots therefore cannot be assigned to the hardware alone.
+
+**Build.** `tsapp-stress.c` is unchanged. It is compiled with the B5b-2 protected tshark tree's own `tshark.c.o`
+compile line, and linked with that tree's recorded image link, with `tsapp_stress.o` in `tshark.c.o`'s place.
+- Controls: the recorded compile line reproduces `tshark.c.o` byte for byte, and the recorded link reproduces the
+  tree's `tshark.dom` byte for byte.
+- Recipe: `<hdd>/capstone/nested/b5b2/build-stress-trap.sh` (`f928ae1c…`).
+- Image `118ac0e7…`; the board runs its strip, `12c63983…` (20,982,240 B). No illegal encoding (`scan_illegal.py`).
+- The CDERIVE word `0xa283955b` of `wmem_block_fast_sublet_alloc` sits at offset 0x4f0 here, so it runs at
+  `0x3ff67bc234`.
+
+**Run.** One boot, firmware `2b19fc2a…` (21,657,608 B), read back by name before and after.
+- /init (the trap route's) runs two stages, each under a 3,600 s watchdog, and prints a tick every 120 s:
+  - p0 = `100 212 10 1`, then p1 = `300000 212 10000 1`;
+  - p2 = `300000 212 10000 1`.
+- The overlay is `<hdd>/capstone/nested/b5b2/make-boardS.py` (`dc44c9f2…`).
+- The unprotected image did not fit under the 26,000,000 B firmware cap, so it ran only on the twin.
+- Pre-registration: nested-workloads `9b7c370ba5c7`. At P1's point estimate it predicted p1 would not return, with
+  probability 1 − 0.0033.
+
+**What it read.** Board lines: `results/b5b2-board2-stressS.txt`. Twin lines: `results/twin-trap-stressS.txt`. Reader:
+`src/read-boardS.py` (`d22d1262…`), run as `read-boardS.py <board.txt> <twin.txt>`.
+- Control `smoke.dom rc=7`.
+- **p0, p1 and p2 all returned with rc 0**, and every STRESS line equals the twin's (12, 32, 32). 116,616,408 fast
+  allocations were completed.
+- There was no watchdog line, and 27 ticks. p1 took 1,432.4 s, 47.7 s per 10,000 packets; P1's native route took
+  about 65 s.
+- No apertures were read, since nothing stopped.
+
+**What it says.**
+- The hazard on B5b-2 with this allocator revision is **below 2.6·10^-8 per allocation (95 %)**. That is about half
+  P1's point estimate, and inside P1's single-draw interval. It is a bound, not an absence.
+- **The two boots do not show different rates.** If P1's boot (one stop in about 2.0·10^7) and this one (none in
+  1.17·10^8) shared one rate, the single stop would land in P1's boot with probability 0.15. This test was computed
+  after the boot.
+- So the reductions below need a bitstream on which the stop has been seen. As of 2026-11-25 that is P1.
+
 ## What it shows, and what it does not
 
 - **The stop needs nothing of tshark beyond this allocation path.** There is no dissection, no capture input, a far
@@ -136,4 +179,7 @@ ingredient. After that, a directed `.S` for simulation, which is CLAUDE.md's rul
 - `src/read-stress.py`: the P1 boot's reader.
 - `results/p1-board1-stress1.txt`: the P1 boot's result lines and aperture block.
 - `results/twin-native-stress1.txt`: the twin's reference lines.
+- `src/read-boardS.py`: the B5b-2 boot's reader.
+- `results/b5b2-board2-stressS.txt`: the B5b-2 boot's result lines.
+- `results/twin-trap-stressS.txt`: its trap-route twin's lines.
 - `SHA256SUMS`: these files.
