@@ -432,3 +432,33 @@ Reported: the led_stretch worst slack and the rev_node worst-500 count.
 - mcf on the fixed seal completes, or faults with a named cause and pc. A silent wedge refutes the fix as S-35's remedy.
 - The matched SPEC pair (the same images, 28fcbb646 against the fixed seal, one board): each row within 1 %. A row beyond that makes the registered-only park the follow-up, with its own gate.
 - Kits: crevoke4b and wapflu, whose vectors are to be re-simulated on a5c45a46d before that seal is graded with them; b5b2-ldcexc2 as a bare image (to build).
+
+## The diagnostic seal 28fcbb646: sealed and graded (2026-11-25)
+
+The board lane sealed `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu_28fcbb646.bit`.
+- Size: 11,443,722 B.
+- **sha256 `925607df163bd8c8b96a2ccef84126478251124eb02fe31d301cfee18cc0d32e`**, recomputed here from the copy in bitstreams/ and equal to the build's verdict.
+- The build tree is at 28fcbb646 with no core change.
+- Its gate PASS 3/3 is recorded above, in the board lane's grade.
+
+**Graded here: PASS on every pre-registered full-build key** (the combined-hash section's keys, centred on 88db40027's seal):
+
+| key | band | read |
+|---|---|---|
+| placed LUT | 149,188 +-3,000 | 151,405 (+2,217) |
+| placed FF | 69,534 +-2,000 | 69,497 (-37) |
+| routing | 0 errors, 0 unrouted, 0 partial | routed clean, 200,863/200,863 |
+| congestion | <= 5 | placed level 4; router no hotspot, its control parsing to 5 |
+| loops | 0, each toy firing | check_timing 0 (report and routed dcp), TIMING-23 0, LUTLP-1 0, each toy 1 |
+| clk_out1 WNS | [-1.47, +6.01] | +1.516 |
+
+Reported:
+- design WNS +0.177, TNS 0, WHS +0.024; slices 44,753 (87.84 %); RAMB36 115;
+- rev_node on the worst 500: 299 paths / 229 cells;
+- led_stretch worst setup slack +8.556 (88db40027's seal: +8.744), the apertures' only timing cost.
+
+The grade is <synth>/b5b2waff-28fcbb646-full-out/grade-board/grade-waf-full.txt.
+
+**Its session** (board 2, in the semantics owner's order): the flash, then the wapflu kit, crevoke4b's 17, the three g2, and B5T-g1b with mcf last. If mcf wedges, its snapshot is graded against the pattern pre-registered above (c7877d008be7).
+- On this seal, crevoke4b cannot detect a missed flash: board 2 comes from 88db40027, whose column equals 28fcbb646's.
+- The flash checks are the readback and wapflu's b5b2-untagged (the board lane's note).
