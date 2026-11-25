@@ -155,6 +155,7 @@ static bool native_supported(u64 nr)
     case CAPSTONE_SYS_faccessat:
     case CAPSTONE_SYS_openat: case CAPSTONE_SYS_newfstatat: case CAPSTONE_SYS_fstat:
     case CAPSTONE_SYS_sysinfo: case CAPSTONE_SYS_prlimit64:
+    case CAPSTONE_SYS_ioctl: case CAPSTONE_SYS_uname: case CAPSTONE_SYS_getrandom:
     case CAPSTONE_NR_SIGACTION:
     case CAPSTONE_SYS_rt_sigprocmask: case CAPSTONE_SYS_getcwd: case CAPSTONE_SYS_chdir:
         return true;

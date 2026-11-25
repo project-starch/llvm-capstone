@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Native fd services: authority is checked by native_acquire before issue. */
 #include <linux/fcntl.h>
+#include <linux/ioctl.h>
+#include <asm/ioctls.h>
 struct native_wire_flock {
     s16 type, whence;
     u32 pad;
@@ -93,6 +95,19 @@ static bool native_files_issue(struct context *c, const struct ns_invocation *ca
             wire.start = lock.l_start; wire.length = lock.l_len; wire.pid = lock.l_pid;
             memcpy(call->buffer[2].data, &wire, sizeof(wire));
         }
+        break;
+    case CAPSTONE_SYS_ioctl:
+        /* ioctl serves the two integer requests a libc issues on any fd, FIOCLEX and FIONCLEX,
+         * as fcntl(F_SETFD) on the authorized descriptor: Linux's ioctl_fioclex does the same
+         * (set_close_on_exec). musl passes the request as an int, so it may arrive
+         * sign-extended; the kernel reads an unsigned int. Every other request still answers
+         * -ENOSYS, as the delegated route's: a request with a pointer argument needs its own
+         * marshalling. CPython's _Py_set_inheritable is the caller (run-file path). */
+        if ((a[1] & 0xffffffffu) != FIOCLEX && (a[1] & 0xffffffffu) != FIONCLEX) { rc = -ENOSYS; break; }
+        mutex_unlock(&vm_lock);
+        rc = capstone_native_fcntl(a[0], file, F_SETFD,
+                                   (a[1] & 0xffffffffu) == FIOCLEX ? FD_CLOEXEC : 0, NULL, DOM_FDS);
+        mutex_lock(&vm_lock);
         break;
     case CAPSTONE_SYS_fsync: case CAPSTONE_SYS_fdatasync:
     case CAPSTONE_SYS_ftruncate:

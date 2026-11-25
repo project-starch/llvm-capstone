@@ -3,6 +3,8 @@
 #include <linux/stat.h>
 #include <linux/resource.h>
 #include <linux/sysinfo.h>
+#include <linux/utsname.h>
+#include <linux/random.h>
 #include <asm/stat.h>
 
 static unsigned long native_refused_calls;
@@ -75,6 +77,34 @@ static bool native_gcc_issue(struct context *c, const struct ns_invocation *call
         break;
     case CAPSTONE_SYS_sysinfo:
         rc = capstone_native_sysinfo(call->buffer[0].data);
+        break;
+    case CAPSTONE_SYS_uname:
+        /* newuname: the task's UTS namespace under uts_sem. Not applied: the personality
+         * overrides (UNAME26, the compat architecture), which a native task never sets.
+         * CPython's platform.machine() is the caller. */
+        if (!call->buffer[0].data || call->buffer[0].length != sizeof(struct new_utsname)) { rc = -EFAULT; break; }
+        down_read(&uts_sem);
+        memcpy(call->buffer[0].data, utsname(), sizeof(struct new_utsname));
+        up_read(&uts_sem);
+        rc = 0;
+        break;
+    case CAPSTONE_SYS_getrandom:
+        /* getrandom(buf, len, flags), as drivers/char/random.c's: the same flag check, the wait
+         * for the CRNG unless GRND_NONBLOCK or GRND_INSECURE (GRND_RANDOM is the same pool
+         * since Linux 5.6), then len bytes. len is bounded by the route's buffer. */
+        if (a[2] & ~(u64)(GRND_NONBLOCK | GRND_RANDOM | GRND_INSECURE) ||
+            (a[2] & (GRND_INSECURE | GRND_RANDOM)) == (GRND_INSECURE | GRND_RANDOM)) { rc = -EINVAL; break; }
+        if (a[1] && (!call->buffer[0].data || call->buffer[0].length < a[1])) { rc = -EFAULT; break; }
+        if (!(a[2] & GRND_INSECURE) && !rng_is_initialized()) {
+            if (a[2] & GRND_NONBLOCK) { rc = -EAGAIN; break; }
+            mutex_unlock(&vm_lock);
+            rc = wait_for_random_bytes();
+            mutex_lock(&vm_lock);
+            if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
+            if (rc) break;
+        }
+        get_random_bytes(call->buffer[0].data, a[1]);
+        rc = (long)a[1];
         break;
     case CAPSTONE_SYS_prlimit64:
         if ((pid_t)a[0] != 0 && (pid_t)a[0] != task_tgid_vnr(current)) { rc = -EPERM; break; }
