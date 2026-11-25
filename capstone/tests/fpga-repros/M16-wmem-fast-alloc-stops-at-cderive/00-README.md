@@ -170,6 +170,9 @@ Each step keeps the heartbeat and the twin reference:
 2. A fixed allocation size.
 3. A loop of `capstone_cap_derive` on a fixed parent, outside wmem.
 
+Reductions 1 and 2 are modes `f` and `s` of `src/tsapp-stress-red.c`; its mode `a` is the full form, with
+`tsapp-stress.c`'s lines. Its reader is `src/read-red.py`.
+
 Each one that still stops halves what the hardware side has to look at. The first one that returns names the
 ingredient. After that, a directed `.S` for simulation, which is CLAUDE.md's rule 8.
 
@@ -180,6 +183,8 @@ ingredient. After that, a directed `.S` for simulation, which is CLAUDE.md's rul
 - `results/p1-board1-stress1.txt`: the P1 boot's result lines and aperture block.
 - `results/twin-native-stress1.txt`: the twin's reference lines.
 - `src/read-boardS.py`: the B5b-2 boot's reader.
+- `src/tsapp-stress-red.c`: the program with reductions 1 and 2 (modes `f`, `s`) and the full form (mode `a`).
+- `src/read-red.py`: the reader of a P1 boot of that program.
 - `results/b5b2-board2-stressS.txt`: the B5b-2 boot's result lines.
 - `results/twin-trap-stressS.txt`: its trap-route twin's lines.
 - `SHA256SUMS`: these files.

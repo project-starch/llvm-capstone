@@ -7560,3 +7560,130 @@ identical to the board lane's grade file. There was no stop, so no aperture snap
   heartbeat. Its p1 took
   358.7 s against u1's 21.4 s for a third of the packets, so the protected path is 5.6× slower per packet there.
 - No aperture reading, since nothing stopped.
+
+## M-16's first two reductions on P1 (2026-11-25)
+
+### Pre-registration: M-16's stress form with its first two reductions, one boot on board 1 (P1), protected only (written 2026-11-25 17:53, before the boot)
+
+**Question.** Which parts of the stress form does P1's stop need? On P1 the full form stopped once, after about 2·10^7
+allocations (result above, `832faa980e3b`). On B5b-2 it did not stop in 1.17·10^8 (boot S, `5d902b54a271`). So the
+reductions run on P1, the bitstream where the stop has been seen. Runtime granted board 1 for this run in its own message.
+
+**The program.** `tshark/stress/red/tsapp-stress-red.c` (`1f0825a6…`) is `tsapp-stress.c` with a mode argument. Its
+argv is `mode packets K report seed`. One image carries all three modes, because the 26,000,000 B firmware cap fits one
+such image per boot.
+The program and its reader are committed beside M-16's other files, in
+`tests/fpga-repros/M16-wmem-fast-alloc-stops-at-cderive/src/`. The other paths here are under `<hdd>/capstone/nested/`.
+- **a:** `tsapp-stress.c`'s loop, unchanged. On the twin its 41 STRESS lines for `400000 212 10000 1` equal
+  `tsapp-stress.c`'s, and its 100-packet lines equal too. This is the positive control.
+- **f (reduction 1):** BLOCK_FAST alone. Every allocation goes to the packet scope, with the same LCG sizes, and there is
+  no file scope.
+- **s (reduction 2):** BLOCK_FAST alone, at one fixed size, 32 B.
+
+**Build.** `tshark/stress/red/build-red.sh` (`bea9fe6a…`) is `build-stress.sh` with only the source and the output
+directory changed.
+- **Controls, both trees:** the relink of each tree's `tshark_m5.o` reproduces `tshark_m5.dom` byte for byte.
+- Images:
+  - protected `959f8509…`, strip `a15d30b2…` (20,208,504 B);
+  - unprotected `eb418c7d…`, strip `813a099f…` (twin only).
+- **The allocator is P1's.** `wmem_block_fast_sublet_alloc` is 0x4b2 bytes in both images. Its instruction bytes hash to
+  `bee25b8c…` in this image and in P1's stress image `c93cc972…`. The function sits 0x7a higher here, at `0x77c60c`.
+- **The site.** The function has two CDERIVE words: `0xa283955b` at +0x45c and `0xa205955b` at +0x462. Both are
+  `capstone_cap_derive`'s inlined tail in `wmem_sublet_issue_at`:
+  - +0x45c is the derive of the child: `scc t2` and then `cderive child, t2, size`;
+  - +0x462 is the zero-size refusal branch.
+  So every successful allocation executes +0x45c once, whatever its size. Mode s therefore runs P1's stop instruction
+  once per allocation, as a and f do.
+  - At P1's load base, +0x45c runs at **`0x3ff676ca68`** (P1's image: `0x77c9ee` → `0x3ff676c9ee`).
+
+**Stage.** `tshark/stress/red/stage-board` (`make-stage-red.py`, `a65700ac…`), around bkit91's own smoke:
+- `p1red/red1` (`mk-red-stage.sh` `f4ad092e…`; `red1.SHA256SUMS` `443aa317…`);
+- its files differ from stress1's (`p1st/stress1`) in exactly three: the image, `plan.json` and `run.sh`.
+
+Commands, in order, each in a fresh run directory, with K = 212 and seed 1:
+
+| | mode | packets | fast allocations | heartbeat |
+|---|---|---|---|---|
+| r0 | s | 100 | 21,200 | every 10 |
+| r1 | s | 600,000 | 127,200,000 | every 10,000 |
+| r2 | f | 300,000 | 63,600,000 | every 10,000 |
+| r3 | a | 300,000 | 58,298,524 | every 10,000 |
+
+**Ordering.** One stop ends the boot. So the most-reduced form runs first, and the full form runs last as the control.
+The first command that does not return is the reading.
+
+**Board-free checks, done.**
+- The recheck on bkit91 (`p1red/recheck.sh`, as `p1s100/recheck.sh` with the kit changed):
+  - the real bake and both stubs ran, rc 0;
+  - the real firmware is 23,760,392 B, under the cap, `e4be27b5…`.
+- The chain's own dry run (`nat-run3p.sh`, `NR_DRY=1`) reached `DONE`. It prints `BAKED_TIMEOUT=10800`, as stress1's
+  did.
+- On this kit a stage with `spec.sh` sets the idle limit to the timeout. So a stop is recognised only when the
+  10,800 s budget ends, and the runner then reads the wedge apertures (`BAKED_WEDGE_APERTURES=1`), as for stress1.
+
+**Time.** On P1, mode a ran 10,000 packets in 60-75 s. The twin's per-packet time for s and f is 0.71 and 0.84 of a's.
+At 7.5 ms a packet for a, the four commands take about 7,300 s, plus about 140 s to unpack the image each time. That
+is under the 10,800 s budget, with about 2,000 s to spare after the smoke and the boot.
+
+**Twin.** The twin (`nst-red-board2`, slot 28, 2^18 records) ran this stage (`serial.log` `02055366…`). All four commands return rc 0:
+- r0 `done … sum=144131f731537378`;
+- r1 62 lines, `done packets=600000 fast=127200000 … sum=53c790819c8ca080`;
+- r2 32 lines, `sum=b1ad28789dad93bd`;
+- r3 32 lines, `sum=f6ed64e0d51b9d04`, the line boot S's p1 printed on B5b-2.
+
+On the earlier twin run (`nst-red-twin`), the unprotected image's s and f lines equal the protected ones.
+
+**Reader.** `p1red/read-red.py` (`64782291…`), run as `read-red.py <board.txt> <twin serial.log>`:
+- **RETURNED:** rc 0, with every STRESS line equal to the twin's;
+- **NO RETURN:** the last heartbeat and the twin's next one, every aperture row verbatim, and a comparison of the commit
+  pc with `0x3ff676ca68` and of sw=220 with `0x8c`;
+- **OTHER:** a line differs, or rc is nonzero;
+- **NOT STARTED:** the command is absent.
+
+It was tested six ways:
+- the twin's log as both inputs: 4 RETURNED, exit 0;
+- a copy cut after r1's packet-60,000 line, with P1's aperture block and its commit pc set to `0x3ff676ca68`: NO
+  RETURN, a stop between 12,720,000 and 14,840,000 allocations, pc True, sw=220 True;
+- the same with P1's own pc: pc False;
+- the cut with no aperture block: "NO APERTURE BLOCK";
+- one checksum digit changed: OTHER, exit 1;
+- a twin log with no complete command: exit 2.
+
+On P1's real stress1 transcript against its twin, it reads s0 RETURNED and s1 NO RETURN between 19,432,859 and
+21,375,862. Its pc is False, as it should be, since that is the other image's pc, and sw=220 is True. That is the
+result recorded above, so the reader parses the board's real format.
+
+**The hypothesis (H1).** The stop is a per-allocation hazard of the derive at +0x45c, at P1's estimate of 4.9·10^-8, in
+all three modes.
+- Under H1, r1 stops with probability 0.998. Its first stop falls at about 1.4·10^7 allocations (median), near packet
+  67,000.
+- At the lower end of P1's interval (1.2·10^-9), r1 returns with probability 0.86. So no return here shows absence.
+
+**Predictions.**
+1. The smoke passes, and r0 returns equal to the twin's lines.
+2. **Under H1, r1 does not return.** Its last heartbeat lies before packet 600,000. The commit pc reads `0x3ff676ca68`,
+   with sw=220 `0x8c`.
+
+**What each outcome says.**
+- **r1 stops at `0x3ff676ca68` with sw=220 `0x8c`.** BLOCK_FAST alone, at one fixed size, is enough. That removes the
+  file scope, the BLOCK allocator, the free path, the size mix and the jumbo path.
+  - Next is reduction 3, `capstone_cap_derive` on a fixed parent outside wmem. Then a directed `.S` for simulation.
+  - No more board time goes to r2 or r3.
+- **r1 returns and r2 stops there.** Removing the size mix removed the stop in this boot. r1's return bounds the
+  fixed-size hazard below 2.4·10^-8 (95 %).
+  - That is a bound, and it is about half P1's point estimate. So "the size mix is needed" is a hypothesis for the
+    next boot, not a finding.
+- **r1 and r2 return and r3 stops.** The file scope's interleaving is needed, with the same caveat. r2's return bounds f
+  below 4.7·10^-8.
+- **All four return.** Then the positive control did not stop in 5.8·10^7 allocations either. Under H1 that has
+  probability 0.057. Together with boot S this would put the full form at no stop in 1.7·10^8 allocations since P1's one
+  stop, so P1's rate is the question first, not the reductions.
+- **A stop elsewhere, or with another signature:** reported as itself, and not merged with M-16.
+- **A command cut by the budget** (the heartbeat still advancing at the budget's end): "no stop within T" for that
+  command. The other commands' verdicts stand.
+
+**Limits.**
+- One boot.
+- No unprotected arm on the board (the cap). On the twin, the protected and unprotected s and f lines are equal.
+- The apertures are read once, after the budget.
+- A return is a bound, not an absence.
