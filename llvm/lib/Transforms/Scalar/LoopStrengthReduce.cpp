@@ -167,9 +167,11 @@ static cl::opt<bool> CapabilityByteIV(
 // iteration that reaches the test (the candidate filter). Accessed cursors lie
 // in [0, 2^38) by the format: a Sublet cursor is the zero extension of 38
 // address bits, and a reference written with a cursor at or above 2^38 is an
-// untagged integer, which traps at its access (capstone-qemu target/riscv/cap.h
-// :199-233; design/sublet-reference-model.md section 2.1; bounds are NOT
-// limited, so the basis is the cursor). A count at or above the period visits a
+// untagged integer, which traps at its access in protected U, where
+// application code runs (capstone-qemu target/riscv/cap.h:199-233;
+// design/sublet-reference-model.md sections 2.1 and 5; bounds are NOT
+// limited, so the basis is the cursor). The access must survive codegen: see
+// LiveAccessOnly. A count at or above the period visits a
 // whole cycle of cursors, spread over 2^64 - 2^ctz(step) bytes, so one of them
 // lies at or above 2^38 and the original traps at that access, which the
 // rewritten loop reaches too. Below the period the exits coincide, as without
@@ -7041,9 +7043,12 @@ static llvm::PHINode *GetInductionVariable(const Loop &L, ScalarEvolution &SE,
 // this even though neither GEP dominates the latch. Work backwards from an
 // access through an anchor: an uncovered exit, backedge, cycle, or instruction
 // that can leave the function prevents the proof from reaching the header.
+// With LiveAccessOnly, only an access codegen cannot delete counts: a store, a
+// volatile access, or a load whose value is used. An unused load is removed by
+// SelectionDAG, and a proof that rests on it trapping is void.
 static bool capabilityAnchorAccessedEveryIteration(
     Loop *L, Value *Base, Type *ElementTy, const SCEV *Index,
-    ScalarEvolution &SE) {
+    ScalarEvolution &SE, bool LiveAccessOnly = false) {
   SmallPtrSet<BasicBlock *, 16> Covered;
   SmallPtrSet<BasicBlock *, 16> Transfers;
   for (BasicBlock *BB : L->blocks()) {
@@ -7058,9 +7063,10 @@ static bool capabilityAnchorAccessedEveryIteration(
           Anchors.insert(GEP);
       }
       Value *Address = nullptr;
-      if (auto *Load = dyn_cast<LoadInst>(&I))
-        Address = Load->getPointerOperand();
-      else if (auto *Store = dyn_cast<StoreInst>(&I))
+      if (auto *Load = dyn_cast<LoadInst>(&I)) {
+        if (!LiveAccessOnly || Load->isVolatile() || !Load->use_empty())
+          Address = Load->getPointerOperand();
+      } else if (auto *Store = dyn_cast<StoreInst>(&I))
         Address = Store->getPointerOperand();
       if (Address && Anchors.contains(Address)) {
         Covered.insert(BB);
@@ -7097,7 +7103,7 @@ static bool capabilityAnchorAccessedEveryIteration(
 static bool replaceCapabilityLatchTest(Loop *L, const SCEVAddRecExpr *Index,
                                        Value *Base, Type *ElementTy,
                                        const APInt &ByteStep, PHINode *IV,
-                                       ScalarEvolution &SE) {
+                                       bool LiveAccess, ScalarEvolution &SE) {
   if (!L->getHeader()->getModule()->getTargetTriple().isCapstone64() ||
       ByteStep.isZero() || L->getExitingBlock() != L->getLoopLatch())
     return false;
@@ -7151,7 +7157,9 @@ static bool replaceCapabilityLatchTest(Loop *L, const SCEVAddRecExpr *Index,
       dyn_cast<SCEVConstant>(SE.getConstantMaxBackedgeTakenCount(L));
   bool CountBounded =
       MaxCount && MaxCount->getAPInt().getActiveBits() <= PeriodBits;
-  if (!CountBounded && !CapabilityExitRuntimeEnd)
+  // The run-time endpoint rests on the original trapping at an access, so that
+  // access must survive codegen (LiveAccess).
+  if (!CountBounded && !(CapabilityExitRuntimeEnd && LiveAccess))
     return false;
 
   Type *IndexTy = Index->getType();
@@ -7166,6 +7174,12 @@ static bool replaceCapabilityLatchTest(Loop *L, const SCEVAddRecExpr *Index,
   SCEVExpander Expander(SE, Preheader->getDataLayout(), "lsr.cap.exit");
   if (!Expander.isSafeToExpandAt(EndIndex, Preheader->getTerminator()))
     return false;
+  // Checked before anything is emitted, so a refusal leaves the preheader as
+  // it was.
+  if (!CountBounded &&
+      !Expander.isSafeToExpandAt(SE.getNoopOrZeroExtend(Count, IndexTy),
+                                 Preheader->getTerminator()))
+    return false;
   Value *Offset = Expander.expandCodeFor(EndIndex, IndexTy,
                                         Preheader->getTerminator());
   IRBuilder<> StartBuilder(Preheader->getTerminator());
@@ -7175,8 +7189,6 @@ static bool replaceCapabilityLatchTest(Loop *L, const SCEVAddRecExpr *Index,
     // step is even and the start plus one byte is never a cursor of this IV.
     assert(PeriodBits < 64 && "an unbounded count needs an even byte step");
     const SCEV *WideCount = SE.getNoopOrZeroExtend(Count, IndexTy);
-    if (!Expander.isSafeToExpandAt(WideCount, Preheader->getTerminator()))
-      return false;
     Value *CountV = Expander.expandCodeFor(WideCount, IndexTy,
                                            Preheader->getTerminator());
     Value *Fits = StartBuilder.CreateICmpULT(
@@ -7234,6 +7246,9 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
     Type *ElementTy;
     APInt ByteStep;
     PHINode *IV;
+    // An access codegen cannot delete covers every iteration (the run-time
+    // endpoint's condition; the filter above accepts any access).
+    bool LiveAccess;
   };
   SmallVector<CursorExitCandidate, 4> ExitCandidates;
   for (WeakVH &Candidate : Candidates) {
@@ -7320,7 +7335,12 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
                                      ConstantInt::get(IndexTy, ByteStep),
                                      "lsr.cap.next");
       IV->addIncoming(Next, Latch);
-      ExitCandidates.push_back({Index, Base, ElementTy, ByteStep, IV});
+      ExitCandidates.push_back(
+          {Index, Base, ElementTy, ByteStep, IV,
+           CapabilityExitRuntimeEnd &&
+               capabilityAnchorAccessedEveryIteration(L, Base, ElementTy, Index,
+                                                      SE,
+                                                      /*LiveAccessOnly=*/true)});
     }
     for (auto [GEP, Offset] : Uses) {
       Value *Residual = Expander.expandCodeFor(Offset, IndexTy, GEP);
@@ -7354,7 +7374,7 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
     SE.forgetLoop(L);
     for (const CursorExitCandidate &C : ExitCandidates)
       if (replaceCapabilityLatchTest(L, C.Index, C.Base, C.ElementTy, C.ByteStep,
-                                     C.IV, SE))
+                                     C.IV, C.LiveAccess, SE))
         break;
     DeleteDeadPHIs(Header);
     SE.forgetLoop(L);

@@ -156,3 +156,48 @@ loop:
 exit:
   ret void
 }
+
+; Negative control: @repeating_cursor with its load unused. SelectionDAG deletes an unused load. With the unreachable
+; endpoint the loop would then never exit and never access anything: a hang where the original returns after three
+; iterations (found by the claim-auditor, 2026-11-26). The run-time endpoint needs an access codegen keeps (a store,
+; a volatile access, or a used load), so this loop keeps its integer test.
+; ON-LABEL:  @repeating_dead(
+; ON-NOT:    lsr.cap.never
+; ON:        icmp eq i64
+; ON-NOT:    lsr.cap.never
+; ON:        ret void
+define void @repeating_dead(ptr addrspace(200) %b) {
+entry:
+  br label %loop
+loop:
+  %i = phi i64 [0, %entry], [%next, %loop]
+  %offset = mul i64 %i, -9223372036854775808
+  %p = getelementptr inbounds i8, ptr addrspace(200) %b, i64 %offset
+  %v = load i8, ptr addrspace(200) %p
+  %next = add i64 %i, 1
+  %done = icmp eq i64 %next, 3
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; A used, non-volatile load is an access codegen keeps: @unbounded's shape with its load summed.
+; ON-LABEL:  @unbounded_used(
+; ON:        lsr.cap.never
+; ON:        select i1
+; ON:        icmp eq ptr addrspace(200)
+define i64 @unbounded_used(ptr addrspace(200) %b, i64 %n) {
+entry:
+  br label %loop
+loop:
+  %i = phi i64 [0, %entry], [%next, %loop]
+  %s = phi i64 [0, %entry], [%s.next, %loop]
+  %p = getelementptr inbounds i64, ptr addrspace(200) %b, i64 %i
+  %v = load i64, ptr addrspace(200) %p
+  %s.next = add i64 %s, %v
+  %next = add i64 %i, 1
+  %done = icmp eq i64 %next, %n
+  br i1 %done, label %exit, label %loop
+exit:
+  ret i64 %s.next
+}
