@@ -1,8 +1,10 @@
 # Virtual C applications on Linux
 
 The virtual stack, node growth and local mallocng are merged on `dev`.
-The managed lifetime ISA is pinned at QEMU `7dbfdd534eea`; rebuild the adapter
-against that pin. The allocator uses musl mallocng with local `CDERIVE` and
+The managed lifetime ISA is pinned at QEMU `ea57497908` (dev's capstone-qemu
+pin since 57ce67cf6258: CREVOKE takes the object alone, CRENEW is added; the
+managed-mallocng qualification ran at the earlier `7dbfdd534eea`); rebuild the
+adapter against that pin. The allocator uses musl mallocng with local `CDERIVE` and
 `CREVOKE` hooks; see [its representation](mallocng.md). The earlier
 [qualification manifest](results/node-growth/qualification.json) identifies
 exact source and executable hashes. Earlier R1/R2/R3 result files below retain
