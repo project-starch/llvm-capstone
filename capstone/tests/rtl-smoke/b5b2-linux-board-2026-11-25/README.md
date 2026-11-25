@@ -105,3 +105,49 @@ So on silicon the test loader protected both processes, where the twin refused t
 This is a reading, attributed to nothing. The twin's failure is listed as unresolved in the PREREG. No positive control
 in this boot shows that regs.S's lost-register checks can fire on silicon: the twin exits before they run, so neither
 platform has yet exercised the failing path of the check that read 0.
+
+## Boots 3 and 4 (amendment 2, runtime/b5b2-linux 90f2f5bc5e83)
+
+The run:
+- Board 2, one hub booking, 1503, from 04:46 to 04:56 UTC.
+- The resident 904cd9c6b was read back by name before each boot and after the last. No flash.
+- Both boots use the same kernel, Image `686d255f…`, and the same initramfs. `/init` runs `/regs`, then `/regs-strip23`,
+  then `/enter`.
+- `/regs-strip23` is regs.S with one added `xori s7, s7, 0`, found once in the binary at 0x1024e (`000bcb93`).
+- Boot 4 was run only because boot 3's grade printed the exact line `STRIP CONTROL 23`.
+
+The scripts:
+- `run-linux34.sh` (a9e97e38c97e1b49, kept on `<mnt-hdd>`) drove both boots and the gate.
+- `grade-linux3.py` (59eef26ef8a5a82d) is the grader. Before the run it was dry-run on synthetic captures:
+  - boot 3 good, and boot 3 with the strip missed;
+  - boot 4 with a lost x7, with regs 0 (REFUTES), with a setup failure 92 (MISS), with signal 139, and with a kernel
+    oops after /init.
+
+  Both gate branches were also dry-run.
+
+```
+boot 3, fw3y 77de789fdd00 (keep-tags on), all AS PREDICTED:
+  P1 "Capstone: register tags kept across M traps, causes 24-30 delegated"   P2 MEDELEG 0x000000007f00b109
+  P3 Linux to Run /init, with the captag, sublet and loader-registered lines
+  P4 regs status 0 | regs-strip23 status 23 | enter status 200 | loop alive | done   (test loader: pids 26-28 protected)
+boot 4, fw3n c1698787d831 (the same tree, flag off), all AS PREDICTED:
+  P1 no "Capstone:" line   P2 MEDELEG 0x000000000000b109   P3 Linux to Run /init
+  P4 regs status 139 | regs-strip23 status 139 | enter status 200 | loop alive | done
+     sublet: fault cause=24 pc=0x10218 ... pid=26 comm=regs          (and pid=27 comm=regs-strip23, same pc)
+```
+
+The grader's outputs are `result-lines-boot3.txt` and `result-lines-boot4.txt`.
+
+What the readings show:
+- **Boot 3.** The strip control's 23 shows that regs.S's lost-register check fires on silicon. Under keep-tags, the same
+  check reads 0 for the unmodified program.
+- **Boot 4, status.** Under the flag-off firmware, both programs exit 139: 128 + 11, so SIGSEGV.
+- **Boot 4, the fault.** The kernel reports cause 24 at pc 0x10218 in both. In the 904cd9c6b RTL's `riscv_pkg.sv`, 24 is
+  `UNEXPECTED_OPERAND_TYPE`.
+  - The disassembly puts pc 0x10218 at `INC(a0, a1, a7)`: the first capability operation on a1, a reference to mapping
+    B. It comes right after the first 40M-iteration spin, which runs while timer interrupts trap to M.
+  - Each program's fault came about 10.6 s after its "protected" line, against about 21.6 s per program under keep-tags.
+
+This is a reading of when and where it failed. That a1 lost its tag at an M-mode trap during the spin is the
+mechanism amendment 2 predicts, and the faulting instruction is consistent with it. The board did not observe the
+strip itself.

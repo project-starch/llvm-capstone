@@ -1,0 +1,21 @@
+boot 3; capture: 157 lines, 8932 chars
+P1 AS PREDICTED: Capstone line Capstone: register tags kept across M traps, causes 24-30 delegated
+P2 AS PREDICTED: Boot HART MEDELEG = 0x000000007f00b109
+P3 AS PREDICTED: Linux banner present; Run /init at line 139; kernel lines before it [True, True, True]
+  TRAPTEST: up, kernel 6.1.0
+  sublet: test loader: pid 26 protected, table 0x81c5b000
+  TRAPTEST: regs status 0
+  sublet: test loader: pid 27 protected, table 0x81c5b000
+  TRAPTEST: regs-strip23 status 23
+  sublet: test loader: pid 28 protected, table 0x81c5b000
+  TRAPTEST: enter status 200
+  TRAPTEST: loop alive
+  TRAPTEST: dmesg [   21.985225] sublet: test loader: pid 26 protected, table 0x81c5b000
+  TRAPTEST: dmesg [   43.585265] sublet: test loader: pid 27 protected, table 0x81c5b000
+  TRAPTEST: dmesg [   65.185430] sublet: test loader: pid 28 protected, table 0x81c5b000
+  TRAPTEST: done
+  reboot: System halted
+P4 AS PREDICTED: statuses {'regs': 0, 'regs-strip23': 23, 'enter': 200}
+STRIP CONTROL 23
+
+B5B2-LINUX-3 P1=ok P2=ok P3=ok P4=ok

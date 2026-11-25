@@ -1,0 +1,24 @@
+boot 4; capture: 162 lines, 9553 chars
+P1 AS PREDICTED: Capstone line absent
+P2 AS PREDICTED: Boot HART MEDELEG = 0x000000000000b109
+P3 AS PREDICTED: Linux banner present; Run /init at line 138
+  TRAPTEST: up, kernel 6.1.0
+  sublet: test loader: pid 26 protected, table 0x81c56000
+  TRAPTEST: regs status 139
+  sublet: test loader: pid 27 protected, table 0x81c6f000
+  TRAPTEST: regs-strip23 status 139
+  sublet: test loader: pid 28 protected, table 0x81c6d000
+  TRAPTEST: enter status 200
+  TRAPTEST: loop alive
+  TRAPTEST: dmesg [   21.186043] sublet: test loader: pid 26 protected, table 0x81c56000
+  TRAPTEST: dmesg [   31.836198] sublet: test loader: pid 27 protected, table 0x81c6f000
+  TRAPTEST: dmesg [   42.496019] sublet: test loader: pid 28 protected, table 0x81c6d000
+  TRAPTEST: done
+  reboot: System halted
+P4 AS PREDICTED: regs status 139 (signal 11); statuses {'regs': 139, 'regs-strip23': 139, 'enter': 200}
+
+B5B2-LINUX-4 P1=ok P2=ok P3=ok P4=ok
+
+kernel fault lines (from the capture):
+sublet: fault cause=24 pc=0x10218 address=0x3f8b9eb000 pid=26 comm=regs ra=0x3f8b9fb010 fp=0x3f8b9fb080 entry=0x0 code=0x10000-0x105aa
+sublet: fault cause=24 pc=0x10218 address=0x3f96b78000 pid=27 comm=regs-strip23 ra=0x3f96b88010 fp=0x3f96b88080 entry=0x0 code=0x10000-0x105ae
