@@ -88,3 +88,16 @@ What this establishes:
 
 **Consequence for the campaign:** both arms' firmware carries FW_FAST_RDTIME=y, so neither pays the M trip for
 rdtime. Plain's firmware stays stock apart from that flag.
+
+## The final campaign Full kernel (built, not yet booted)
+
+`build/build-kernel-final.sh`, tree `trapk/fpga-final` (a copy of the board tree, so it carries the series and the
+msghdr loader; the script's fresh-tree branch applies the loader patch but has not been run from scratch). Against
+the bring-up kernel it adds NO_HZ_IDLE at HZ=100 and turns RISCV_CAPSTONE_TRAP_TEST off. `config-keys-final.txt`
+holds its keys. Checks:
+- Every .config key compared against the Plain kernel's (`trapk/plain/linux-6.1/.config`): they differ only in the
+  Capstone options and the initramfs path. NO_HZ_IDLE, HZ=100, HZ_PERIODIC off and SMP off agree.
+- The test-only symbols `sublet_test_enter` and `sublet_test_fault` are absent from its vmlinux (0) and present in
+  the bring-up kernel's (2). `sublet_copy_msghdr_from_user` is present (1).
+- Not yet run: a boot of this kernel (twin or board) with a .dom program. Without TRAP_TEST the regs.S test cannot
+  run; its first boot needs a .dom smoke program as the control.
