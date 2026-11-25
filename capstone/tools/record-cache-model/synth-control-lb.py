@@ -68,6 +68,16 @@ SELF = {
     "five split by a check": (b"".join(wr(s) for s in (1, 65, 129, 193)) + ev("c", 0, 1, 1, 1) + wr(257), 0),
 }
 
+# the open phase (b42c8c644: every lifetime op reads the first two free entries, and the read tap fills them live for
+# their stored NEXT generation, ex_stage.sv:2628-2629; measured as reads in capstone-ariane slu-walk 4bbdbc6ed):
+# allocate s20 {0}, check (hit), release (dead in place), check (deny_hit_dead), the next op's open reads s20 at gen
+# 1, then a check of the stale id {0, 20}: with the open read live it MISSES and probes (a dead id: no install); the
+# same trace with the open read at live 0 (the twin's shape before nested a1b52f58ab) denies it without a probe.
+def openph(live): return (ev("a", 1, 20, 0, 1) + ev("c", 0, 20, 0, 1) + ev("r", 1, 20, 0, 0) + ev("c", 0, 20, 0, 1)
+                          + ev("a", 0, 20, 1, live) + ev("c", 0, 20, 0, 0))
+OPENPH = {"open read live 1": (openph(1), dict(probes=1, deny_hit_dead=1)),
+          "open read live 0": (openph(0), dict(probes=0, deny_hit_dead=2))}
+
 def run_out(binary, body):
     with tempfile.NamedTemporaryFile(suffix=".rt2", delete=False) as f:
         f.write(body); path = f.name
@@ -114,6 +124,11 @@ def main():
         got = [l.split() for l in run_out(binary, ev("c", 0, 9, 1, 1) + body).splitlines() if l.startswith("LB op_stretches")]
         se = int(got[0][4]) if got else None
         if se != want: print(f"MISMATCH self_evict {name}: got {se} expected {want}"); bad += 1
+    for name, (body, want) in OPENPH.items():
+        lines = [l.split() for l in run_out(binary, body).splitlines() if l.startswith("LB probes")]
+        got = {lines[0][i]: int(lines[0][i + 1]) for i in range(1, len(lines[0]), 2)} if lines else {}
+        for c, v in want.items():
+            if got.get(c) != v: print(f"MISMATCH open phase {name} {c}: got {got.get(c)} expected {v}"); bad += 1
     for name, body in OK.items():
         rc = run_one(binary, body)
         if rc != 0: print(f"WELL-FORMED REFUSED {name}: rc {rc}, expected 0"); bad += 1
