@@ -123,3 +123,15 @@ Predictions:
    - The SUMMARY carries no MODE_CHECK_FAILED.
    - Anything else stops the run before the treatment.
 2. **Treatment then compare.py:** IDENTICAL.
+
+## Correction (2026-11-25): withdrawn
+
+Amendment 2 above says "fx18 is a regression since that record (82/83)". That is WITHDRAWN.
+- What was read: fixture 18's precondition is no longer met. The first calloc(1, 64) after the free does not take
+  the freed storage, so the fixture stops with its no-op mark; fixture 26 (9a328c4e1e85) creates the reissue by
+  searching, and that write faults as predicted.
+- Not shown: the cause, which is not bisected. Six candidate commits are named in
+  ports/memcached/app/results/2026-11-25-fx18b/README.md.
+- Also not shown: whether this is a defect, either way. 9a328c4e1e85's message calls it "not a defect", which was a
+  ruling and is withdrawn too.
+The bar this amendment set is unchanged.
