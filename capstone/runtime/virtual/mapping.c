@@ -6,6 +6,8 @@
 #include <sys/shm.h>
 #include <syscall.h>
 __attribute__((__weak__)) void __vm_wait(void) {}
+/* malloc-mapping.c defines the real one; a program linked without the heap keeps this. */
+__attribute__((__weak__)) void __heap_protected(size_t address, size_t bytes) { (void)address; (void)bytes; }
 
 static void *mapping_result(void *p)
 {
@@ -29,7 +31,13 @@ int __munmap(void *p, size_t n)
 { return __syscall_ret(__syscall(SYS_munmap, p, n)); }
 int munmap(void *p, size_t n) { return __munmap(p, n); }
 int __mprotect(void *p, size_t n, int prot)
-{ return __syscall_ret(__syscall(SYS_mprotect, p, n, prot)); }
+{
+    int rc = __syscall_ret(__syscall(SYS_mprotect, p, n, prot));
+    /* The heap's mapping cache must not reissue a mapping whose protections may have changed (malloc-mapping.c). */
+    if (n) __heap_protected(__builtin_capstone_cap_get_cursor(p) & -4096UL,
+                            ((__builtin_capstone_cap_get_cursor(p) & 4095) + n + 4095) & -4096UL);
+    return rc;
+}
 int mprotect(void *p, size_t n, int prot) { return __mprotect(p, n, prot); }
 void *mremap(void *p, size_t old, size_t n, int flags, ...)
 {
