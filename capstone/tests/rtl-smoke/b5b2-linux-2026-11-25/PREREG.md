@@ -154,3 +154,33 @@ best of 5 repeats of 20,000 ops each, for:
 - rdtime(keep) - rdtime(stock) between 60 and 600 cycles: the keep-tags entry and exit, 62 capability memory ops plus
   31 compares, against stock's 31 sd and 31 ld.
 - A difference outside that band is read for what it is, not stretched to fit.
+
+## Amendment 5 (2026-11-25): boots 9-12, the rdtime fast path (caplifive-opensbi 25b14da6)
+
+**Change.** `FW_FAST_RDTIME`: the trap entry answers `csrrs rd, time, x0` from mtime without the C part. It touches
+t0-t2 and sp, and the flag is independent of keep-tags, so both arms get it. With both flags off the builds are
+byte-identical to the base and to eb85e21c (generic fw_jump.bin hashes).
+
+**Program.** `/mtrip` now also prints `MTRIP-TIME backwards <n> cycles_per_tick <x> ticks <t>`: rdtime answers that go
+backwards, and the core cycles per 1 MHz mtime tick over the last loop. `/init` = `build/init-mtrip2`: regs, its strip
+control and the loader first, then mtrip three times.
+
+**Images** (`SHA256SUMS.mtrip2`): the same kernel and initramfs; only the firmware differs.
+- boot 9: keep-tags `4dd09b4e…`
+- boot 10: stock `269bd80a…`
+- boot 11: keep-tags + fast `3cabb79f…`
+- boot 12: stock + fast `d217c7e3…`
+They run on one board, in the order 9, 10, 11, 12, no flash; the record names the resident.
+
+**Predictions:**
+- every boot: `regs status 0`, `regs-strip23 status 23`, `enter status 200`. The fast path must keep the trap-route
+  contract (boot 11 is the one that tests it);
+- `backwards 0` on every run, and cycles_per_tick equal across the four boots within ±1 %. The fast path's answers are
+  mtime itself;
+- boots 9/10 rdtime within ±3 % of boots 7/8's 1,932 / 1,138 (the same firmware);
+- boots 11/12: rdtime below 600 cycles on both; keep-fast minus stock-fast below 200 (three STC/LDC pairs against
+  three sd/ld);
+- getppid within ±3 % across all four. The fast path is not on its path.
+A reading outside these is reported as read.
+
+**Note:** the QEMU keep-tags suite with FW_FAST_RDTIME=y is queued on the lock and not yet read. The twin has a time CSR, so it cannot exercise the fast path anyway; on silicon the fast path is checked by these boots' own regs/strip/enter controls and the MTRIP-TIME check.
