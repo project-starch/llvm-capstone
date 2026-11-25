@@ -6985,3 +6985,95 @@ independent of the rest of tshark.
 - The board's speed for this program is not known before the boot. The twin's s1 took 14.4 s of guest time; on the
   board it is estimated at 10-40 min. If the 3 h budget ends while the heartbeat still advances, that is reported as
   "no stop within T", not as a stop.
+
+## perlbench item 3: the full port's code without its lifetime instructions, test.pl on P1 (2026-11-25)
+
+### Pre-registration: perlbench test.pl on P1, u = stock and n = the full port with its lifetime instructions neutralised, one boot on board 1 (written 2026-11-25 12:31, before the boot)
+
+**Question.** The full port's board pair (result above, d50760796c1a) read F−P6 +12,016.7 M. It priced the lifetimes
+at 204.4 cycles each, but only by assuming the allocators' code costs the heads' 3.726 cycles per twin instruction.
+At 3.88 the price falls inside the band. This boot measures the allocators' code on the board, as pairn did for the
+heads. N is the full port with its lifetime instructions neutralised, so:
+- the allocators' code price is (NF−N)/(Z_NF−Z_N);
+- the allocators' own lifetime price is ((F−NF) − (P6−N))/(L_FULL−L_HEADS).
+
+**The instrument.**
+- `nested/perlspec/fx2/build-fullnop2.sh` builds n, `perlbench_r.fullnop2.strip.dom` `3fec4963…` (full `943dfb3e…`):
+  - a copy of the full port's tree (`fx2/full`, `ce3a48e5`);
+  - `lifenop-522.patch`'s block (pairn's) after the capability.h include in the three translation units that call the
+    lifetime helpers: `sv.c` (heads and bodies), `op.c` (op slabs) and `capstone_sv_segs.h` (hash entries, in `hv.c`);
+  - only `sv.o`, `op.o` and `hv.o` recompiled, with the full port's own compile lines, linked with its link line and
+    stripped as it was.
+- **Controls:**
+  - the full port's full image strips to its `.dom`;
+  - the three objects, recompiled unchanged, are byte-identical to the full port's;
+  - the compile warnings equal the control's (105, 24 and 17);
+  - `mksyms.py` gives `perl-full.syms` exactly.
+- **Census, full port to n** (`capop-census.py`): CDERIVE 100 → 56 (−44), MOVC +44, CREVOKE 16 → 6 (−10),
+  ADD-to-x0 0 → 10. Word counts are equal (407,693 and 146,812).
+- **One derive stays real: the body segment's, `s->life` of a chunk at its aligned address.**
+  - The bodies and hash-entry issue paths take each child at `a − s->lo` from that life's base. That is the aligned
+    address only for a real derive: a MOVC copy keeps the chunk's base.
+  - The first instrument, `fullnop` (`82fd9265…`, `build-fullnop.sh`), neutralised that derive too. Every body was
+    handed out the alignment pad off, and test.pl failed 58 output lines on the twin (40.0 G instructions against
+    88.2 G).
+  - It is set aside and not used. pairn's heads port had no such derive: its lives start at offset 0.
+- **Twin** (`fx2/stage-fnop2`, the full port's twin stage with only the image replaced, zones4 and opcount, 2^20
+  records):
+  - makerand.out and test.out equal the stock twin run's.
+  - Image zone: Z_NF 88,154,230,752 against the full port's 88,158,235,556, NF−F = −4,004,804 (−0.005 %). The
+    neutralised derives skip a few instructions of their checks.
+  - **Lifetime instructions, F minus NF** (opcount; `opc-full-ce3a48e5` against `opc-fullnop2-3fec4963`): CDERIVE
+    32,847,623 and CREVOKE 26,758,241, so **L_FULL = 59,605,864**.
+    - Against prot6's L_HEADS 26,043,473, the difference is 33,562,391. The twin's earlier opcode difference of the
+      two images was 33,562,951.
+    - MOVC rises 32,848,149.
+  - Z_NF − Z_N = 1,380,147,727 and Z_NF − Z_U = 3,820,703,050.
+
+**Configuration.**
+- P1 is resident on board 1. The chain reads it back by name.
+- Kit `nested/kits/bkit91-rec1m` (2^20 records), pairf's.
+- Chain `nested/p1pnf/p1pnf.conf` and `p1pnf.list` on `nested/p1s100/nat-run3p.sh`, behind the M-16 stress chain
+  (pid 3170600). The list line is `pairnf 86400 660`, so `BAKED_TIMEOUT=345600`.
+- Stage `nested/p1pnf/pairnf` (`pairnf.SHA256SUMS`, 574 files). Against pairf's stage one file differs, the prot
+  `.xz`, which unpacks to `3fec4963…`. Commands: makerand.pl then test.pl, for u, then for n.
+- Checked off the board (rule 8, `recheck-p1k.sh` with `RD=nested/p1pnf`):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on pairf's real transcript and on its cut, PASS all 9 steps, `BAKED_TIMEOUT=345600`;
+  - real firmware build 23,760,392 B;
+  - an `NR_DRY=1` pass of the chain to DONE.
+- **Reader** `nested/p1pnf/read-pairnf.py` (`3ed8e1d1…`). Its inputs are this boot, pairf's, pairn's and pair6's
+  transcripts, SPEC's references, and `nested/p1pnf/counts.txt` (`5786cc10…`, the twin numbers above, fixed now).
+  - With pairn's transcript as this boot it reproduces pairn's N−U +9,092.9 M and P6−N 172.44.
+  - On pair6's cut it exits 1. With a count missing it exits 1.
+- Disclosed as for pairf: this boot's bake relinks the shared kernel tree with `node_flat_records=1048576`.
+
+**Rules.**
+- Answers: as pairf's.
+- Stock check: u within ±1 % of pair6's u. Outside it, only NF−U and the full port's code price are read.
+
+**Readings and their outcomes.** Every arm is taken against its own boot's u.
+- **NF−U** prices the full port's code: NF−U over Z_NF−Z_U, against the heads' 3.726 and the stock mean 3.169.
+- **The allocators' code price** c_a = (NF−N)/(Z_NF−Z_N), with N from pairn.
+- **The allocators' lifetime price** ((F−NF) − (P6−N))/33,562,391, with F from pairf and P6 from pair6.
+  - It equals (12,016.7 M − c_a × 1,380.15 M)/33.56 M, so the two readings are one measurement seen twice.
+  - Against the heads' 172.4 ± 15 % (146.6-198.3), as pairf registered:
+    - **c_a ≤ 3.885, so the price is ≥ 198.3 (NF−U ≤ 14,454 M):** pairf's "above" stands, measured. The allocators'
+      lifetimes cost more per instruction than the heads'.
+    - **c_a between 3.885 and 5.142 (NF−U 14,454-16,189 M):** the allocators' lifetimes cost what the heads' do,
+      and pairf's miss was its code price.
+    - **c_a above 5.142:** the allocators' lifetimes are cheaper than the heads'.
+
+**Prediction.** NF−U +13,500 to +16,800 M. The low edge puts the allocators' code at the stock mean, 3.169; the high
+edge puts the lifetimes at the heads' remainder-only price, 129.1. Point +14,249 M: c_a = 3.736, the heads' price,
+which is pairf's assumption. The pairf result's counters favour it: the record-TLB misses and walk cycles there scale
+with the lifetime count, the replays faster.
+- Records: n's distance from u in hpm3, hpm4 and hpm7, each under 15 % of pairf's F−U in the same counter, as N's
+  were under pair6's.
+
+**Limits.**
+- One run per arm, u first, not interleaved.
+- The allocators' code and lifetime prices take four boots: this one, pairf, pairn and pair6. Their u's span
+  267,083.1-267,243.5 M so far.
+- n is an instrument. Its children are unprotected copies of their parents' capabilities, and one derive per body
+  segment stays real.
