@@ -5070,7 +5070,7 @@ a948e4134, the RTL lane's flash rule. The targeted variant now reads clean on it
 
 Siblings: R-73 (the debug module writes DRAM around the adapter).
 
-### R-73 — the debug module's system-bus master writes DRAM around the AXI adapter, so its writes update neither capability tags, the tag-word cache nor the page bitmap `OPEN 2026-11-14 — by source (claim-audited while auditing the TWC change); present on every tree with the shadow-tag adapter; board exposure NIL IF the board's `reset halt` asserts ndmreset (one gdb read; see Exposure); no fix written`
+### R-73 — the debug module's system-bus master writes DRAM around the AXI adapter, so its writes update neither capability tags, the tag-word cache nor the page bitmap `OPEN 2026-11-14 — by source (claim-audited while auditing the TWC change); present on every tree with the shadow-tag adapter; board exposure NIL ON OUR BOOT FLOW, read 2026-11-25: the board's `reset halt` resets the core through ndmreset (board 2, 904cd9c6b; `tests/rtl-smoke/r73-reset-halt-2026-11-25`); not covered: a load_image after the core has run with no reset between, and live system-bus writes; no fix written, none needed for the final bitstream`
 
 **Mechanism.** The SoC crossbar has two masters: `localparam NBSlave = 2; // debug, ariane`
 (`corev_apu/fpga/src/ariane_xilinx.sv:220`). The debug module's AXI master is `slave[1]` (`i_dm_axi_master`, with
@@ -5094,10 +5094,25 @@ adapter's `rst_ni`, which is `ndmreset_n` (`ariane_xilinx.sv:316-320` → `i_ari
 `wt_cache_subsystem.sv:237`). So if `reset halt` asserts ndmreset, every page is unmarked when the load writes; an
 unmarked page's leftover tag bytes are invisible until its first tagged store zeroes them, and everything loaded
 after (kernel, domains) is written by the core's own LSU. In that case the exposure is nil whether the load uses the
-system bus or the program buffer. NOT ESTABLISHED: what `reset halt` asserts is the OpenOCD configuration on the
-board's host (the in-tree `ariane.cfg` is stock upstream, not the board's; riscv-013 resets through dmcontrol.ndmreset
-unless reset_config overrides it). One read settles it: the board config's reset-assert setting, or
-`monitor riscv set_mem_access` and `reset_config` in a gdb session.
+system bus or the program buffer. READ 2026-11-25 (board lane, board 2, resident 904cd9c6b, hub booking 1499; folder
+`tests/rtl-smoke/r73-reset-halt-2026-11-25`, lane record board/meas-pw 9acd64d2f0dc):
+- the board's OpenOCD 0.12.0 has `reset_config none separate` (no SRST) and no reset-assert, reset-assert-pre or
+  reset-deassert-post handler, so riscv-013 resets through dmcontrol.ndmreset;
+- on silicon, mscratch 0x5a5a5a5a12345678 and mepc 0x80001234 were written and read back exactly (the control), and
+  read 0 after `reset halt`, with pc at the boot ROM's 0x10000. The core's rst_ni was asserted.
+
+The hop from those CSRs to the bitmap and TWC is by source at 904cd9c6b: the same rst_ni reaches csr_regfile
+(`cva6.sv:2230`) and `wt_cache_subsystem` (`:2587`) → `wt_axi_adapter` (`:240`) → `tbm_clr_q`'s 4096-cycle clear
+(`:357-360`) and `p_twc_ctl` (`:519`).
+
+So the exposure is NIL on our boot flow. Every board driver, and every B5b-2 Linux boot, runs `reset halt` before
+`load_image` and resumes only after the last load.
+
+NOT COVERED:
+- a `load_image` issued after the core has run with no reset in between;
+- any system-bus write to a running system, for instance a gdb memory write into a live domain.
+
+The defect stays OPEN.
 
 **Siblings.** I-16 (a sim-trace defect found in the same session), and the TWC work on capstone-ariane
 perf/twc-reach (where this was found; that change neither fixes nor worsens it).
