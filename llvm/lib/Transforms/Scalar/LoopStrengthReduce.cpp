@@ -193,6 +193,27 @@ static cl::opt<bool> CapabilityExitRuntimeEnd(
              "endpoint chosen at run time, the real one below the cursor period "
              "and an unreachable one at or above it (default off)"));
 
+// With -lsr-capability-exit-runtime-end, the endpoint, the count test and the
+// select are built in L's preheader, which runs once per entry. imagick's
+// HorizontalFilter enters its inner loop 288,000 times for 3.73 iterations
+// each, so the 4 instructions per entry cost more than the 1 per iteration the
+// cursor test saves (capstone/tests/imagick-loop-shapes/RESULTS.md). This
+// option builds them in the preheader of the outermost enclosing loop where
+// the base, the count, the start index and the end index are all invariant.
+// The values are the same; they are now computed on outer iterations that do
+// not enter L. None of them traps there: a capability GEP is CIncOffset, which
+// on an untagged source adds as an integer (capstone-ariane b42c8c644
+// capstone_flu_unit.anvil:36, :70; capstone-qemu helper_cscincoffset) and on a
+// tagged one writes an untagged result when the cursor leaves the format. A
+// tagged sealed or uninitialised base (cause 26) is the one exception: the
+// original faults on it only on an entry to L. A C pointer the program indexes
+// does not hold one.
+static cl::opt<bool> CapabilityExitEndHoist(
+    "lsr-capability-exit-end-hoist", cl::Hidden, cl::init(false),
+    cl::desc("With -lsr-capability-exit-runtime-end, build the run-time endpoint "
+             "in the outermost preheader where its inputs are invariant "
+             "(default off)"));
+
 // The flag adds instruction count to solutions cost comparison.
 static cl::opt<bool> InsnsCost(
   "lsr-insns-cost", cl::Hidden, cl::init(true),
@@ -7114,7 +7135,8 @@ static bool capabilityAnchorAccessedEveryIteration(
 static bool replaceCapabilityLatchTest(Loop *L, const SCEVAddRecExpr *Index,
                                        Value *Base, Type *ElementTy,
                                        const APInt &ByteStep, PHINode *IV,
-                                       bool LiveAccess, ScalarEvolution &SE) {
+                                       bool LiveAccess, ScalarEvolution &SE,
+                                       DominatorTree &DT) {
   if (!L->getHeader()->getModule()->getTargetTriple().isCapstone64() ||
       ByteStep.isZero() || L->getExitingBlock() != L->getLoopLatch())
     return false;
@@ -7191,23 +7213,48 @@ static bool replaceCapabilityLatchTest(Loop *L, const SCEVAddRecExpr *Index,
       !Expander.isSafeToExpandAt(SE.getNoopOrZeroExtend(Count, IndexTy),
                                  Preheader->getTerminator()))
     return false;
-  Value *Offset = Expander.expandCodeFor(EndIndex, IndexTy,
-                                        Preheader->getTerminator());
-  IRBuilder<> StartBuilder(Preheader->getTerminator());
+  // With CapabilityExitEndHoist, the run-time endpoint is built in the
+  // preheader of the outermost enclosing loop in which all of its inputs are
+  // invariant, so a short loop entered many times does not pay for it per entry.
+  Instruction *EndAt = Preheader->getTerminator();
+  if (!CountBounded && CapabilityExitEndHoist) {
+    const SCEV *WideCount = SE.getNoopOrZeroExtend(Count, IndexTy);
+    auto *BaseI = dyn_cast<Instruction>(Base);
+    for (Loop *P = L->getParentLoop(); P; P = P->getParentLoop()) {
+      BasicBlock *PP = P->getLoopPreheader();
+      if (!PP || (BaseI && !DT.dominates(BaseI, PP->getTerminator())) ||
+          !SE.isLoopInvariant(EndIndex, P) || !SE.isLoopInvariant(WideCount, P) ||
+          !SE.isLoopInvariant(Index->getStart(), P) ||
+          !Expander.isSafeToExpandAt(EndIndex, PP->getTerminator()) ||
+          !Expander.isSafeToExpandAt(WideCount, PP->getTerminator()) ||
+          !Expander.isSafeToExpandAt(Index->getStart(), PP->getTerminator()))
+        break;
+      EndAt = PP->getTerminator();
+    }
+  }
+  Value *Offset = Expander.expandCodeFor(EndIndex, IndexTy, EndAt);
+  IRBuilder<> StartBuilder(EndAt);
   Value *End = StartBuilder.CreateGEP(ElementTy, Base, Offset, "lsr.cap.end");
   if (!CountBounded) {
     // PeriodBits < 64 here (an odd step's period exceeds every count), so the
     // step is even and the start plus one byte is never a cursor of this IV.
     assert(PeriodBits < 64 && "an unbounded count needs an even byte step");
     const SCEV *WideCount = SE.getNoopOrZeroExtend(Count, IndexTy);
-    Value *CountV = Expander.expandCodeFor(WideCount, IndexTy,
-                                           Preheader->getTerminator());
+    Value *CountV = Expander.expandCodeFor(WideCount, IndexTy, EndAt);
     Value *Fits = StartBuilder.CreateICmpULT(
         CountV,
         ConstantInt::get(IndexTy, APInt::getOneBitSet(
                                       IndexTy->getIntegerBitWidth(), PeriodBits)),
         "lsr.cap.fits");
     Value *Start = IV->getIncomingValueForBlock(Preheader);
+    if (EndAt != Preheader->getTerminator())
+      // The IV's own start is built in L's preheader: rebuild it here.
+      Start = Index->getStart()->isZero()
+                  ? Base
+                  : StartBuilder.CreateGEP(
+                        ElementTy, Base,
+                        Expander.expandCodeFor(Index->getStart(), IndexTy, EndAt),
+                        "lsr.cap.start.hoisted");
     Value *Never = StartBuilder.CreateGEP(StartBuilder.getInt8Ty(), Start,
                                           ConstantInt::get(IndexTy, 1),
                                           "lsr.cap.never");
@@ -7385,7 +7432,7 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
     SE.forgetLoop(L);
     for (const CursorExitCandidate &C : ExitCandidates)
       if (replaceCapabilityLatchTest(L, C.Index, C.Base, C.ElementTy, C.ByteStep,
-                                     C.IV, C.LiveAccess, SE))
+                                     C.IV, C.LiveAccess, SE, DT))
         break;
     DeleteDeadPHIs(Header);
     SE.forgetLoop(L);
