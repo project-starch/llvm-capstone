@@ -575,3 +575,16 @@ Its sessions are R-80's and ldcexc2's silicon evidence, graded from the kits' `e
 - board 2: the matched pair after its 28fcbb646 session and the ldcexc2 pre-mode control.
 
 mcf is read by exposure (the board lane's column). A wedge snapshot is read by grade-mcfpat.py, read-walkvar.py and read-r8x.py; an R-80 pattern on this seal is "R-80's fix not holding".
+
+## mcf on the fixed seals: graded by exposure, not per run (2026-11-25, with the board lane)
+
+On silicon the mcf wedge is intermittent. On 904cd9c6b and 88db40027 together there are three runs, each cut at the 3,600 s stage bound: boot 5 wedged at about 2,766 s, and the other two ran clean.
+- That is about 9,966 s of unfixed mcf exposure with ONE wedge: a rate of about 1 per 10,000 s, with a 90 % Poisson interval from 1 per 194,000 s to 1 per 2,100 s (computed by both lanes).
+- Pooling the two bitstreams treats their LDC paths as one, which is unproven.
+- The model exp(-T/tau) assumes a constant hazard across mcf's phases, which is unknown. Both clean runs passed 2,766 s, so the wedge is not tied deterministically to that point.
+
+On a5c45a46d and b42c8c644:
+- a WEDGE refutes the fix as mcf's remedy;
+- a clean full-length run of T seconds weighs about exp(-T/tau) against "not fixed", and only cumulatively, across boards and re-runs. It is never a pass/fail on one run.
+
+The board lane records each run's exposure: board, seal, mcf entry, end (completion, watchdog or silence), seconds, and outcome. Exposure is taken from each capture, not rounded. The diagnostic full-length B5T-g1b on 28fcbb646 is the first full-length unfixed calibration point. The discriminating pair is ldcexc2 (b5b2-ldcfix-bare-2026-11-25), but only on a board where the pre-fix seal reproduces its wedge.
