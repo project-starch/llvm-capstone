@@ -8082,3 +8082,89 @@ Every stage ended rc 0, and the log holds 70 `@@CASE-END` lines.
   - fw_payload.bin `ddee6d29e26b4d73…`, 23,754,760 B, under the 26,000,000 B cap;
   - Image `33ce8624…`, the same tree relinked, with only `version-timestamp.o` recompiled;
   - overlay `180aacaf…`, initramfs `bc3b311b…`.
+
+### twin-board2: the loopback explanation holds (2026-11-26)
+
+- `twin-board2` ran `ovl-board2` on Image `749fed26…`. Lock asked 00:40:19, done 01:28:30. Graded with grade-corpus.py
+  against twin-all's 346 cells.
+- 341 cells equal twin-all's. **32 (crash-097) is MISSED on all four arms**, as in twin-all and run18, so the loopback
+  was the cause. 30 is back to infra, as in twin-all.
+- Five cells differ:
+  - 25 on the four asan-blind arms reads out-of-denominator, the exit line's expected effect;
+  - SQLite malloc 11 is NO-READING both times, with the reason "infra" here and "inconclusive" there.
+
+### Pre-registration: B5b-2 board boot "nested-cpymem", CPython then memcached (written 2026-11-26 02:40 host time (+08), 18:40Z on Nov 25, before the boot)
+
+**What it is.** It covers runtime's B5b-2 items 2 and 3 on silicon in one boot:
+- CPython's pyperformance subset on the trap route;
+- then memcached as a server, which is also the msghdr loader's first silicon reading.
+
+Both fit one payload under the 26,000,000 B cap, so runtime's rule puts them in one boot, CPython first and memcached
+last (the newest kernel path). The board lane runs it.
+
+**Platform.**
+- Board 2's b42c8c644 session, right after misscost, as runtime allocated it; board 3's offer after ldcexc2 is the
+  fallback. The boot runs on exactly one board, and its readings carry the board ID. The seal is the **full** B5b-2
+  seal **b42c8c644**, never its spatial-only variant (runtime: on that variant every cause-25
+  catch becomes MISSED by design).
+- Runner: the board lane's run-one-e.sh (runner 5: incremental capture, the silence stop with the wedge snapshot, the
+  STOP file), with the board's own booking and readbacks before and after.
+- Image `<hdd>/nested/b5b2/cm/payload-cm3/fw_payload.bin`, sha256
+  `ccecad78bfcb78b0634fd229859845eb81b0ab418326cbef4dbe2b4f715ce655`, 25,851,912 B:
+  - firmware: sbi-keep trap-route-keep-tags;
+  - DTB: caplifive-b5b2-wide.dtb `3d223e80…` (`sublet.dom_wide_grants=1`, present in the bytes);
+  - **board kernel** = series at 6d4504f8b073 + the runtime lane's msghdr loader (unvalidated at registration),
+    Image `f97b98f1…`, relinked from trapk/fpga/linux-6.1 with only the initramfs changed;
+  - initramfs `acf4a766…` = base-rootfs `dd2dd8ff…` + overlay `ovl-cm3` (`093e5b6c…`).
+- `ovl-cm3` is the twin-qualified overlays with only time limits changed, plus one instrument change:
+  - CPython: `ovl-trim`'s stages C30/C31, with images stock `e47ab197…` and prot `a269a6b5…` and the 150-module stdlib
+    tree;
+  - memcached: `ovl-req`'s stages M20/M21, unpatched, with images stock `53538940…` and protected `4108e588…`;
+  - trap-vexec `41fb8b58…` = runtime/trap-route-tools 081c21bd1f0e.
+- `make-board-kit.py` (`ce218337…`) with `cm2.spec` (`985f1cab…`) changes:
+  - /init → trapk/fpga/init-ordered-bound (`6462764b…`): per-stage bounds from /stages.bound;
+  - CPython's per-run watchdog: 3300 → 9600 s;
+  - an `@@UP <uptime>` line after each run's end line.
+- Stage bounds: C30 and C31 10,800 s each, M20 and M21 3,600 s each. Each is at least 15× the stage's twin time
+  (CPython 263 s stock and 354 s prot per run, prot stage 631 s by uptime; memcached 3.5-11 s per repetition on twin-cm3, about 30 s per stage).
+- The instrument change: mc-harness is rebuilt from ports/memcached/app/host/mc-harness/mc-harness.c with its two
+  wall-clock limits raised, the same on all arms. The rebuild without the change reproduces the shipped binary
+  `90b558d8…`, so only the change differs: listen 120 → 600 s; no byte 60 → 300 s; binary `fde5d3c7…`, source
+  `d016390a…`. Both limits stay under the 900 s per-repetition watchdog, so a hung server is still caught. Twin
+  check: on twin-cm3 a whole repetition takes 3.5-5.0 s (the first of each stage, which includes the stage's unpacking, 11 s stock and 6.5 s protected). Listen time and the longest gap are each at most that, so at 15× they are 53-165 s: within the new limits, and over the old 60 s one.
+- **Boot bound: 30,000 s.** That is the sum of the stage bounds (28,800 s), plus 1,200 s for upload, boot and the smoke
+  control.
+
+**Predictions** (the twin, `twin-cm3`, this exact overlay on Image `749fed26…`; lock granted after a 5,203.5 s wait, done 02:40:07; console log sha256 `1badfd76be9deb68…`):
+- **CPython, both arms PASS:**
+  - rc 0, answer `58211793977f706c…` = native's, `PYPERFORMANCE-OK 8`;
+  - each exit line names its image (`e47ab197…`, `a269a6b5…`);
+  - twin wall time: stock 253.4 s, prot 329.0 s.
+- **memcached, 6 of 6 repetitions qualify:** every transcript equals native's 1,931,207 B, each server stops on
+  `shutdown` with exit 0, identity reads `STAT pointer_size 128`, and each exit line names its image.
+- **grade-cm.py on the twin log: exit 0, BOTH PASS.** The prediction is the same exit on the board's capture.
+- The board is predicted slower, but by an unknown factor. That factor is a reading, below.
+
+**Grader.** `python3 <hdd>/nested/b5b2/cm/grade-cm.py <UART capture> <new out dir>` (`90c39ded…`). It runs
+cpython/read-cpy.py (`dc685836…`) and memcached/read-mc.py (`15d33f37…`), the latter against memcached/out, the native
+reference.
+- Exit 0 means both pass: CPython's both arms rc 0, answer = native's `58211793…`, `PYPERFORMANCE-OK 8`, no timeout
+  or fault, and an exit line naming the arm's image; memcached 6 of 6 repetitions qualify.
+- Exit 1: something was read and failed.
+- Exit 2: no reading, meaning a stage or run is missing.
+- Controls on recorded logs: twin logs pass (0). A changed answer, a dropped OK line and a wrong image each fail
+  (read-cpy 1). memcached at 0/6 fails (1). A log without a stage gives 2. And the twin-cm3 log itself passes (0).
+
+**How each outcome reads.**
+- **CPython PASS:** the protected and stock images both run Fig. 10's workload correctly on silicon's trap route. The
+  @@UP and PYPERF-TIME lines give wall times, which are a cost reading and not a verdict.
+- **CPython FAIL:**
+  - a wrong answer or a fault is a correctness finding, reported with the arm and the fault line;
+  - a `@@CPY-TIMEOUT` at 9600 s is a budget reading, not a verdict.
+- **memcached 6/6:** the msghdr loader serves sendmsg on silicon, on both arms.
+- **memcached all `<EOF>`** (4,905 B transcripts, twin-all's shape): the loader does not serve sendmsg on silicon. That
+  is a kernel finding, routed to runtime.
+- **memcached `<TIMEOUT>` in a transcript:** a harness timeout at 300 s idle, not a protection verdict.
+- **A stage cut at its bound, or a silence stop:** no reading for that stage. The wedge snapshot goes to runtime.
+- **The board/twin ratio** is a reading of this boot: per run, from the @@UP lines and CPython's up0/up1, against the
+  twin's. It is not a prediction.
