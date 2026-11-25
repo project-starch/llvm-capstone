@@ -1,0 +1,11 @@
+capture: 8986 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955424 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5T-505.mcf_r NO READING: no QSTEP-END (the capture ended inside the stage)
+  TRAPTEST: stage B5T-505.mcf_r begin
+
+B5B2-SPEC5 C=ok B5T-505.mcf_r=NO READING done=NO
