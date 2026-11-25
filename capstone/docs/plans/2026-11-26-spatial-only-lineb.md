@@ -165,6 +165,11 @@ So:
     - csmint's position 4 is the first root's raw hi word (3 << 1 = 0x6), which stays. The second mint (positions 6 and 8) moves 0x4 → 0x3 and 0x8 → 0x6;
     - csmint-vm position 3 stays for the same reason. Its 20-21 move as csmint's 6 and 8, and 26-29 are the pool header.
   - **crevint-mt and -sh** read 0 timer traps at the site (position 9). The arm's own VOID rule fires, as the list warned: a CREVOKE of a few cycles leaves no room for a timer.
-- **Not explained, recorded:** srvcost's D1 (64 sscratch writes in S), 0x591 → 0x379, and P1, 0x1572 → 0x11c5. P1 is the cold first pass with every probe gone. D1 times CSR writes that touch no lifetime state. A candidate, not traced: on Full the S setup's 32 CDERIVEs and their stores just before D1 leave record writes in flight that D1's flushing CSR writes wait behind.
+- **srvcost's D1, TRACED (2026-11-26):** D1 is 64 sscratch writes in S; it reads 0x591 on Full and 0x379 here.
+  - Full's D1 window (cycles 46,233-47,654 of the base's trace) contains 8 write-buffer evictions. Here it contains none.
+  - The 8 entries, by their DC-WB-ALLOC addresses: four record words at 0x80009030-0x80009260 inside tbl, the table header's two quadwords at 0x80006000/0x80006010, and two of the test's own stores (arr[30], arr[31]).
+  - So on Full the lifetime unit's table writes from the setup's CDERIVEs are still draining when D1 begins, and D1's CSR writes wait behind them. The stub writes no table, so nothing is in flight.
+  - This is a real cost of lifetime checking, and the +Spatial row will show it.
+  - P1 is the first U pass, where every verdict misses on Full and none here.
 
-No stub defect was found: every deviation is explained by the stub's stated semantics, except D1's.
+No stub defect was found: every deviation is explained by the stub's stated semantics, and D1's by the trace.
