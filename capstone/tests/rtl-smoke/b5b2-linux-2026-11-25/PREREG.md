@@ -184,3 +184,30 @@ They run on one board, in the order 9, 10, 11, 12, no flash; the record names th
 A reading outside these is reported as read.
 
 **Note:** the QEMU keep-tags suite with FW_FAST_RDTIME=y is queued on the lock and not yet read. The twin has a time CSR, so it cannot exercise the fast path anyway; on silicon the fast path is checked by these boots' own regs/strip/enter controls and the MTRIP-TIME check.
+
+## Amendment 6 (2026-11-26, before the boot): boot 13, the first boot of the final campaign Full kernel
+
+**Image** `trapk/fpga-final/smoke-out/fw_payload.bin`, sha256 798c53e0086b6fa3037165ae420cf821ec52549a296fa4f21fecf71388b488ae,
+17,467,912 B. Its parts:
+- kernel: `build/build-kernel-final.sh` (NO_HZ_IDLE at HZ=100, TRAP_TEST off, the msghdr loader in), Image 1ab7b4c6…;
+- firmware: keep-tags with FW_FAST_RDTIME=y, caplifive-opensbi 25b14da6. The fast path is present: two
+  `fw_fast_mtime_addr` references in fw_payload.elf, as in boot 11's out-fy, against 0 in out2-y;
+- DTB caplifive-b5b2.dtb;
+- overlay: `build/init-final-smoke`, smoke.dom (the SPEC kits' control, byte-identical to g2b's), mtrip (boots 9-12's).
+The quiesced-state shell commands of the earlier inits are not repeated here.
+
+**Board and seal:** b42c8c644, on whichever board runs it first (board 2's session, as a conditional step after
+nested's boots, or board 3's late branch). Bound 900 s.
+
+**Predictions:**
+1. The control prints `ok` and `TRAPTEST: control smoke.dom rc=7`, as on every SPEC kit boot.
+2. mtrip, three runs:
+   - rdtime 100-140 cycles per op. Boot 11 (keep + fast) read 119.2-119.3, and neither the tick nor TRAP_TEST is on
+     rdtime's path;
+   - rdcycle 5.00-5.2;
+   - getppid within ±3 % of boot 11's 1,259.3 (1,221-1,297). TRAP_TEST off removes one compare and branch from the
+     native syscall path, a few cycles;
+   - MTRIP-TIME cycles_per_tick 1.99 and backwards 0 on every run.
+3. No `sublet: fault` or `sublet: call` line.
+4. `TRAPTEST: done`.
+A failure of 1 or 4 voids the kernel for the campaign until it is explained; a reading outside 2 is reported as read.
