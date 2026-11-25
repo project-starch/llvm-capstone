@@ -78,3 +78,39 @@ bounded at 900 s after the load.
 - P1 and P2 are unchanged.
 - P3 is unchanged, plus `sublet: .dom loader registered`, which boot 1 printed as "off" without the parameter.
 - P4 is unchanged: as on the twin, `regs status 91` and `enter status 1`.
+
+## Amendment 2 (2026-11-25, after boot 2, before boots 3 and 4)
+
+**Boot 2** (board 2, booking 1502, image `54d11b89…`; board/meas-pw 819ab44207c6):
+- P1, P2 and P3 read as predicted, including `sublet: .dom loader registered`; `/init` started at 19.49 s.
+- P4 MISSED its twin-based prediction. On silicon: `regs status 0` (every register kept its reference), with the
+  kernel's `sublet: test loader: pid 26 protected`, then `enter status 200`, `loop alive` and `done`.
+
+**The twin, not the silicon, was wrong.** The twin's image repacked the rootfs as uid 1000, which made the setuid
+`bin/busybox` owned by uid 1000 (`-rwsr-xr-x <user> <user>`, against `root root` in the original). So /init's shell
+ran with euid 1000, and `capable(CAP_SYS_ADMIN)` refused the test loader with EPERM. Two things follow:
+- **Retracted:** the claim in this PREREG's pre-boot checks that the EPERM is "a kernel or test issue, not the
+  firmware's". It was the harness's.
+- **Withdrawn:** "a known failure" as P4's basis. It was a defective twin image.
+The board images were never repacked; they are the rootfs unchanged, with a root-owned overlay (Amendment 1).
+
+**What boot 2 cannot say:** whether regs.S's lost-register checks can fire on silicon. Neither platform has
+exercised that failing path, so boots 3 and 4 add the controls. Both use one kernel, Image `686d255fb841…`, whose
+initramfs adds `/regs-strip23`: the collaborator's regs.S unchanged except one line, `xori x23, x23, 0`, before
+its dump, which makes s7 an integer (`build/regs-strip23.S`, ILLEGAL 0 by the scan). `/init` = `build/init-diag3`.
+Hashes are in `SHA256SUMS.boot34`.
+
+| Boot | Firmware | Image | Predicted |
+|---|---|---|---|
+| 3 | keep-tags (eb85e21c, `FW_CAPSTONE_KEEP_TAGS=y`) | `77de789fdd00…` | P1-P3 as boot 2; `regs status 0`; `regs-strip23 status 23` (the check fires on x23); `enter status 200`; `loop alive`; `done` |
+| 4 | the same tree built with the flag OFF (byte-identical to stock OpenSBI 1.3.1, checked on the generic platform) | `c1698787d831…` | no `Capstone:` banner line; `Boot HART MEDELEG 0x000000000000b109` (no 24-30); Linux to `/init`; `regs status` NOT 0 |
+
+For boot 4, any of the following counts as the firmware's contract mattering on silicon:
+- a lost-register code 1..31;
+- 100 + c (the test hook's reference faulted);
+- a signal-kill status;
+- a kernel failure after `/init`.
+`regs status 0` under the stock firmware refutes the claim that keep-tags is needed for this test on silicon, or
+shows that no M trap landed while references were held. The 2 x 40M-iteration spins span many machine-timer ticks, so
+the second reading would itself need explaining. Boot 3 runs first. If its strip control does not read 23, boot 4 is
+not run.
