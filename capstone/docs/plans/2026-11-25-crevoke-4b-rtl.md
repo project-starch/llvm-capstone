@@ -389,3 +389,44 @@ Both runs were graded twice: by the board lane's grader, and here from the raw c
 **Read order if a snapshot gets cut short:** 192, 223, 209, 229, 195, then 221, 220, 219, 225, 222.
 
 **Prediction for the fixed seal** (the semantics owner's): mcf completes, or faults with a named cause and pc. A silent wedge there refutes the fix.
+
+## R-80's fix (capstone-ariane b5b2-ldcfix a5c45a46d, on 28fcbb646): pre-registered before its gate (2026-11-25)
+
+**The change:** one term in load_unit.sv's exception block, `if (state_q == SEND_TAG_LDC) pop_ld_o = 1'b1;`. A faulting LDC leaves the LSU as a faulting plain load does. Under CAPSTONE_DYN_BYPASS, the R-43 replay marker and the probe's timeout 25 take the same path. The commit message has the mechanism and readings.
+
+**Readings:**
+- b5b2-ldcexc2 wedges on 28fcbb646 and completes on the fix with one cause-24 trap. Its control is unchanged.
+- 56 regression tests have identical values. b5b2-srvcost's measured costs move -2 and -1 cycles, its end -3 over 198 probes; sref and sref-gen move -2 cycles each.
+- Lint: at baseline, identical by name.
+- The claim-auditor found no lost writeback, no double pop, no new loop term, and one misplaced comment, which was fixed.
+- UNRESOLVED: the NO_DYN_BYPASS control build does not elaborate at 28fcbb646 at all (issue_read_operands.sv:2109).
+
+**Synthesis-only gate** (base: 28fcbb646's gate, dcp sha16 cf3055c8baa1251a):
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within +-505 MB of 4,969.8 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy fires), LUTLP-1 0 (toy fires) |
+| 3 core LUT | at most 126,258 + 2,500 = 128,758 |
+
+Reported, not graded:
+- load_unit: LUT within a few cells, FF +0 (one pop term, no new state);
+- the load unit's FSM: not re-encoded;
+- rows beyond +-2,500 by stem.
+
+If key 1 or 2 fails: the partition and loop members, and no full build.
+
+**Full build on a pass.** The keys of 88db40027's table, centred on 28fcbb646's seal when it exists, otherwise on 88db40027's:
+- placed LUT +-3,000;
+- FF +-2,000;
+- routed clean;
+- congestion <= 5;
+- loops 0, each toy firing;
+- clk_out1 inside [-1.47, +6.01].
+
+Reported: the led_stretch worst slack and the rev_node worst-500 count.
+
+**Silicon** (the semantics owner's predictions):
+- mcf on the fixed seal completes, or faults with a named cause and pc. A silent wedge refutes the fix as S-35's remedy.
+- The matched SPEC pair (the same images, 28fcbb646 against the fixed seal, one board): each row within 1 %. A row beyond that makes the registered-only park the follow-up, with its own gate.
+- Kits: crevoke4b and wapflu, whose vectors are to be re-simulated on a5c45a46d before that seal is graded with them; b5b2-ldcexc2 as a bare image (to build).
