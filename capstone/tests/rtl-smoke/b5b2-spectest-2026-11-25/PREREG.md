@@ -258,3 +258,29 @@ values and cycles to a5c45a46d. This replaces a5c45a46d as the FINAL candidate.
 b42c8c644 shows a cause-25 fault at an LDC on a live object. compiler's CREVOKE scan count predicts every run at 0,
 so the PRE path is not expected to be reached by any SPEC row. A 25 at an LDC on b42c8c644 is therefore a finding
 against the fix, or a new mechanism, and is mapped and reported, not classified.
+
+## Amendment 10 (2026-11-26, before any boot of these images): g2 rebuilt with per-stage bounds (g2b)
+
+**Why.** On 28fcbb646 (board 2, 12:56-16:13Z) all three g2 images read imagick PASS and x264 NO READING. x264's
+`gen` alone ran about 2,128 s and its `run` was still running, with no fault line, when the image's single
+3,600 s stage bound cut it. So g2 cannot give x264 a reading on any seal.
+
+**Change.** The three g2b images are the g2 images with `/init` = `init-ordered-bound` (the g1b init, byte-identical
+to the committed file), plus `/stages.order` (imagick first, x264 last) and `/stages.bound` (imagick 3,600 s,
+x264 14,400 s). Every other overlay file is byte-identical to g2's (17 files per image compared; the comparison
+reports the init difference, so it can fire). Hashes: `SHA256SUMS.g2b`, `overlay-files.g2b.sha256`.
+
+**Kernel.** It was built in the pinned tree `trapk/fpga-v1`: the board tree as it stood before the runtime lane's
+msghdr loader went in, with the four loader files restored from their pre-edit copies. The trap-route series is at
+6d4504f8b073. `sublet_copy_msghdr_from_user` is absent from fpga-v1's vmlinux (0 symbols) and present in the
+current board tree's (1); `sublet_load_user_pointer` is present in both. The firmware is keep-tags with
+FW_FAST_RDTIME off, and the DTB is caplifive-b5b2.dtb, both as for g2.
+
+**Predictions** (b42c8c644; also any later run on 28fcbb646): imagick as Amendment 4 (rc 0, specdiff pass), all
+three arms. x264: `gen` rc 0, then `run` rc 0 with specdiff pass on all three arms, the FLU ungate's prediction
+carried from Amendment 4. Its `run` time is not predicted, since it has never been measured. If x264 meets its
+14,400 s bound, that is NO READING again, recorded with the elapsed time, not a fault. A cause-24 fault at
+CINCOFFSET refutes the ungate, as in Amendment 4. Amendment 9's cause-25-at-LDC rule applies.
+
+**The registered g2 images stay valid** for what they already read: imagick on 28fcbb646. The b42c8c644 sessions
+use g2b in their place.
