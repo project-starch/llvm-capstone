@@ -173,3 +173,5 @@ So:
   - P1 is the first U pass, where every verdict misses on Full and none here.
 
 No stub defect was found: every deviation is explained by the stub's stated semantics, and D1's by the trace.
+
+**Clarification of the gate's memory key, before any reading (2026-11-26, asked by the board lane):** "mapping in class (within 10 % of 4,968 MB)" is ONE-SIDED. The binding key is a technology-mapping peak of at most 5,465 MB, under the 40 GB guard: it guards against a blow-up. A peak below 4,471 MB is REPORTED as a deviation and does not fail the key. Removing the lifetime unit is expected to lower it, as P1's spatial step A did (4,914 against 5,042 MB).
