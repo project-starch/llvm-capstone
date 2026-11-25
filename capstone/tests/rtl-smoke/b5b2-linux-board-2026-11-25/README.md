@@ -64,3 +64,44 @@ determined.
 A second difference from the twin: the board's command line is its DTS bootargs, `earlycon console=ttyS0,57600`, so
 the kernel prints `sublet: .dom loader off`. The twin passes `rdinit=/init panic=-1 sublet.dom_binfmt=1`, and its
 kernel prints `registered`.
+
+## Boot 2 (amendment 1, runtime/b5b2-linux 05ac6828a092)
+
+The run:
+- Board 2, hub booking 1502, from 04:34 to 04:39 UTC.
+- The resident 904cd9c6b was read back by name before and after the boot. No flash.
+- The image was `fw_payload.bin` 54d11b896b2a59e3. Its initramfs is `base-rootfs.cpio` followed by `overlay.cpio`,
+  byte-exact. The base carries `dev/console` (c 5,1, root), and the embedded DTB passes `sublet.dom_binfmt=1`.
+- The procedure was the same, with the load taking 149 s. "TRAPTEST: done" arrived 58 s after `continue`.
+
+The grader was `grade-linux2.py` (160ae1381bac95cf), which adds the amended P3 line. Before the run it read AS
+PREDICTED on the twin's log and MISS on boot 1's capture, which printed "off".
+
+```
+P1 AS PREDICTED  OpenSBI v1.3, then the keep-tags line
+P2 AS PREDICTED  Boot HART MEDELEG = 0x000000007f00b109
+P3 AS PREDICTED  captag bulk=0, sublet 63-bit exact bounds 0, ".dom loader registered", then Run /init at 19.49 s
+P4 DIFFERS FROM THE TWIN:
+                 TRAPTEST: up, kernel 6.1.0
+                 [21.96] sublet: test loader: pid 26 protected, table 0x81c5e000
+                 TRAPTEST: regs status 0          (twin: 91)
+                 [43.57] sublet: test loader: pid 27 protected, table 0x81c58000
+                 TRAPTEST: enter status 200       (twin: 1)
+                 TRAPTEST: loop alive
+                 TRAPTEST: done
+                 [45.88] reboot: System halted    (twin: "Attempted to kill init" panic)
+```
+
+The grader's output is `result-lines-boot2.txt`.
+
+What the exit codes mean, as the test programs' own headers define them:
+- `regs.S` exits 0 when every register kept its reference, n when register xn lost its tag or lifetime, 100 + c on a
+  hook fault with cause c, 90-95 on a setup failure, and 91 (`not_protected`) when the test loader refused.
+- `enter.S` exits with the -errno of SUBLET_NR_TEST_ENTER, 200 when the call returned 0 with a reference in a0
+  (LCC type 1), and 201 when it returned 0 or more without one.
+
+So on silicon the test loader protected both processes, where the twin refused them with EPERM.
+
+This is a reading, attributed to nothing. The twin's failure is listed as unresolved in the PREREG. No positive control
+in this boot shows that regs.S's lost-register checks can fire on silicon: the twin exits before they run, so neither
+platform has yet exercised the failing path of the check that read 0.
