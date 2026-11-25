@@ -163,3 +163,30 @@ Images B5T-g4mk, B5TL0-g4mk and B5TL1-g4mk are in `SHA256SUMS.g4mk` and `overlay
 **Run:** board 3, after chain 3, in the order B5T, B5TL0, B5TL1.
 **Predicted:** C `rc=7`, then makerand rc 0 with a specdiff pass, B5T near 289 s (boot B5T-g4's run0, the same image and
 input), and the other arms' times as first readings.
+
+## Amendment 6 (2026-11-25): group 1 with per-stage bounds
+
+**Readings that prompted it.** B5T-g1r on board 2 (88db40027):
+- C as predicted;
+- lbm PASS (1,052.7 s);
+- nab faulted with 24 at vaddr 0x1fc5c, exactly the twin count's prediction (free_ivector+0x2);
+- xz NO READING: six commands of 322-988 s each returned rc 0, then the 3,600 s watchdog killed the seventh;
+- mcf NO READING: it ran 3,600 s with no fault line and /init's ticks alive throughout, then the watchdog killed it.
+mcf test is long on this board: the P1 board-test PREREG (2026-10-28, Addendum 4) cut it at 12,000 s, then set
+30,000 s. So the 3,600 s bound was too short for xz and mcf, by the record.
+
+**Change.** `init-ordered-bound` = `init-ordered` plus a per-stage bound read from `/stages.bound` (default 3,600 s).
+Bounds: lbm 3,600, nab 3,600, xz 7,200, mcf 30,000. The board's 20-minute silence stop, with the snapshot first,
+still catches a wedge.
+**Images,** `SHA256SUMS.g1b` / `overlay-files.g1b.sha256`; the stages are byte-identical to those images':
+- B5T-g1b: B5T-g1r's four stages;
+- B5TL0-g1b: lbm, nab and xz only. mcf is dropped from the ablation arm to save about 8 board-hours;
+- B5TL1-g1b: all four.
+They replace the not-yet-run B5TL0-g1 and B5TL1-g1 in the chain on board 3, and B5T-g1r in the diagnostic seal's list
+(Amendment 4), where B5T-g1b runs instead.
+
+**Predictions:**
+- on 904cd9c6b and 88db40027: lbm pass, nab 24 at its free_ivector+0x2, xz pass within 7,200 s;
+- mcf: pass within 30,000 s, OR a silence-stop wedge whose snapshot is read against boot 5 (904cd9c6b) and rtl's S-35
+  pattern (28fcbb646 only, whose apertures exist);
+- on 28fcbb646: nab passes (the FLU ungate).
