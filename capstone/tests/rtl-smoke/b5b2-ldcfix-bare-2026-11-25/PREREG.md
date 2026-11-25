@@ -40,3 +40,21 @@ Every position is class E, except sublet-life's pool slots 5-9 (positions 25-34)
 The same 3 images (byte-identical: SHA256SUMS unchanged) were simulated on capstone-ariane b5b2-prefix b42c8c644 (core = 7861abcfa), rtl_dirty=no (s2pre-wt `.sup/r77`), with this kit's settings. Their vectors are in `expected-vectors-b42c8c644.json`, which has the same fields as `expected-vectors.json` plus `sim_rtl`.
 
 **Every image reads exactly this kit's `vector` column (the a5c45a46d / candidate column), in every position.** R-77's fix changes no value of this kit. On the b42c8c644 seal the rules above apply unchanged, with `expected-vectors-b42c8c644.json`'s `vector` as the column.
+
+## Addendum 2026-11-26: the spatial-only core 14f2ef81a, pre-registered before its board session
+
+**Role:** INFORMATIONAL in board 1's spatial-only kit boot (runtime's allocation, 2026-11-26): read and recorded, graded by the rules below, no decision rests on it.
+
+**The seal:** caplifive_…-r77-spatial_14f2ef81a.bit, sha256 df9de4d49b21b475934e3a90ee81722ece98f6b1207c893bbc9a475e4c928be9 (graded SP-FULL PASS, llvm-capstone land/rtl-crevoke4b 42fa22984689). The resident name is read back and the seal is cited by its sha256.
+
+**The vectors:** the same 3 images, byte-identical (images/ unchanged since this kit's pin; every `out/*.elf` objcopies to its `images/*.bin`; SHA256SUMS verifies), were simulated through the Anvil prologue at `S12_MEM_DELAY=12` on capstone-ariane b5b2-spatial 14f2ef81a (core 5ff493d0a: the lifetime unit replaced by `capstone_sublet_life_stub`), rtl_dirty=no, time_out 3,000,000 (s2fix-wt `.sup/spk`, PROVENANCE 2026-11-25T18:48:16Z). They are in `expected-vectors-14f2ef81a.json`, with the same fields as `expected-vectors.json` plus `sim_rtl`.
+
+**Against the Full core's column** (b42c8c644's (`expected-vectors-b42c8c644.json`)): b5b2-ldcexc2, b5b2-ldcexc2-ctl read identically. The positions that move (class in brackets; u = ungraded):
+
+| image | sha16 | rec | SR | positions that move, Full → spatial-only |
+|---|---|---|---|---|
+| sublet-life | ecbfe9171c0dbbbf | 0x80003200 | 35 | 4[E] 0x19 → 0x0; 7[E] 0x19 → 0x0; 11[E] 0x19 → 0x1d; 12[E] 0x19 → 0x0; 15[E] 0x8000000000010000 → 0x0; 16[E] 0x6 → 0x0; 17[E] 0x300000003 → 0x0; 18[E] 0x8 → 0x0; 21[E] 0x1000000000 → 0x0; 22[E] 0x100000000 → 0x0; 23[E] 0x1400000000 → 0x0; 24[E] 0x400000000 → 0x0; 26[U] 0x200000000 → 0x0; 35[E] 0x6 → 0x3 |
+
+Each move is the stub's stated semantics (llvm-capstone capstone/docs/plans/2026-11-26-spatial-only-lineb.md, "The 57 Line B tests: what MUST change"): every lifetime op completes with no effect, so a stale access is not refused (25 → 0, or the next check's cause: 25 → 28 where the access is also out of bounds; 25 → 4 where it is also misaligned; a dead-parent CDERIVE goes on to its size check, 29, at sublet-life's position 11, the plan's in-tree reading; the trap counts fall by the 25s that became no fault); CREVOKE takes a few cycles and the run stays live; ids read the root they were derived from; the lifetime table is never written (sublet-life's table positions read 0).
+
+**On the 14f2ef81a seal** the rules above apply unchanged, with `expected-vectors-14f2ef81a.json`'s `vector` as the column. sublet-life's VOID rule reads its 14f2ef81a vector. That vector differs from every Full column at the positions above, so a board left on a Full bitstream is caught by this kit, as well as by the readback.
