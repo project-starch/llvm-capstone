@@ -58,12 +58,24 @@ ariane_pkg.sv: 238 entries, with the `CAPSTONE_SUBLET_FMT` block after index 235
 | 192 | 0x01 | commit slot 0 valid |
 | commit pc (230-237) | 0x3ff7fe3506 | inside mcf's domain (enters 0x3ff7fe0000); slot 0, stale after a flush |
 | 193 | 0x04 | store_buf_commit_cnt 4 |
-| 194 / 195 / 229 | 0 / 0 / 0 | store and load states idle |
+| 194 | 0 | store_state 0 (store_unit.sv:123, `state_q`) |
+| 195 / 229 | 0 / 0 | **no reading**: `load_state` is undriven at 904cd9c6b, so it reads 0 on every boot (correction below) |
 | 219 lsu_head_op | 0xd7 | fu_op 215 = **LDC** |
 | 220 lsu_head_debug | 0x8c | lsu_ctrl.valid 1, lsu_ready 0, fu 12 = CAPSTONE_DYN |
 | 221 store_debug | 0xf8 | commit queue valid 1111, **data_req 1, data_gnt 0**, no_st_pending 0 |
 | 222 | 0 | adapter_tag_debug, constant '0 in this build |
 | rev_node debug / head / serving | 0 / 0 / 0 | |
+
+**Correction (2026-11-25, after the first push of this record, 57c5f32e3880).** The row above for sw=195 and sw=229
+first read "store and load states idle". `load_state` has no driver: `load_unit.sv:109` declares `state_o` and never
+assigns it (904cd9c6b; the same holds at 715bdd1fe). So both apertures read 0 on every boot, and say nothing about the
+load unit. The rtl lane found it, after reading sw=195 = 0 as "the load unit was idle with the LDC presented, so the
+LDC never issued, so not R-29"; that reading is withdrawn, and R-29's involvement is open. sw=192, 193 and 194 are
+driven (`commit_instr_id_commit[0].valid`; store_buffer.sv:110 `commit_status_cnt_q`; store_unit.sv:123 `state_q`).
+Only 219-221 also have their drivers checked (load_store_unit.sv:412-413, store_unit.sv:480); 222 is a constant. The
+rows for 224-228, 255 and the multi-byte reads are labelled from the mux expression only, with no driver checked, and
+are not citable until one is. What this check missed: it took each aperture's label from the mux, and never looked for
+the driver behind it.
 
 Read as raw readings, attributed to nothing:
 - a valid LDC sits at the LSU head with the LSU not ready;
