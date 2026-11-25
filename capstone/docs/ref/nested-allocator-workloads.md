@@ -7749,7 +7749,9 @@ Detail, lines and apertures: `tests/fpga-repros/M16-wmem-fast-alloc-stops-at-cde
 - r1 and r2 never exercise the file-scope BLOCK allocator or the free path (block = free = 0). So their returns say
   that BLOCK_FAST alone does not reach that state. They give no rate, and the registered "the file scope's
   interleaving is needed" stands in that sense.
-- **Withdrawn (2026-11-26):** the constant-rate reading of the stress form.
+- **Withdrawn (2026-11-26):** the constant-rate reading of the stress form. To be exact: a hazard **the same in every
+  mode** is refuted, by r1 and r2 (0.0020, 0.044). A constant rate **for the full form alone** is disfavoured, not
+  refuted (0.035; post hoc 0.05-0.1). The figure is withdrawn as a reading either way.
   - That covers P1's 4.9·10^-8 per allocation, and boot S's "hazard below 2.6·10^-8" read as a rate. Boot S reads
     instead: on B5b-2, with the one-operand revision, the same full-form sequence passed this point twice without
     stopping.
@@ -7760,6 +7762,117 @@ Detail, lines and apertures: `tests/fpga-repros/M16-wmem-fast-alloc-stops-at-cde
   - on P1, ordered with each command expected to return before the one expected to stop:
     - a control cut before packet 100,000, then seed 1 with a fine heartbeat, last;
     - another seed in a boot of its own, since it may also stop.
+
+### Pre-registration: M-16's window on P1, boots loc1 and loc2 on board 1, protected only (written 2026-11-26 06:46 host time (+08), 22:46Z on Nov 25, before either boot)
+
+**Question.** Is P1's stop tied to a point in the full form's seed-1 sequence (H2, from red1 at N = 2), and where in
+the window does it fall? Runtime granted board 1 for M-16's window localisation, to follow +Spatial Tier 1 there.
+
+**The program and the image** are red1's, unchanged: `tsapp-stress-red.c`, protected, strip `a15d30b2…`
+(20,208,504 B), packed as `stress_sublet.xz` `46396e7d…` in both kits. The stop instruction is this image's CDERIVE
+in `wmem_block_fast_sublet_alloc`, which runs at `0x3ff676ca68`.
+
+**Stages and kits.** Each stage is made by `make-stage-red.py` (`a65700ac…`) and wrapped in bkit91's own smoke, as red1
+was. Paths are under `<hdd>/capstone/nested/`.
+- loc1: `tshark/stress/red/stage-board-loc` → `p1red/loc1` (`mk-loc-stage.sh` `7aaa0010…`, `loc1.SHA256SUMS`
+  `c79a1a76…`). Its files differ from red1's in exactly two: `train/plan.json` and `train/run.sh`.
+- loc2: `tshark/stress/red/stage-board-loc2` → `p1red/loc2` (`mk-loc2-stage.sh` `f486bdb4…`, `loc2.SHA256SUMS`
+  `02e75cc3…`). Its files differ from loc1's in the same two.
+
+Commands, in order, each a new process with K = 212:
+
+| boot | command | mode | packets | heartbeat | seed |
+|---|---|---|---|---|---|
+| loc1 | c0 | a | 99,000 | every 1,000 | 1 |
+| loc1 | l1 | a | 300,000 | every 100 | 1 |
+| loc2 | c0 | a | 99,000 | every 1,000 | 1 |
+| loc2 | s2 | a | 300,000 | every 1,000 | 2 |
+
+c0 is the control: the full form, cut before the window, so it must return. The command expected to stop runs last in
+each boot. s2 may stop as well, so it has a boot of its own.
+
+**Chain.** `p1s100/nat-run3p.sh` (`9c3525d4…`) on board 1 with:
+- `p1red/p1loc.conf` (`36f1ca29…`): P1's bitstream `…-tagoverlap6c-pagedtbl_d83d3a633`, TAG `p1loc-m16loc`, kit bkit91;
+- `p1red/p1loc.list` (`68c90c1d…`): loc1, then loc2, each 2,700 s with a 210-minute booking.
+
+The chain flashes P1 if it is not resident, with the seal's sha256 checked, and reads the bitstream back by name. It
+leaves the board on P1.
+- The kit multiplies 2,700 s into `BAKED_TIMEOUT=10800`, which the dry run printed for both boots.
+- On this kit the idle limit equals the timeout. So a stop is recognised only when the 10,800 s budget ends, and the
+  wedge apertures are read once, after it.
+- **Both boots will be UNGATED.** The kit's `board-run.sh:159` sets `PREFLIGHT=0`, as it did for red1 and s1. The
+  checks that apply are the chain's: the kit's SHA256SUMS, the bitstream named in `board.env`, and the seal.
+
+**Board-free checks, done.**
+- `p1red/recheck.sh` (`65b83a46…`) on each kit:
+  - the real bake, rc 0;
+  - `BOARD_STUB=2` on a real P1 transcript that returns (`d76782aa…`, the one red1's recheck used) and on its cut
+    that does not, rc 0 each;
+  - the real firmware, 23,760,392 B, under the cap: loc1 `0a96ab58…`, loc2 `43019be3…`.
+- The chain's own dry run (`NR_DRY=1`) reached `DONE` through both boots.
+
+**Time.** On P1, mode a runs about 3.6 ms a packet, from red1's r2 (918 s for 300,000 packets) and the twin's f/a ratio
+of 0.84. red1's pre-registration said 60-75 s per 10,000 packets, and that figure was wrong.
+- So c0 takes about 360 s, and l1 or s2 about 1,090 s if it returns. Each command also unpacks the image, about 140 s.
+- A boot in which everything returns takes about 1,800 s. A stop holds the boot to its 10,800 s budget.
+
+**Twin references.** A command's lines are a function of its argv, and the heartbeat interval changes only which lines
+print. So the lines that matter are already in hand:
+- c0's last heartbeat is the locate twin's `pkt=99000 fast=19238362 block=1749638 free=876156 sum=c7bcb25f7f6a9209`
+  (`nst-red-locate`, serial `cc185143…`; M-16's `results/twin-locate.txt`).
+- l1's lines up to 110,000 are the locate twin's. Its end is red1's twin r3 line (`nst-red-board2`, serial
+  `02055366…`): `done packets=300000 fast=58298524 … sum=f6ed64e0d51b9d04`.
+- The reader's references are the twin runs of these exact stages, `nst-loc1-twin` and `nst-loc2-twin`, which are
+  running.
+- **Before the boots, an addendum is pushed** with:
+  - their serial hashes;
+  - a check that loc1's twin lines equal the lines above;
+  - seed 2's counts at its packets 100,000 and 110,000 against seed 1's;
+  - the reader's re-test.
+- Board gets the arming data only once that addendum is on origin.
+
+**Reader.** `p1red/read-red.py` (`64782291…`), red1's, run as `read-red.py <board.txt> <twin serial.log>`. It reads by
+command number, so the names c0, l1 and s2 need no change. In l1 it brackets a stop between two 100-packet lines.
+
+**Hypotheses.**
+- **H2:** the stop is tied to a point in the seed-1 full form's sequence, between packets 100,000 and 110,000.
+- **T:** the stop is tied to the time elapsed in the process, from about 364 s (red1's last line) to about 400 s (the
+  twin's next line, at 3.6 ms a packet). r1 and r2 ran longer without stopping, so T is about mode a only.
+- At seed 1 both put the stop in the same window. **loc1 cannot separate them.** Its finer heartbeat is not a planned change of
+  time per packet, and its print cost on P1 is not measured.
+
+**Predictions.**
+1. The smoke passes in both boots, and c0 returns in both, equal to the twin's lines.
+2. **loc1: l1 does not return.** Its last heartbeat lies between packets 100,000 and 109,900. The commit pc reads
+   `0x3ff676ca68`, and sw=220 reads `0x8c`. The stop then lies within the 100 packets after that line.
+3. **loc2: H2 predicts that s2 does not stop between its packets 100,000 and 110,000.** T predicts a stop at about the
+   same elapsed time.
+
+**What each outcome says.**
+- **c0 does not return:** a stop before the window, near 360 s or earlier, and that boot's last command is lost.
+  - That is against H2's window.
+  - c0 ends at about 360 s, at the edge of T's window, so a stop near its end is consistent with T.
+  - Its last heartbeat is reported, with the elapsed time by the watchdog's clock.
+- **l1 stops in the window, with the signature:** H2 and T both hold, at N = 3. The window narrows to 100 packets, which
+  the twin's lines bracket. Next is the boot that separates position from time (the folder's "Next reductions", step
+  3), before any directed `.S`.
+- **l1 stops before packet 100,000:** against H2. It is consistent with T only if its elapsed time, by the watchdog's
+  clock, falls near 364-400 s.
+- **l1 returns:** neither H2 nor T predicts the stop at that point. Three runs of one sequence, two stops in the same
+  window and one return: the stop is not deterministic there, and the rate question reopens.
+- **s2 returns:** against T, and consistent with a point specific to seed 1's sequence (H2).
+- **s2 stops between its packets 100,000 and 110,000:** against a point specific to seed 1's sequence. It is UNDECIDED
+  between T and a count trigger (packets or allocations), if the addendum shows seed 2's counts there close to seed
+  1's.
+- **s2 stops elsewhere:** against a count trigger set by seed 1's counts. It is against T unless its elapsed time
+  falls near 364-400 s. That is consistent with a seed-dependent point in the sequence.
+- **A stop elsewhere in the code, or with another signature:** reported as itself, and not merged with M-16.
+
+**Limits.**
+- Two boots, so one draw for each question.
+- Both boots are ungated.
+- The elapsed time comes from the watchdog's clock, which times console arrival, not the core.
+- T is one form of a time trigger: a time counted from the process's start.
 
 ## M-16's return rate on Line B: the protected tshark in repeated B5b-2 boots (2026-11-25)
 
@@ -7800,6 +7913,15 @@ are compared directly, with that caveat.
 | boot S's bound, below 2.6·10^-8 per allocation | at least 0.947 | at least 0.76 |
 | P1's stress-form estimate, 4.9·10^-8 | 0.903 | 0.60 |
 | P1's tshark rate, 5 of 8 | 0.625 | 0.095 |
+
+**Amendment (2026-11-26, 06:47, before any of these boots: none is granted, and the board lane's output tree holds no B-prot-r boot).** The first two rows came
+from a constant per-allocation rate of the stress form, which red1 withdrew (the result above). They are void, and no
+row replaces them: on P1 the stress form's stop looks tied to one point in its own sequence (H2, N = 2), so it gives no
+per-boot rate for tshark.
+- The prediction is the third row alone: at P1's tshark rate, p = 0.625 per boot and P(5 of 5) = 0.095.
+- On B5b-2 the stress form passed P1's stop point twice (boot S). That is a fact about that sequence, not a rate, and it
+  predicts nothing here.
+- "What each outcome says" stands, read against the third row only.
 
 **What each outcome says.**
 - **5 of 5 return:** together with B-prot, that is 6 of 6, with a Clopper-Pearson 95 % interval of 0.54-1.00 on p.

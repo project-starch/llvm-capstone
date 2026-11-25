@@ -241,6 +241,8 @@ command.
   - Post hoc, "two stops land in the same 10,000-packet window, any window" has probability about 0.047 at 4.9·10^-8,
     and 0.097 at 1·10^-7.
   - All of these were computed after the boot.
+  - So what is refuted is a hazard **the same in every mode** (r1 and r2). For the full form alone, a constant rate is
+    **disfavoured, not refuted** (0.035; post hoc 0.05-0.1). The published 4.9·10^-8 is withdrawn as a reading.
 - **The stop looks tied to a point in the full form's sequence.** Two runs of the same sequence on P1 both stopped
   between packets 100,000 and 110,000, with the same serving index.
   - **Position and time are confounded.** By the watchdog's clock both runs stopped about 360 s after their process
@@ -265,8 +267,9 @@ command.
   smaller live heap, and no I/O beyond the heartbeat. It holds the same function, the same pc offset and M-16's
   aperture signature.
 - ~~**Hazard.** One stop after about 2.0·10^7 allocations gives about 4.9·10^-8 per allocation. The 95 % interval from
-  this single draw is 1.2·10^-9 to 1.9·10^-7.~~ **Withdrawn 2026-11-26.** A constant per-allocation rate is
-  disfavoured for the stress form on P1: p ≈ 0.035 for P1's first-stop window, about 0.05-0.1 post hoc, N = 2. Its second
+  this single draw is 1.2·10^-9 to 1.9·10^-7.~~ **Withdrawn 2026-11-26.** A hazard the same in every mode is refuted
+  by red1's r1 and r2 (0.0020, 0.044). A constant per-allocation rate for the full form alone is disfavoured, not
+  refuted: p ≈ 0.035 for P1's first-stop window, about 0.05-0.1 post hoc, N = 2. Its second
   run stopped in the same 10,000-packet window, with the same serving index ("On P1 again"). The two tshark-band figures (4.7·10^-8 to 7.4·10^-7) are M-16's tshark samples, and they
   are not affected.
 - **Not shown:**
@@ -281,17 +284,35 @@ Reductions 1 (BLOCK_FAST alone) and 2 (at a fixed size) are modes `f` and `s` of
 returned on P1 (red1). Mode `a` is the full form, with `tsapp-stress.c`'s lines. Its reader is `src/read-red.py`.
 
 If the stop sits at a point in the sequence (H2), the next steps locate that point rather than shrink the loop:
-1. **On the twin, which costs no board time.** Print every 100 packets between 100,000 and 110,000. Then record what
-   the full form does there that it does nowhere earlier: the BLOCK chunk turnover, the free-list lengths, and the
-   revocation-node state that the apertures name (head `0x0071`, serving index `0x1381`).
+1. **On the twin, which costs no board time.** Run 2026-11-26 (`nst-red-locate`; lines from 99,000 to 110,000 in
+   `results/twin-locate.txt`): mode a, seed 1, a heartbeat every 100 packets, 110,000 packets, rc 0. Its line at
+   100,000 equals red1's last board line, and its 10,000-packet lines equal the earlier twin's (`nst-red-board2`).
+   - **Nothing in the heartbeat counters singles out the window.** Each 100-packet increment of fast, block and free
+     between 100,000 and 110,000 lies inside the range the same increment takes before 100,000.
+   - block − free rises monotonically, so every window is the first to reach its value. A count or capacity trigger
+     cannot be told from a position trigger this way.
+   - **Not done:** the BLOCK chunk turnover, the free-list lengths and the revocation-node state (head `0x0071`, serving
+     index `0x1381`). The native twin has no revocation-node table, and the program prints none of these.
 2. **On P1, ordered so that every command expected to return runs before the one expected to stop.** A stop silences
-   the console for the rest of the budget, so nothing after it runs:
+   the console for the rest of the budget, so nothing after it runs. Pre-registered in the lane doc as boots loc1 and
+   loc2:
    - first, as the control, mode a, seed 1, cut at packet 99,000, which must return;
-   - then mode a, seed 1, heartbeat every 100 packets from 100,000, last in its boot. H2 predicts a stop in the same
-     window, which narrows it to 100 packets.
+   - then mode a, seed 1, heartbeat every 100 packets, last in its boot. H2 predicts a stop in the same window, which
+     narrows it to 100 packets. This cannot separate position from elapsed time.
    - Mode a with another seed may also stop under H2, so it goes in a boot of its own. H2 predicts that the stop moves
      or goes away.
-3. Then a directed `.S` for simulation, built from the allocations in that window, which is CLAUDE.md's rule 8.
+   - **Mode a runs about 3.6 ms a packet on P1**, from r2's 918 s for 300,000 packets and the twin's f/a ratio of
+     0.84. So 100,000 packets take about 364 s, which matches both stops. red1's pre-registration said 60-75 s per
+     10,000 packets, and that figure was wrong. The control's 99,000 packets end at about 360 s, at the edge of
+     that window.
+3. **Separating position from time** needs a boot that changes the wall time per packet and leaves the sequence alone:
+   the same command with a CPU-bound process beside it on the single hart.
+   - A stop near half the packets would say the trigger is not the sequence position. It would be cycle or timer time,
+     or an interrupt count: the spinner dilates wall time and interleaving, not the process's own CPU time.
+   - A stop between 100,000 and 110,000 is consistent with position, a count, or per-process CPU time.
+   - It is not built yet. It needs its own stage, kit and twin reference, and a third P1 boot from runtime.
+4. Then a directed `.S` for simulation, built from the allocations in that window, which is CLAUDE.md's rule 8. It
+   needs the trigger to lie in the allocation sequence, which step 3 tests.
 
 ## Files
 
@@ -306,4 +327,5 @@ If the stop sits at a point in the sequence (H2), the next steps locate that poi
 - `results/twin-trap-stressS.txt`: its trap-route twin's lines.
 - `results/p1-board1-red1.txt`: the P1 reduction boot's result lines and aperture block.
 - `results/twin-red1.txt`: its twin's lines.
+- `results/twin-locate.txt`: the twin's 100-packet lines from 99,000 to 110,000 (mode a, seed 1).
 - `SHA256SUMS`: these files.
