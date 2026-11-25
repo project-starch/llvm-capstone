@@ -7181,3 +7181,64 @@ per-line timeout raised from 300 s to 3,600 s; log `f63c48cc…`):
 **Limits.**
 - One boot. The spans are from `/proc/uptime`, without in-context counters.
 - The arms are ABBA for SQLite and mruby, and one each for gcc.
+
+### Pre-registration: B5b-2 boots B-stock and B-prot, Fig. 10's Wireshark workload one arm per boot, with Perl makerand.pl, board 2 (written 2026-11-25 13:38, before the boots)
+
+**Question.** Does Fig. 10's Wireshark revision run on B5b-2 silicon with stock's answer? What does it cost in
+wall-clock time across the two boots? And do Perl 5.36's stock and 0001 + 0002 images run there at all?
+
+**Why two boots.**
+- The base payload without an overlay is about 17.2 MB. The two stripped tshark images are 5.2 MB each in xz, so
+  they do not fit under the 26,000,000 B cap together.
+- So each boot carries one tshark arm and one Perl arm.
+
+**The images** (`make-payload.sh`, KEEP=y; overlays by `make-boardB.py`, `07323665…`):
+- **B-stock:** `nested/b5b2/boardB-stock/out/fw_payload.bin`, sha256
+  `c89a676d3d67ec537ec770f530c34dc53755f505274c65e7d5c4e52f4f3b6272`. Contents: Perl stock, then tshark stock.
+- **B-prot:** `nested/b5b2/boardB-prot/out/fw_payload.bin`, sha256
+  `2effea0096ee964f4239300ce66eeea707920acaf57d1e70d33bcc867fa4d9fa`. Contents: Perl p0002, then tshark prot.
+- Both are 25,851,912 B, as boot A's image is. The payload pads to its size, so they are told apart by hash, and their
+  initramfs files differ from the overlay on.
+- **Stage N0, Perl 5.36 on SPEC's test `makerand.pl`.** This is does-it-run only, with no cost reading, at about 0.1 s
+  of work.
+  - SPEC's `test.pl` cannot serve Perl 5.36. It runs each test as `..//$^X`, and upstream 5.36 makes `$^X` absolute,
+    so every child fails (317 of 317 on the native build).
+  - The reference is native 5.36's own `makerand.out`, `acbf40c2…`: deterministic, and not SPEC's 43,841 B because
+    5.36's rand differs.
+  - Fig. 10's suns.pl row is a train input and waits for the final campaign (runtime lane, the lead's rule).
+- **Stage N1, Fig. 10's Wireshark workload, as oneop's `run-app-zones4.sh` runs it.**
+  - Each of the 169 captures of `set169.txt` runs as `tshark -r caps/<c> -V -n`, with TZ=UTC and an empty
+    configuration directory.
+  - Each stdout is appended after a `=== <c> rc=<n>` header. The answer is that file's sha256, against oneop's
+    `b190069b…`, which matched in all six oneop boots.
+  - A heartbeat is printed every 20 captures.
+
+**Run.** The board lane runs both boots with its B5b-2 capture runner on board 2, stock first, each bounded at 2 h,
+with the resident read back. `/init` bounds each stage at 3,600 s.
+
+**Reader** `nested/b5b2/read-boardB.py` (`122f1974…`): the control line, the Perl arm, then the tshark arm's 169
+inputs, 0 nonzero, the answer's hash, and its span.
+- On both twin logs it exits 0.
+- On a twin log of the overlay without the Perl stage it exits 1 (`perl: NO STAGE`).
+
+**Twin evidence** (the trap-route QEMU twin, as boot A's; logs `a9ec37c9…` and `f469853f…`): both boots give control
+rc=7, Perl's `acbf40c2…`, tshark's 169 inputs with 0 nonzero, and `b190069b…`.
+- The twin's spans are not repeatable. tshark stock read 166.3 s and 193.1 s in two twin runs of the same image, and
+  prot 194.3 s and 181.7 s. None is read.
+
+**Predictions.**
+1. Both controls read `rc=7`.
+2. Both Perl arms answer `acbf40c2…` with rc 0.
+3. Both tshark arms answer `b190069b…` with 169 inputs and 0 nonzero.
+4. **Cost** (cross-boot, wall-clock span, kernel and trap route included): prot against stock between −5 % and +15 %,
+   point +2.3 %, oneop's image-instruction cost.
+
+**What each outcome says.**
+- **All met:** Fig. 10's Wireshark revision runs on B5b-2 silicon with stock's answer, and so does Perl 5.36.
+- **tshark prot does not return, or answers differently:** reported with the heartbeat and dmesg. M-16's stop on P1
+  was in this allocator's CDERIVE, but B5b-2 is another bitstream with another route, so nothing is predicted from it.
+- **A control fails:** that boot is void.
+
+**Limits.**
+- The cost is cross-boot, one boot per arm, spans only.
+- Perl is does-it-run only.
