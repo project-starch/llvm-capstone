@@ -63,7 +63,7 @@ ariane_pkg.sv: 238 entries, with the `CAPSTONE_SUBLET_FMT` block after index 235
 | 219 lsu_head_op | 0xd7 | fu_op 215 = **LDC** |
 | 220 lsu_head_debug | 0x8c | lsu_ctrl.valid 1, lsu_ready 0, fu 12 = CAPSTONE_DYN |
 | 221 store_debug | 0xf8 | commit queue valid 1111, **data_req 1, data_gnt 0**, no_st_pending 0 |
-| 222 | 0 | adapter_tag_debug, constant '0 in this build |
+| 222 | 0x00 | adapter_tag_debug, the AXI adapter's shadow-tag FSM: tag_state 0, tag_wr_pend 0, tag_rd_inflight 0 (wt_axi_adapter.sv:264; corrected, see below) |
 | rev_node debug / head / serving | 0 / 0 / 0 | **no reading**: constant 0 in the Sublet build (capstone_sublet_life.sv:226-229) |
 
 **Correction (2026-11-25, after the first push of this record, 57c5f32e3880).** The row above for sw=195 and sw=229
@@ -79,12 +79,21 @@ followed from the mux down to its `assign` or procedural write. The Anvil units'
 `.anvil.sv` of 904cd9c6b's synthesis tree: `capstone_dyn_unit.anvil.sv:19227-19230`, its syncers' req_set at :19823,
 and `capstone_flu_unit.anvil.sv:5361`. The tracer was first shown to find `load_state` undriven and `store_state`
 driven.
-- **Driven:** 255; 224 (all eight bits); 192, 193, 194; 219, 220, 221; the commit pc (scoreboard.sv:149); the trap-log
+- **Driven:** 255; 224 (all eight bits); 192, 193, 194; 219, 220, 221, 222; the commit pc (scoreboard.sv:149); the trap-log
   mepc and tval (cva6.sv's procedural log); 225 bits 6-4, 2-0; 226 bits 6, 5, 2, 1; 227 bits 7, 5, 4, 3.
 - **Constant in this build:** 225 bit 7 (trace_buf_empty = 1, no tracer) and bit 3 (dom_switch_busy = 0); 226 bits 7,
-  4, 3, 0; 227 bits 6, 2-0; 228 (0x80); 222 (0); the rev_node debug word, head and serving index (0,
+  4, 3, 0; 227 bits 6, 2-0; 228 (0x80); the rev_node debug word, head and serving index (0,
   capstone_sublet_life.sv:226-229).
 - **Undriven:** 195 and 229 (load_state).
+
+**Second correction (sw=222).** This table first listed 222 as a constant 0, from cva6.sv:2566. That `assign` sits in the
+`gen_adapter_tag_debug_tieoff` branch, which builds only when `DCacheType != WT`. The FPGA build is WT, and there 222
+is the cache subsystem's `tag_debug_o` (cva6.sv:2610). It reaches `wt_axi_adapter.sv:264` `{tag_state_q,
+tag_wr_pend_q, tag_rd_inflight_q, 1'b0}`; the `'0` at wt_cache_subsystem.sv:224 is the PITON branch's. 904cd9c6b's
+routed dcp holds 17 tag_state_q, 4 tag_wr_pend_q and 1 tag_rd_inflight_q flops under `i_adapter`, beside a known-cell
+control (load_unit's state_q: 4). The rtl lane read it right. The tracer used here does not evaluate generate branches
+or defines. The other constants above rest on branches checked against the synthesis log itself: the .vds elaborates
+`capstone_sublet_life`, so the Sublet branch, and names no `capstone_dom_switcher` and no tracer.
 
 The board lane's snapshot tool now prints each value with this status (run_sup_bare-linux4.py, cdad66bfa4eb71b6), so
 an undriven or constant value is never reported as a reading.
