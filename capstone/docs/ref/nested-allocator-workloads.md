@@ -8213,3 +8213,115 @@ reference.
 - **A stage cut at its bound, or a silence stop:** no reading for that stage. The wedge snapshot goes to runtime.
 - **The board/twin ratio** is a reading of this boot: per run, from the @@UP lines and CPython's up0/up1, against the
   twin's. It is not a prediction.
+
+### Pre-registration: B5b-2 board boot "nested-corpus", SQLite then PHP engine-repros (written 2026-11-26 04:17 host time (+08), 20:17Z on Nov 25, before the boot)
+
+**What it is.** Runtime's B5b-2 item 1 on silicon: the engine-repro corpus on the trap route, in one boot.
+- SQLite: stages N1 (malloc) and N2 (pools).
+- PHP: P10-P13 (asan-blind; arms stock, block, object, exact) and P14-P17 (temporal-asan-visible; the same arms).
+
+It runs after `nested-cpymem`, whose @@UP lines give the first board/twin ratio. The board lane runs it.
+
+**Platform.**
+- Board 2's b42c8c644 session after nested-cpymem, as runtime allocated it. Board 3's offer is the fallback. The boot
+  runs on exactly one board, and its readings carry the board ID.
+- **The seal is the full B5b-2 seal b42c8c644, never its spatial-only variant.** On that variant every cause-25 catch
+  is MISSED by design, so a corpus boot there would only be an explicit, labelled control. It is not this run.
+- Runner: the board lane's run-one-e.sh (runner 5), with the board's own booking and readbacks.
+- **The preflight state is part of the reading.** If the driver's first line reads `PREFLIGHT SKIPPED`, every verdict is
+  reported as UNGATED.
+- Image `<hdd>/nested/b5b2/corpus/payload-board4/fw_payload.bin`, sha256
+  `540fec67c0a30b9e6cf53e856faceb1dfbf83629a2753e4c1294a580392dd600`, 21,657,608 B:
+  - firmware: sbi-keep trap-route-keep-tags;
+  - DTB: caplifive-b5b2-wide.dtb `3d223e80…` (`sublet.dom_wide_grants=1`, present in the bytes; memory 0x3c2d2000 B);
+  - **board kernel** = the series at 6d4504f8b073 + the runtime lane's msghdr loader (unvalidated at registration),
+    Image `d0142665…`. It is relinked from trapk/fpga/linux-6.1 with only `init/version-timestamp.o` recompiled
+    (build.log CC lines);
+  - initramfs `b0e469ff…` = base-rootfs `dd2dd8ff…` + overlay `ovl-board4` (overlay.cpio `ec03aeec…`);
+  - trap-vexec = runtime/trap-route-tools 081c21bd1f0e.
+- `ovl-board4` is `ovl-board2` (the twin-qualified overlay with lo up in the PHP stages) changed only in time limits and
+  stamps, by `make-board-kit.py` (`ce218337…`) with `board4.spec` (`f008744e…`):
+  - /init → trapk/fpga/init-ordered-bound (`6462764b…`), with per-stage bounds from /stages.bound;
+  - the per-run watchdog goes from 300 to 900 s, the same on every arm;
+  - an `@@UP <uptime>` line follows each run's end line, outside every reader's run text.
+- **Stage bounds:**
+  - N1 and N2, 7,800 s each;
+  - P10-P13, 3,600 s each;
+  - P14-P17, 4,500 s each.
+- Each bound is at least 15× the stage's twin time without its hung runs, plus one full 900 s watchdog per hung run.
+  Twin spans on twin-board4 are:
+  - N1, 941 s, of which 900 s is case 11's watchdog;
+  - N2, 41 s;
+  - P10-P13, 939-946 s each, of which 900 s is case 30's watchdog;
+  - P14-P17, 123-142 s.
+  - So the worst bound need is P14-P17's 15 × 142 = 2,130 s against 4,500 s.
+- **Boot bound: 49,200 s.** That is the sum of the stage bounds (48,000 s), plus 1,200 s for upload, boot and the
+  smoke control.
+
+**Twin reference** (`twin-board4`, this exact overlay on Image `749fed26…`, wide grants, `boot-long.py`):
+- The lock was asked 02:30:20 and granted after 813.5 s; the run was done 04:13:28.
+- Every one of the ten stages ended rc 0. Console log sha256 `9c38c8e375717550…`.
+- `grade-corpus.py --emit` wrote 346 cells, `predictions.json` `0f613f2c3ffeec41…`.
+- twin-board2 (the same overlay with the old limits) graded against these predictions reads 346 of 346 equal, exit 0.
+- Twin per-run times, from @@UP:
+  - the longest run that does not hang is case 70 (crash-161) at 58-78 s. It is an OOM kill of php-real-nested at the
+    twin's 512 MB, and its cell is out-of-denominator from the corpus's pristine record (`SIGNAL:11`), whatever the
+    run does;
+  - next is case 21 (crash-075) at 30-50 s;
+  - the hung runs are SQLite malloc 11 (`@@CASE-TIMEOUT`, rc 137) and PHP asan-blind 30 (`VM_EXIT_TIMEOUT`, four
+    arms), each cut at 900.1 s.
+
+**Predictions: every cell equals twin-board4's** (346 cells, `predictions.json`). Tallies:
+- **SQLite:**
+  - malloc 29 MISSED, 4 NO-READING (02 and 20 unattributed, 06 inconclusive, 11 infra);
+  - pools **28 CAUGHT, 5 MISSED**, after the cause-24 rule moves 31 (statDecodePage), as registered at 21:42 on 11-25.
+- **PHP asan-blind** (CAUGHT/MISSED/NO-READING):
+  - stock 5/29/5, block 12/21/6, object 25/10/4, exact 29/4/6.
+  - Across the four arms, the NO-READING cells are:
+    - 15, 25 and 44 on every arm (out-of-denominator; 25 by its putenv precondition);
+    - 30 on every arm (infra);
+    - 03, 19 and 42, unattributed, three cells in all;
+    - 37, not-reached, two cells.
+- **PHP temporal-asan-visible:** stock 1/5/25, block, object and exact 6/0/25 each. The 25 NO-READING cells are
+  out-of-denominator by the corpus record.
+- **grade-corpus.py on the board's capture: exit 0.**
+
+**Grader.** `python3 <hdd>/nested/b5b2/corpus/grade-corpus.py <UART capture> <new out dir>
+<hdd>/nested/b5b2/corpus/platform-board.json <hdd>/nested/b5b2/corpus/twin-board4/predictions.json`
+- Script hashes: grade-corpus.py `e2d80260…`, read-sqlite.py `8aac31a3…`, read-php.py `a2d71056…`,
+  platform-board.json `0b5cfd85…`.
+- It runs the readers with their own trap/eval judges, applies the cause-24 rule, and compares [verdict, reason] per
+  cell.
+- Exit codes:
+  - 0: every cell equals its prediction;
+  - 1: a cell differs;
+  - 2: a reader found no reading, or a predicted cell has none (a boot that stopped part-way).
+- Controls, run today:
+  - twin-board4's own log gives 0 (346/346);
+  - twin-board2's log gives 0;
+  - the same log cut at P16's begin gives 2 (222 cells read, 124 with no reading);
+  - twin-board vs twin-all gives 1, and a trimmed CPython log gives 2, as before.
+- One control was void and was redone: a 4 MB cut of a 378 KB log is the whole log.
+
+**How each outcome reads.**
+- **Exit 0:** silicon's trap route, under the full seal, reads the corpus as the twin does, cell for cell.
+- **A CAUGHT ↔ MISSED change in a cell** is a protection finding. It is reported with its fault line: cause, pc and
+  symbol.
+- **A cause-24 reading:**
+  - outside pools 31, or in 31 outside statDecodePage, is listed apart, and its verdict stays the judge's (the rule as
+    registered);
+  - in a cell the twin never studied, it is flagged by the grader.
+- **A change of reason only, inside NO-READING, on 30 (infra ↔ not-reached) or SQLite 11 (infra ↔ inconclusive):** these
+  are the timing cases. Both pairs have been read on the twin across runs (twin-board, twin-all). It is a timing
+  difference, reported as such, not a protection difference.
+- **Case 21 (crash-075) cut by its 900 s watchdog:** at a board/twin ratio above about 18 it overruns. Its cell would
+  then read a budget reading, not a verdict. The ratio is read from nested-cpymem first.
+- **Case 70 running longer than on the twin:** the board has about 963 MB to the twin's 512 MB, so its OOM may come
+  later or not at all. Its cell is out-of-denominator by the corpus record either way. Only its time can change.
+- **Case 25 reading anything but out-of-denominator:** the putenv probe's platform reading differs from the twin's. It
+  is reported as a platform difference.
+- **32 (crash-097) not MISSED:** the loopback state differs from the twin's, read against the stage's `ifconfig` line.
+- **A stage cut at its bound, or a silence stop:** that stage gives no reading (grader 2). The wedge snapshot goes to
+  runtime, and the other stages' cells stand.
+- **The board/twin ratio** is a reading of this boot, per run from the @@UP lines, against twin-board4's. It is not a
+  prediction.
