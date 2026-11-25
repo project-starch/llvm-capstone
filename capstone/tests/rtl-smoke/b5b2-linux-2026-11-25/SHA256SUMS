@@ -1,0 +1,8 @@
+0e36edbb343c670372b52f027d2f25f393490ce8f00c3e0081ca59d2b8b7de4e  trapk/fpga/fw/platform/fpga/ariane/firmware/fw_payload.bin
+e99b1b58a4f502b0895907a5b974f25d8a76b5b619c333014b031082eef4c04a  trapk/fpga/linux-6.1/arch/riscv/boot/Image
+5c5bfbc7c9fcaa6d1cd10249878f51151c94fb084a5bc3053389b491be0ad3a0  trapk/fpga/linux-6.1/vmlinux
+b35cf71b599053c0670c3e2b5122b1f4024f08e464f5401afe92b66903c8877b  trapk/fpga/caplifive-b5b2.dtb
+740c6c32854b375c895dbbd5c2b26f068b9049e8ac35eeeebff07f3b0d3b1fd3  trapk/fpga/initramfs.cpio
+ba6b520257a0faf1e8858bf35f249450c6b71fee931e74f25da39f534fd61c73  trapk/fpga/root/regs
+8ea947d73bccc0438fc17b5c27c33bbee5c5f91683ba4a8a9138f9ebd0ba618a  trapk/fpga/root/enter
+f6c0da5452fcc775e9336ce91a88548a7b9ef60bf9e65f5a48738a8695372afd  trapk/fpga/root/init
