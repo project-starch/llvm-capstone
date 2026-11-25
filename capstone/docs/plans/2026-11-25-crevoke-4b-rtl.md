@@ -63,6 +63,44 @@ the reference is capstone-qemu da49602d76 (`cap_rev_kill_step`). RTL: capstone-a
   - an older committed store into the table may not have drained before a lifetime op reads it (pre-existing);
   - ldc_lsu_ex outranks the replay mark at CAP_WB (pre-existing; LDC/STC bypass the DYN unit here).
 
+## The store drain and the audit's residual 2 (2026-11-25, the semantics owner's rulings)
+
+- **Residual 1, the ruling.** The reference reads the table as memory holds it, with no ordering clause for software
+  writes, so the lifetime unit must see the hart's own committed stores. The trap-route kernel grows the table with
+  plain stores (record page, directory entry, then CAPACITY), with no fence on its !SMP build.
+- **904cd9c6b's exposure** (b5b2-sbdrain.S, five shapes, on 904cd9c6b's core files): no exposure found in five shapes
+  at sim memory delay 12. In each, a CDERIVE or CSMINT retried after the growth stores saw the grown table, the
+  kernel's sret path included.
+- **The fix, capstone-ariane 609d7216c.** The unit accepts a lifetime operation only while the committed store queue
+  is empty (cva6.sv no_st_pending_ex, registered in ex_stage). LSU probes are not held.
+  - No deadlock: the stores waited for are older and committed, and drain without the unit.
+  - A first version (36c71714c) also waited for the D$ write buffer. That cost 430 cycles a round of
+    {CDERIVE, CREVOKE} even with no store, because the buffer holds the unit's own writes until DRAM acknowledges
+    them. It was replaced, with the ruling's agreement.
+  - Cost at sim delay 12: 16 rounds of {CDERIVE, CREVOKE} take 4,283 cycles against 904cd9c6b's 4,221; with four
+    stores ahead of each round, 4,600 against 4,538.
+- **The D$ property behind it** (b5b2-sbfwd.S, 88db40027, with sim-only D$ trace points). The D$ holds a 16-byte read
+  while a plain store to its granule is in the write buffer. Shown on CAPACITY, the header's free list, a record, and
+  a directory entry, each while its entry was resident, with the fence controls showing no hold. The walker's
+  directory reads are 16-byte reads too.
+  - The hold's view of the store buffer is the whole buffer (store_buffer.sv's shadow), so 904cd9c6b already read
+    memory's state by the hold. The drain removes the dependence on the store-buffer half of it.
+  - Word forwarding is not relied on and is unclaimed: its trace point never fired.
+  - The lines relied on are named in the test's header.
+- **Residual 2** (the LSU exception record outranking the replay mark): unreachable under CAPSTONE_DYN_BYPASS. LDC/STC
+  results are forwarded as normal results, so the record is never captured: 0 captures and 0 merges over 62 tests,
+  faulting LDCs included. The guard is in anyway: the record merges only into the result of the LDC/STC the DYN unit
+  dispatched.
+- **Core, 609d7216c:** 62 tests identical in value to bf8fc0cfb's (cycle readings move). Lint: the Sublet gate
+  identical by name to 904cd9c6b's; ids55 adds the three new ex_stage ports as unused names.
+
+## The synthesis gate on 88db40027 (4(b) + the drain + the guard): pre-registered (2026-11-25, before the request)
+
+88db40027's core differs from 609d7216c only in SUP_TRACE blocks (sim only). The keys are bf8fc0cfb's below. The
+reported bands add, for the drain: the unit's dyn acks gated by one more AND, and ex_stage's one flop and the guard's
+AND, so the lifetime unit and ex_stage stay inside their bands below. bf8fc0cfb's synthesis-only gate (4(b) alone)
+is the sizing read for 4(b); the difference between the two gates is the drain and the guard.
+
 ## The synthesis gate on bf8fc0cfb: pre-registered (2026-11-25, before the request)
 
 GATE KEYS (base: step 9's gate on 904cd9c6b, dcp sha16 1eebdc9602d3f0bf):
