@@ -6887,3 +6887,101 @@ applet, so every beat of the board-2 run read 0 and the fallback hid it ("The `s
 the file is absent, never a number. The manifests were regenerated (`sha256sum -c` rc 0). `read-s100pair.py` accepts
 `NA` and the padded `wc` output. It was tested on `pair-dry/ret-twin-u1.txt` and on a copy with `NA` beats. The s100
 rechecks predate the change, so rule 8 is re-run on them before the final campaign.
+
+## M-16: a stress form of the allocation path (2026-11-25)
+
+### Pre-registration: the protected allocation path alone, 100 then 400,000 packets in one boot on P1, board 1 (written 2026-11-25 11:40, before the boot)
+
+**Question.** M-16's five boots (above) read the protected tshark's non-return as intermittent on P1. Pooled, 5 of 8
+boots return. Every non-return holds the core at the CDERIVE of `wmem_block_fast_sublet_alloc`. One tshark run per
+boot reads that rate at 40-68 min a sample. The result named the next form: many issues of that allocation path in
+one boot. This boot runs that path alone, about 41 times as often as one tshark run, and asks whether it stops.
+
+**The program** (`nested/tshark/stress/tsapp-stress.c`, `42b7ad10…`). It is not a port file, and it is not tshark.
+- **Scopes.** It uses tshark's two scope kinds:
+  - a packet scope (BLOCK_FAST) with K = 212 allocations per packet, then `wmem_free_all`;
+  - a file scope (BLOCK). One allocation in 12 goes there, half of those are freed again with `wmem_free`, and the
+    scope is reset every 1,000 packets.
+- **Sizes.** A fixed LCG draws them: 70 % 8-64 bytes, 25 % 65-512, 5 % 513-4096. Each allocation's first and last
+  bytes are written and read back into a checksum, so the checksum is a function of argv only.
+- **Output.** A `STRESS pkt=…` heartbeat every N packets (N = 10 for 100 packets, 10,000 for 400,000) places a stop
+  to within N packets.
+- **Build** (`build-stress.sh`, `ad719e29…`):
+  - compiled with work-sublet's own `tshark.c.o` compile line, and linked as `build-domain-native.sh` links
+    `tshark_m5`: the same inputs, `tsapp-heap.o`, the SDK's libc and `-Wl,--no-relax`;
+  - so the wmem 0001 objects (with the Q-15 repair), glib and the runtime are tshark's own objects.
+  - **Control:** the same link of work-sublet's `tshark_m5.o` reproduces `tshark_m5.dom` byte for byte. It does in
+    work-none too.
+  - Image `c93cc972…`, stripped as tshark's is: `84d347d8…`.
+- **The site.** `wmem_block_fast_sublet_alloc` holds the same word at the same offset as in tshark. tshark's stop pc
+  `0x3ff6780f04` is offset 0x45c, word `0xa283955b`, the CDERIVE. In this image it is vaddr `0x77c9ee`, which loads
+  at **`0x3ff676c9ee`**, assuming the same load base as tshark's.
+- Census against the unprotected build: +36 CDERIVE and +5 CREVOKE.
+- **Twin** (slot 28, 2^18 records, `nst-stress2`): the protected arm's 9,000-packet output equals the unprotected
+  arm's, line for line.
+  - It issues 1,748,489 fast allocations. tshark issues 1,905,321 per run (twin zones).
+
+**Configuration.**
+- P1 `…-pagedtbl_d83d3a633` is resident on board 1; the chain reads it back by name.
+- Kit `t3-smoke/bkit91-k2n-native-p1-tree-cscfix` (2^18 records), M-16's.
+- Chain `nested/p1st/p1st.conf` and `p1st.list` on `nested/p1s100/nat-run3p.sh`. The list line is
+  `stress1 2700 210`, so `BAKED_TIMEOUT=10800`: a stop holds the board 3 h.
+- Stage `nested/p1st/stress1` (`stress1.SHA256SUMS`, 19 files), from the kit's `make-train-stage.sh` around
+  `tshark/stress/stage-board` (`make-stage-stress.py`, `e1c0ecaf…`). Commands, in order:
+  - **s0:** 100 packets, the protected image;
+  - **s1:** 400,000 packets, the protected image.
+- **No unprotected arm on the board.** With two images the firmware is 30,051,848 B, over the kit's 26,000,000 B
+  cap. The first stage was set aside for that reason.
+  - The rule-8 recheck had built that firmware without refusing it: the cap is checked only by the real board run.
+  - With one image the firmware is 23,760,392 B.
+  - The unprotected control is on the twin, and in M-16's board record, where the unprotected tshark returned in
+    every boot.
+- Checked off the board (rule 8, `nested/p1n/recheck-p1k.sh` with this kit):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on tsu-r3's real transcript and on its cut, PASS all 9 steps, `BAKED_TIMEOUT=10800`;
+  - real firmware build 23,760,392 B (`b1c1c36d…`);
+  - an `NR_DRY=1` pass of the chain to DONE (`p1st/dry.log`).
+- **Reference.** The twin ran this exact stage (`nested/out/nst-stress-board`, serial `153ffc99…`).
+  - Both commands return.
+  - s1 ends `packets=400000 fast=77731920 block=7068080 free=3535783 sum=8b070641d4aab910`.
+- **Reader** `nested/p1st/read-stress.py` (`0384cfba…`). For each command it reports RETURNED (rc 0 and every
+  STRESS line equal to the twin's), NO RETURN (the last heartbeat and the wedge apertures) or OTHER.
+  - On the twin's serial as both inputs: both RETURNED.
+  - On a copy cut after packet 150,000: NO RETURN at packet 150,000 (29,148,417 fast allocations).
+  - On a copy with one checksum digit changed: OTHER, mismatches at the last two lines.
+  - Its aperture patterns, run on tsu-r1's real transcript, read M-16's published values (`0x3ff6780f04`, `0x92`,
+    `0x8c`, `0x14b9`).
+
+**The hypothesis it tests (H1).** The non-return is a per-issue hazard of this allocation path, at M-16's rate and
+independent of the rest of tshark.
+- M-16's pooled non-return rate per tshark run is 0.085-0.755 (95 %). Over 1.905 M fast allocations a run, that is a
+  hazard of 4.7e-8 to 7.4e-7 per allocation.
+- s1 issues 77.7 M:
+  - the expected number of stops is 3.6 to 57;
+  - the chance s1 returns under H1 is at most 0.027;
+  - the median stop falls between packets 4,800 and 76,000.
+- s0's 19,360 allocations return under H1 with probability at least 0.986.
+
+**Predictions.**
+1. s0 returns, with every STRESS line equal to the twin's.
+2. **s1 does not return.** Its last heartbeat lies before packet 400,000. The commit pc reads the stress image's
+   CDERIVE, `0x3ff676c9ee`, and sw=225 and sw=220 read as in M-16.
+
+**What each outcome says.**
+- **s1 stops at `0x3ff676c9ee`:** the stop needs nothing of tshark beyond this path. The heartbeat places it to within
+  10,000 packets, and this program is then the hardware side's reproducer, at minutes a sample instead of an hour.
+- **s1 stops elsewhere:** reported as itself, with its pc.
+- **s1 returns, equal to the twin:** H1 is rejected. At 77.7 M issues without a stop, the hazard of this path alone
+  is below 3.9e-8 per allocation (95 %), under the lower bound M-16's rate needs (4.7e-8).
+  - The non-return then needs some of the rest of tshark: its dissection, its heap and memory size, its I/O, or its
+    run time.
+  - The next stress form would add those, one at a time.
+- **s0 does not return:** the boot is read at s0.
+
+**Limits.**
+- One boot. A return is a bound, not a proof.
+- The stress program differs from tshark in everything except the allocators and their callers' shape. That is
+  the point of it, but a return says nothing about which difference matters.
+- The board's speed for this program is not known before the boot. The twin's s1 took 14.4 s of guest time; on the
+  board it is estimated at 10-40 min. If the 3 h budget ends while the heartbeat still advances, that is reported as
+  "no stop within T", not as a stop.
