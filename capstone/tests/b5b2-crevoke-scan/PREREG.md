@@ -79,3 +79,25 @@ mnemonic grep had missed the kernel's CV_KILL and the lean runtime's heap_renew 
 replaced it.
 
 A stage whose max is above 0 refutes prediction 2 for that stage. Its BIG lines (pc, privilege) then name the issuer.
+
+## Amendment 1, before the run: how the count maps to the silicon walk (rtl's reading)
+
+The rtl lane read capstone_sublet_life.sv at each bitstream: the count is a LOWER bound on what CREVOKE_S visits.
+For a run of n members:
+- **904cd9c6b:** a check pass over n + 1 records, then a commit pass that reads and writes each member: 2 reads and
+  1 write per member, plus the open, the operand and the header writes.
+- **4(b) bitstreams** (7861abcfa, 88db40027, 28fcbb646, a5c45a46d): a forward scan of n + 1 (skipped on a valid
+  restart), a backward check per chunk of at most 64, and a backward release: 3 reads and 1 write per member, plus 4
+  accesses per chunk.
+
+The exposure unit is measured cycles, not accesses. Board 2 timed a CREVOKE over a 200-member run with rdcycle:
+4,227 cycles on 904cd9c6b (about 21 per member) and 5,281 on 4(b) (about 26). Those are warm-cache figures, since the
+records had just been written by CDERIVE.
+- So the 1,048,574-cycle bound is reached at FEWER than about 40,000 members. The cold factor is not known.
+- The earlier figure of about 46 cycles per node (about 22,700 nodes) belongs to an older walk and is not used here.
+
+The count, the thresholds (over 1,000 and over 20,000) and the predictions are unchanged. A row is read as exposed if
+its max approaches the warm bound. Every stage with a max above 1,000 is listed with its BIG lines, so rtl can apply a
+cold factor once one exists.
+- On 4(b) bitstreams, an interrupt ends an execution after its current chunk, and its flush clears the pending probe.
+- On 7861abcfa the bound is gone (the R-77 fix).
