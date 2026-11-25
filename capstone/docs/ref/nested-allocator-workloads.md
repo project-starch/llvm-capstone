@@ -7808,3 +7808,114 @@ fault line:
 
 **Files** (`<hdd>/capstone/nested/b5b2/perlfault/`): `run-native.sh`, `children.log` (the 317 invocations),
 `sr/test.out`, and the twin overlay `ovl/`.
+
+## B5b-2's bug corpora, memcached and CPython on the trap-route twin, and the cause-24 rule (2026-11-25)
+
+These are the twin readings that become the board's predictions for runtime's B5b-2 items 1-3, plus a judging rule
+for the corpus boots. That rule is pre-registered here, written 21:42, before any board run of the corpus. No board
+has run any of this.
+
+**The run.** `twin-all`, one boot on the trap-route QEMU twin:
+- QEMU: qemu-crv `ea5c05f3…`, `-m 512M`, one hart, no exact bounds, the silicon's setting.
+- Firmware: fw_jump `67115ce6…`.
+- Kernel: trapk Image `4fc06dde…` with `sublet.dom_wide_grants=1`, which is what `caplifive-b5b2-wide.dtb`
+  (`3d223e80…`) gives the board.
+- Root filesystem: base-rootfs `dd2dd8ff…`, with compiler's /init.
+- Lock: granted 20:29, done 21:19. Console log sha256 `08c735e24a4907bc…`.
+- Stages: C30/C31 CPython, M20/M21 memcached, N1/N2 SQLite engine-repros, P10-P17 PHP engine-repros. Every stage
+  reached `@@QSTEP-END rc=0`.
+
+**CPython** (stock `e47ab197…`, prot `a269a6b5…`; `pyperformance-subset.py`, `PYTHONHASHSEED=0`):
+- both arms rc 0 and `PYPERFORMANCE-OK 8`;
+- both answers are `58211793…`, which equals the native reference.
+
+**SQLite engine-repros** (`read-sqlite.py`, trap/eval's observe and judge; image manifests: malloc `fc4624193c28ccf5…`,
+pools `0222760f5d5779a6…`, 33 images each):
+- malloc: MISSED 29, NO-READING 4. All 33 cells equal case.json's virtual-malloc verdict.
+- pools: CAUGHT 27, MISSED 6. 31 of 33 cells equal the record. The other two are 29 (`sqlite3Get4byte`) and
+  31 (`statDecodePage`): cause 28 CAUGHT in the record, cause 24 here in the same function, MISSED under the
+  arm's `[25, 28]`.
+- Prior art: this is the pair recorded above on 2026-11-23 (capstone-qemu 0542c5556c): with exact bounds, 29 and 31
+  are cause 28 at the same pc and address; without, cause 24. It is the moved-capability rule R-60 (qemu-crv
+  `op_helper.c` `capstone_set_moved_cap`): a CINCOFFSET to a cursor the compressed form cannot represent writes an
+  untagged integer, and the load through it traps 24. kit-p1v, the P1 twin, read the same 6 pools MISSED.
+
+**PHP engine-repros** (`read-php.py` and trap/eval's run-realphp.py `--from-record`; image `a26d572f…`, probes
+putenv `fd2e1555…` and nested `36cfcece…`):
+
+| arm | asan-blind CAUGHT / MISSED | temporal-asan-visible CAUGHT / MISSED |
+|---|---|---|
+| stock | 5 / 30 | 1 / 5 |
+| block | 12 / 22 | 6 / 0 |
+| object | 25 / 11 | 6 / 0 |
+| exact | 29 / 5 | 6 / 0 |
+
+Against kit-p1v's committed bundles (`results/2026-11-23-p1v-twin`), 271 of 280 cells are the same. The 9 others are
+four cases:
+- **25 (crash-084)**: out-of-denominator on kit-p1v, MISSED on four arms here.
+  - The putenv probe printed the ABSENT pattern exactly.
+  - But the judge counts a probe reading only from a transcript that names its image's digest
+    (`transcript_image`).
+  - trap-vexec.sh printed no `capstone-exec: exit image=… sha256=…` line; the log has none.
+  - This is a gap in the trap route's tooling (fix below).
+- **03 (crash-008), exact arm**: unattributed here, CAUGHT by chain on kit-p1v. The trap route's fault line has no
+  frame chain (`chain: []`), so the climb from `__stpcpy` to `php_date` cannot be made. Recorded as
+  "unattributed: the trap route's fault line has no chain".
+- **21 (crash-075)**: CAUGHT on pools and exact here; kit-p1v read infra (cause-30 node-table exhaustion). Recorded
+  as infra/timing.
+- **30 (crash-092)**: infra on the nested arms (the per-run watchdog), as in run18. A timing case.
+
+**memcached: not qualified, a route gap.**
+- 0 of 6 repetitions qualify, stock and protected alike.
+- The server accepts, reads `shutdown` and exits 0, but every response reads `<EOF>`.
+- Its responses go through `tcp_sendmsg` → `sendmsg` (memcached.c:137). trapk's `sublet_load_embedded` (loader.c)
+  admitted only the iovec calls, execve and pselect6, and gave sendmsg -ENOSYS ("msghdr … get ENOSYS until their
+  loaders exist").
+- Ruling (runtime): no change to the workload. The fix is a msghdr loader in the kernel, which runtime has written
+  (Image `749fed26…`). Unpatched memcached is requalified on that Image once runtime's directed test reads.
+- A build with sendmsg rewritten as writev (`out-w`, stock `c165e169…`, protected `5fd5093c…`) is a twin diagnostic
+  only: a patched workload, not a measured arm.
+
+**trap-vexec.sh's exit line** (for case 25):
+- The C launcher's line is `capstone-exec: exit image=<path> sha256=<hex>` (runtime/virtual/exec.c:1307). trap-vexec.sh
+  now prints it on a run that ends, under the same gate (stderr a terminal or `CAPSTONE_EXEC_DIAGNOSTICS`).
+- tests/trap-platform/test-vexec.sh: 8 of 8 PASS. The new checks are the exact line with the image's own digest, no
+  line without diagnostics, and no exit line on a fault. The previous script fails the two new positive checks.
+- The diff is handed to runtime (`trap-vexec-exitline.diff`, `c6a2bb88…`; script `41fb8b58…`).
+- The probe's positive control on the twin is queued (`ovl-r60off` stage N3). Its pass condition: run-realphp's
+  probe_reading reads ABSENT (False) from that transcript.
+
+### Pre-registration: cause 24 under compressed bounds (runtime's rule, as registered)
+
+Silicon has no exact bounds, so the board reads cause 24 where the exact-bounds record reads 28. For this corpus run
+and its board boots, a cause-24 cell scores CAUGHT only if all three hold:
+- (a) its faulting pc is in the same function as the exact-bounds reference catch;
+- (b) the exact-bounds twin run of the same case and image catches it with cause 28 there;
+- (c) the faulting operand is the result of a CINCOFFSET or CINCOFFSETIMM in that function.
+Otherwise the cell keeps the judge's verdict.
+
+The rule applies to every cell. On the twin, exact bounds off, the cause-24 cells are 7, all SQLite. PHP has none:
+the same search finds 134 cause-25 and 52 cause-28 cells there. (c), read from each image's disassembly at the
+faulting pc:
+
+| cell | function | faulting operand | (c) |
+|---|---|---|---|
+| pools 31 | `statDecodePage` | `cincoffset a0, a0, a1` right before `lbu a1, 0(a0)` | met |
+| pools 29 | `sqlite3Get4byte` | its argument, spilled and reloaded with `ldc`; the cincoffset is in the caller | not met |
+| malloc 22 | `editDist3FindLang` | `cincoffset a0, a0, a1` right before `lw a0, 0(a0)` | met |
+| malloc 02 | `sqlite3PagerSetPagesize` | loaded with `ldc` from memory | not met |
+| malloc 05 | `sqlite3DropTriggerPtr` | loaded with `ldc` | not met |
+| malloc 19, 20 | `nodeRelease` | loaded with `ldc` | not met |
+
+- 29 stays MISSED, recorded as "24 at an operand formed by a cincoffset in the caller: excluded by rule (c) as
+  registered". If the call-chain form is the better rule, it is pre-registered for the next corpus run, with 29 as
+  the case that motivates it.
+- (b) is one exact-bounds twin of the 7 cells plus pools 30, which is a control because it reads cause 28 either way
+  (`ovl-r60b`, `x-capstone-exact-bounds=true`).
+- Its off half is the same 8 cases on the same kernel (`ovl-r60off`). Both run on the twin's current Image
+  `749fed26…`: the twin's Image path was rebuilt in place, and `4fc06dde…` is not kept. The diff between the two
+  Images is the msghdr loader, which none of these cases calls.
+- The two halves' `capstone-vexec` differ by the exit line above, which prints only on a normal exit, never on a fault.
+- **Prediction:** pools 31 moves, and it is the only cell that does. 22 meets (c), but it cannot meet (a): the
+  malloc arm has no reference catch, and its record is MISSED on virtual-malloc at both bounds settings (the
+  2026-11-23 readings above). So the rule moves one cell, pools 27 → 28 CAUGHT, if (b) reads 28 for 31.
