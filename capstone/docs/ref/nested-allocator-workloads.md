@@ -9770,3 +9770,20 @@ instruction) and then `shift=8` (256 ns), which bracket silicon's 228 ns.
 - The PTW is invisible to the D$ model, and its effect is an estimate. The other limits of the v3 residency
   reading also stand: the RC refill path is an assumption, probe-internal accesses are not reported, and the window
   is ±D plus the tty drain lag.
+
+**Amendment 1** (written 2026-11-27 05:56 host time, 21:56Z, before either run; the chain waiting on the QEMU lock was
+stopped first, and it had not booted):
+- **The quantity to match is ticks per instruction, not ns per instruction.**
+  - The trace kernel (`Image.twin` `749fed26`, which is trapk/linux-6.1's Image) is CONFIG_HZ=250 with NO_HZ_IDLE.
+  - g1b's kernel, trapk/fpga-v1/linux-6.1, is CONFIG_HZ=100 with HZ_PERIODIC.
+  - This lane read both `.config` files. The rtl lane found the mismatch.
+  - Silicon's rate, 100 Hz × ~228 ns, is about 2.3e-5 ticks per instruction. The twin matches it at about 91 ns per
+    instruction, between shift 6 (64 ns) and shift 7 (128 ns). Shift 8 would be 2.8 times silicon's rate.
+- **So the second run is shift 6, not shift 8.** `chain-ic.sh` is now `af5ddcab`: shift 7, then shift 6 if shift 7
+  passes the gate. It was dry-run again.
+- **Prediction 2 becomes:** E op 3 per instruction at shift 7 is 1.6 to 2.1 times shift 6's, and both exceed v3's
+  407,870.
+- **Prediction 3 becomes:** the order is v2 > v3 > shift 6 > shift 7.
+- Both sides run without Sstc (sstc=false on the twin, none on CVA6), so every tick is an M round trip on both.
+- A silicon-only source of M trips is not modelled: rdtime traps to M on g1b and reads natively in QEMU. The rtl
+  lane's hpm row (0x07/0x08) bounds it.
