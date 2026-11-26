@@ -173,3 +173,105 @@ reference rule (an integer), as for SCC.
 - Option A against option B for CRVC (a one-bit difference in how the mode is selected; the encodings are the
   same).
 - The EF_CAPSTONE_AUIPCGP flag.
+
+## Line B re-check and the step-4 plan (2026-11-26)
+
+*At the runtime lane's request. The project lead has said to try stage 2 on Line B, and it has to be shown
+experimentally to pay. Nothing is built, and no synthesis is requested. The choice between option A and option B
+stays with the lead. This section proceeds on B.*
+
+### (a) The mode's home on Line B: the spec above holds at b42c8c644 and on the final Full kernel
+
+- **CSR 0x5C3 is free at b42c8c644.** riscv_pkg.sv:669 defines only CSR_SREVROOT = 12'h5C1 in that range, and nothing
+  in core/ names 0x5C3, scapmode or crvc.
+- **The kernel writes the spec names are where it says,** in the final Full kernel tree (the trap series, boot 13):
+  - switch_mm writes srevroot from the mm context at mm/context.c:317-321;
+  - the loader checks the ELF header at sublet/binfmt.h:66 and :335.
+- **One addition, the return-to-U guard** (entry.S:407-425). It already compares srevroot with
+  current->mm's capstone_root and kills the task on a mismatch. It should compare scapmode with the mm's capstone_crvc
+  in the same way, so that a stale or missing bit never reaches U. The existing mutant switch (SUBLET_MUTANT_NO_GUARD)
+  then covers it too.
+- **The per-process state is per mm,** derived at switch_mm, not saved: threads share it, and execve replaces it.
+- **The kernel side is in the collaborator's trap series:** context.c, entry.S and binfmt.h. Those changes go through
+  the series' owner, not into it directly.
+- **Homes considered and rejected:**
+  - **srevroot's low 12 bits:** the reasons above. Protected U is defined by srevroot != 0, and the kernel compares
+    and rewrites srevroot by value.
+  - **sscratch:** on this kernel it holds the user tp with its tag across U and is swapped at every trap entry and
+    exit (entry.S:70, 137-207). It has no spare bits. A decode input there would ride a register the entry code
+    rewrites on every trap.
+- **Option A,** the mode always on in protected U, would be the same RTL with `crvc_o = priv == U && srevroot != 0`
+  and no CSR. Its cost is that every protected image is in the mode. On P1's twin, the FP-heavy rows lose fetch bytes
+  in the mode: nab -3.53 % and lbm -2.98 %, with imagick +0.37 %. Under B those images stay out of it.
+
+### (b) Step 4 on the Line B footing
+
+**The compiler.** B5TL1's compiler (llvm-c9, 29027126f39b) has neither +cap-crvc nor +cap-base-zcb. The lane compiler
+(llvm-sinkland) has both, so every arm is built by it, with B5TL1's flags.
+- The off arm is LSHOFF, already counted on all eight stages (tests/spec8-lsrh). LSRH is not in these arms, so stage
+  2 is measured alone.
+- **The arms:**
+  - **CRVC:** +cap-crvc. All eight stages are built and read, so the per-stage choice option B allows can be
+    made from the readings.
+  - **ZCB:** +zcb +cap-base-zcb.
+  - **CRVCZ:** both together. P1's sum of the two (x264 about 3.4 %) was never measured.
+
+**The twin.** qemu-crv 3a9fc39167 has no CRVC decode. The prototype's decode (capstone-qemu 05706b2e11,
+compiler/stage2-crvc-qemu) is keyed on CSRUNV's virtual_options.
+1. Port it onto the trap twin's tree as the reference-model section above specifies: CSR 0x5C3 under x-capstone-crvc,
+   with the mode as a TB flag, `scapmode.crvc && priv == U && srevroot != 0`.
+2. For the fetch-byte measurement, add a twin-only property that also sets the mode in every protected U, with no
+   CSR write. A CRVC image then boots on the unmodified trap kernel.
+   - Fetch bytes do not depend on how the mode is selected.
+   - Only CRVC-built images boot with the property, and the off arm boots without it.
+   - A CRVC image booted without the property must fail: it would run c.ldcsp as c.fldsp. That failure is the
+     positive control that the mode is reached.
+3. The kernel's loader, switch_mm and guard changes get their own twin check before any board:
+   - a flagged image runs in the mode;
+   - the leak mutant, which leaves the bit set for an ordinary mm, trips the guard;
+   - with the guard also disabled (SUBLET_MUTANT_NO_GUARD), that ordinary process still decodes standard RVC,
+     because the mode is gated on srevroot != 0. That is the hardware's half of the check.
+4. The Zcb arms need zcb=true on the twin's CPU string, since qemu-crv defaults it off (target/riscv/cpu.c:2088).
+
+**The reading.** Fetch bytes per stage at shift 1 (capmix3), against LSHOFF, on the eight-stage init of
+tests/spec8-lsrh, together with instruction counts and the outputs. This gets its own pre-registration, with P1's
+readings as the prior. P1 read, against CRVC0:
+
+| | perl | gcc (train01) | x264 | mcf | xz | imagick | nab | lbm |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| CRVC fetch bytes saved | 8.47 % | 14.88 % | 2.16 % | 6.61 % | 1.86 % | 0.37 % | -3.53 % | -2.98 % |
+| ZCB fetch bytes saved | 0.889 % | 0.593 % | 1.289 % | 0.081 % | 1.259 % | 0.982 % | 0.220 % | 0.000 % |
+
+Line B's gcc stage is the t1.c test, not train01, so gcc is not predicted from P1.
+
+### (c) Zcb may need no new seal
+
+**b42c8c644's configuration enables Zcb:** capstone_cv64a6_imafdc_sv39_config_pkg.sv:77 `CVA6ConfigZcbExtEn = 1`,
+and :156 `RVZCB`. If rtl confirms that the compressed decoder decodes it on that seal, and that the FPGA build uses
+this configuration, then the ZCB pair (LSHOFF against ZCB images) can run on b42c8c644 itself.
+- It needs no RTL and no synthesis, and it can run before any stage-2 seal exists.
+- It follows ZCB9 on P1 silicon, which read perl -0.33 %, and xz and imagick flat.
+
+### (d) The cycle band, pre-registered after the step-4 readings and before any RTL
+
+**Calibration:** ZCB9 on P1 silicon, N=1, time saved per fetch byte saved:
+- perl 0.33 / 0.889 = 0.37;
+- xz 0.06 / 1.259 = 0.05;
+- imagick flat (+0.26 % against 0.98 %, inside its band).
+
+**The band:** time saved = fetch bytes saved × [0, 0.37], per stage, from the Line B step-4 fetch readings. It is
+written as a band, not a point, because the ratio is N=1 and spans nearly an order of magnitude across rows.
+Converted at P1's CRVC fetch figures, it would be perl 0 to -3.1 %, for scale only.
+
+**Go/no-go for a stage-2 seal:**
+- a time saving of at least 1 % on perlbench makerand (275.70 s on b42c8c644) or gcc t1.c (5.55 s, where 1 % is
+  about five ticks of the 0.01 s timer);
+- and no stage worse than its in-session spread + 0.05 % + the 0.02 s quantum, the LSRH board form's rule.
+
+**The board:**
+- the new seal is b42c8c644 + the decoder + the mode;
+- the pair is the CRVC (or CRVCZ) image against LSHOFF on that seal;
+- the control is LSHOFF on the new seal against the same image on b42c8c644, which reads what the seal itself costs.
+
+The new seal never replaces the campaign seal unless it reads as above AND the lead agrees. The decoder change sits
+in the issue path, so a synthesis-only run comes before any full build.
