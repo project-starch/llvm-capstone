@@ -9028,6 +9028,67 @@ stock pair on the same seal and kernel?
   recorded beside it. A stage where the two differ is reported with both readings and v2's INBAND line.
 - Nothing else changes: the boots, the payloads, the predictions and the outcome readings.
 
+### Result: "Full + ports". Both ports PASS on silicon with B5TL1's answers, and so do both stock pairs; v2 and v1 agree on every row (board 2, b42c8c644, 2026-11-26 15:37-16:14 host time, read against c4732c42a52b with Amendment 1 1ab5179e06d3)
+
+**Platform, as read back.** One board, one seal, one kernel per pair, so both pairs are readable.
+
+| boot | booking | payload | host time | uart sha256 | preflight |
+|---|---:|---|---|---|---|
+| CF-B5TL1-g3 (stock) | 1586 | `997e2fd6fdbdecdf…` | 15:37:23-15:42:58 | `ef564f145a309141…` | UNGATED (preflight run after it started) |
+| CFP-B5TL1-g3 (port) | 1587 | `6616eecf0c797071…` | 15:43:00-15:48:36 | `5e4b0123351f21a8…` | BLOCK by C10's 20 MB budget (21.66 MB); runtime ruled past it |
+| CF-B5TL1-g4mk (stock) | 1588 | `e82d42ebe558cb18…` | 15:48:42-16:01:34 | `2522348b57230d99…` | GO |
+| CFP-B5TL1-g4mk (port) | 1589 | `432e6ae27d5aa062…` | 16:01:41-16:14:34 | `4c1171058609dd33…` | BLOCK by C10's FDT count; runtime ruled past it |
+
+- The board lane ran the boots and preflight-board-run.sh. Every boot's readback names `…-r80-r77_b42c8c644.bit`
+  before and after, and every booking was released.
+- **C10's BLOCKs are not about the payloads' contents.**
+  - The g3 size BLOCK hits runtime's own B5TL1-g3 payload identically, and that payload ran on this seal.
+  - The FDT BLOCK on CFP-g4mk is a false positive. The payload has the one real FDT at `0x14000` (3,518 B, version 17),
+    as CF-g4mk has. Its second `d00dfeed` sits at `0xd73e9a` inside compressed data, with a totalsize of
+    1,180,622,853, and is no FDT (checked here on the payload). The fixed check (dev `6daffca3824c`) reads GO.
+- **The port images are in the port payloads,** by each payload's overlay manifest. CFP-g3 carries `cpugcc_r_base.native`
+  `cff54b2a361867f2…` and CFP-g4mk carries `perlbench_r_base.native` `b4eb3e6f267f5f34…`, the port images built above.
+  The captures print no image hash, so the identity rests on the payload hash.
+
+**Grades.** Binding: v2 (`grade-spec-chain-v2.py` `b976d2884c8c42d5…`), with the registered stage roots; v1
+(`4fa95eaf…`) beside it. The board lane graded the boots, and every row was rerun here with the same output.
+
+| boot | stage root | v2 | v1 | v2 INBAND | `sublet: fault` lines |
+|---|---|---|---|---|---:|
+| CF-g3 | `c4/b5b2spec/board-stages` | `C=ok`, gcc PASS, rc 0 | the same | none | 0 |
+| CFP-g3 | `nested/b5b2/ports/boardroot` | `C=ok`, gcc PASS, rc 0 | the same | none | 0 |
+| CF-g4mk | `b5b2linux/g4mkroot` | `C=ok`, perlbench PASS, rc 0 | the same | 1 line removed | 0 |
+| CFP-g4mk | `nested/b5b2/ports/boardroot` | `C=ok`, perlbench PASS, rc 0 | the same | 1 line removed | 0 |
+
+- The two INBAND removals are whole `TRAPTEST: tick` lines (396.88 and 396.87) inside the perl hash block. v1's own
+  filter also dropped them, so the two graders agree.
+
+**Against the predictions.**
+1. **Met, on both port boots:** smoke `C=ok`, and the one stage PASS.
+2. **The time readings** (`up1 − up0` of the stage's `@@SPEC-END`, 0.01 s resolution, N = 1 per arm):
+
+| stage | stock | port | port / stock | twin port / stock |
+|---|---:|---|---:|---:|
+| 502.gcc_r (t1.c) | 5.55 s | 5.83 s | 1.050 | 1.176 |
+| 500.perlbench_r (makerand.pl) | 275.70 s | 279.75 s | 1.015 | 0.958 |
+
+- gcc's difference, 0.28 s, is 28 resolution steps over a 5.5 s run.
+- These are readings, one boot per arm, not cost estimates. The twin's ratios are an emulator's, and they did not
+  predict these.
+
+**Reading.**
+- Both ports run on B5b-2 silicon in the campaign's form with B5TL1's answers, with no fault line in either. That is the
+  first board run of each:
+  - gcc's all-abc-bm-ls-tfl-phi port;
+  - perlbench's full port (heads, bodies, hash entries and op slabs).
+- They join Line B's Full + ports row. The share is the runtime and rtl lanes' to compute, with the per-event prices
+  named by their source.
+
+**Limits.**
+- One boot per arm. Test-size inputs only: gcc's t1.c and perl's makerand.pl.
+- The port's image identity is read from the payload, not from the capture.
+- Two of the four boots were preflight-BLOCKED by C10 and ran on runtime's ruling, and one is ungated.
+
 ### Pre-registration: B5b-2 board boot "nested-corpus", SQLite then PHP engine-repros (written 2026-11-26 04:17 host time (+08), 20:17Z on Nov 25, before the boot)
 
 **What it is.** Runtime's B5b-2 item 1 on silicon: the engine-repro corpus on the trap route, in one boot.
