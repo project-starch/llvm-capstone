@@ -43,6 +43,10 @@ Times are the stage's `@@SPEC-END` uptime difference, summed over a stage's comm
 | 3 | B5T-g3 | c40b8ce9 | gcc PASS 7.15 | v1 |
 | 3 | B5TL0-g3 | ab7fe832 | gcc PASS 7.07 | v1 |
 | 3 | B5TL1-g3 | ce0ca633 | gcc PASS 5.76 | v1 |
+| 3 | B5TL1-g1b | 539b2ef4 | lbm PASS 1,052.26; nab PASS 752.86; xz 12/12 PASS 4,863.14; mcf PASS 6,601.15 | **v2**, v1 equal; no INBAND line |
+| 3 | B5T-g4mk | 62795fa9 | perlbench PASS 290.45 | **v2**, v1 equal; INBAND 2 |
+| 3 | B5TL0-g4mk | a96705ba | perlbench PASS 291.48 | **v2**, v1 equal; INBAND 2 |
+| 3 | B5TL1-g4mk | 192a5a75 | perlbench PASS 282.94 | **v2**, v1 equal; INBAND 2 |
 | 2 | B5T-g1b | 45e4fbdd | lbm PASS 1,052.62; nab PASS 754.91; xz 12/12 PASS 4,875.33; mcf PASS 6,826.53 | **v2**, v1 equal; no INBAND line |
 | 2 | B5T-g2b | ca1a3e42 | imagick PASS 11.84; x264 stopped by ruling | v1 |
 | 2 | B5TL0-g2b | cba7e1f5 | imagick PASS 11.83; x264 stopped by ruling | v1 |
@@ -50,11 +54,15 @@ Times are the stage's `@@SPEC-END` uptime difference, summed over a stage's comm
 
 Control `smoke.dom rc=7` read AS PREDICTED in every row.
 
+**INBAND 2** in the three g4mk rows: v2 removed two whole `TRAPTEST: tick` lines (about 399 s and 520 s) from inside
+perlbench's 557-line hash block. v1's filter drops the same lines, and the verdicts are equal.
+
 **mcf (Amendment 8).** Both B5T-g1b rows completed with specdiff 2/2 PASS and no fault line. The exposure is 6,828.2 s
 on board 3 and 6,826.2 s on board 2, from `mcf-exposure.py` 17c806a6. Its predecessor, aa1d6557, took the stage's end
 as the latest time anywhere after it, validation and the dmesg dump included, and gave 6,844.3 and 6,842.2. Those two
 numbers are withdrawn. The `@@SPEC-END` times are 6,828.57 and 6,826.53. `grade-mcffault.py` (c028de3b, unanchored)
-reads both rows byte-identically to its predecessor. This is CONSISTENT with R-80's fix, and
+reads both rows byte-identically to its predecessor. B5TL1-g1b (board 3) also completed, specdiff 2/2 PASS, no fault
+line: exposure 6,600.8 s from 17c806a6, `@@SPEC-END` time 6,601.15 s. This is CONSISTENT with R-80's fix, and
 not evidence for it, by Amendment 8. Amendment 7's refutation condition (a silent wedge) did not occur.
 
 **No cause-25 fault at an LDC** in any row, as Amendment 9 predicted (see the check above).
@@ -70,13 +78,22 @@ not evidence for it, by Amendment 8. Amendment 7's refutation condition (a silen
 | SP-B5TL1-g2i | 5064e3d5 | imagick PASS 11.57 | v1 |
 | SP-B5TL1-g3 | 82df0a83 | gcc PASS 5.70 | v1 |
 | SP-B5TL1-g4mk | b799fdff | perlbench PASS 293.96 | v1 |
+| SP-B5TL1-g1b | d5653c64 | lbm PASS 1,051.55; nab PASS 748.94; xz 12/12 PASS 4,853.66; mcf PASS 6,247.42 | **v2**, v1 equal; no INBAND line |
 
-The name read back before and after each boot is 14f2ef81a. These three were graded at 13:41-14:00 +08, before
+The name read back before and after each boot is 14f2ef81a. SP-B5TL1-g1b's data hashes equal the spatial-only twin's
+on all four stages (4, 5, 26 and 5 hashes); its mcf completed with no fault line, exposure 6,247.0 s. The first three
+rows were graded at 13:41-14:00 +08, before
 Amendment 14, so v1 is their binding grader.
 
 Against B5TL1 on b42c8c644 (the same userland, a different overlay image): imagick 11.57 against 11.63 on both boards,
 gcc 5.70 against 5.76. Each is one reading per arm, inside the 0.01 s uptime resolution plus run-to-run spread, which
 is not measured yet. No +Spatial cost or saving is read from these rows. That is the campaign's three-run job.
+
+The g1b and g4mk pairs, same B5TL1 userland, Full (board 3) / +Spatial (board 1), N=1 each: lbm 1,052.26 / 1,051.55,
+nab 752.86 / 748.94, xz 4,863.14 / 4,853.66, mcf 6,601.15 / 6,247.42, perlbench 282.94 / 293.96. Perl is the one
+stage where the spatial-only seal is slower (by 11.02 s). It is open and not read as a seal property: the twin's
+instruction counts for the two images are being taken, to tell different work from a per-instruction or board
+difference.
 
 ## The matched pair (Amendment 9): 28fcbb646 against b42c8c644, board 2
 
@@ -95,7 +112,7 @@ as a property of either seal.
 
 ## Still owed
 
-- Board 3: B5TL1-g1b (running), B5T/B5TL0/B5TL1-x264b, the g4mk rows, ldcexc2.
-- Board 1: SP-B5TL1-g1b (running), then SP-B5TL1-x264b.
+- Board 3: B5T/B5TL0/B5TL1-x264b.
+- Board 1: SP-B5TL1-x264b.
 - Every one of these grades under v2, with v1 beside it (Amendment 14). x264 is graded by its data hashes
   (Amendment 13).
