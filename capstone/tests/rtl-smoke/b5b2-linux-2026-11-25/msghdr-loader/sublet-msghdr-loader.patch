@@ -1,0 +1,166 @@
+--- a/arch/riscv/include/asm/sublet-uaccess.h
++++ b/arch/riscv/include/asm/sublet-uaccess.h
+@@ -124,6 +124,21 @@
+ int sublet_copy_iovec_from_user(struct iovec *iov, const struct iovec __user *uvec,
+ 				unsigned long nr_segs);
+ 
++/* struct msghdr in the protected user layout (16-byte pointers; musl's socklen_t and int
++ * fields): name +0x00, namelen +0x10, iov +0x20, iovlen +0x30, control +0x40, controllen +0x50,
++ * flags +0x58, size 0x60. sublet_copy_msghdr_from_user loads the three pointers with
++ * sublet_load_user_pointer, so each becomes a handle of the call, and reads the 32-bit fields,
++ * zero-extended as Linux reads musl's {int, pad} pairs. 0, -EFAULT or -E2BIG. */
++#define SUBLET_MSG_NAME		0x00
++#define SUBLET_MSG_NAMELEN	0x10
++#define SUBLET_MSG_IOV		0x20
++#define SUBLET_MSG_IOVLEN	0x30
++#define SUBLET_MSG_CONTROL	0x40
++#define SUBLET_MSG_CONTROLLEN	0x50
++#define SUBLET_MSG_FLAGS	0x58
++struct user_msghdr;
++int sublet_copy_msghdr_from_user(struct user_msghdr *msg, const void __user *umsg);
++
+ struct pt_regs;
+ /* Bind the arguments of system call nr of the current protected task and call it: the result,
+  * -ENOSYS for a call outside the allow-list, -EFAULT for a forged integer in a pointer
+--- a/arch/riscv/kernel/sublet/uaccess.c
++++ b/arch/riscv/kernel/sublet/uaccess.c
+@@ -4,6 +4,7 @@
+  * kernel slot of the reference a handle names, and call the routine in uaccess-asm.S that
+  * accesses through it. A handle that names no reference fails like a fault at its first byte.
+  */
++#include <linux/socket.h>
+ #include <linux/errno.h>
+ #include <linux/export.h>
+ #include <linux/sched.h>
+@@ -173,6 +174,39 @@
+ 	return 0;
+ }
+ 
++int sublet_copy_msghdr_from_user(struct user_msghdr *msg, const void __user *umsg)
++{
++	unsigned long at = (__force unsigned long)umsg, ptr;
++	u32 v;
++	int err;
++
++	err = sublet_load_user_pointer(at + SUBLET_MSG_NAME, &ptr);
++	if (err)
++		return err;
++	msg->msg_name = (void __user *)ptr;
++	err = sublet_load_user_pointer(at + SUBLET_MSG_IOV, &ptr);
++	if (err)
++		return err;
++	msg->msg_iov = (struct iovec __user *)ptr;
++	err = sublet_load_user_pointer(at + SUBLET_MSG_CONTROL, &ptr);
++	if (err)
++		return err;
++	msg->msg_control = (void __user *)ptr;
++	if (copy_from_user(&v, (const void __user *)(at + SUBLET_MSG_NAMELEN), sizeof(v)))
++		return -EFAULT;
++	msg->msg_namelen = v;
++	if (copy_from_user(&v, (const void __user *)(at + SUBLET_MSG_IOVLEN), sizeof(v)))
++		return -EFAULT;
++	msg->msg_iovlen = v;
++	if (copy_from_user(&v, (const void __user *)(at + SUBLET_MSG_CONTROLLEN), sizeof(v)))
++		return -EFAULT;
++	msg->msg_controllen = v;
++	if (copy_from_user(&v, (const void __user *)(at + SUBLET_MSG_FLAGS), sizeof(v)))
++		return -EFAULT;
++	msg->msg_flags = v;
++	return 0;
++}
++
+ /* untagged_addr for RISC-V: the address of a protected task's handle, every other value
+  * unchanged. A handle with a guard bit set stays as it is, so the range checks refuse it. */
+ unsigned long sublet_untagged_addr(unsigned long addr)
+--- a/arch/riscv/kernel/sublet/loader.c
++++ b/arch/riscv/kernel/sublet/loader.c
+@@ -5,8 +5,9 @@
+  * sublet_copy_iovec_from_user, execve's get_user_arg_ptr reads each argument pointer through
+  * sublet_load_user_pointer (arch/riscv/kernel/sublet/uaccess.c). Each embedded reference goes
+  * into the call's list with its tag and becomes its own handle. This function only admits
+- * the calls whose use sites load: the iovec calls and execve, and pselect6 without a sigset
+- * pack. msghdr (sendmsg, recvmsg) and the sigset pack get ENOSYS until their loaders exist.
++ * the calls whose use sites load: the iovec calls and execve, sendmsg and recvmsg (net/socket.c
++ * reads their msghdr through sublet_copy_msghdr_from_user), and pselect6 without a sigset
++ * pack. sendmmsg, recvmmsg and the sigset pack get ENOSYS until their loaders exist.
+  */
+ #include <linux/errno.h>
+ #include <asm/unistd.h>
+@@ -22,6 +23,8 @@
+ 	case __NR_preadv:
+ 	case __NR_pwritev:
+ 	case __NR_execve:
++	case __NR_sendmsg:
++	case __NR_recvmsg:
+ 		return 0;
+ 	case __NR_pselect6:
+ 		return a->arg[5] ? -ENOSYS : 0;
+--- a/net/socket.c
++++ b/net/socket.c
+@@ -106,6 +106,13 @@
+ #include <net/busy_poll.h>
+ #include <linux/errqueue.h>
+ #include <linux/ptp_clock_kernel.h>
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-uaccess.h>
++/* A protected (Sublet) task passes its msghdr in its own layout (asm/sublet-uaccess.h). */
++#define SUBLET_MSG_LAYOUT()	test_thread_flag(TIF_CAPSTONE)
++#else
++#define SUBLET_MSG_LAYOUT()	0
++#endif
+ 
+ #ifdef CONFIG_NET_RX_BUSY_POLL
+ unsigned int sysctl_net_busy_read __read_mostly;
+@@ -2410,6 +2417,13 @@
+ 	struct user_msghdr msg;
+ 	ssize_t err;
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (SUBLET_MSG_LAYOUT()) {
++		err = sublet_copy_msghdr_from_user(&msg, umsg);
++		if (err)
++			return err;
++	} else
++#endif
+ 	if (copy_from_user(&msg, umsg, sizeof(*umsg)))
+ 		return -EFAULT;
+ 
+@@ -2681,10 +2695,17 @@
+ 					(struct compat_msghdr __user *) msg;
+ 	int __user *uaddr_len = COMPAT_NAMELEN(msg);
+ 	struct sockaddr_storage addr;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	char __user *sublet_msg = (char __user *)msg;
++#endif
+ 	unsigned long cmsg_ptr;
+ 	int len;
+ 	ssize_t err;
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (SUBLET_MSG_LAYOUT())
++		uaddr_len = (int __user *)(sublet_msg + SUBLET_MSG_NAMELEN);
++#endif
+ 	msg_sys->msg_name = &addr;
+ 	cmsg_ptr = (unsigned long)msg_sys->msg_control;
+ 	msg_sys->msg_flags = flags & (MSG_CMSG_CLOEXEC|MSG_CMSG_COMPAT);
+@@ -2711,6 +2732,20 @@
+ 		if (err < 0)
+ 			goto out;
+ 	}
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (SUBLET_MSG_LAYOUT()) {
++		/* musl's msg_flags and msg_controllen are 32-bit, at their protected-layout offsets */
++		err = __put_user((u32)(msg_sys->msg_flags & ~MSG_CMSG_COMPAT),
++				 (u32 __user *)(sublet_msg + SUBLET_MSG_FLAGS));
++		if (!err)
++			err = __put_user((u32)((unsigned long)msg_sys->msg_control - cmsg_ptr),
++					 (u32 __user *)(sublet_msg + SUBLET_MSG_CONTROLLEN));
++		if (err)
++			goto out;
++		err = len;
++		goto out;
++	}
++#endif
+ 	err = __put_user((msg_sys->msg_flags & ~MSG_CMSG_COMPAT),
+ 			 COMPAT_FLAGS(msg));
+ 	if (err)
