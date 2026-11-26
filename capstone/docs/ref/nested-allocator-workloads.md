@@ -8116,6 +8116,16 @@ boots**.
   - If it does not exit 0, the twin's difference is reported first, and hbA is not graded against that twin.
 - hbB: `nst-loc1-twin` (`21612e7b…`), the twin run of this exact stage.
 
+**Addendum 1 (2026-11-26 16:30 host time (+08), during hbA's boot, before either boot is graded): hbA's twin reference.**
+- `nst-hbA-twin` ended at 16:30:06, rc 0, `specdiff 0/0`. Its serial log's sha256 is `d12cb8b8c606c94f…`.
+- `check-hbA-twin.py` exits 0. c0 is EQUAL to `nst-loc1-twin`'s c0 (101 STRESS lines, rc 0), and h10k is EQUAL to
+  `nst-red-board2`'s r3 (32 lines, rc 0, `done packets=300000`).
+- `read-red2.py`, the twin against itself: c0 and h10k RETURNED, exit 0.
+- It is the binding hbA reference, as registered.
+- **Disclosed:** the run was launched without `OUTROOT`, so `nst-run.sh` wrote it to its default root, `perf/faultesc`
+  (BEGIN/END lines in that root's `RESULTS`). Its directory was then moved, unchanged, beside the other twins in
+  `<hdd>/nested/out/`. The hash above is the moved file's.
+
 **Reader.**
 - `p1red/read-red2.py` (`3d2b9c35…`), run as `read-red2.py <board.txt> <twin serial.log>`.
 - It is read-red.py (`64782291…`) with one change. A command with no `@@SPEC-END` whose last STRESS line is a strict
