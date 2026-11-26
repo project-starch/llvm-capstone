@@ -138,3 +138,12 @@ For each stage: the three times, their mean and range, the seal, the board and t
 - for the long stages, the cross-board ratio, with board 1's CF-g1b offset stated beside it;
 - the ports ratio from board 2's pairs (Phase C).
 No interval beyond the range is claimed at N=3.
+
+## Amendment 1 (2026-11-26, before any boot of this campaign): P4 has no reading for g2i
+
+The design runs CF-B5TL1-g2i only on board 1 (Phase A). Boards 2 and 3 get no CF imagick, so P4 cannot be read for
+imagick. P4 is read for gcc and perlbench from Phase C on board 2, and for lbm, nab, xz and mcf from board 1's CF-g1b
+against Phase B's CF-g1b on boards 2 and 3. For imagick it reads NO READING. The decision it exists for, perl's
+qualification gap, is unaffected. The board plans armed from fec8d4357796 are unchanged (camp-b1.plan d84532ac46260a2c,
+camp-b2.plan 14035a3ab9821615, camp-b3.plan 827186facd1d7022; each read here against the design, with the order
+S F F S S F on board 1).
