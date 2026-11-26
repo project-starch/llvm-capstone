@@ -9621,3 +9621,50 @@ and `link.txt`, llvm-c9 `29027126f39b`, the B5TL1 SDK, the one-operand shim):
 **Limits.**
 - Test-size makerand.pl only, the campaign's g4mk stage.
 - One twin. The arms are experiments, not port scripts.
+
+### Result: perl-fullren against perl-full. Answers and protection unchanged; the variant COSTS 4,250 image instructions instead of saving, so prediction 4 fails; the repeats are exact, so the reading is not noise (trap-route twin, 2026-11-26 21:05 to 2026-11-27 01:53 host time, read against 9dbf6da8cca7)
+
+**Runs** (`renew/twin-renew.sh` `db8eb818…`, `boot-plugin.py` `1d6c39c7…`, opcount `1144e04f…`, qemu-crv `ea5c05f3…`,
+`Image.twin` `749fed26…`). Every boot ended `BOOT: EOF`, and every perl stage graded
+`B5TL1P-500.perlbench_r=PASS` under grade-spec-chain-v2.py.
+
+| boot | staged image (first 8) | image instructions | CDERIVE | CREVOKE | CRENEW | twin run (s) | boot.log (first 8) |
+|---|---|---:|---:|---:|---:|---:|---|
+| cal-full (calibration) | `b4eb3e6f` perl-full | 3,209,053,644 | 1,943 | 311 | 6 | 56.28 | `71546c3d` |
+| ren1 | `d5cb32d6` perl-fullren | 3,209,057,894 | 1,905 | 207 | 110 | 57.43 | `95eb0966` |
+| ren2 | `d5cb32d6` perl-fullren | 3,209,057,894 | 1,905 | 207 | 110 | 54.02 | `019414e1` |
+| full2 | `b4eb3e6f` perl-full | 3,209,053,644 | 1,943 | 311 | 6 | 57.29 | `d8db04b4` |
+
+**Predictions, read.**
+1. **Answers: holds.** All four stages PASS.
+2. **Fixtures: holds** (boot `fx`, boot.log `df7bacc4…`, 56 runs, 35 faults, all cause 25, each with its fault line):
+   - full, fullren and fullrenff fault in the same modes run by run: heads in modes 1-3, bodies and hash entries in
+     modes 1-4. Mode 0 reads in every build.
+   - Controls: stock-heads reads in modes 0-2 and faults in mode 3 (recorded); fullnr-bodies reads in modes 0-3 and
+     faults in mode 4; fullnr-he reads in modes 0-4. So every fixture's protected modes are read.
+   - fullrenff takes every fall-back path (each renewal reads as failed) and faults exactly where perl-full does.
+3. **Lifetime instructions: holds.**
+   - CRENEW rises by 104 (6 to 110). full2's 6 are the runtime's and are in both arms.
+   - CREVOKE falls by 104 (311 to 207), equal to the CRENEWs the variant adds. That is what no failed renewal and no
+     double renewal would show. Disclosure: the registered wording says "the CRENEW count". Read as ren1's whole count
+     (110), 104 is 5.5 % short and outside the 0.1 % band; the 6 the runtime executes in both arms are why.
+   - CDERIVE falls by 38 (1,943 to 1,905), within the 104 allowed.
+4. **Image instructions: FAILS.** ren − full = **+4,250**, with 38 removed CDERIVEs: **+111.8 per removed
+   CDERIVE**, against the registered −2 to −14.
+   - Readable by the rule: |ren1 − ren2| = 0 and |full2 − cal-full| = 0, both under a tenth of 4,250.
+   - This is the registered caveat's case: the net of the three sites is a cost. opcount cannot split it by site.
+     By opcode (ren1 − full2, image region): custom-2 funct3=1 funct7=0x04 +1,137, funct7=0x05 −38, funct7=0x0c −53,
+     CDERIVE −38, CREVOKE −104, CRENEW +104, csldc (funct3=3) +770, csstc (funct3=4) +401; the base ISA +2,071.
+   - Against the port's own cost on makerand.pl (114,431,715 image instructions), the variant adds 0.0037 %.
+5. **Repeats: holds exactly.** ren1 = ren2 and full2 = cal-full, to the instruction, in the image region.
+6. **Recorded.**
+   - Kernel and firmware do not repeat: vmlinux reads 1,713,483,281 / 1,719,396,476 (cal-full, full2) and
+     1,708,837,324 / 1,698,150,593 (ren1, ren2), 10.7 M apart on one image. Firmware reads 25.6 M, 25.9 M, 25.8 M,
+     24.9 M. So a renewal's table work in software, if any, is below this twin's kernel noise and is not read.
+   - Lowest MemAvailable: 890,200 kB in all four boots; cal-stock 890,456 kB.
+   - Twin run times 54.02-57.43 s, a twin's.
+
+**What this reads.** On test-size makerand.pl, renewing heads, bodies and hash entries at the free keeps the answers
+and the fixtures' protection, including on the forced-failure path. But it does not pay. CDERIVE falls by only 38
+against 104 renewals, and the added work outweighs that: 1,171 more 16-byte capability loads and stores, 1,137 more
+funct7=0x04 ops and 2,071 more base-ISA instructions. Not read: which site costs, and cycles.
