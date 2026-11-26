@@ -8350,6 +8350,82 @@ reference.
 - **The board/twin ratio** is a reading of this boot: per run, from the @@UP lines and CPython's up0/up1, against the
   twin's. It is not a prediction.
 
+### Result: nested-cpymem, CPython PASS on both arms; memcached 0 of 6 by the registered criterion, every transcript the same and off native's only in the two answers that read the wall clock (board 2, 2026-11-26 05:18-06:52 host time, read against 506d11206c40)
+
+**Platform, as read back.**
+- Board 2, booked by the board lane's runner and released (UNBOOK 200).
+- The readback before the boot names `…-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit`: the full B5b-2 seal, as registered.
+- The readback after the boot returned no name (rc 3). The board lane's runner records it; it does not touch this boot's readings.
+- Image `ccecad78bfcb78b0…`, as registered.
+- The runner's logs carry no preflight-gate line, so this boot is reported **UNGATED**.
+- Capture: uart.txt sha256 `b1043a2b6bcb3ebe…`, 78,673 B. The grader's boot.txt (CR dropped) is sha256 `ffb832f8715f1a63…`.
+
+**Grader, as registered** (`grade-cm.py`, `90c39ded…`): **exit 1.**
+- cpython: rc 0, "both arms pass".
+- memcached: rc 1. read-mc.py stopped with a base64 error after printing stock reps 1-3 as FAILS.
+  - The error's cause: a console heartbeat line, `TRAPTEST: tick 5212.96`, landed inside protected rep 1's `server.out` block.
+  - The reader takes the block whole, so it cannot decode it. The twin's log has 5 tick lines and none inside a block; the board's has 43.
+  - The registered exit is 1 either way: stock reps 1-3 had already failed on their transcripts.
+
+**CPython: PASS on both arms**, which is the prediction.
+- Both arms: rc 0, answer `58211793977f706c…` (397 B) = native's, `PYPERFORMANCE-OK 8`, no timeout or fault.
+- Each exit line names its arm's image: stock `e47ab197…`, prot `a269a6b5…`.
+
+| arm | board wall (s) | twin wall (s) | board / twin |
+|---|---|---|---|
+| stock | 2,246.3 | 253.4 | 8.9× |
+| prot | 2,398.0 | 329.0 | 7.3× |
+
+- On the board, prot is +6.8 % over stock in wall time; on the twin it is +29.8 %. The twin's emulation cost is not silicon's, so only the board's figure is a silicon reading.
+- Per benchmark, prot over stock on the board (PYPERF-TIME, ns):
+
+| benchmark | change |
+|---|---|
+| json_dumps | +8.6 % |
+| json_loads | +11.6 % |
+| richards | +2.6 % |
+| deltablue | +2.4 % |
+| chaos | +3.8 % |
+| go | +5.5 % |
+| nbody | +8.1 % |
+| gc_collect | +16.4 % |
+
+- This is one run per arm (N = 1): a reading, not an estimate with a spread.
+
+**memcached: 0 of 6 repetitions qualify**, against a prediction of 6 of 6.
+- Every repetition on both arms:
+  - harness rc 0;
+  - `stop=shutdown exit=0`;
+  - identity `STAT pointer_size 128`;
+  - an exit line naming its image (stock `53538940…`, protected `4108e588…`);
+  - a transcript of 1,931,245 B.
+- All six transcripts are byte-identical to each other (sha256 `028c99b24131e5b7…`), and each differs from native's (1,931,207 B, `ee1522c8e0eceec9…`) in exactly two places:
+  - `get gone` after `touch gone -1`, and `get past` after `set past 0 -1 1`, return the value. Native's do not. These are mc-harness.c:207-208, "expired at once" and "stored expired".
+  - As a result, `STAT get_hits` reads 337 against 335 and `get_misses` 5 against 7.
+- The twin of this exact overlay (twin-cm3) gives native's transcript in all six repetitions.
+- None of the failure shapes the pre-registration named appears: no `<EOF>` transcript, no `<TIMEOUT>`, no cut stage. The msghdr loader delivered every transcript whole on both arms.
+
+**Why the two answers differ: the board has no RTC.**
+- In memcached 1.6.45, a negative exptime becomes `REALTIME_MAXDELTA + 1` = 2,592,001 (memcached.h:1064, `EXPTIME_TO_POSITIVE_TIME`).
+- realtime() (memcached.c:174) reads a value above the 30-day delta as absolute Unix time. It gives 1, "expired at once", only when `2,592,001 <= process_started`, where `process_started = time(0) − 62` (memcached.c:203).
+- So the item expires at once only if the wall clock is more than 30 days past the epoch.
+  - The twin's kernel sets its clock from goldfish_rtc: `setting system clock to 2026-11-25T18:29:26 UTC`.
+  - The board's log has no RTC line, so the board's wall clock counts from the epoch. At these commands the uptime was ~5,000 s. realtime() then returns `2,592,001 − process_started`, an expiry about 30 days ahead.
+- Both arms read the same, because the cause is in time(0), not in protection.
+- **Checked on the twin, one variable changed** (2026-11-26 08:59-09:00, `<hdd>/nested/b5b2/cm/epoch/run-epoch.sh`):
+  - The setup: ovl-cm3's memcached stages only, Image `749fed26…`, and one initramfs (`5f351a47…`) for both arms. The arms differ only in QEMU's `-rtc base`.
+  - **epoch** (`-rtc base=1970-01-01T00:00:00`): the kernel reads `setting system clock to 1970-01-01T00:00:02 UTC`, and all six transcripts are sha256 `028c99b2…`, the board's exactly.
+  - **real** (no `-rtc`): the kernel reads `2026-11-26T01:00:25 UTC`, and all six are `ee1522c8…`, native's.
+  - So the board's whole memcached difference is reproduced by the clock alone.
+
+**Reading.**
+- CPython: the stock and protected images both run Fig. 10's workload correctly on silicon's trap route, at +6.8 % wall time for prot (N = 1).
+- memcached: protection does not change the server's behaviour on silicon. Both arms give the same 1,931,245 B transcript, and its two differences from native are the board's wall clock.
+- It does not qualify by the registered criterion, and that verdict stands as registered.
+  - A requalification needs native's reference taken at the board's clock, or the board's clock set before the server starts. Either is a new pre-registration.
+  - The two `-1` fixtures cannot pass on a board without an RTC.
+- The cpymem board/twin ratio for corpus case 21: CPython reads 8.9× stock and 7.3× prot. memcached's repetitions read ~10× in uptime per repetition (board 49-50 s, twin 3.5-6.5 s).
+
 ### Pre-registration: B5b-2 board boot "nested-corpus", SQLite then PHP engine-repros (written 2026-11-26 04:17 host time (+08), 20:17Z on Nov 25, before the boot)
 
 **What it is.** Runtime's B5b-2 item 1 on silicon: the engine-repro corpus on the trap route, in one boot.
