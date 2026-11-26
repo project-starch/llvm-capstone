@@ -9212,6 +9212,25 @@ so the expected list is that stage alone.
 **Limits.** gcc's t1.c only, one boot per arm. The fail-stop path is shown by the forced-failure control, not by a real
 failure: a real one needs 2^32 − 2 releases of one slot, which no test input reaches.
 
+**Addendum 1 (2026-11-26 20:03 host time (+08), 12:03Z, before either boot): the payloads.**
+- runtime built both (`trapk/build-cfp-g3v2.sh` `9dc7d9eb…`, record `build-cfp-g3v2.done`). Each is CFP-B5TL1-g3's
+  overlay with the gcc stage directory replaced, relinked as the campaign's port payloads were (fpga-final, keep-tags
+  firmware with `FW_FAST_RDTIME=y`, 2 fast-path references).
+
+| payload | fw_payload.bin sha256 | bytes | native in the overlay | plan.json |
+|---|---|---:|---|---|
+| CFP-B5TL1-g3v2 | `724f0027fdf5fe59…` | 21,662,216 | `bd308d5ab7187be8…` (gcc-port2) | `330efbb9…` |
+| CFP-B5TL1-g3v2ff | `8fad069606cbb548…` | 21,662,216 | `1a9b370a6298307e…` (gcc-port2ff) | `3a580bb7…` |
+
+- **Checked here.**
+  - Both `fw_payload.bin` hashes and sizes.
+  - Each overlay manifest against CFP-B5TL1-g3's differs in exactly two lines: the stage's `plan.json` and its native.
+  - The native and `plan.json` extracted from each `overlay.cpio` have the hashes above.
+- The boot's stage is named `B5TL1-502.gcc_r`, as the grader's expected list says.
+- No twin replay of the payloads: the stages are twin-qualified above, and the kernel and firmware are CFP-g3's, which
+  ran on this seal.
+- The board lane slots both boots on board 2 after M-16's hbB. g3v2 runs first. Nothing else changes.
+
 ### Pre-registration: B5b-2 board boot "nested-corpus", SQLite then PHP engine-repros (written 2026-11-26 04:17 host time (+08), 20:17Z on Nov 25, before the boot)
 
 **What it is.** Runtime's B5b-2 item 1 on silicon: the engine-repro corpus on the trap route, in one boot.
