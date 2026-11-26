@@ -9299,6 +9299,40 @@ failure: a real one needs 2^32 − 2 releases of one slot, which no test input r
   ran on this seal.
 - The board lane slots both boots on board 2 after M-16's hbB. g3v2 runs first. Nothing else changes.
 
+### Result: CFP-B5TL1-g3 v2. v2 PASSES on silicon, and the forced-failure control stops with SUBLET-RENEW-FAILED, rc 134, graded MISS, as predicted (board 2, b42c8c644, 2026-11-27 03:01-03:12 host time, 19:01-19:12Z on Nov 26, read against db1188431edf with Addendum 1 c986a843f704)
+
+**Gates, both boots.**
+- The board lane checked Addendum 1 before each boot. Seal `b42c8c644` was read back by name before and after each
+  boot (`…r77_b42c8c644.bit`, rc 3: the name matches, and the console exposes no sha256).
+- PREFLIGHT: `exit 1 BLOCKED … by C10's 20 MB working budget only` (21,662,216 B), and the boots proceeded by
+  runtime's ruling, as for CFP-B5TL1-g3 on this seal. So both boots are gated, with that one block overridden.
+- Smoke control `C=ok` (smoke.dom rc 7). No `sublet: fault` line in either capture.
+
+| boot | payload (first 16) | booking | uart.txt sha256 (first 16) | stage | rc | specdiff | `up1 − up0` |
+|---|---|---|---|---|---:|---|---:|
+| CFP-B5TL1-g3v2 | `724f0027fdf5fe59` | 1608 | `efd010abaf9db1bd` (10,771 B) | **PASS** | 0 | 1/1 | 5.83 s |
+| CFP-B5TL1-g3v2ff | `8fad069606cbb548` | 1609 | `edfb1709bce6d301` (10,615 B) | **MISS** | 134 | 0/1 | 3.39 s |
+
+Graded here with `grade-spec-chain-v2.py` (`b976d288…`): `SPEC_STAGE_ROOT=gcc-v2/boardroot` for g3v2 (exit 0) and
+`gcc-v2/boardroot-ff` for g3v2ff (exit 1). This agrees with the board lane's v2 and v1 grades.
+
+**Predictions, read.**
+1. **CFP-g3v2: holds.**
+   - `C=ok`, and the stage PASSES: QSTEP rc 0, `rc!=0: 0`, specdiff 1/1.
+   - The decoded `.err` (`0c86179b…`) holds only gcc's own `t1.c:2:5: warning: conflicting types for built-in function
+     'printf'`. It has no `SUBLET-RENEW-FAILED`, and the capture has no fault line.
+   - `.s` is `58111208…`, and `.out` is empty.
+2. **CFP-g3v2ff: holds.**
+   - The command's rc is 134.
+   - The decoded `.err` is `SUBLET-RENEW-FAILED` then `Aborted` (marker count 1).
+   - The kernel line is `sublet: cpugcc_r_base.n[57]: signal 6 has a handler, caught signals are not supported:
+     killed`, as on the twin. One copy in the capture is spliced.
+   - The grader reads MISS (`rc!=0: 1`, specdiff 0/1). So the fail-stop's line and rc reach a silicon capture.
+3. **Time, a reading at N = 1:** v2 took 5.83 s, the same as v1's 5.83 s; the stock pair took 5.55 s.
+
+**How it reads.** By the registered table, PASS means v2 replaces v1 as the CFP-g3 row's image, with v1's reading
+kept beside it. The fail-stop path is shown by the control, not by a real failure, as the limits say.
+
 ### Pre-registration: B5b-2 board boot "nested-corpus", SQLite then PHP engine-repros (written 2026-11-26 04:17 host time (+08), 20:17Z on Nov 25, before the boot)
 
 **What it is.** Runtime's B5b-2 item 1 on silicon: the engine-repro corpus on the trap route, in one boot.
