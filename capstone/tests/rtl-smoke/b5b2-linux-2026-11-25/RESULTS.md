@@ -129,3 +129,31 @@ f47b2a686ce2 (`b5b2-seals-board-2026-11-25/b42c8c644-board2.result-lines.txt`, s
 **Consequence:** the Full kernel stands for the campaign (Amendment 6's void condition did not fire). Boot 14 (the
 +Spatial kernel on 14f2ef81a, board 1) attempt 1 was NO READING for infrastructure reasons (a GDB timeout after a
 completed load, booking 1566), and it is still owed.
+
+## Boot 14: the final +Spatial kernel on the spatial-only seal 14f2ef81a (board 1, 2026-11-26 05:32-05:36Z), as predicted
+
+Pre-registered as Amendment 7 (4447a1b8cd1b). Boot 13, which had been unread when this boot was registered, read 4
+of 4 first. Image c975128b…, the smoke2 build with FW_FAST_RDTIME.
+- The seal: 14f2ef81a was flashed by the wapflu kit at 05:28-05:30Z. Board 1 had P1 resident, left by nested.
+  - The kit read WFKIT 1/1 AS PREDICTED.
+  - The bitstream read back by name as `…-spatial_14f2ef81a.bit` after the flash, after the kit's loads, and before
+    and after this boot.
+- The capture: UART sha16 a438f4e24665e144, 9,235 characters, bookings 1577 (flash and kit) and 1578 (boot). The
+  readings below are the board lane's report; its result lines will be on board/meas-pw.
+- Attempt 1 (booking 1566) was NO READING: a GDB timeout after a completed load.
+
+| Prediction | Reading |
+|---|---|
+| 1. control `ok`, smoke.dom rc=7 (binding) | `okTRAPTEST: control smoke.dom rc=7`, no R-reads-back line |
+| 2. mtrip in Amendment 6's bands | rdtime 119.71-119.76, rdcycle 5.00, getppid 1,269.06-1,269.66, cycles_per_tick 1.99, backwards 0, all three runs |
+| 3. msgt native and protected rc 0, fails=0, the five lines (binding) | both rc 0, fails=0, all five MSGT lines equal to the twin's |
+| 4. no `sublet: fault`, `call` or "R reads back" line | none |
+| 5. `TRAPTEST: done` (binding) | present |
+
+- The spatial-only path is used. Prediction 3's protected msgt is the step whose root check accepts R without its
+  record. On this seal the Full kernel's check refuses it (the twin pair of e247b4fdd995), and here it passes with
+  fails=0.
+- rdtime and getppid match boot 13's Full kernel on b42c8c644 within 0.2 % (119.70-119.72, 1,266.9-1,268.0).
+
+**Consequence:** the +Spatial final kernel stands for the campaign's +Spatial arm. Both final kernels are now read
+on silicon, on the seals they pair with.
