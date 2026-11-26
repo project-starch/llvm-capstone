@@ -13,10 +13,20 @@ the PREREG amendments that read them. Only the 28fcbb646 half of the matched pai
 - the verdict from `grade-spec-chain.py` (v1, 4fa95eaf). For a row first graded after Amendment 14 (pushed
   2026-11-26 14:18 +08), it comes from `grade-spec-chain-v2.py` (b976d288), with v1 beside it. B5T-g1b on board 2 was
   regraded by this lane from its capture under both, and reproduces the board lane's grade file byte for byte;
-- Amendment 9's cause-25-at-LDC rule. Every capture below has **0** occurrences of the substring `cause=` (`grep -a`;
-  the same grep counts 456 lines with `cause=25` in board 2's nested-corpus capture, so the check fires). The board
-  lane's `scan-c25ldc.py` prints NONE on each, but it anchors at the start of a line and parses only 140 of those 456
-  spliced lines. Its NONE is therefore not the evidence; the substring count is. It has been reported for a fix.
+- Amendment 9's cause-25-at-LDC rule. Every capture below has **0** occurrences of the substring `cause=` (`grep -a`).
+  In board 2's nested-corpus capture the same grep finds 456 lines with `cause=25`, so the check fires. Those 456 lines
+  are 150 fault events: each prints as a `sublet: fault` line, its `TRAPTEST: dmesg` echo and the launcher's
+  `capstone-exec: domain fault` line. Two more events are kernel faults. The board lane's `scan-c25ldc.py` (28dca1e4)
+  anchored at the start of a line and found 140 of the 150 events; the 10 it missed occur only mid-line. A first
+  version of this file said "140 of those 456 lines", which counted lines, not events. The board lane fixed it at
+  203b6edd:
+  - an unanchored match, de-duplicated by (timestamp, pid, pc);
+  - NO READING for a fault that mapfaults.py cannot map. Before, it said "not at an LDC";
+  - mapfaults blocks keyed by pid and pc and bounded. Before, an unmapped fault could read the next fault's
+    instruction.
+
+  Its controls are spliced into a copy of a real capture. The fixed scanner's verdict line equals the recorded one on
+  all 15 rows scanned.
 
 Times are the stage's `@@SPEC-END` uptime difference, summed over a stage's commands, in seconds. /proc/uptime has
 0.01 s resolution.
@@ -40,8 +50,11 @@ Times are the stage's `@@SPEC-END` uptime difference, summed over a stage's comm
 
 Control `smoke.dom rc=7` read AS PREDICTED in every row.
 
-**mcf (Amendment 8).** Both B5T-g1b rows completed with specdiff 2/2 PASS and no fault line: board 3 exposure
-6,844.3 s, board 2 6,842.2 s. Their `@@SPEC-END` times are 6,828.57 and 6,826.53. This is CONSISTENT with R-80's fix, and
+**mcf (Amendment 8).** Both B5T-g1b rows completed with specdiff 2/2 PASS and no fault line. The exposure is 6,828.2 s
+on board 3 and 6,826.2 s on board 2, from `mcf-exposure.py` 17c806a6. Its predecessor, aa1d6557, took the stage's end
+as the latest time anywhere after it, validation and the dmesg dump included, and gave 6,844.3 and 6,842.2. Those two
+numbers are withdrawn. The `@@SPEC-END` times are 6,828.57 and 6,826.53. `grade-mcffault.py` (c028de3b, unanchored)
+reads both rows byte-identically to its predecessor. This is CONSISTENT with R-80's fix, and
 not evidence for it, by Amendment 8. Amendment 7's refutation condition (a silent wedge) did not occur.
 
 **No cause-25 fault at an LDC** in any row, as Amendment 9 predicted (see the check above).
