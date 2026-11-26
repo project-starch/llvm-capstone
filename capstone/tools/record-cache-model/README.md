@@ -130,11 +130,47 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
 - An edge with the key unchanged must not flush: a build that flushes on every E FAILS the control on six counts.
 - A malformed trace exits 2: six malformed traces (E word 1 = 2; T, I, PI with a non-zero word 1; a record with bit 33; kind 11) must each exit 2, and E word 1 = 1 must exit 0. f82523965196 checked word 1 after the marker branches, so the four marker cases were accepted; c156970f12cd fixed it and its build passes.
 
+**The numerator, ruled by the semantics owner (the runtime lane, 2026-11-26, second ruling):**
+- NO BUILD may use the CEILING: all LB check misses x the cold cost (the higher). If removing every miss saves under
+  1 %, no organisation can pass.
+- BUILD uses only the misses REMOVED by a named candidate x the warm cost (the lower), MINUS the candidate's own added
+  cost.
+- For RC, that added cost is RC's own misses x RC's miss cost: one 64-byte line fill, unmeasured. So an RC BUILD stays
+  UNDECIDED until that cost is bounded, first in simulation and then by one silicon reading, as for the LB pair. LB's
+  per-miss cost is NOT a proxy for it.
+- An LB-size candidate adds no new miss type, so its BUILD needs only removed misses x warm.
+- A program without its board row is UNDECIDED, and no estimate is written for it.
+
 **Verdicts, per program** (rule as ruled above; each row carries its cost pair and its denominator's source):
 
 | program | trace (nested lane, twin) | LB check misses asis / dedup | cycle denominator (board row) | share at cold 40.4 | share at warm 15.6 | verdict |
 |---|---|---|---|---|---|---|
 | 502.gcc_r test (t1.c) | spec-gcc.2262833, sha256 0cfc265bfa31dbb2..., recomputed here | 8,921 / 8,921 (self_evict 0) | 144.0 M = 5.76 s x 25 MHz | 0.250 % | 0.097 % | **NO BUILD** |
+| 505.mcf_r test (inp.in) | spec-mcf.2201746, sha256 633ca24aabba3062..., recomputed here | 181,127,530 / 181,127,654 (self_evict 124) | not yet: B5TL1-g1b on b42c8c644 | -- | -- | **UNDECIDED** (no board row) |
+
+**505.mcf_r test (inp.in): UNDECIDED, because its board row does not exist yet.**
+- The trace is the nested lane's spec-mcf.2201746: 65,420,275,952 B, sha256 633ca24aabba3062..., recomputed here. It
+  has 4,088,767,247 events and 61 tables.
+- The image: mcf_r_base.native a1daec395a9e7260..., which equals board-stages B5TL1/505.mcf_r (recomputed here) and
+  B5TL1-g1b's overlay (the board lane; payload 539b2ef41ee4d444...).
+- LB check misses at 64x4: 181,127,530 asis (dev 6d87efe8d50a's build, reproducing the nested lane's
+  b35fb24d8e97-built number exactly) and 181,127,654 dedup (the nested lane), over 10,044,639,808 checks. self_evict
+  is 124, so the bracket is closed.
+- The other organisations' check misses: RC 44,836,912; GC 177,942,095.
+- By size (asis): 128x4 178,924,715; 256x4 173,320,429; 64x8 179,088,405; 128x8 173,978,679; 1024x8 = 4096x32
+  126,537,860.
+- The floor is set by LB's 524,176 namespace flushes, about 241 misses per flush. A verdict cache that survives an
+  edge is a lever this model cannot measure: the trace says only that the key changed, not to which key.
+- The rule's break-even run times at 25 MHz. These are thresholds, not estimates; mcf's B5TL1-g1b run time decides.
+  - NO BUILD (ceiling, cold 40.4) at 29,270 s or more. g1b's mcf stage bound is 30,000 s, so even a run cut at the
+    bound decides.
+  - BUILD (removed x warm 15.6) by LB size:
+    - 1024x8 removes 54,589,670 and needs a run of 3,406 s or less;
+    - 256x4 removes 7,807,101 and needs 487 s or less;
+    - 128x8 removes 7,148,851 and needs 446 s or less;
+    - 128x4 and 64x8 need 137 and 127 s or less.
+  - RC removes at most 136,290,618 check misses, minus its own line fills. RC is UNDECIDED until RC's miss cost is
+    bounded.
 
 **The denominator: board 3, B5TL1-g3 on b42c8c644, 502.gcc_r PASS** (board/meas-pw f47b2a686ce2, b42c8c644-board3 result lines).
 - The run's time is the SPEC-END line's up1 50.54 minus up0 44.78 = 5.76 s. The row prints no cycle count, so cycles are
