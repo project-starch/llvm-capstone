@@ -9412,3 +9412,144 @@ were read, 346 predicted, and 114 differ.
   - case 21 (crash-075) 208-256 s against 30-50 s per arm, inside its 900 s watchdog;
   - case 70 (crash-161) 803-860 s against 58-78 s. It is out-of-denominator either way.
   - The two hung runs, SQLite malloc 11 and PHP 30, read infra on both.
+
+## perlbench item 3 on Line B: CRENEW for heads, bodies and hash entries, failing closed, on the trap-route twin (2026-11-26)
+
+### Pre-registration: perl-fullren against perl-full, makerand.pl on the trap-route twin (written 2026-11-26 21:04 host time (+08), before the variant's runs)
+
+**Question.**
+- runtime asks for the CRENEW half of item 3 on the trap route.
+- oneop measured all three variants' program side on 24 Nov (the sections above):
+  - heads (5.36): 13.51 image instructions per removed CDERIVE;
+  - bodies: 10.04;
+  - hash entries: a net cost on suns.pl, because the bounds test runs at every issue and suns.pl frees few entries.
+- oneop's table has no generations, so a renew there was a release plus an allocation. B5b-2's table has generations, so
+  a renew normally stays in place. And the trap-route twin decodes CRENEW (qemu-crv `3a9fc39167`, `helper_csrenew`).
+- What does renewing heads, bodies and hash entries at the free do to perlbench's instructions on Line B, against
+  the current port, in the campaign's own build and stage?
+- And is protection unchanged, including on the path where a renewal fails?
+
+**A renewal can fail on Line B, so the variant fails closed.**
+- A CRENEW at a slot's last generation needs a new identity, and the allocation decision comes before any lifetime ends
+  (RTL at b42c8c644, `core/capstone_sublet_life.sv:487-488`, then `S_K_DEC0` at `:595-598`). The model works the
+  same way (`target/riscv/op_helper.c:1190-1209`).
+- In a table that can grow, the result is cause 30, and the kernel grows the table. In one that cannot, the result is
+  an untagged 0 (`:319-324`, decision 1), with no record written and **the old lifetime left live**
+  (`op_helper.c:1224-1228`).
+- The trap kernel's table grows on demand. It stops growing only at the format's ceiling or when a page allocation
+  fails (runtime: `sublet-table.c:54-58`, `:110`).
+- So each of the three renew sites checks the result. On 0 it takes the port's own path:
+  - heads: revoke and clear the issued entry;
+  - bodies and hash entries: revoke, and return the segment's own pointer, so the next issue derives.
+- **That revoke cannot itself fail there.**
+  - CREVOKE checks the tag and the lifetime only, and it takes no allocation decision. In the model, `helper_cskill`
+    (`op_helper.c:1169-1189`) never calls `capstone_alloc_slot`. In the RTL, line 488 sends CREVOKE straight to
+    `S_K_PV_R`.
+  - The old lifetime is live after a failed renew, as above.
+
+**The arms** (`ports/build-renew.sh`, built as `build-ports.sh` builds perl-full: B5TL1's own tree, its `compile.txt`
+and `link.txt`, llvm-c9 `29027126f39b`, the B5TL1 SDK, the one-operand shim):
+- **perl-fullren** (`d5cb32d6f0bd75b0…`): perl-full plus three experiment scripts, never port scripts.
+  - `renew/heads-renew.py` (``f0616af5…``): the 5.36 variant (oneop `0003`) in the 5.22 port's shape. The issued table tells
+    a reissue apart, so no bounds test is needed.
+  - `renew/bodies-renew-lb.py` (``5857aeec…``) and `renew/he-renew-lb.py` (``3bef5674…``): oneop's `bodies-renew.py` and
+    `he-renew.py`, failing closed.
+  - The defines are `-DPERL_CAPSTONE_SUBLET_{HEADS,BODIES,HE}_RENEW`, and `renew/renew-shim.h` (``378aa5b4…``) is
+    force-included.
+  - Op slabs are not renewed: oneop read that as a cost, and runtime did not ask for them.
+- **perl-fullren-ff** (`c30ba1d7a9129481…`): perl-fullren plus `-DPERL_CAPSTONE_RENEW_FORCE_FAIL`.
+  - Every renewal reads as failed (0, with the old lifetime left live) without executing CRENEW.
+  - So every site takes its fall-back. This arm is the fixture's check of that path.
+- **perl-fullren0**: the three scripts without the new defines. **It is byte-identical to perl-full** (`07738b77…`
+  unstripped, `b4eb3e6f…` stripped), so the edits change nothing unless asked.
+- Every image reads `ILLEGAL=0`.
+- Static census (`scan_illegal.py`):
+  - perl-full: CRENEW 1 (the runtime's), CREVOKE 15, CDERIVE 96;
+  - perl-fullren: CRENEW 10, CREVOKE 15, CDERIVE 96;
+  - perl-fullren-ff: CRENEW 1, CREVOKE 15, CDERIVE 96.
+- **Lines of patch** (`diff -ruN`, build products excluded):
+  - the port against B5TL1's stock tree: 639 added and 8 removed over 11 files (568 and 8 that are neither blank nor
+    comment);
+  - the variant against the port: 45 added and 0 removed in `sv.c` and `capstone_sv_segs.h` (40 code lines). The heads
+    edit keeps the port's issue body under `#else`, which inflates the added count. The shim adds 11 lines (5 code).
+- **These images never go to the board here.**
+
+**Fixtures** (`renew/build-renew-fixtures.sh`, built as `build-fixtures.sh` builds perl-full's: the port's committed
+`make-{heads,bodies,he}-fixture.py`, the arm's `perlmain.o` line, linked in `perlmain.o`'s place). One twin boot runs
+`renew/stage-fx`, 56 runs:
+- heads (modes 0-3): full, fullren and fullrenff, with stock-heads (perl-stock, whose heads carry no lifetimes) as the
+  control;
+- bodies and hash entries (modes 0-4): full, fullren and fullrenff, with fixture/bin's fullnr-bodies and fullnr-he
+  (NOREVOKE) as the controls.
+
+**The instrument, calibrated before this pre-registration.**
+- oneop's `opcount.so` (`1144e04f…`, source `6decfe33…`) on qemu-crv. Both are QEMU 8.1.1.
+- The boot script is `renew/boot-plugin.py`, runtime's `boot-long.py` with two changes:
+  - it passes `-plugin`;
+  - after `TRAPTEST: done` it waits for QEMU to exit by init's poweroff, because the plugin writes its file at exit.
+- The runner is `renew/twin-renew.sh`: twin-ports.sh's twin, at the board's memory, with init-twin and one perlbench
+  stage per boot.
+- Calibration (2026-11-26, `twin-renew.sh` `db8eb818…`, `boot-plugin.py` `1d6c39c7…`): `cal-stock` (B5TL1's own g4mk
+  stage) and `cal-full` (perl-full's port stage), one boot each. Both stages PASS under `grade-spec-chain-v2.py`.
+  Image-region counts (opcount):
+
+| boot | image instructions | CDERIVE | CREVOKE | CRENEW | twin run (s) |
+|---|---:|---:|---:|---:|---:|
+| cal-stock | 3,094,621,929 | 793 | 130 | 3 | 56.02 |
+| cal-full | 3,209,053,644 | 1,943 | 311 | 6 | 56.28 |
+
+  - The port costs 114,431,715 image instructions on makerand.pl (+3.70 %), and adds 1,150 CDERIVEs and 181 CREVOKEs.
+  - runtime read 3,094,621,929 for the campaign's CF image on its own twin run, equal to cal-stock.
+  - **So the saving is small.** Each renewal replaces at most one CREVOKE and one later CDERIVE. With at most 181 port
+    releases to renew, oneop's 10-14 instructions per removed CDERIVE would make at most about 2,500 instructions:
+    under 10^-6 of the image's count. It is readable only if the twin repeats exactly (prediction 5).
+
+**Runs** (`renew/twin-renew.sh`, after this pre-registration):
+- `fx`, the fixture boot;
+- `ren1` and `ren2`, perl-fullren's stage (`renew/stages/fullren`, the port stage with the image replaced);
+- `full2`, perl-full again, the same-day control.
+
+**Predictions.**
+1. **Answers.** Each stage PASSes under grade-spec-chain-v2.py (`b976d288…`) against `ports/twinroot`. A boot that does
+   not PASS is not read.
+2. **Fixtures.**
+   - fullren and fullrenff fault in exactly the modes perl-full faults in, run by run.
+   - bodies and HE: mode 0 reads, and modes 1-4 fault, as perl-full's did on this twin (`twin-fx`).
+   - heads: mode 0 reads, and modes 1-3 fault.
+   - Controls:
+     - fullnr-bodies reads in modes 0-3 and faults in mode 4;
+     - fullnr-he reads in modes 0-4;
+     - stock-heads reads in modes 0-2, and its mode 3 is recorded.
+   - If a control does not read where predicted, its fixture's protected modes are not read.
+3. **Lifetime instructions** (image region, opcount; ren1 against full2):
+   - CRENEW appears;
+   - CREVOKE falls by the CRENEW count to within 0.1 % of it;
+   - CDERIVE falls by at most the CRENEW count.
+4. **Image instructions: ren − full between −2 and −14 per removed CDERIVE.** oneop read heads 13.51 and bodies 10.04,
+   and hash entries cost.
+   - Removed CDERIVEs are full2's count minus ren1's.
+   - **Caveat: hash entries can flip the sign.** Their bounds test runs at every issue, and on suns.pl it outweighed
+     the saving. If it does so here, ren − full is positive, and prediction 4 fails. opcount counts by region and
+     opcode, not by site, so it cannot split the three sites. A positive difference is reported as the net of the three.
+5. **Repeats.** ren1 and ren2 agree in image instructions to within 0.01 %, and full2 and cal-full likewise.
+   - **Readability rule for prediction 4:** its saving is read only if both repeat differences, |ren1 − ren2| and
+     |full2 − cal-full|, are under a tenth of |ren1 − full2|. Otherwise the twin's repeat noise covers the saving.
+     Prediction 4 is then reported as not resolved, and only the lifetime counts of prediction 3 are read.
+6. **Recorded, not predicted:**
+   - kernel and firmware instructions, where a renewal's table work would show if the trap route charged it to
+     software;
+   - the stage's lowest MemAvailable, against perl-full's and stock's;
+   - the run time (`up1 − up0`), a twin's.
+
+**What is read.**
+- The saving per removed CDERIVE, and its share of the port's own image instructions (full − stock, from the
+  calibration).
+- Whether any renewal failed cannot be read from opcount alone. A failure executes a CRENEW and a CREVOKE where a
+  success executes only the CRENEW. So it would show as CREVOKE falling by less than CRENEW, and so would the
+  untraced double renews oneop read (73 and 63). Prediction 3's band covers both.
+- The fall-back path itself is shown by the fixtures of fullrenff.
+- Not read: cycles. This is the twin.
+
+**Limits.**
+- Test-size makerand.pl only, the campaign's g4mk stage.
+- One twin. The arms are experiments, not port scripts.
