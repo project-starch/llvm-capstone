@@ -1,0 +1,15 @@
+#!/bin/sh
+# +Spatial final kernel smoke: the .dom control, the M-round-trip cost three times, then msgt native and protected.
+# msgt's protected run is the step that reaches the spatial-only path (R accepted without its record); it is last.
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+mkdir -p /tmp && mount -t tmpfs tmpfs /tmp
+echo "TRAPTEST: up, kernel $(uname -r)"
+mkdir -p /tmp/run && cd /tmp/run && cp /smoke.dom . && ./smoke.dom; echo "TRAPTEST: control smoke.dom rc=$?"; cd /
+for i in 1 2 3; do /mtrip; echo "TRAPTEST: mtrip $i rc=$?"; done
+/msgt.native; echo "TRAPTEST: msgt native rc=$?"
+cd /tmp/run && cp /msgt.dom . && ./msgt.dom; echo "TRAPTEST: msgt protected rc=$?"; cd /
+busybox dmesg | busybox grep -E "sublet: (fault|call)" | sed 's/^/TRAPTEST: dmesg /'
+echo "TRAPTEST: done"
+busybox poweroff -f; echo "TRAPTEST: poweroff failed"; sleep 999999

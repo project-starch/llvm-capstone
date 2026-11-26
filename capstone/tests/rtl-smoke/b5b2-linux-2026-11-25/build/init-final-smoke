@@ -1,0 +1,12 @@
+#!/bin/sh
+# Final campaign kernel smoke: the .dom control, then the M-round-trip cost (fast rdtime path), three runs.
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+echo "TRAPTEST: up, kernel $(uname -r)"
+busybox grep -E 'CONFIG_HZ=|NO_HZ_IDLE' /proc/config.gz 2>/dev/null
+mkdir -p /tmp/run && cd /tmp/run && cp /smoke.dom . && ./smoke.dom; echo "TRAPTEST: control smoke.dom rc=$?"; cd /
+for i in 1 2 3; do /mtrip; echo "TRAPTEST: mtrip $i rc=$?"; done
+busybox dmesg | busybox grep -E "sublet: (fault|call)" | sed 's/^/TRAPTEST: dmesg /'
+echo "TRAPTEST: done"
+busybox poweroff -f; echo "TRAPTEST: poweroff failed"; sleep 999999
