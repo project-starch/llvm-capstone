@@ -155,6 +155,7 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
 |---|---|---|---|---|---|---|
 | 502.gcc_r test (t1.c) | spec-gcc.2262833, sha256 0cfc265bfa31dbb2..., recomputed here | 8,921 / 8,921 (self_evict 0) | 144.0 M = 5.76 s x 25 MHz | 0.250 % | 0.097 % | **NO BUILD** |
 | 505.mcf_r test (inp.in) | spec-mcf.2201746, sha256 633ca24aabba3062..., recomputed here | 181,127,530 / 181,127,654 (self_evict 124) | not yet: B5TL1-g1b on b42c8c644 | -- | -- | **UNDECIDED** (no board row) |
+| 500.perlbench_r test (makerand.pl, the campaign's g4mk stage) | spec-perl3.2883687, sha256 1af7b0c90ab7cb56..., recomputed here | 277,290 / 277,290 (self_evict 0) | not yet: Full's g4mk on b42c8c644 | -- | -- | **UNDECIDED** (no board row) |
 
 **505.mcf_r test (inp.in): UNDECIDED, because its board row does not exist yet.**
 - The trace is the nested lane's spec-mcf.2201746: 65,420,275,952 B, sha256 633ca24aabba3062..., recomputed here. It
@@ -198,6 +199,18 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
         figure), RC BUILD is impossible on mcf at any run time.
     - RC candidate NO BUILD at c = 2 needs a run of 21,666 s or more (22,024 s at c = 0).
     - Between those, the result is UNDECIDED, and only the residency pass resolves it.
+
+**500.perlbench_r test (makerand.pl): UNDECIDED, because its board row does not exist yet.**
+- The trace is the nested lane's spec-perl3.2883687: 10,130,629,600 B, sha256 1af7b0c90ab7cb56..., recomputed here. It
+  has 633,164,350 events and 17 tables. It comes from the campaign's own stage, SP-B5TL1-g4mk.
+- The image: perlbench_r_base.native f3c8c80d71844564..., which equals g4mkroot's B5TL1/500.perlbench_r native
+  (recomputed here).
+- LB check misses: 277,290 under both walks, over 1,216,156,215 checks, with self_evict 0. RC reads 228, and the size
+  floor (4096x32) is 277,204.
+- Thresholds at 25 MHz (not estimates):
+  - NO BUILD on the ceiling (cold 40.4) at a run of 44.8 s or more;
+  - a larger LB removes at most 86 misses;
+  - RC's candidate NO BUILD at c = 2 (removed 277,062 x 40.4 - 228 x 2) is at 44.8 s or more as well.
 
 **The denominator: board 3, B5TL1-g3 on b42c8c644, 502.gcc_r PASS** (board/meas-pw f47b2a686ce2, b42c8c644-board3 result lines).
 - The run's time is the SPEC-END line's up1 50.54 minus up0 44.78 = 5.76 s. The row prints no cycle count, so cycles are
