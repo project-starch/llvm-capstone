@@ -291,18 +291,27 @@ meets all four. scapmode costs a flushing write per switch, or a conditional wri
   flop, `crvc_d = wdata[0]`, which resets to 0. The table address, and the protected-U predicate `srevroot_q != 0`
   (:3009-3017), are bit-identical to today.
 - **Read:** srevroot reads `{srevroot_q[63:12], 11'b0, crvc_q}`, so bit 0 reads back. On b42c8c644 it reads 0.
-- **Effective mode:** `crvc_o = crvc_q && priv == U && srevroot_q != 0`. The srevroot_q term is an addition to rtl's
-  `crvc_q && priv == U`: without it, a write of exactly 1 (the boot probe's own write, or a bug) would put an
-  ordinary process in the mode.
+- **Effective mode:** `crvc_o = crvc_q && cap_data_ctx[0]`.
+  - cap_data_ctx_o[0] is the existing protected-U predicate, `!sup_active_q && priv == U && srevroot_q != 0`
+    (:3013-3014). That makes this one AND rather than a new 64-bit compare, which is rtl's refinement.
+  - The srevroot_q term is an addition to rtl's first form, `crvc_q && priv == U`. Without it, a write of exactly 1
+    (the boot probe's own write, or a bug) would put an ordinary process in the mode.
 - **No new flush:** the srevroot write already sets flush_o.
 - **Every srevroot writer at b42c8c644:**
   - the CSR write at :2076;
   - the read at :1104, which must return bit 0;
   - **the domain-switch register path at :2146** (`7'd67: srevroot_d = {dom_switch_reg_req_i.data[63:12], 12'b0}`).
     It is NOT under a define or a generate condition. It is part of the always-active domain-switch register write,
-    taken whenever the switcher issues reg_id 67 (enable at :477-480). Its comment names CSRUNV's ENTRY walk as the
-    issuer, and the runtime lane relays rtl's statement that this is CSRUNV's path, gone under Sublet. That is a
-    statement about the switcher, not about this line, and rtl is asked to confirm it from the switcher's source.
+    taken whenever the switcher issues reg_id 67 (enable at :477-480). rtl confirmed from source at b42c8c644 that it
+    has no driver on Line B:
+    - CSRUNV is illegal at decode under CAPSTONE_SUBLET_FMT (decoder.sv:1492-1500, unconditional). A marked
+      instruction never issues (issue_read_operands.sv:1380), so commit's CSRUNV request path
+      (commit_stage.sv:715-725) never sees it.
+    - In capstone_dom_switcher.anvil, only CSRUNV walks reach id 67: walk_advance's id-67 arms are gated on is_runv
+      (:556-574); the RESUME and ESCAPE accesses (:324, :510) run only for runv modes 2-4; and runv_load_advance
+      (:175-179) is the ENTRY walk.
+    - The one other walk, a full CALL/RETURN switch (:703-711), ends at id 66 (:575-576).
+    There are no other srevroot writers.
   - **Either way, the change clears crvc_q there (`crvc_d = 1'b0` beside :2146).** Under Line B no CSRUNV context
     uses CRVC, so the clear costs nothing, and the path cannot leave a stale bit if it is live after all.
 - **Synthesis first:** the decode cone is on the UNOPTFLAT list (rtl), so the synthesis-only gate comes first.
