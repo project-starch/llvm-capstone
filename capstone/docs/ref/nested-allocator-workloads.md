@@ -8681,6 +8681,52 @@ twin-cm3. The two overlays' manifests differ in that one file and nowhere else.
 - **Any other difference:** reported as itself, with its arm.
 - **No clock line, or a 1970 clock line:** the set failed. That is no reading for this question.
 
+### Result: memcached's requalification. 6 of 6 qualify, every transcript native's, with the clock set from /init (board 2, 2026-11-26 15:26-15:37 host time, read against 740970700451)
+
+**Platform, as read back.**
+- Board 2 (booking 1585), booked by the board lane's runner and released (UNBOOK 200).
+- Payload `fw_payload.bin` sha256 `194a54623cd3056a…`, 19,565,064 B, as registered.
+- The readback names `…-r80-r77_b42c8c644.bit` before and after the boot: the full seal, as registered.
+- The runner's logs carry no preflight-gate line, so the boot is reported **UNGATED**.
+- Capture `uart.txt`: sha256 `a67782b907173a74…`, 74,563 B. It reaches `TRAPTEST: done`.
+
+**Readings.**
+- **Prediction 1, met.** Before the smoke, the console reads `TRAPTEST: clock set rc=0 from /clock.epoch 1795663474`
+  and `TRAPTEST: clock 2026-11-26T03:24:34Z epoch-s 1795663474`.
+- **Prediction 2, met.** The registered grader (`read-mc2.py` `c76d4138…`, against `<hdd>/nested/b5b2/memcached/out`)
+  exits 0: **6 of 6 repetitions qualify**. Two tick lines were dropped inside transcript blocks.
+  - For every repetition, on both arms:
+    - harness rc 0;
+    - `stop=shutdown exit=0`, at 10.75-11.53 s;
+    - a transcript equal to native's (1,931,207 B);
+    - identity `STAT pointer_size 128`.
+  - Each exit line names its image: stock `535389400f49…`, protected `4108e588f238…`.
+- **Repetition 3 of each arm has no `job.json`. That is by design.**
+  - The stage's repetition 3 runs `capstone-vexec` directly as root (`-u root`), without the `capstone-job` wrapper
+    that writes `job.json` (`run.sh`, the `RG_BEGIN:stock:3` block).
+  - The loop that prints the files skips a missing one, so the capture has no `RG_FILE:job.json` block there.
+  - The twin's set arm (`cm/clock/set/read-mc2.txt`) reads the same empty `job` on repetition 3 of both arms.
+  - `job.json` is not in the qualify rule.
+- **The in-run grade.** The board lane's appended plan step passed read-mc2.py a directory of its own as the native
+  reference, and the grader stopped on a missing file (rc 1). The grade above is the board lane's rerun of the
+  registered command, repeated here with the same output.
+
+**Reading.**
+- On silicon, memcached is served by the msghdr loader on both arms with native's transcript, once the clock is set.
+  The server row qualifies on the campaign's final Full kernel. It stands as the Full arm's memcached row.
+- nested-cpymem's 0 of 6 fits the board's missing RTC, which the twin reproduced by the clock alone (`cm/epoch`,
+  `cm/clock`). This boot cannot separate the clock from its kernel change (below). nested-cpymem's own verdict, 0 of 6
+  by its registered criterion, stands as registered.
+- **Disclosed again:** this boot also changed the kernel and the payload from nested-cpymem's. So it is the server row on
+  the campaign kernel, not a one-variable rerun.
+- **Board / twin times** (the harness's `stop_seconds`, readings): board 10.75-11.53 s, against 1.11-1.37 s on the
+  twin's set arm.
+
+**Limits.**
+- Three repetitions per arm, one boot, ungated.
+- The clock value is the overlay's build time, so the boot's wall clock started at 03:24:34Z. Any value over 30 days
+  past the epoch serves.
+
 ## Line B campaign arm "Full + ports": gcc's and perlbench's ports as B5TL1-paired stages (2026-11-26)
 
 runtime's Line B plan (dev b4aae7e416e8, `docs/plans/2026-11-25-line-b-final-campaign.md`) adds an arm "Full + ports":
