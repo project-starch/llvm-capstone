@@ -1,4 +1,4 @@
-# board 1, the +Spatial seal 14f2ef81a (spatial-only) sessions, cut at 2026-11-26T02:24:57Z
+# board 1, the +Spatial seal 14f2ef81a (spatial-only) sessions, cut at 2026-11-26T07:27:45Z while the SP session runs on
 
 ## the kit session (orch-sp.sh): log
 2026-11-25T21:13:53Z armed
@@ -113,3 +113,155 @@ reading; voids nothing (the runtime lane's ruling). Re-armed by hand for the nex
 2026-11-25T23:07:09Z FAILED START AGAIN spb1b-20261125T2239-boot14: NO READING (infra); no further try
 (the AGAIN line is the wrapper's wording before the fix: the rerun stopped before any load, its chain.log reading "STOP: board 1 busy";
  the fixed wrapper waits for idle first and logs such a rerun as "the RERUN could not start (a pre-run STOP: ...)")
+
+## the wapflu flash + boot-14 session (spb1c): log
+2026-11-25T23:13:17Z armed
+2026-11-26T05:28:18Z the 14f2ef81a full chain ended
+2026-11-26T05:28:19Z gates PASS: seal 14f2ef81a sha df9de4d49b21b475; plan ARMED by the board lane after reading every pin below (sha16 cd12555975808ee6)
+2026-11-26T05:31:54Z wapflu: kit rc=0 29 FLASH END caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynb 29 READBACK after flash = caplifive_ids55-native-tagcache-mlp-fpieee-h  WFKIT cand 1/1 AS PREDICTED; 
+2026-11-26T05:31:59Z boot14: marked DONE-ON-BOARD 1 in <path>/b5b2linux/boot14.armed before the run
+2026-11-26T05:36:19Z boot14 (board 1): 19 RUN END rc=0 [lx 13:36:18] end: TRAPTEST: done seen; 9235 chars 19 GRADE rc=0 BOOT14 4/4 binding-and-checked as predicted 
+2026-11-26T05:36:19Z SESSION END
+
+## wapflu
+01-sublet-life           AS PREDICTED           
+02-b5b2-untagged         AS PREDICTED           
+
+WFKIT cand 1/1 AS PREDICTED; 
+
+## boot14
+PASS  1 control ok + rc=7, no 'R reads back': okTRAPTEST: control smoke.dom rc=7
+  raw rdtime ['119.76', '119.76', '119.71'] rdcycle ['5.00', '5.00', '5.00'] getppid ['1269.66', '1269.06', '1269.59']; cycles_per_tick ['1.99', '1.99', '1.99'] backwards ['0', '0', '0']
+PASS  2 mtrip x3 in Amendment 6's bands: in band
+PASS  3 msgt native + protected rc 0, fails=0, five lines = the twin's: yes
+PASS  4 no sublet fault/call or R-reads-back line: none (0)
+PASS  5 TRAPTEST: done: present
+
+BOOT14 4/4 binding-and-checked as predicted
+
+## the SP session (orch-sp3.sh, 14f2ef81a resident): log
+2026-11-26T05:21:55Z armed
+2026-11-26T05:36:55Z the 14f2ef81a full chain ended
+2026-11-26T05:36:55Z gates PASS: seal 14f2ef81a sha df9de4d49b21b475; plan ARMED by the board lane after reading every pin below (sha16 88a1c9b8a181c35c)
+2026-11-26T05:36:55Z RESIDENT: the previous session read back caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit (RK 2026-11-26 05:31); no flash
+2026-11-26T05:41:53Z SP-B5TL1-g2i: 53 RUN END rc=0 [lx 13:41:51] end: TRAPTEST: done seen; 11340 chars 53 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS done=yes 
+2026-11-26T05:41:54Z SP-B5TL1-g2i extra: SP-EXTRA SUBLET=NONE TWIN=1 equal of 1 (not binding); TWIN B5TL1-538.imagick_r EQUAL (8 twin hashes) 
+2026-11-26T05:41:54Z SP-B5TL1-g2i c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T05:47:09Z SP-B5TL1-g3: 09 RUN END rc=0 [lx 13:47:08] end: TRAPTEST: done seen; 10771 chars 09 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes 
+2026-11-26T05:47:10Z SP-B5TL1-g3 extra: SP-EXTRA SUBLET=NONE TWIN=1 equal of 1 (not binding); TWIN B5TL1-502.gcc_r EQUAL (5 twin hashes) 
+2026-11-26T05:47:10Z SP-B5TL1-g3 c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T06:00:04Z SP-B5TL1-g4mk: 03 RUN END rc=0 [lx 14:00:02] end: TRAPTEST: done seen; 75104 chars 04 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes 
+2026-11-26T06:00:04Z SP-B5TL1-g4mk extra: SP-EXTRA SUBLET=NONE TWIN=1 equal of 1 (not binding); TWIN B5TL1-500.perlbench_r EQUAL (557 twin hashes) 
+2026-11-26T06:00:04Z SP-B5TL1-g4mk c25: C25LDC NONE: no cause-25 fault in the capture
+
+## SP-B5TL1-g2i
+capture: 11144 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         956400 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-538.imagick_r PASS: QSTEP rc=0; read rc=0
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 8, in-band 4, specdiff 1/1 PASS
+    run0: rc 0 11.57 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-538.imagick_r begin
+  TRAPTEST: stage B5TL1-538.imagick_r bound 3600s
+  TRAPTEST: stage B5TL1-538.imagick_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.208898] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.181302] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.963785] sublet: .dom loader registered
+  TRAPTEST: dmesg [   26.453473] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81c63000
+  TRAPTEST: dmesg [   33.470640] sublet: imagick_r_base.[61] enters 0x3ff7c00000, table 0x81c9f000
+
+B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS done=yes
+
+## SP-B5TL1-g3
+capture: 10586 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955760 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 5.7 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-502.gcc_r begin
+  TRAPTEST: stage B5TL1-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.208961] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.181220] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.963199] sublet: .dom loader registered
+  TRAPTEST: dmesg [   37.443323] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82457000
+  TRAPTEST: dmesg [   45.153450] sublet: cpugcc_r_base.n[57] enters 0x3ff7000000, table 0x8247f000
+
+B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+
+## SP-B5TL1-g4mk
+capture: 74159 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         956176 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-500.perlbench_r PASS: QSTEP rc=0; read rc=0
+    READ 500.perlbench_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 557, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 293.96 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-500.perlbench_r begin
+  TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209034] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.182698] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.965483] sublet: .dom loader registered
+  TRAPTEST: dmesg [   38.410306] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81ca6000
+  TRAPTEST: dmesg [   54.763768] sublet: perlbench_r_bas[59] enters 0x3ff7c00000, table 0x81cff000
+
+B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes
+
+## SP-B5TL1-g2i spectest Amendment 12 readings (grade-sp-extra.py; P3 binding, P4 not)
+P3 SUBLET NONE
+TWIN B5TL1-538.imagick_r EQUAL (8 twin hashes)
+
+SP-EXTRA SUBLET=NONE TWIN=1 equal of 1 (not binding)
+
+## SP-B5TL1-g3 spectest Amendment 12 readings (grade-sp-extra.py; P3 binding, P4 not)
+P3 SUBLET NONE
+TWIN B5TL1-502.gcc_r EQUAL (5 twin hashes)
+
+SP-EXTRA SUBLET=NONE TWIN=1 equal of 1 (not binding)
+
+## SP-B5TL1-g4mk spectest Amendment 12 readings (grade-sp-extra.py; P3 binding, P4 not)
+P3 SUBLET NONE
+TWIN B5TL1-500.perlbench_r EQUAL (557 twin hashes)
+
+SP-EXTRA SUBLET=NONE TWIN=1 equal of 1 (not binding)
+
+## SP-B5TL1-g2i stage and SPEC lines
+TRAPTEST: stage B5TL1-538.imagick_r begin
+TRAPTEST: stage B5TL1-538.imagick_r bound 3600s
+@@SPEC-STAGE 538.imagick_r test arms=capstone-lifetimes commands=1 validations=1
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=33.08 up1=44.65 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 val capstone-lifetimes 0
+@@SPEC-END 1 val capstone-lifetimes 0 rc=0 up0=51.14 up1=56.77 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 538.imagick_r test
+TRAPTEST: stage B5TL1-538.imagick_r rc=0
+
+## SP-B5TL1-g3 stage and SPEC lines
+TRAPTEST: stage B5TL1-502.gcc_r begin
+@@SPEC-STAGE 502.gcc_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=44.76 up1=50.46 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 502.gcc_r test
+TRAPTEST: stage B5TL1-502.gcc_r rc=0
+
+## SP-B5TL1-g4mk stage and SPEC lines
+TRAPTEST: stage B5TL1-500.perlbench_r begin
+@@SPEC-STAGE 500.perlbench_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=54.39 up1=348.35 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 500.perlbench_r test
+TRAPTEST: stage B5TL1-500.perlbench_r rc=0
