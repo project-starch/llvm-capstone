@@ -8964,3 +8964,73 @@ It runs after `nested-cpymem`, whose @@UP lines give the first board/twin ratio.
   runtime, and the other stages' cells stand.
 - **The board/twin ratio** is a reading of this boot, per run from the @@UP lines, against twin-board4's. It is not a
   prediction.
+
+### Result: nested-corpus. The registered grader exits 1: all 114 differing cells are NO-READING "control-failed" in the three nested arms. The cause is the console, and with the console's splices undone every one of the 346 cells reads as predicted (board 2, 2026-11-26 06:57-11:08 host time, read against this pre-registration)
+
+**Platform, as read back.**
+- Board 2, booked by the board lane's runner and released (UNBOOK 200).
+- The readback names `…-r80-r77_b42c8c644.bit` before and after the boot (rc 3 each, a name match): the full seal, as
+  registered.
+- Image `540fec67c0a30b9e…`, as registered.
+- The runner's logs carry no preflight-gate line, so the boot is reported **UNGATED**.
+- Capture `uart.txt`: sha256 `bee5a02abbbd8982…`, 339,350 B. All ten stages ended rc 0, and the console reached
+  `TRAPTEST: done`.
+
+**Grader, as registered** (`grade-corpus.py` `e2d80260…`, against `twin-board4/predictions.json`): **exit 1**. 346 cells
+were read, 346 predicted, and 114 differ.
+- Every differing cell reads `NO-READING`, reason `control-failed`, in the three arms whose controls must fault:
+  - SQLite pools: 32 cells, predicted 27 CAUGHT and 5 MISSED;
+  - PHP asan-blind nested-exact: 35 cells;
+  - PHP asan-blind nested-pools: 35 cells;
+  - PHP temporal nested-exact: 6 cells;
+  - PHP temporal nested-pools: 6 cells.
+- **No other cell differs.** SQLite malloc, PHP stock, PHP block (bundle-virtual-malloc), and every out-of-denominator,
+  infra and unattributed cell read as predicted.
+
+**Why the controls "failed": the board's console splices the kernel's fault line into the program's own line.**
+- **SQLite pools.**
+  - The control `uaf-mem5` faults on the board, exactly as on the twin: `sublet: fault cause=25 pc=0x3ff7c01f00
+    address=0x3ff7f15e00`. bounds-mem5 likewise faults with cause 28 at `0x3ff7c01f38`, on the same pc as the twin.
+  - But the console shows `CONTROL uaf-mem5[ 2243.335305] sublet: fault …` and then ` mark` on the next line.
+  - The reader's `control_seen()` (wt-trap `engine-repros/shared/run-virtual.py:80`) requires the substring
+    `CONTROL uaf-mem5 mark`. So it returns `none`, and the arm's every cell becomes control-failed.
+- **PHP nested-exact and nested-pools.** The nested-bound probe faults as declared, again exactly as on the twin:
+  `cause=28 pc=0x3ff7fe1cb4 address=0x3ff7fdb089`. On the console, the kernel line lands after `bounds=[…,0x3ff7fdb089) `,
+  before the program's `tag=1`, so the judge reads `nested-bound-probe: DID NOT`.
+- **The mechanism.** printk writes the serial console directly, while the program's own output still drains from the
+  tty buffer through the slow UART. So a fault line can overtake the text the program printed just before it.
+  - On the twin the UART drains at once, and twin-board4's log has no such splice.
+  - Only fault lines move, so only arms whose controls or probes are meant to fault are hit.
+
+**An unregistered re-read, with the splices undone** (`<hdd>/nested/b5b2/corpus/resplice/`).
+- `resplice.py` (`fa6cf62e…`) finds a kernel fault line (`[ <secs>] sublet: fault …`) that starts after a non-empty
+  prefix on its line. It excludes the `TRAPTEST: dmesg` and `@@PROBE-DMESG` echoes, which carry such lines by design.
+  It moves that line after the rest of the interrupted line.
+- It made **15 repairs** in the board capture, each printed:
+  - the two SQLite pools controls;
+  - the four nested-bound probes;
+  - nine PHP case outputs: crash-140, crash-151 and crash-030, each in more than one arm.
+- It made **0 repairs** in twin-board4's log, whose bytes it leaves unchanged.
+- Registered grader, unchanged, on the repaired capture (`board-resplice.txt` `2acad9a4…`): **exit 0, 346 of 346 cells
+  equal to the predictions**. The tallies:
+  - SQLite: malloc 29 MISSED / 4 NO-READING; pools 28 CAUGHT / 5 MISSED;
+  - PHP asan-blind: stock 5/29/5, block 12/21/6, object 25/10/4, exact 29/4/6;
+  - PHP temporal: stock 1/5/25, and block, object and exact 6/0/25 each.
+- **Negative control:** the repaired capture with the uaf-mem5 control's two fault lines removed reads that control as
+  `none`. The 32 SQLite pools cells become control-failed again, exit 1. So the repair cannot make a control pass
+  that did not fault. It only moves a fault line that is there.
+- **This re-read is not the registered verdict, which stays exit 1.** It shows what the registered verdict measured: the
+  console, not the protection.
+
+**Reading.**
+- Silicon's trap route, under the full seal, reads the corpus as the twin does, cell for cell, once the console's
+  ordering is undone. Every CAUGHT ↔ MISSED cell, every cause and every NO-READING reason matches.
+- The registered grader cannot say this on a board capture whose controls fault. A board reader has to tolerate a
+  spliced kernel line, and a twin-qualified reader has never seen one.
+  - Next instrument change, for the next board corpus boot: a resplice step before the readers, with this boot as
+    its positive control. It goes in as a pre-registered instrument change.
+- **Board / twin times** (from @@UP, readings):
+  - whole boot 14,815 s against 5,374 s;
+  - case 21 (crash-075) 208-256 s against 30-50 s per arm, inside its 900 s watchdog;
+  - case 70 (crash-161) 803-860 s against 58-78 s. It is out-of-denominator either way.
+  - The two hung runs, SQLite malloc 11 and PHP 30, read infra on both.
