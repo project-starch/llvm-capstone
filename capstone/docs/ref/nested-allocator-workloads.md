@@ -7888,6 +7888,34 @@ they gate the grading.
 - The chain waits for the board lane's session marker on board 1 and starts only if that session's log ends
   `SESSION END`.
 
+**Addendum: the twin references (2026-11-26 09:08 host time (+08), 01:08Z; loc1 still running on board 1, neither boot graded).**
+- The serials, on twin runs of the exact stages:
+  - `nst-loc1-twin` 21612e7b8c2aeb66… (264,118 B);
+  - `nst-loc2-twin` 13bbfaa41ef25231… (48,618 B).
+  - Both rc 0, and every command returns.
+- **loc1's twin equals the lines above:**
+  - c0's last heartbeat and its end are `pkt=99000 fast=19238362 block=1749638 free=876156 sum=c7bcb25f7f6a9209`.
+  - l1's heartbeats on packets common to the locate twin (`nst-red-locate`): all 1,100 equal, packets 100 to 110,000.
+  - l1's end is `done packets=300000 fast=58298524 block=5301476 free=2652582 sum=f6ed64e0d51b9d04`, red1's r3 line.
+  - loc2's c0 is the same as loc1's.
+- **Seed 2 against seed 1** (s2 against l1):
+
+  | packet | fast, seed 2 / seed 1 | block, seed 2 / seed 1 |
+  |---|---|---|
+  | 100,000 | 19,434,904 / 19,432,859 (+0.011 %) | 1,765,096 / 1,767,141 (−0.116 %) |
+  | 110,000 | 21,378,605 / 21,375,862 (+0.013 %) | 1,941,395 / 1,944,138 (−0.141 %) |
+
+  - All four are within Amendment 1's 2 %, so seed 2's counts are **close**. A stop of s2 between its packets 100,000 and 110,000 is read as UNDECIDED between T and a count trigger, as registered.
+  - A stop elsewhere is still read as registered.
+  - s2's end is `done packets=300000 fast=58303004 block=5296996 free=2649579 sum=c2d00342ae2d27e5`.
+- **The reader's re-test** (`read-red.py` `64782291…`, `<hdd>/nested/p1red/rtest-loc/`):
+  - loc1's twin against itself: exit 0, c0 and l1 RETURNED.
+  - loc2's twin against itself: exit 0, c0 and s2 RETURNED.
+  - loc1's twin cut after l1's `pkt=100000` line, followed by the aperture block of red1's matching test cut (`cut-l1-100k.txt` `bb32d87a…`): exit 0.
+    - c0 RETURNED. l1 NO RETURN, with the stop bracketed between 19,432,859 and 19,452,273 fast allocations (packets 100,000 and 100,100).
+    - The commit pc equals the CDERIVE, and sw=220 equals P1's 0x8c.
+  - loc2's twin read against loc1's: exit 1, s2 OTHER at its first line (seed 2). So the comparison fires.
+
 ## M-16's return rate on Line B: the protected tshark in repeated B5b-2 boots (2026-11-25)
 
 ### Pre-registration: Fig. 10's protected Wireshark workload in five boots on a Line B board, queued (written 2026-11-25 19:29, before any of the boots)
