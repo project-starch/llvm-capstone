@@ -4679,7 +4679,7 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
-### R-81 — a lifetime-unit read whose response never arrives leaves the unit waiting forever: its memory engine has no timeout `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN; not constructed`
+### R-81 — a lifetime-unit read whose response never arrives leaves the unit waiting forever: its memory engine has no timeout `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN; not constructed; MONITORED IN SIMULATION 2026-11-26 (capstone-ariane b5b2-hangmon-c 808ddfabd, SUP_TRACE only): over the 63 Line B tests the unit's longest read wait is 1,221 cycles and no wait reaches 100,000 (docs/plans/2026-11-26-lifetime-unit-hang-monitors.md); not constructed`
 
 Siblings: R-81, R-82 and R-83 are three ways the lifetime unit can stay busy forever; R-77 (whose PRE fix, capstone-ariane
 b5b2-prefix 7861abcfa, turns each of them into a CORE hang instead of a false 25 at about 1M cycles); R-80. All three were
@@ -4704,7 +4704,7 @@ hang ended for a waiting access in a false 25 at about 1M cycles; with it, the a
 controller finished); 229 bit 3 (port 2's rd_req); 225 bit 4 (dyn_wait_rev_res) 1 if a DYN lifetime op waits on the unit;
 and the write side quiet (192 bits 6:5 and 221 bits 3:2 not stuck). A 204 of 0x21 says the probe's own read was the lost one.
 
-### R-82 — the lifetime unit's record write is never granted while the store unit holds port 3's request: the store port has strict priority and no bound `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN; not constructed`
+### R-82 — the lifetime unit's record write is never granted while the store unit holds port 3's request: the store port has strict priority and no bound `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN; not constructed; MONITORED IN SIMULATION 2026-11-26 (capstone-ariane b5b2-hangmon-c 808ddfabd, SUP_TRACE only): over the 63 Line B tests the unit's longest held write is 60 cycles and none reaches 100,000 (docs/plans/2026-11-26-lifetime-unit-hang-monitors.md); not constructed`
 
 Siblings: R-81, R-82 and R-83 are three ways the lifetime unit can stay busy forever; R-77 (whose PRE fix, capstone-ariane
 b5b2-prefix 7861abcfa, turns each of them into a CORE hang instead of a false 25 at about 1M cycles); R-80. All three were
@@ -4732,7 +4732,7 @@ the commit queue's valid entries; 192 bits 6:5 (the write buffer's cache-update 
 full) for why the store port is not drained; 229 bit 3 quiet (no unit read outstanding, unlike R-81); 225 bit 4 if a DYN
 lifetime op waits.
 
-### R-83 — a flush while CSMINT's create channel waits for its response returns the LSU's sequencer to IDLE, and the lifetime unit's create response is never acked `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN (argued from the flush sources, not exhaustively); not constructed`
+### R-83 — a flush while CSMINT's create channel waits for its response returns the LSU's sequencer to IDLE, and the lifetime unit's create response is never acked `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN (argued from the flush sources, not exhaustively); not constructed; MONITORED IN SIMULATION 2026-11-26 (capstone-ariane b5b2-hangmon-c 808ddfabd / 066c97947, SUP_TRACE only): the must-fire flush-in-CM_CRQ/CM_CRS line is 0 over the 63 Line B tests and over b5b2-csmint-irq's 256 CSMINTs under 2,334 M-timer interrupts (TICK 20-160); no flush met the sequencer outside idle at all; debug-mode entry and a racing namespace flush NOT TESTED (docs/plans/2026-11-26-lifetime-unit-hang-monitors.md)`
 
 Siblings: R-81, R-82 and R-83 are three ways the lifetime unit can stay busy forever; R-77 (whose PRE fix, capstone-ariane
 b5b2-prefix 7861abcfa, turns each of them into a CORE hang instead of a false 25 at about 1M cycles); R-80. All three were

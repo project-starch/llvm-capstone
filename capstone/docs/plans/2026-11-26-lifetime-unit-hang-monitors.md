@@ -37,3 +37,51 @@ SUP_TRACE` only. 4bbdbc6ed's core is b42c8c644's plus one `$display`. The monito
 - A directed arm, CSMINT under a dense timer-interrupt storm, comes next, whatever this run reads.
 - Bounded maxima say no test starved the unit. They do not show that a lost D$ response (R-81) or a never-granted
   store port (R-82) cannot happen.
+
+## The 63 tests, read (2026-11-26)
+
+The run: s2pre-wt `.sup/hm`, rtl 808ddfabd, dirty=no. verFiles defines: `+S12_MEM_DELAY=12+SUP_TRACE+CAPSTONE_SIM_DEBUG_MINT`.
+All 63 tests produced a log and every one ended SUCCESS. Counts are from each test's `.iss`, read by an exact-token
+Python count. A directory with no `.iss` would exit 2.
+
+| monitor | result |
+|---|---|
+| R83-FLUSH | **0 in all 63** (as predicted) |
+| R83-CRQ | 37 in all, 3 in b5b2-sbdrain-mint (the positive control: the create channel is entered), 1 in each of 34 other tests whose setup mints the kit root by CSMINT |
+| R83-FLUSHSEEN | 0 in all 63 (recorded): no flush met the CSMINT sequencer anywhere but idle |
+| R81-LONG / R82-LONG | **0 in all 63** (as predicted) |
+| R81-RDMAX | at most 1,221 cycles (b5b2-srvcost and -cold, the probe reads of a cold record), 246 in the crevint and crevsv tests, 0 in 7 tests that make no lifetime read |
+| R82-WRMAX | at most 60 cycles (the crevint and crevsv tests), 0 in 27 tests |
+
+- **One prediction missed:** "R82-WRMAX >= 1 in every test" read 0 in 27 of the 63. The counter counts the cycles a
+  write waits without its ack, so a write granted in its first cycle reads 0. The prediction misread the counter, not
+  the unit. The counter does fire (36 tests, up to 60 cycles), so it says nothing for or against R-82.
+- **What it shows:** in none of the 63 Line B tests does the unit wait long on a read or a write, and no flush ever
+  meets CSMINT's create channel.
+- **What it does not show:** that R-81, R-82 or R-83 is unreachable (the limits above). R-83's interrupt case runs
+  next: capstone-ariane 066c97947, b5b2-csmint-irq at TICK 160, 80, 40 and 20, pre-registered in its header before
+  any run.
+
+## R-83's interrupt case, read (2026-11-26)
+
+The run: s2pre-wt `.sup/hmirq`, rtl 066c97947 (808ddfabd + the test), dirty=no, the same defines. Four arms, safest
+first, each pre-registered in the test's header before any run:
+
+| TICK (mtime ticks) | completed mints | last rd | exceptions | timer interrupts | R83-CRQ | R83-FLUSHSEEN | R83-FLUSH | result |
+|---|---|---|---|---|---|---|---|---|
+| 160 | 0x40 | 0x13f | 0 | 386 | 65 | 0 | 0 | SUCCESS, 95,590 cycles |
+| 80 | 0x40 | 0x13f | 0 | 507 | 65 | 0 | 0 | SUCCESS, 96,962 cycles |
+| 40 | 0x40 | 0x13f | 0 | 692 | 65 | 0 | 0 | SUCCESS, 99,499 cycles |
+| 20 | 0x40 | 0x13f | 0 | 749 | 65 | 0 | 0 | SUCCESS, 99,979 cycles |
+
+- **All four arms read as predicted.** 64 mints complete with no exception under 386 to 749 interrupts, and R83-FLUSH
+  is 0.
+- **No flush ever met the CSMINT sequencer outside idle**, over 2,334 interrupts and 260 entries of the create channel
+  (R83-FLUSHSEEN 0). That fits the auditor's argument that an interrupt is taken on a younger instruction, after the
+  issued CSMINT has left the sequencer.
+- **The monitor's parts are each live:** flush_i is the signal on which the LSU's EDGE-FLUSHPEND monitor fires, and
+  the sequencer leaves idle 65 times per arm. Only their conjunction is absent, and the conjunction is the thing being
+  tested.
+- R81-RDMAX at most 186 cycles and R82-WRMAX at most 35; both LONG monitors are 0.
+- **Not tested:** debug-mode entry at a CSMINT, and a namespace flush (an srevroot write) racing one. R-83 stays
+  HYPOTHESIZED; this narrows it, it does not close it.
