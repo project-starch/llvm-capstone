@@ -1,0 +1,129 @@
+# board 2, the b42c8c644 session (orch-r77c.sh), cut at 2026-11-26T02:24:57Z while the session runs on
+# its first boots are the seal's silicon Tier 1 kits on a second board: b5b2n (the flash), crevoke4b, wapflu, misscost
+
+## session log
+2026-11-25T18:32:57Z armed
+2026-11-25T20:34:57Z the b42c8c644 full chain ended
+2026-11-25T20:34:58Z gates PASS: seal b42c8c644 sha 6a09f34d50842e01; plan ARMED by the board lane after reading every pin below (sha16 be3d3584d64d9bba)
+2026-11-25T20:58:03Z b5b2n: kit rc=0 17 FLASH END caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynb 17 READBACK after flash = caplifive_ids55-native-tagcache-mlp-fpieee-h  B5B2N-KIT 21/21 AS PREDICTED
+2026-11-25T21:13:38Z crevoke4b: kit rc=0  C4BKIT cand 16/16 AS PREDICTED; 
+2026-11-25T21:15:32Z wapflu: kit rc=0  WFKIT cand 1/1 AS PREDICTED; 
+2026-11-25T21:18:18Z misscost: kit rc=0  MCKIT b5b2-srvcost AS PREDICTED / b5b2-srvcost-cold AS PREDICTED
+2026-11-25T21:18:23Z nested-cpymem: marked DONE-ON-BOARD 2 in <path>/b5b2linux/nested-cpymem.armed before the run
+2026-11-25T22:52:11Z nested-cpymem (board 2): 11 RUN END rc=0 [lx 06:52:10] end: TRAPTEST: done seen; 78673 chars 11 GRADE rc=1 status 1 
+2026-11-25T22:52:17Z boot13: marked DONE-ON-BOARD 2 in <path>/b5b2linux/boot13.armed before the run
+2026-11-25T22:56:56Z boot13 (board 2): 55 RUN END rc=0 [lx 06:56:54] end: TRAPTEST: done seen; 8777 chars 56 GRADE rc=0 BOOT13 4/4 as predicted 
+2026-11-25T22:57:01Z nested-corpus: marked DONE-ON-BOARD 2 in <path>/b5b2linux/nested-corpus.armed before the run
+
+## b5b2n
+-- b5b2-cptag-diag (grade-diag.py) --
+01-sublet-life-r1          AS PREDICTED      SR [35]
+15-b5b2-cptag-r1           AS PREDICTED      SR [24]; position 22 (reading 21) = 1
+23-b5b2-cptag-diag-r1      H-fetch           raw 22-28: 1 | cold 4 4 | warm 4 4 flag 1 | miss 43 (warm delta 0; half the miss scale 19.5)
+
+DIAG wap-flu-r80-r77_b42c8c644: control exact; diag loads ['H-fetch']
+-- the 22 graded images (grade-b5b2nkit-l.py) --
+readback: caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit | after loads: caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit
+01-sublet-life-r1            AS PREDICTED      SR 35; ungraded positions 25-34: 0x0 0x200000000 0xff00ffffff00ffff 0xe3000000570000 0xff00ffffff00ffff 0x1e000000ec0000 0xff00ffffff00ffff 0xff000000ff0000 0xff00ffffff00ffff 0xff000000ff0000
+02-b5b2-illegal-r1           AS PREDICTED      SR 76
+03-b5b2-illegal-runv-r1      AS PREDICTED      SR 4
+04-b5b2-illegal-csup-r1      AS PREDICTED      SR 46
+05-b5b2-uprot-r1             AS PREDICTED      SR 19
+06-b5b2-uprot-mis-r1         AS PREDICTED      SR 23
+07-b5b2-rule2-r1             AS PREDICTED      SR 14
+08-b5b2-rule2-pair-r1        AS PREDICTED      SR 21
+09-b5b2-sref-r1              AS PREDICTED      SR 20
+10-b5b2-sref-gen-r1          AS PREDICTED      SR 20
+11-b5b2-scratch-r1           AS PREDICTED      SR 54
+12-b5b2-mwrite-r1            AS PREDICTED      SR 8
+13-b5b2-raw-r1               AS PREDICTED      SR 38
+14-b5b2-rawlcc-r1            AS PREDICTED      SR 5
+15-b5b2-cptag-r1             AS PREDICTED      SR 24
+16-b5b2-cptag2-r1            AS PREDICTED      SR 13
+17-b5b2-nsedge-r1            AS PREDICTED      SR 17
+18-b5b2-ctxport-f4-r1        AS PREDICTED      SR 6
+19-b5b2-ctxport-f4ctl-r1     AS PREDICTED      SR 6
+20-b5b2-ctxport-widelo-r1    AS PREDICTED      SR 6
+21-b5b2-ctxport-widehi-r1    AS PREDICTED      SR 6
+22-b5b2-ctxport-edgem-r1     AS PREDICTED      SR 6
+
+control sublet-life AS PREDICTED on its graded positions
+B5B2N-KIT 21/21 AS PREDICTED
+
+## crevoke4b
+01-sublet-life           AS PREDICTED           
+02-b5b2-crevint          AS PREDICTED           recorded p2=0x14a1
+03-b5b2-crevint-mt       AS PREDICTED           recorded p2=0x1767 p8=0x5 p9=0x5
+04-b5b2-crevint-sh       AS PREDICTED           recorded p2=0x1abf p4=0x100000047 p5=0x800000cf p8=0x2 p9=0x2 p10=0x1 p11=0x9227b3d4c7c6bfb1
+05-b5b2-crevint-lat      AS PREDICTED           latency band PASS: lat [1222, -119, 565, -130, 565, -130, 0, 0] ticks; cycles/ticks 30062/15031; positive after the first in cycles [(2, 1130), (4, 1130)] (bound 15,000; first 1222 recorded); recorded p2=0x1a23 p8=0x6 p9=0x6 p13=0x4c6 p14=0xffffffffffffff89 p15=0x235 p16=0xffffffffffffff7e p17=0x235
+06-b5b2-crevsv-none      AS PREDICTED           recorded p2=0x1a24 p8=0x6 p9=0x6 p10=0x3
+07-b5b2-crevsv-srev      AS PREDICTED           recorded p2=0x1f80 p8=0x6 p9=0x6 p10=0x3
+08-b5b2-crevsv-straw     AS PREDICTED           recorded p2=0x1f33 p8=0x6 p9=0x6 p10=0x3
+09-b5b2-crevsv-derive    AS PREDICTED           recorded p2=0x1ffa p4=0x800000cf p5=0x800000ce p8=0x6 p9=0x4 p10=0x3 p11=0xd443b2166d8185e1
+10-b5b2-crevsv-kill      AS PREDICTED           recorded p2=0x1d6e p3=0x80000008 p4=0x800000d0 p5=0x800000cf p8=0x6 p9=0x4 p10=0x3 p11=0x5323b3b7586ffcf6
+11-b5b2-sbdrain-none     AS PREDICTED           
+12-b5b2-sbdrain-fill     AS PREDICTED           
+13-b5b2-sbdrain-fence    AS PREDICTED           
+14-b5b2-sbdrain-mint     AS PREDICTED           
+15-b5b2-sbdrain-sret     AS PREDICTED           
+16-b5b2-sbdrain-cost0    AS PREDICTED           recorded p2=0xe7a
+17-b5b2-sbdrain-cost     AS PREDICTED           recorded p2=0xee9
+
+C4BKIT cand 16/16 AS PREDICTED; 
+
+## wapflu
+01-sublet-life           AS PREDICTED           
+02-b5b2-untagged         AS PREDICTED           
+
+WFKIT cand 1/1 AS PREDICTED; 
+
+## misscost
+01-sublet-life        SR 35 SV 0x0 0x0 0x0 0x19 0x0 0x0 0x19 0x0 0x0 0x0 0x19 0x19 0x2 0x2 0x8000000000010000 0x6 0x300000003 0x8 0x0 0x0 0x1000000000 0x100000000 0x1400000000 0x400000000 0x0 0x200000000 0xff00ffffff00ffff 0x50000 0xff00ffffff00ffff 0x14000000240000 0xff00ffffff00ffff 0xff000000ff0000 0xff00ffffff00ffff 0xff000000ff0000 0x6
+02-b5b2-srvcost       SR 13 SV 0x1bd 0x674 0x688 0x674 0x5f2 0x83 0x290 0x83 0x83 0x83 0x286 0x83 0x8
+03-b5b2-srvcost-cold  SR 13 SV 0x1c2 0x674 0x682 0x674 0x5ef 0x83 0xb2c 0x666 0x83 0x83 0x5b8 0x9b 0x8
+  b5b2-srvcost: AS PREDICTED; warm (P3-P2)/33 = 15.9, (P7-P2)/33 = 15.6 cycles per miss (sim 19.6 / 14.3)
+  b5b2-srvcost-cold: AS PREDICTED; cold (P3-P4)/33 = 37.0, (P7-P2)/33 = 40.4 cycles per miss (sim 78.7 / 71.5)
+
+MCKIT b5b2-srvcost AS PREDICTED / b5b2-srvcost-cold AS PREDICTED
+
+## boot13
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  TRAPTEST: up, kernel 6.1.0
+  ABSENT: CONFIG_HZ=
+  ABSENT: NO_HZ_IDLE
+PASS  1 control ok + smoke.dom rc=7: okTRAPTEST: control smoke.dom rc=7
+  raw rdtime ['119.72', '119.70', '119.71'] rdcycle ['5.00', '5.00', '5.00'] getppid ['1266.94', '1267.95', '1267.13']
+  raw cycles_per_tick ['1.99', '1.99', '1.99'] backwards ['0', '0', '0'] ticks ['1202369', '1202406', '1208417']; mtrip rc [('1', '0'), ('2', '0'), ('3', '0')]
+PASS  2 mtrip x3 in range: all in range
+PASS  3 no sublet fault/call line: none (0 line(s))
+PASS  4 TRAPTEST: done: present
+
+BOOT13 4/4 as predicted
+
+## nested-cpymem (the nested lane's payload, graded by that lane on nested-workloads 098cae0f858b; the grade is theirs)
+UNGATED by preflight-board-run.sh (not invoked by runner 5)
+board-lane prechecks: image sha256 against the arming file; seal sha256 and readback by name before and after; holder; booking
+board ID: 2. Readback by name before and after: …_b42c8c644.bit, nv-readback rc=3 both times (the name matches; the console exposes no sha256).
+Its stage lines, every @@UP line, and CPython's up0/up1 lines:
+TRAPTEST: stage C30-cpython-stock begin
+TRAPTEST: stage C30-cpython-stock bound 10800s
+@@CPY-END stock rc=0 answer=58211793977f706c3e9def7a500cb8de29749f71b89e233cde1db285fea1ed36 bytes=397 up0=163.07 up1=2409.33
+@@UP 2410.49
+TRAPTEST: stage C30-cpython-stock rc=0
+TRAPTEST: stage C31-cpython-prot begin
+TRAPTEST: stage C31-cpython-prot bound 10800s
+@@CPY-END prot rc=0 answer=58211793977f706c3e9def7a500cb8de29749f71b89e233cde1db285fea1ed36 bytes=397 up0=2548.41 up1=4946.45
+@@UP 4947.61
+TRAPTEST: stage C31-cpython-prot rc=0
+TRAPTEST: stage M20-memcached-stock begin
+TRAPTEST: stage M20-memcached-stock bound 3600s
+@@UP 5033.45
+@@UP 5082.99
+@@UP 5132.14
+TRAPTEST: stage M20-memcached-stock rc=0
+TRAPTEST: stage M21-memcached-protected begin
+TRAPTEST: stage M21-memcached-protected bound 3600s
+@@UP 5214.48
+@@UP 5264.07
+@@UP 5311.85
+TRAPTEST: stage M21-memcached-protected rc=0

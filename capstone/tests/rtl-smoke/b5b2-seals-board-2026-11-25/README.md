@@ -35,14 +35,47 @@ land/rtl-crevoke4b); the SPEC and Linux amendments are the runtime lane's (runti
   (the diagnostic reads H-fetch; a seventh H-fetch here: warm 4/4, flag 1, miss 43, VALID).
 - Three loads FAILED TO START (below). They carry no reading; their reruns are recorded as reruns, not as second readings.
 
-## Infra note: board 3's intermittent JTAG load hang
+## Board 3, the b42c8c644 session (`b42c8c644-board3.result-lines.txt`, cut while the session runs on)
+
+- The seal's silicon Tier 1: flashed by b5b2n (booking 1544) and read back by name, then b5b2n 21/21 AS PREDICTED (the diag
+  15-b5b2-cptag AS PREDICTED), crevoke4b cand 16/16 (1545), wapflu cand 1/1 (1546). They were graded against the simulated
+  vectors of fca456c2aad8 (b5b2n) and 1258f0833b60 (crevoke4b, wapflu), which the graders re-check against those commits.
+  Two kit loads failed to start and were rerun inside their kit (below).
+- boot3 P1-P4 ok.
+- SPEC: imagick PASS in all three g2b images, gcc PASS in all three g3 images, no cause-25 fault in any capture. x264
+  has no reading on this seal: B5T-g2b's x264 ran past 12,180 s within its 14,400 s bound, and by the runtime lane's ruling
+  B5TL0-g2b and B5TL1-g2b were STOPped after imagick's stage end (their notes and the stopper's log are in the file).
+
+## Board 2, the b42c8c644 session (`b42c8c644-board2.result-lines.txt`, cut while the session runs on)
+
+- The same Tier 1 on a second board: flashed by b5b2n (1550) and read back, b5b2n 21/21, crevoke4b 16/16 (1551), wapflu 1/1
+  (1552), misscost both images AS PREDICTED (1553).
+- Boot 13 (the Full final kernel): 4/4 as predicted.
+- nested-cpymem is the nested lane's payload, graded by that lane (nested-workloads 098cae0f858b). The file carries its
+  stage lines, every @@UP line and CPython's up0/up1 lines, with the labels that lane asked for.
+
+## Board 1, the +Spatial seal 14f2ef81a (`14f2ef81a-board1.result-lines.txt`)
+
+- Kit session: flashed by b5b2n and read back; b5b2n 20/21 (the one MISS is 15-b5b2-cptag, the instrument artifact; the diag
+  reads H-fetch), crevoke4b 16/16, ldcexc2 fixed AS PREDICTED, wapflu 1/1, misscost informational (zero record misses).
+  The b5b2n entry is the RE-GRADE of the same run: the session's own grade ERRORed in its diag section through a wrapper
+  defect (the environment was set after the diag subprocess); the file says so.
+- Boot 14 (the +Spatial final kernel), attempt 1: NO READING (infra), booking 1566. load_image completed, then GDB's
+  `set $pc` timed out, so the image never ran; the once-only rerun was refused "board 1 busy" by attempt 1's still-live
+  holder. Not a kernel reading. The rerun wrapper now waits for the board to be idle first. Boot 14 is re-armed by hand.
+
+## Infra note: the intermittent JTAG load hang (boards 3 and 1)
 
 - On board 3, 2026-11-25, `monitor load_image … 0x80000000 bin` hung for OpenOCD's full 120 s ("Timed out after 120s
   wait") on 3 of 64 bare-kit loads, on three different images: 16-b5b2-cptag2 (66,048 B), 04-b5b2-crevint-sh and
   15-b5b2-sbdrain-sret (53,184 B each).
 - Every one of the other 61 loads took 0-1 s from load_image to continue, 94,144 B images included. Each failing image
-  loaded fine at another time. No such timeout appears in board 2's loads of the same day.
-- So it is image- and size-independent, and specific to board 3 (its link or its probe). The image never ran: the
+  loaded fine at another time.
+- Counted over every bare-kit load of 2026-11-25/26: board 3, 5 of 108 (3 of 64 in the a5c45a46d session and its reruns,
+  2 of 44 in the b42c8c644 session); board 1, 2 of 50 (the 14f2ef81a kit session); board 2, 0 of 64. Board 1 also lost
+  boot 14's first attempt to a JTAG timeout of a neighbouring shape: the 240 s Linux load completed and the next GDB
+  command (`set $pc`) timed out.
+- So it is image- and size-independent, and not specific to one board, though board 2 shows none. The image never ran: the
   runner had not reached `continue`, and every load is preceded by its own power cycle and `monitor reset halt`. A
   failed start therefore leaves no state, and the loads after it in a kit are valid.
 - From the b42c8c644 sessions on, a load with that full signature (the OpenOCD message AND no UART byte AND no SR line)
