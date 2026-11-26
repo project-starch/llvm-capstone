@@ -83,7 +83,8 @@ allocation. Where in its loops the 18,193 fall was not read.
 1. **Repeat, LSHOFF2 = LSHOFF ± 100 per stage: HOLDS.** nab +4, imagick -90, perlbench 0.
    - The -90 is all in libc: __fwritex -38, memset -23, printf_core -15, memcpy -14.
    - The four functions take one of two values from boot to boot. LSRH and LSHOFF2 show -90 against LSHOFF in the
-     same four. POOL and LSHON show 0, like LSHOFF. What selects the value is not shown.
+     same four. POOL and LSHON show 0, like LSHOFF. **UNEXPLAINED:** what selects the value has not been read, and
+     no mechanism is claimed.
    - nab's +4 is alloc_slot, in the runtime's allocator.
 2. **Reproduction: HOLDS.** LSHON against LSHOFF:
    - nab +24,313,904, against spec8's +24,313,900;
@@ -103,6 +104,18 @@ allocation. Where in its loops the 18,193 fall was not read.
    - POOL -1,099,819, against -1,099,810 ± 1,000;
    - LSRH -1,676,247, against -1,676,157 ± 1,000; the 90 is the libc offset in prediction 1.
 7. **Outputs equal across the five boots: HOLDS.**
+
+## A correction to the pre-registration's compiler note
+
+PREREG.md said the binary's --version named cf639153be7b because "LLVM's revision header is not regenerated in this
+worktree". That explanation is wrong.
+- The binary was built at 01:40 from the working tree, while HEAD was still cf639153be7b. The hoist was committed at
+  01:46 (3eac93f488ec).
+- A later build does pick up the new HEAD: it names 8bf6a86af81f.
+- A rebuild from committed sources gives the same LSRH images byte for byte, for imagick, nab, x264 and perlbench.
+  LoopStrengthReduce.cpp has changed only in comments since 3eac93f488ec.
+
+So the arms' compiler identity stands, by binary hash and by rebuild.
 
 ## What this does not show
 
