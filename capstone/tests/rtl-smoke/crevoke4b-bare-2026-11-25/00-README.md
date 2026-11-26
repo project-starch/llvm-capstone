@@ -30,8 +30,12 @@ This kit claims nothing about the B5T mcf / M-16 wedge. That wedge is open, and 
   - The script's positive control: the same captures graded against the 88db40027 column read 9/17.
   - Only the eight crevint/crevsv arms other than kill can tell the two bitstreams apart. sublet-life, crevsv-kill and the seven sbdrain arms carry E values equal on both trees.
 - **The flash:** the seal (sha256 bdff45d0a96f68ad1ea3f2077c7ca350960047a1f394d21849bd4a003da58d9a) was checked before the flash, power-cycled, and its name read back after the flash and after the loads (booking 1513).
+- **What "17/17" counts:** 16 arms plus the control. Only eight of the 16 (the crevint and crevsv arms other than kill) carry
+  an E value that differs between the two bitstreams, so those eight are the arms that discriminate.
+- **The independent grade** is `grade-rtl/c4b-grade.py`, with its three outputs: step 1 on the base column, step 1 graded
+  against the 88db40027 column as its positive control (9/17), and step 3.
 - **The seal, 09:17-09:33Z: 88db40027 AS PREDICTED, 17/17 exact on E** (graded here the same way; it agrees with the board lane's 16/16 plus the control). All 17 image sha16 values are in the session log.
   - No VOID arm. Timer traps at the site: crevint-mt 5, -sh 2, -lat 6, crevsv 6/6/6/4/4.
-  - The latency band PASSES: 565 ticks x 2.0 cycles/tick = 1,130 cycles at each resumed-chunk stop, against the 15,000 bound. Sim read 3,692 at memory delay 12. The first latency (the fresh scan) is 1,222 ticks.
+  - The latency band PASSES: 565 ticks x 2.0 cycles/tick = 1,130 cycles at each resumed-chunk stop, against the 15,000 bound. Sim read 3,692 at memory delay 12. The first latency (the trap landing in the fresh, O(n) scan) is 1,222 ticks = 2,444 cycles, recorded and unbounded by the PREREG.
   - Every R value equals the 88db40027 sim: crevint-sh, crevsv-derive and crevsv-kill ids and checksums.
 - N = 1, one board.

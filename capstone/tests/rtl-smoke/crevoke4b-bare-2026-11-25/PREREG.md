@@ -76,3 +76,17 @@ E positions are plain values; the others are written <class:value>. 1-based posi
 - **sbdrain:** the base reads as the candidate on every E position. No exposure in five shapes at memory delay 12 (the plan's record).
 
 **The aperture build.** The aperture build (capstone-ariane b5b2-wedgeap and its successor) changes no architectural value. These images are simulated on it separately, and its seal is graded against the 88db40027 column only after that simulation equals it.
+
+## Addendum 2026-11-25: the final candidate a5c45a46d (R-80's fix), pre-registered before its seal
+
+The same 17 images (byte-identical: SHA256SUMS unchanged) were simulated on capstone-ariane b5b2-ldcfix a5c45a46d, rtl_dirty=no (s2fix-wt `.sup/fin`), with the same settings as above. Their vectors are in `expected-vectors-a5c45a46d.json`, which has the same fields as `expected-vectors.json` plus `sim_rtl`.
+
+**Every image reads exactly this kit's candidate column**, in every position including the M ones. R-80's pop changes no value of this kit.
+
+On the a5c45a46d seal the rules above apply unchanged, with `expected-vectors-a5c45a46d.json`'s `vector` as the candidate column. As on 28fcbb646, a run on that seal cannot detect a missed flash from a 28fcbb646 board by this kit alone: those columns are equal. The flash is shown by the readback, and by b5b2-ldcfix-bare-2026-11-25 where the board is known to wedge without the fix.
+
+## Addendum 2026-11-25: the final candidate b42c8c644 (R-80 + R-77's PRE fix), pre-registered before its seal
+
+The same 17 images (byte-identical: SHA256SUMS unchanged) were simulated on capstone-ariane b5b2-prefix b42c8c644 (core = 7861abcfa), rtl_dirty=no (s2pre-wt `.sup/r77`), with this kit's settings. Their vectors are in `expected-vectors-b42c8c644.json`, which has the same fields as `expected-vectors.json` plus `sim_rtl`.
+
+**Every image reads exactly this kit's `vector` column (the a5c45a46d / candidate column), in every position.** R-77's fix changes no value of this kit. On the b42c8c644 seal the rules above apply unchanged, with `expected-vectors-b42c8c644.json`'s `vector` as the column.

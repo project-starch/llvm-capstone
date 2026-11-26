@@ -345,10 +345,319 @@ Its kit:
 The crevoke4b-bare-2026-11-25 kit (PREREG 77f0e191b97f) ran in the semantics owner's granted sequence on board 2. The board lane's records are board/meas-pw 6e07527a8a98.
 - **The control, 904cd9c6b resident, no flash:** 17/17 exact on the base column.
 - **The flash of 88db40027's seal** (sha256 bdff45d0...8d9a, checked first, its name read back after the flash and after the loads).
-- **The 17 on the seal: 17/17 exact on every E position.**
+- **The 17 on the seal: 17/17 exact on every E position.** That is 16 arms plus the control. Eight of the arms discriminate the
+  two bitstreams: the crevint and crevsv arms other than kill.
   - No VOID arm.
   - Stop latency 1,130 cycles at each resumed-chunk stop on silicon (565 ticks at 2.0 cycles/tick), against the 15,000 bound. Sim read 3,692.
+    The first stop, in the fresh O(n) scan, is 1,222 ticks = 2,444 cycles: recorded, not bounded.
   - Every recorded id and checksum equals the sim.
   - No sbdrain exposure in the five shapes.
 
 Both runs were graded twice: by the board lane's grader, and here from the raw captures with an independent script whose positive control fires. The kit README has the full readings. Board 2 stays on 88db40027.
+
+## S-35's mechanism in simulation, and the pattern pre-registered for the diagnostic seal 28fcbb646 (2026-11-25, before that seal boots)
+
+**Reproduced.** b5b2-ldcexc2 (capstone-ariane b5b2-ldcfix, +SUP_AP_SWEEP, memory delay 12; predictions in its header before the run):
+- **The setup:** protected U, a backlog of 16 + 1 stores through a capability, then at once an LDC through an untagged base (24 from the LSU's capability check).
+- **The arm:** it runs to the cycle limit; WEDGE-WBUF reads "store refused: full=1, lookups done, no memory write pending".
+- **The control** (the same LDC through the valid base): completes, 0x0 with 0 traps, in 33,579 cycles.
+- **The misaligned variant** (b5b2-ldcexc, integer M) completes with cause 4 and one trap. That exception is registered once on the MMU path and the LDC stops re-presenting.
+
+**The mechanism, read in the trace:**
+1. The faulting LDC is not popped (load_unit SEND_TAG_LDC: kill, then IDLE), so it is re-presented every cycle as a capability-width read on load port 1 (RQDBG rd_req 010 held; 195/229 cycling IDLE <-> SEND_TAG_LDC).
+2. Each such read collides with the write buffer's cache update (wt_dcache_mem bank_collision's rd_cap term), so the update is never acked (192: return pending 1, update req 1, update ack 0), and no entry evicts.
+3. The buffer stays full (223: full 1, lookups done), the store port is refused, and the commit queue fills.
+4. The older store at the commit head waits for room (commit_stage :627-630), so the LDC never becomes the head and its exception is never taken. No timeout applies.
+
+**The silicon question.** Whether mcf's wedge (S-35) IS this mechanism is the diagnostic seal's question: B5T mcf re-run on 28fcbb646, with the snapshot tool reading the new bytes.
+
+**Pre-registered pattern** (stretched reading: a 0 was 0 for 2^20 cycles; a cycling state reads the OR of its codes; IDLE 0 | SEND_TAG_LDC 9 = 9):
+
+| switch | layout at 28fcbb646 | THIS mechanism reads | decisive |
+|---|---|---|---|
+| 192 | {wbuf return pending, cache-update req, its ack, write in flight, memory write req, its ack, ni_conflict, commit slot 0 valid} | 0xd1: bit 7 = 1, bit 6 = 1, bit 5 = 0 (the ack never), bit 4 = 1, bits 3-1 = 0, bit 0 = 1 | bit 6 = 1 with bit 5 = 0 |
+| 223 | {CAPSTONE port (2) controller state[3:0], wbuf full, S-07 gran_hazard, lookup req, its ack} | 0x08 (port 2 idle, full, lookups done) | full 1, lookup req 0 |
+| 209 | {load port (1) controller state[3:0], PTW port (0) state[3:0]} | 0x10 (READ \| IDLE = 1; PTW idle) | high nibble 1 |
+| 229 | {load_state[3:0], rd_req port 2, port 1, port 0, 0} | 0x94 (load state 9; port 1 requesting) | rq1 = 1, state nibble 9 |
+| 195 | {ldbuf flushed[1:0], ldbuf valid[1:0], load unit state[3:0]} | state nibble 9; the upper nibble recorded | state 9 |
+| 219 / 220 / 221 | as on 904cd9c6b | the LDC's op (0xd7) / 0x8c / 0xf8, as S-35 read them | |
+| 225 / 222 | as on 904cd9c6b | 0x80 / 0x00 | |
+
+**Grading:**
+- **AS PREDICTED:** 192 bits 6/5 = 1/0, 223 = 0x08, 209's high nibble = 1, and 229's rq1 = 1.
+- **A DIFFERENT SHAPE:** any of those four differs. The table's other candidates then name it.
+- **No wedge:** mcf completes. Then the trigger did not occur on that run, which is no evidence either way. If mcf passes, the FLU ungate may have removed the upstream fault, as the semantics owner predicts.
+
+**Read order if a snapshot gets cut short:** 192, 223, 209, 229, 195, then 221, 220, 219, 225, 222.
+
+**Prediction for the fixed seal** (the semantics owner's): mcf completes, or faults with a named cause and pc. A silent wedge there refutes the fix.
+
+## R-80's fix (capstone-ariane b5b2-ldcfix a5c45a46d, on 28fcbb646): pre-registered before its gate (2026-11-25)
+
+**The change:** one term in load_unit.sv's exception block, `if (state_q == SEND_TAG_LDC) pop_ld_o = 1'b1;`. A faulting LDC leaves the LSU as a faulting plain load does. Under CAPSTONE_DYN_BYPASS, the R-43 replay marker and the probe's timeout 25 take the same path. The commit message has the mechanism and readings.
+
+**Readings:**
+- b5b2-ldcexc2 wedges on 28fcbb646 and completes on the fix with one cause-24 trap. Its control is unchanged.
+- 56 regression tests have identical values. b5b2-srvcost's measured costs move -2 and -1 cycles, its end -3 over 198 probes; sref and sref-gen move -2 cycles each.
+- Lint: at baseline, identical by name.
+- The claim-auditor found no lost writeback, no double pop, no new loop term, and one misplaced comment, which was fixed.
+- UNRESOLVED: the NO_DYN_BYPASS control build does not elaborate at 28fcbb646 at all (issue_read_operands.sv:2109).
+
+**Synthesis-only gate** (base: 28fcbb646's gate, dcp sha16 cf3055c8baa1251a):
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within +-505 MB of 4,969.8 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy fires), LUTLP-1 0 (toy fires) |
+| 3 core LUT | at most 126,258 + 2,500 = 128,758 |
+
+Reported, not graded:
+- load_unit: LUT within a few cells, FF +0 (one pop term, no new state);
+- the load unit's FSM: not re-encoded;
+- rows beyond +-2,500 by stem.
+
+If key 1 or 2 fails: the partition and loop members, and no full build.
+
+**Full build on a pass.** The keys of 88db40027's table, centred on 28fcbb646's seal when it exists, otherwise on 88db40027's:
+- placed LUT +-3,000;
+- FF +-2,000;
+- routed clean;
+- congestion <= 5;
+- loops 0, each toy firing;
+- clk_out1 inside [-1.47, +6.01].
+
+Reported: the led_stretch worst slack and the rev_node worst-500 count.
+
+**Silicon** (the semantics owner's predictions):
+- mcf on the fixed seal completes, or faults with a named cause and pc. A silent wedge refutes the fix as S-35's remedy.
+- The matched SPEC pair (the same images, 28fcbb646 against the fixed seal, one board): each row within 1 %. A row beyond that makes the registered-only park the follow-up, with its own gate.
+- Kits: crevoke4b and wapflu, whose vectors are to be re-simulated on a5c45a46d before that seal is graded with them; b5b2-ldcexc2 as a bare image (to build).
+
+## The diagnostic seal 28fcbb646: sealed and graded (2026-11-25)
+
+The board lane sealed `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu_28fcbb646.bit`.
+- Size: 11,443,722 B.
+- **sha256 `925607df163bd8c8b96a2ccef84126478251124eb02fe31d301cfee18cc0d32e`**, recomputed here from the copy in bitstreams/ and equal to the build's verdict.
+- The build tree is at 28fcbb646 with no core change.
+- Its gate PASS 3/3 is recorded above, in the board lane's grade.
+
+**Graded here: PASS on every pre-registered full-build key** (the combined-hash section's keys, centred on 88db40027's seal):
+
+| key | band | read |
+|---|---|---|
+| placed LUT | 149,188 +-3,000 | 151,405 (+2,217) |
+| placed FF | 69,534 +-2,000 | 69,497 (-37) |
+| routing | 0 errors, 0 unrouted, 0 partial | routed clean, 200,863/200,863 |
+| congestion | <= 5 | placed level 4; router no hotspot, its control parsing to 5 |
+| loops | 0, each toy firing | check_timing 0 (report and routed dcp), TIMING-23 0, LUTLP-1 0, each toy 1 |
+| clk_out1 WNS | [-1.47, +6.01] | +1.516 |
+
+Reported:
+- design WNS +0.177, TNS 0, WHS +0.024; slices 44,753 (87.84 %); RAMB36 115;
+- rev_node on the worst 500: 299 paths / 229 cells;
+- led_stretch worst setup slack +8.556 (88db40027's seal: +8.744), the apertures' only timing cost.
+
+The grade is <synth>/b5b2waff-28fcbb646-full-out/grade-board/grade-waf-full.txt.
+
+**Its session** (board 2, in the semantics owner's order): the flash, then the wapflu kit, crevoke4b's 17, the three g2, and B5T-g1b with mcf last. If mcf wedges, its snapshot is graded against the pattern pre-registered above (c7877d008be7).
+- On this seal, crevoke4b cannot detect a missed flash: board 2 comes from 88db40027, whose column equals 28fcbb646's.
+- The flash checks are the readback and wapflu's b5b2-untagged (the board lane's note).
+
+## The final B5b-2 candidate: R-77's PRE fix on a5c45a46d (capstone-ariane b5b2-prefix b42c8c644, core = 7861abcfa), pre-registered before its gate (2026-11-25)
+
+**What it adds to a5c45a46d.** The verdict probe's timeout counts only after the lifetime unit ACCEPTS the probe: `rvc_timeout = rvc_pend_q && rvc_sent_q && rvc_wait_q == RVC_PROBE_WAIT_POST`. The ~1M-cycle PRE bound is removed. The semantics owner ruled a spurious 25 on a live object a correctness defect, and accepted the trade: a unit that never accepts now hangs, with the access at the commit head.
+
+**The evidence, b5b2-crevint -DCI_YLDC** (each cut pre-registered on the branch before its run; the readings are in the test header):
+
+| tree | condition | reading |
+|---|---|---|
+| 28fcbb646 (no R-80) | a verdict-miss LDC during a CREVOKE walk | WEDGES (see below) |
+| a5c45a46d (b0) | as is | completes, no 25; the LDC presents ONCE (948,921 times on 28fcbb646) |
+| a5c45a46d (b) | sim-only 4,000-cycle PRE bound | the probe times out unaccepted, and the LDC faults 25 on the LIVE object |
+| 7861abcfa (c) | the same bound, inert here | as (b0), with no timeout |
+
+The 28fcbb646 wedge, in order:
+- the replay-marked LDC re-presents on load port 1;
+- the walk's record writes cannot drain: WEDGE-WBUF at cycle 106,085, and the CREVOKE never retires;
+- the probe is never accepted, and its timeout about 1.05M cycles later does not end the wedge.
+This is R-80's second trigger. It needs no faulting access, and it is demonstrated in RTL simulation; it is not an attribution of the mcf instance. Its LED bytes are 192 0xd0, 223 0x0a, 229 0x04, 195 0x99, read beside c7877d008be7's pattern and not instead of it.
+
+Two cuts before each reading were VOID and are recorded:
+- the cache hit because p's own CDERIVE fills it;
+- the walk's forward scan read p, so its tap resolved the probe.
+My first void rule was also mis-stated: probe-sent prints on ACCEPTANCE.
+
+**Gates on 7861abcfa** (memory delay 12):
+- the ldcexc trio as on a5c45a46d;
+- the B5b-2 (40) and B5b-1 (17) lists identical in values AND cycles to a5c45a46d's, 57/57. The comparator's positive control against the 28fcbb646 run reads 4 differences.
+- Lint: Sublet gate PASS with every counter at baseline, and both configurations identical by name to a5c45a46d's (1,628 and 2,498 warnings; the same diff against an older hash shows 229 lines).
+
+**The claim-auditor** (read-only): PLAUSIBLE-BUT-UNPROVEN.
+- (1) the false 25 removed, and (3) nothing else changed (POST, refusal record, counter wrap, acceptance cycle): SUPPORTED.
+- (2) no reachable hang: SUPPORTED by a CORRECTED argument. My cited one was wrong: LCC sends a lifetime-unit query and is not in the empty-scoreboard gate.
+  - The bound that holds: the unit never sits idle refusing the probe.
+  - Nothing commits past the waiting access, so the 8-entry scoreboard bounds younger queries, with no speculative issue.
+- The auditor's LCC-race discriminator (-DCI_YLCC) could not construct the race in two cuts, both VOID by their condition and recorded:
+  - with the unit idle, the probe is accepted the cycle after the miss;
+  - during a walk, LCC cannot dispatch.
+- Hang classes that survive, each a pre-existing defect that used to end in a 25 at about 1M cycles:
+  - H1, a unit read with no rvalid;
+  - H2, the unit's write port starved;
+  - H3, CSMINT's create response unacked after a flush, which the auditor argues is unreachable without proving it exhaustively.
+
+**R-46 and the pending list** (closed with the semantics owner):
+- R-46's write side IS reachable: a taken CBNZ with a tagged rs2 (branch_unit.sv :100-103; CBNZ is legal, decoder.sv:1563-1569).
+- Every reader is unreachable under Sublet:
+  - pc_cap_check and the PC probe need capmode (commit_stage.sv:423, :518), and capmode_d = 0 (csr_regfile.sv:349);
+  - the switcher's pc_next is read only by CALL, RETURN and CSRUNV, all illegal (decoder.sv:1456, :1472);
+  - the escape needs sup_active.
+- CJALR is illegal (decoder.sv:1557), so pcc_tmo's acceptance wait is unreachable here and is inherited by any line with CJALR.
+- The fixes for R-70, R-57 and R-79 are ancestors of a5c45a46d.
+- No other RTL-ready item.
+
+**Synthesis-only gate** (base: a5c45a46d's gate, B5B2R80-GATE PASS):
+
+| key | pass if |
+|---|---|
+| 1 memory | technology-mapping peak within +-505 MB of 4,968.3 MB, under the 40 GB guard |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy fires), LUTLP-1 0 (toy fires) |
+| 3 core LUT | at most 126,264 + 2,500 = 128,764 |
+
+Reported, not graded:
+- load_store_unit LUT within a few tens of cells of a5c45a46d's (one 20-bit compare loses its PRE arm), FF +0;
+- no FSM re-encoded;
+- rows beyond +-2,500 by stem.
+On a key-1 or key-2 failure: the partition and loop members, and no full build.
+
+**Full build on a pass.** 88db40027's key table, centred on a5c45a46d's seal if it has graded PASS by then, else on 28fcbb646's (151,405 / 69,497):
+- placed LUT +-3,000;
+- FF +-2,000;
+- routed clean;
+- congestion <= 5;
+- loops 0 with each toy firing;
+- clk_out1 inside [-1.47, +6.01].
+Reported: the led_stretch worst slack and the rev_node worst-500 count.
+
+**Silicon.** The a5c45a46d sessions stand as R-80's and ldcexc2's evidence. On this seal:
+- the same kits, whose vectors are to be simulated on b42c8c644 before it is graded with them;
+- mcf, by exposure (the board lane's column): a wedge refutes the fix; a fault with 25 is now itself a defect reading.
+
+## R-80's seal a5c45a46d: sealed and graded (2026-11-25)
+
+The board lane sealed `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu-r80_a5c45a46d.bit`.
+- Size: 11,443,722 B.
+- **sha256 `9b46b14fb6252873696acc9762d7aecbc53271567447460207737c2366f1e36e`**, recomputed here from bitstreams/.
+- The build tree is at a5c45a46d with no core change.
+- Its gate read B5B2R80-GATE PASS 3/3:
+  - mapping 4,968.3 MB;
+  - core LUT 126,264 (+6);
+  - load_unit 417 LUT (+4) and 101 FF (+0), no FSM inferred or re-encoded.
+
+**Graded here: PASS on every pre-registered full-build key** (the R-80 section's keys, centred on 28fcbb646's seal):
+
+| key | band | read |
+|---|---|---|
+| placed LUT | 151,405 +-3,000 | 151,406 (+1) |
+| placed FF | 69,497 +-2,000 | 69,500 (+3) |
+| routing | 0 errors, 0 unrouted, 0 partial | routed clean, 200,931/200,931 |
+| congestion | <= 5 | placed level 4; router no hotspot |
+| loops | 0, each toy firing | check_timing 0 (report and routed dcp), TIMING-23 0, LUTLP-1 0, each toy 1 |
+| clk_out1 WNS | [-1.47, +6.01] | +1.778 |
+
+Reported:
+- rev_node on the worst 500: 340 paths / 199 cells;
+- led_stretch +9.412.
+
+The grade is at <synth>/b5b2r80f-a5c45a46d-full-out/grade-board/grade-r80-full.txt.
+
+Its sessions are R-80's and ldcexc2's silicon evidence, graded from the kits' `expected-vectors-a5c45a46d.json` and the ldcfix PREREG:
+- board 3: flash, the kits, the Linux boot-3 image, the SPEC chain, then ldcexc2 last;
+- board 2: the matched pair after its 28fcbb646 session and the ldcexc2 pre-mode control.
+
+mcf is read by exposure (the board lane's column). A wedge snapshot is read by grade-mcfpat.py, read-walkvar.py and read-r8x.py; an R-80 pattern on this seal is "R-80's fix not holding".
+
+## mcf on the fixed seals: graded by exposure, not per run (2026-11-25, with the board lane)
+
+On silicon the mcf wedge is intermittent. On 904cd9c6b and 88db40027 together there are three runs, each cut at the 3,600 s stage bound: boot 5 wedged at about 2,766 s, and the other two ran clean.
+- That is about 9,966 s of unfixed mcf exposure with ONE wedge: a rate of about 1 per 10,000 s, with a 90 % Poisson interval from 1 per 194,000 s to 1 per 2,100 s (computed by both lanes).
+- Pooling the two bitstreams treats their LDC paths as one, which is unproven.
+- The model exp(-T/tau) assumes a constant hazard across mcf's phases, which is unknown. Both clean runs passed 2,766 s, so the wedge is not tied deterministically to that point.
+
+On a5c45a46d and b42c8c644:
+- a WEDGE refutes the fix as mcf's remedy;
+- a clean full-length run of T seconds weighs about exp(-T/tau) against "not fixed", and only cumulatively, across boards and re-runs. It is never a pass/fail on one run.
+
+The board lane records each run's exposure: board, seal, mcf entry, end (completion, watchdog or silence), seconds, and outcome. Exposure is taken from each capture, not rounded. The diagnostic full-length B5T-g1b on 28fcbb646 is the first full-length unfixed calibration point. The discriminating pair is ldcexc2 (b5b2-ldcfix-bare-2026-11-25), but only on a board where the pre-fix seal reproduces its wedge.
+
+**Gate read (board lane, 2026-11-25): B5B2R77-GATE PASS 3/3.**
+- Mapping 4,968.2 MB (-0.0); loops 0 with each toy firing; core LUT 125,279 (-985).
+- Reported: load_store_unit 25,470 LUT (-462) and FF +0; load_unit +2 / +0; no FSM change; 0 rows beyond the floor.
+- MY PREDICTION "within a few tens of cells" MISSED. It sized only the removed compare and mux. With the PRE arm gone the timeout compare is gated by sent_q, and its cone (the DEAD/tmo writes, pcc_tmo) re-optimises. That is a reduction inside the per-module floor, with the sim identical in values and cycles, so it is not attributed further.
+- The full build launched 16:16:41Z, centred on a5c45a46d's seal (151,406 / 69,500).
+
+**Kit vectors on b42c8c644:** every image of b5b2n (23), crevoke4b (17), wapflu (2) and b5b2-ldcfix (3) reads exactly its kit's `vector` column, each in `expected-vectors-b42c8c644.json`.
+
+**Silicon, for the FLU rule's record (board lane, board 2, 28fcbb646):**
+- x264 ran about 1,430 s on all three arms with no fault before the 3,600 s stage watchdog, where 904cd9c6b took cause 24 at a CINCOFFSET within seconds (x264_slicetype_mb_cost+0x146);
+- imagick passed specdiff on all three arms;
+- x264 has no PASS yet only because gen and run exceed the stage bound.
+
+## The final candidate b42c8c644: sealed and graded (2026-11-26)
+
+The board lane sealed `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit`.
+- Size: 11,443,722 B.
+- **sha256 `6a09f34d50842e01deff19296c79c5e06021730ce0da37ec01d0fd86270b190a`**, recomputed here from bitstreams/.
+- The build tree is at b42c8c644; `git diff 7861abcfa HEAD -- core` is empty.
+
+**Graded here: PASS on every pre-registered full-build key** (the final candidate's section, centred on a5c45a46d's seal):
+
+| key | band | read |
+|---|---|---|
+| placed LUT | 151,406 +-3,000 | 150,303 (-1,103) |
+| placed FF | 69,500 +-2,000 | 68,506 (-994) |
+| routing | 0 errors, 0 unrouted, 0 partial | routed clean, 198,616/198,616 |
+| congestion | <= 5 | placed level 4; router no hotspot |
+| loops | 0, each toy firing | check_timing 0 (report and routed dcp), TIMING-23 0, LUTLP-1 0, each toy 1 |
+| clk_out1 WNS | [-1.47, +6.01] | +0.605 |
+
+The clk_out1 reading is inside the band but the lowest of the four B5b-2 seals (a5c45a46d +1.778, 28fcbb646 +1.516). The drop against a5c45a46d is about 1.2 ns, within the several-ns spread that null changes show on this flow, so it is not attributed.
+
+Reported:
+- design WNS +0.177, TNS 0, 0 failing endpoints, WHS +0.043;
+- rev_node on the worst 500: 303 paths / 198 cells;
+- led_stretch +8.179.
+
+The grade is at <synth>/b5b2r77f-b42c8c644-full-out/grade-board/grade-r77-full.txt.
+
+Its sessions (the semantics owner's allocation) are graded from each kit's `expected-vectors-b42c8c644.json`:
+- board 3: kits, boot 3, the SPEC 12, ldcexc2 last;
+- board 2: kits at N=2, the g2 three, B5T-g1b.
+mcf is read by exposure. A wedge snapshot is read by grade-mcfpat.py, read-walkvar.py and read-r8x.py:
+- an R-80 pattern is "R-80's fix not holding";
+- QUIET-UNIT is R-83 or a dropped R-81 response, the trigger for a unit-state aperture build.
+
+## The final candidate b42c8c644 on silicon: its Tier 1 kits on two boards (2026-11-26)
+
+Read by the board lane (board/meas-pw f47b2a686ce2, `capstone/tests/rtl-smoke/b5b2-seals-board-2026-11-25/`
+b42c8c644-board3 and -board2 result lines). The seal is flashed by b5b2n and read back by name before and after the
+loads. The console exposes no sha256, so the bitstream is identified by its name and the local file's sha256 against
+the seal's. Every kit is graded from its `expected-vectors-b42c8c644.json`.
+
+| kit | board 3 | board 2 |
+|---|---|---|
+| b5b2n | 21/21 AS PREDICTED | 21/21 AS PREDICTED (b5b2-cptag-diag reads H-fetch, reading 21's instrument artifact) |
+| crevoke4b | 16/16 AS PREDICTED (latency band PASS, 1,130 cycles) | 16/16 AS PREDICTED (latency band PASS, 1,130 cycles) |
+| wapflu | 1/1 | 1/1 |
+| misscost | -- | both images AS PREDICTED |
+
+- **What these readings are:** the board lane's grades from its own graders. The misscost vector was also re-graded
+  here by script against the kit's `expected-vectors.json`, with the grader negative-tested on a perturbed E value
+  and a perturbed P3 (`tools/record-cache-model/README.md`, Line B).
+- **What they cannot show:** R-77's fix moves no value of these kits (crevoke4b's b42c8c644 addendum), so they say
+  the seal kept every Tier 1 behaviour and nothing about the fix itself. R-80's arm, b5b2-ldcexc2, is not in these
+  two sessions. It reads `LDCKIT fixed AS PREDICTED` on a5c45a46d (board 3, board/meas-pw c198c50f159e) and on
+  14f2ef81a (board 1, f47b2a686ce2), whose ldcexc2 column equals b42c8c644's. On b42c8c644 itself it is still in
+  board 3's remainder.
+- **Discrimination:** neither ldcexc2 reading discriminates yet. The 28fcbb646 control that must wedge on silicon
+  has not been read (the board lane's README, c198c50f159e). So R-80 on silicon is "the fixed arm completes with
+  one cause-24 trap", not "the wedge is gone".

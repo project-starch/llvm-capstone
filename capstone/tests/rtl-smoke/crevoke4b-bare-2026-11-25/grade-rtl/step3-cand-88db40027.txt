@@ -1,0 +1,19 @@
+# c4b-grade.py <captures> expected-vectors.json new  (captures: /mnt/hdd/<user>/capstone/c4bkit/step23-b2-20261125T0901/NN-name/uart.txt, board 2)
+EXACT sublet-life: E 25  M/R {}
+EXACT b5b2-crevint: E 11  M/R {2: '0x14a1'}
+EXACT b5b2-crevint-mt: E 9  M/R {2: '0x1777', 8: '0x5', 9: '0x5'}
+EXACT b5b2-crevint-sh: E 5  M/R {2: '0x1abf', 4: '0x100000047', 5: '0x800000cf', 8: '0x2', 9: '0x2', 10: '0x1', 11: '0x9227b3d4c7c6bfb1'}
+EXACT b5b2-crevint-lat: E 9  M/R {2: '0x1a23', 8: '0x6', 9: '0x6', 13: '0x4c6', 14: '0xffffffffffffff89', 15: '0x235', 16: '0xffffffffffffff7e', 17: '0x235', 18: '0xffffffffffffff7e', 19: '0x0', 20: '0x0', 21: '0x756e', 22: '0x3ab7'} lat=[1222, -119, 565, -130, 565, -130, 0, 0] cal=30062/15031 cycles=[1130, 1130]
+EXACT b5b2-crevsv-none: E 8  M/R {2: '0x1a0c', 8: '0x6', 9: '0x6', 10: '0x3'}
+EXACT b5b2-crevsv-srev: E 8  M/R {2: '0x1f6d', 8: '0x6', 9: '0x6', 10: '0x3'}
+EXACT b5b2-crevsv-straw: E 8  M/R {2: '0x1f31', 8: '0x6', 9: '0x6', 10: '0x3'}
+EXACT b5b2-crevsv-derive: E 5  M/R {2: '0x1fe4', 4: '0x800000cf', 5: '0x800000ce', 8: '0x6', 9: '0x4', 10: '0x3', 11: '0xd443b2166d8185e1'}
+EXACT b5b2-crevsv-kill: E 4  M/R {2: '0x1d6e', 3: '0x80000008', 4: '0x800000d0', 5: '0x800000cf', 8: '0x6', 9: '0x4', 10: '0x3', 11: '0x5323b3b7586ffcf6'}
+EXACT b5b2-sbdrain-none: E 4  M/R {}
+EXACT b5b2-sbdrain-fill: E 4  M/R {}
+EXACT b5b2-sbdrain-fence: E 4  M/R {}
+EXACT b5b2-sbdrain-mint: E 4  M/R {}
+EXACT b5b2-sbdrain-sret: E 4  M/R {}
+EXACT b5b2-sbdrain-cost0: E 3  M/R {2: '0xe7a'}
+EXACT b5b2-sbdrain-cost: E 3  M/R {2: '0xee9'}
+C4B-GRADE new: 17/17 exact on E
