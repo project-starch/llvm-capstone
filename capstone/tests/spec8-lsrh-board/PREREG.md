@@ -190,3 +190,82 @@ do not bind.
 - Train inputs.
 - Any comparison against B5TL1's rows.
 - mcf and xz, unless Amendment 1 adds them.
+
+## Amendment 1 (2026-11-26, before the first boot): the images, their checks, and the prices read since
+
+### Images
+
+Four images were built by c4/spec8/board/make-board.sh, through the Full tree's payload script with
+FW_EXTRA="FW_FAST_RDTIME=y" and keep-tags firmware. LSHOFF2 boots the LSHOFF images. Sha256 of each:
+
+| image | fw_payload.bin | bytes | Image | overlay.cpio |
+|---|---|---:|---|---|
+| S-LSHOFF | fb1c99ffd26a26c91cc93b10ffb8dbf795610fb1d294edd921d7869fe1919baf | 25,856,520 | fb8f807a14393dd6 | 2b804ad91b73b241 |
+| S-LSRH | 4bc5be53046df016e56ade40cb5f3857820f4cf3bcd6b8e1594981b9fcee9832 | 25,856,520 | e8f95da38f708ac3 | 6b3c25333ceea3c1 |
+| X-LSHOFF | 72bcdd213c23672be39238801552fa9fda5936be616ae3190f9d91c9d0e5943d | 21,662,216 | 1bb97d42ec4c6b52 | fdfb1fd5951fb920 |
+| X-LSRH | c4ec690733fca429b7370609f9394560d14f8f1f9399c61aa21a9d222de0b685 | 21,662,216 | 4a34283bcce73773 | f0b2cf9988840a9a |
+
+All four are under the 26,000,000-byte kit cap. The S images leave 143,480 bytes of slack, so the cap is close.
+
+### The three checks
+
+**1. Overlay manifest against the Full campaign images' manifests.**
+- The S images are compared with the four groups' files, plus g2i's init, probes.list and smoke.dom. The X images
+  are compared with CF-B5TL1-x264b. Results:
+
+  | image | files differing |
+  |---|---|
+  | S-LSHOFF | cpugcc_r's native only, 9908933454d63036 against B5TL1's f800e015d161c911 (spec8's gcc difference) |
+  | S-LSRH | the four natives only, each the LSRH hash in the Arms table |
+  | X-LSHOFF | none: its overlay equals CF-B5TL1-x264b's, file for file |
+  | X-LSRH | x264_r's native only (a91cd669417be917) |
+
+- Each S image's stages.order and stages.bound are new files, since no campaign image has this group. They list gcc,
+  imagick, perlbench and nab at 3,600 s each.
+- The build's own check found, in every image, every non-native stage file byte-identical to its source, and every
+  native equal to the arm's strip.dom.
+
+**2. Kernel .config keys.** The Full tree's .config was read right after the last of the four relinks. All of these
+are present:
+- config-keys.txt's four keys: the initramfs source, ISA_C, CAPSTONE_TASK and CAPSTONE_TRAP;
+- CONFIG_NO_HZ_IDLE=y and CONFIG_HZ=100;
+- RISCV_CAPSTONE_TRAP_TEST, SMP, TRANSPARENT_HUGEPAGE, KSM and MODULES all not set.
+
+The four relinks ran back to back under the tree's payload lock, from 16:25:55 to 16:26:31.
+
+**3. Fast-path count.** fast-path-refs=2 in all four images, the campaign images' count.
+
+### Prices read since the pre-registration
+
+These are from the runtime and nested lanes' records, all on b42c8c644, N=1:
+
+| stage | reading | image | kernel |
+|---|---|---|---|
+| perlbench makerand | 275.70 s | CF-B5TL1-g4mk e82d42eb, native f3c8c80d (LSHOFF's) | the campaign Full kernel with FW_FAST_RDTIME |
+| gcc | 5.55 s | CF-B5TL1-g3 997e2fd6 | the campaign Full kernel |
+| nab, B5TL1 | **UNKNOWN** | none on a board yet | |
+
+For nab, B5T-g1b read 754.92 s on board 3 and 754.91 s on board 2, on the qualification kernel. **That is a different
+userland, and it is a scheduling estimate only.**
+
+**The S bracket** is then about 5.55 + 17.2 (imagick run and val) + 275.7 + roughly 755 s, about 1,050 s of stages
+per boot. Three boots of about 20 minutes each come to about 1 h. The X bracket stays at least about 43,000 s.
+
+### Predictions at the read prices (CPI assumption as before; these do not bind)
+
+| stage | predicted Δt | band before the spread |
+|---|---|---|
+| perlbench | 0 (-34 instructions) | 0.14 s + 0.02 s |
+| gcc | 0 (+696 instructions) | 2.8 ms + 0.02 s |
+| nab | about -0.32 s, if its time is about 755 s | 0.38 s + 0.02 s |
+| imagick | -0.21 s | unchanged |
+| x264 | +0.5 s | unchanged |
+
+### mcf and xz stay off
+
+On B5T-g1b (qualification kernel, a different userland) they read 6,828.57 s and 4,873.51 s. That is about 11,700 s
+per arm, or 35,000 s for three arms.
+- The twin decides both: LSRH's images are LSHON's, at +0.001 % and +0.000 %.
+- No session window covering 35,000 s has been offered.
+
+So this amendment does not add them.
