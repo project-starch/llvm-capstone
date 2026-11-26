@@ -9702,3 +9702,71 @@ and `link.txt`, llvm-c9 `29027126f39b`, the B5TL1 SDK, the one-operand shim):
 and the fixtures' protection, including on the forced-failure path. But it does not pay. CDERIVE falls by only 38
 against 104 renewals, and the added work outweighs that: 1,171 more 16-byte capability loads and stores, 1,137 more
 funct7=0x04 ops and 2,071 more base-ISA instructions. Not read: which site costs, and cycles.
+
+## mcf's record-cache population depends on the emulator's speed: the v3 trace under QEMU -icount (2026-11-27)
+
+### Pre-registration: the mcf v3 trace at -icount shift 7 and shift 8 (written 2026-11-27 05:53 host time (+08), 21:53Z on Nov 26, before either run)
+
+**Why.** The record-cache decision (the rtl lane's) asked for the D$ residency of the misses that a bigger verdict
+cache, or the record cache, would remove from b42c8c644's 64x4 LB on mcf. The trace that carries residency (format
+v3, capstone-qemu nested/record-trace-dc `c3f93ba340`, with `dcplugin.so` `0136be18`) gives a different population from
+v2's trace of the same stage:
+
+| trace | 64x4 LB misses | 1024x8 misses | removed by 1024x8 | RC misses | LB flushes | E op 3 (MRET into protected U) | instructions_all |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| v2 `spec-mcf.2201746` | 181,127,530 | 126,537,860 | 54,589,670 | 44,836,912 | 524,115 | 262,027 | 28,755,599,119 |
+| v3 `spec-mcf.1497224` | 181,419,844 | 152,912,523 | 28,507,321 | 44,837,086 | 815,879 | 407,870 | 28,973,518,919 |
+
+- The model is not the cause. `rcm-lb-dc` replays v2's trace at 1024x8 to exactly the rtl lane's 54,589,670 removed and
+  44,836,912 RC misses.
+- The protected instruction count is the same in both, 26,644,263,390, and so are the check and operation event
+  counts. What differs is the namespace flushes, and with them the M round trips out of protected U.
+- The likely cause (a hypothesis, the rtl lane's and this lane's): QEMU's guest time follows the host's wall clock
+  without -icount, so the timer interrupts per instruction depend on how fast the emulator runs. The plugin that
+  carries the D$ model slows QEMU, which gives more ticks, more flushes and a smaller removed population. Silicon
+  runs about 7.5x slower per instruction than either trace (g1b: 6,601.15 s for about 29 G instructions, about
+  228 ns each), so neither trace has silicon's flush rate.
+
+**The runs.** `rectrace-dc/chain-ic.sh` (`7f59009b`) runs the v3 mcf trace twice, under `-icount shift=7` (128 ns per
+instruction) and then `shift=8` (256 ns), which bracket silicon's 228 ns.
+- Under -icount the aclint mtime follows QEMU_CLOCK_VIRTUAL (`hw/intc/riscv_aclint.c:44`, `:392`). So the guest's ticks
+  per instruction are set by the shift, not by the host.
+- The instruments are the v3 run's, changed in two places only:
+  - `trace-spec-dc-ic.sh` (`68de7f0f`) passes -icount through `boot-plugin-ic.py` (`ea2b9761`);
+  - `/init` is `ovl-ic/init` (`b21df695`), whose stage bound is 30,000 guest seconds instead of 3,600, because mcf
+    takes 3.7-7.4 ks of guest time at these shifts.
+- Unchanged: QEMU `d6e8ed5e`, the plugin, `rcm-lb-dc` (`d878e9da`), the stage (B5TL1 505.mcf_r test) and the kernel.
+- Each run is read as the v3 run was: `dc-window.py`, `grade-spec-chain-v2.py`, and `rcm-lb-dc --lb 1024x8` (its LB0 is
+  the 64x4).
+- shift=8 runs only if shift=7 passes the gate: PASS, WINDOW-OK, v3 mismatch_vs_LB0 0, bit44 > 0.
+- Both gate branches were exercised in a stubbed dry run on the v3 run's recorded artifacts (kept in
+  `rectrace-dc/attic-dry-ic/`). The overlay build ran for real.
+
+**Predictions.**
+1. **Gate.** Both runs PASS, with WINDOW-OK at D ≤ 64, mismatch_vs_LB0 0 and bit44 equal to the 64x4 misses.
+2. **The control: flushes scale with the shift.** E op 3 per instruction at shift 8 is 1.6 to 2.1 times shift 7's.
+   Both exceed v3's 407,870, because guest time per instruction rises from about 30 ns to 128 and 256 ns.
+   - If the ratio falls outside this band, M round trips are not timer-driven as assumed, and predictions 3 and 4 are
+     not read.
+3. **The population.** The removed-by-1024x8 count falls as flushes rise, in the order v2 > v3 > shift 7 > shift 8.
+   This is the hypothesis under test, and either outcome is reported.
+4. **Recorded, not predicted:**
+   - the 64x4 and 1024x8 misses;
+   - RC's misses and its removed population;
+   - each population's resident count and cold fraction per seed;
+   - the window's D$ reads and misses per seed;
+   - the E counts, by op;
+   - the wall time.
+
+**What is read, and by whom.**
+- This lane reports the populations and residency at both shifts.
+- The rtl lane grades the record-cache rule. It compares the trace's M round trips with silicon's hpm 0x07
+  (exceptions, interrupts included) and 0x08 (eret) on a b42c8c644 mcf row.
+- Until then, LB 1024x8 on mcf stays UNDECIDED. It is not BUILD.
+
+**Limits.**
+- One run per shift. -icount fixes guest time per instruction, but not the kernel's tick rate on silicon:
+  CONFIG_HZ on the board's kernel is the rtl lane's open check.
+- The PTW is invisible to the D$ model, and its effect is an estimate. The other limits of the v3 residency
+  reading also stand: the RC refill path is an assumption, probe-internal accesses are not reported, and the window
+  is ±D plus the tty drain lag.
