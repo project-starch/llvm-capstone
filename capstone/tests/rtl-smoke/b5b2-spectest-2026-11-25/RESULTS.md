@@ -112,6 +112,11 @@ not attributed. The imagick half is **not comparable**. On 28fcbb646 it ran in t
 `/init`, stage order and bounds (Amendment 10), and x264 ran before imagick in g2. The 9 s gap is recorded and not read
 as a property of either seal.
 
+**ldcexc2 (Amendments 7 and 9)** is graded in its own kit, `../b5b2-ldcfix-bare-2026-11-25/`. On b42c8c644
+(board 3, after B5TL1-g4mk) its fixed arm reads SR 2 0x18 0x1 and its control SR 2 0x0 0x0, `LDCKIT fixed AS
+PREDICTED`. The unfixed 28fcbb646 control that must wedge is still unread, so this shows the fixed arm completing,
+not the wedge gone.
+
 ## Still owed
 
 - Board 3: B5T/B5TL0/B5TL1-x264b.
