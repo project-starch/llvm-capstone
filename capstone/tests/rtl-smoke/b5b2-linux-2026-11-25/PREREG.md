@@ -114,3 +114,143 @@ For boot 4, any of the following counts as the firmware's contract mattering on 
 shows that no M trap landed while references were held. The 2 x 40M-iteration spins span many machine-timer ticks, so
 the second reading would itself need explaining. Boot 3 runs first. If its strip control does not read 23, boot 4 is
 not run.
+
+## Amendment 3 (2026-11-25): boot 6, the same stack on the 88db40027 seal
+
+The 88db40027 seal (capstone-ariane: 4(b) interruptible CREVOKE, the committed-store-queue drain and the CAP_WB guard,
+on 904cd9c6b; sha256 bdff45d0…) is resident on board 2. rtl's crevoke4b kit read 16/16 on it (board lane, 09:33Z).
+
+**Boot 6:** board 2, no flash, image `fw3y` `77de789fdd00…`, byte-identical to boot 3's.
+**Predicted:** exactly boot 3's readings: P1-P3; `regs status 0`; `regs-strip23 status 23`; `enter status 200`; `done`.
+**Classification:**
+- any other reading is a finding about 88db40027 against 904cd9c6b;
+- the board differs from boot 3 (board 2, as boot 3), so the pair is matched in board and image and differs only in
+  the bitstream.
+
+## Amendment 4 (2026-11-25): boots 7 and 8, the cost of an M round trip from U
+
+**The question.** The board has no time CSR. Its OpenSBI banner reads `Boot HART ISA Extensions : none`, where the twin
+reads `time`. So every rdtime, in the kernel's sched_clock and in user code, traps to M for emulation. On Line B each
+such trap also runs the keep-tags save path (31 STC, a compare and 31 LDC) and empties the verdict cache (rtl,
+b5b2-srvcost). This pair reads the firmware's part on silicon. The verdict refill is rtl's sim reading.
+
+**Program.** `/mtrip` (`build/mtrip.c`, static RISC-V, buildroot GCC 12.3, -O2, ILLEGAL 0). It reports cycles per op,
+best of 5 repeats of 20,000 ops each, for:
+- rdtime: one M trip each;
+- rdcycle: no trap, the control;
+- getppid: a U-to-S syscall, no M, the second control.
+`/init` (`build/init-mtrip`) runs it three times.
+
+**Images** (`SHA256SUMS.mtrip`): the same kernel and initramfs; only the firmware differs.
+- boot 7: keep-tags, `870ca3f2…`;
+- boot 8: the same tree with the flag off, `248c932a…`.
+
+**Board:** whichever of 2/3 is free, both boots on that one board, no flash. The record names the resident bitstream.
+
+**Predictions:**
+- rdcycle under 5 cycles on both;
+- getppid equal on both firmwares within ±3 % (no M on that path);
+- rdtime above 100 cycles on both: a full trap, OpenSBI's C emulation and mret;
+- rdtime(keep) - rdtime(stock) between 60 and 600 cycles: the keep-tags entry and exit, 62 capability memory ops plus
+  31 compares, against stock's 31 sd and 31 ld.
+- A difference outside that band is read for what it is, not stretched to fit.
+
+## Amendment 5 (2026-11-25): boots 9-12, the rdtime fast path (caplifive-opensbi 25b14da6)
+
+**Change.** `FW_FAST_RDTIME`: the trap entry answers `csrrs rd, time, x0` from mtime without the C part. It touches
+t0-t2 and sp, and the flag is independent of keep-tags, so both arms get it. With both flags off the builds are
+byte-identical to the base and to eb85e21c (generic fw_jump.bin hashes).
+
+**Program.** `/mtrip` now also prints `MTRIP-TIME backwards <n> cycles_per_tick <x> ticks <t>`: rdtime answers that go
+backwards, and the core cycles per 1 MHz mtime tick over the last loop. `/init` = `build/init-mtrip2`: regs, its strip
+control and the loader first, then mtrip three times.
+
+**Images** (`SHA256SUMS.mtrip2`): the same kernel and initramfs; only the firmware differs.
+- boot 9: keep-tags `4dd09b4e…`
+- boot 10: stock `269bd80a…`
+- boot 11: keep-tags + fast `3cabb79f…`
+- boot 12: stock + fast `d217c7e3…`
+They run on one board, in the order 9, 10, 11, 12, no flash; the record names the resident.
+
+**Predictions:**
+- every boot: `regs status 0`, `regs-strip23 status 23`, `enter status 200`. The fast path must keep the trap-route
+  contract (boot 11 is the one that tests it);
+- `backwards 0` on every run, and cycles_per_tick equal across the four boots within ±1 %. The fast path's answers are
+  mtime itself;
+- boots 9/10 rdtime within ±3 % of boots 7/8's 1,932 / 1,138 (the same firmware);
+- boots 11/12: rdtime below 600 cycles on both; keep-fast minus stock-fast below 200 (three STC/LDC pairs against
+  three sd/ld);
+- getppid within ±3 % across all four. The fast path is not on its path.
+A reading outside these is reported as read.
+
+**Note:** the QEMU keep-tags suite with FW_FAST_RDTIME=y is queued on the lock and not yet read. The twin has a time CSR, so it cannot exercise the fast path anyway; on silicon the fast path is checked by these boots' own regs/strip/enter controls and the MTRIP-TIME check.
+
+## Amendment 6 (2026-11-26, before the boot): boot 13, the first boot of the final campaign Full kernel
+
+**Image** `trapk/fpga-final/smoke-out/fw_payload.bin`, sha256 798c53e0086b6fa3037165ae420cf821ec52549a296fa4f21fecf71388b488ae,
+17,467,912 B. Its parts:
+- kernel: `build/build-kernel-final.sh` (NO_HZ_IDLE at HZ=100, TRAP_TEST off, the msghdr loader in), Image 1ab7b4c6…;
+- firmware: keep-tags with FW_FAST_RDTIME=y, caplifive-opensbi 25b14da6. The fast path is present: two
+  `fw_fast_mtime_addr` references in fw_payload.elf, as in boot 11's out-fy, against 0 in out2-y;
+- DTB caplifive-b5b2.dtb;
+- overlay: `build/init-final-smoke`, smoke.dom (the SPEC kits' control, byte-identical to g2b's), mtrip (boots 9-12's).
+The quiesced-state shell commands of the earlier inits are not repeated here.
+
+**Board and seal:** b42c8c644, on whichever board runs it first (board 2's session, as a conditional step after
+nested's boots, or board 3's late branch). Bound 900 s.
+
+**Predictions:**
+1. The control prints `ok` and `TRAPTEST: control smoke.dom rc=7`, as on every SPEC kit boot.
+2. mtrip, three runs:
+   - rdtime 100-140 cycles per op. Boot 11 (keep + fast) read 119.2-119.3, and neither the tick nor TRAP_TEST is on
+     rdtime's path;
+   - rdcycle 5.00-5.2;
+   - getppid within ±3 % of boot 11's 1,259.3 (1,221-1,297). TRAP_TEST off removes one compare and branch from the
+     native syscall path, a few cycles;
+   - MTRIP-TIME cycles_per_tick 1.99 and backwards 0 on every run.
+3. No `sublet: fault` or `sublet: call` line.
+4. `TRAPTEST: done`.
+A failure of 1 or 4 voids the kernel for the campaign until it is explained; a reading outside 2 is reported as read.
+
+## Amendment 7 (2026-11-26, before the boot): boot 14, the +Spatial final kernel on the spatial-only seal
+
+**Image** `trapk/fpga-final-spatial/smoke2-out/fw_payload.bin`, sha256
+c975128ba1f22f570f1418c8453bff828bde78d9a3d8039207353c120a390be1, 17,467,912 B. Its parts:
+- kernel: `build/build-kernel-final-spatial.sh` (the Full final kernel of Amendment 6 plus
+  CONFIG_RISCV_CAPSTONE_SPATIAL_ONLY=y; the two configs differ only in that key and the initramfs path),
+  Image 2d48cd2d358014c5…;
+- firmware: keep-tags with FW_FAST_RDTIME=y, caplifive-opensbi 25b14da6; two `fw_fast_mtime_addr` references in
+  fw_payload.elf, as in boot 13's image. (A first build of this image without `FW_EXTRA=FW_FAST_RDTIME=y` had 0 and
+  was discarded before any use; the payload script now prints the count and warns on 0.)
+- DTB caplifive-b5b2.dtb;
+- overlay: `build/init-final-spatial-smoke` (sha256 eaf6d6d7…), smoke.dom and mtrip (byte-identical to boot 13's),
+  msgt.dom 2c6c30f7… and msgt.native cba6b00a… (the msghdr-loader directed test, byte-identical to the twin pair's).
+  Order: control, mtrip three times, msgt native, msgt protected last.
+- Not b2e2c905 (`smoke-out`, f9a0c520ac32): same kernel config, no msgt.
+
+**Board and seal:** board 1, rtl's spatial-only seal 14f2ef81a (b42c8c644 plus 5ff493d0a and a lint baseline;
+b42c8c644 is an ancestor), after rtl's kit boot in the same session. Bound 900 s.
+
+**Twin check before the boot** (capstone-qemu sublet/spatial-only with x-capstone-spatial-only=on, firmware keep-tags
+fw-y, the same /init and files; `trapk/run-sfin-*`), a matched pair that differs only in the kernel:
+- +Spatial final Image: `ok`, control rc=7; mtrip three runs rc 0, backwards 0; msgt native and protected both rc 0,
+  `fails=0`, the five MSGT lines identical; no `sublet: fault`/`call` line; `TRAPTEST: done`.
+- Full final Image (boot 13's): `sublet: R reads back as type 1, id 0x3 (no record), and CSMINT answered 0x3`, then
+  `load failed after the point of no return: -95` and control rc=139; the same for msgt protected (rc 139); native
+  msgt rc 0. So the control itself reaches the spatial-only root check: the option is what lets any protected
+  program start on this processor, and msgt adds the sendmsg path on top.
+The twin's mtrip cycle counts are QEMU's and are not predictions.
+
+**Predictions:**
+1. The control prints `ok` and `TRAPTEST: control smoke.dom rc=7`, with no `R reads back` line.
+2. mtrip, three runs, as Amendment 6's bands (rdtime 100-140, rdcycle 5.00-5.2, getppid 1,221-1,297, MTRIP-TIME
+   cycles_per_tick 1.99 and backwards 0). Nothing on these paths touches the lifetime unit, so the spatial-only core
+   is not predicted to move them; a reading outside is reported as read.
+3. msgt native and protected: rc 0, `MSGT done fails=0`, and the five MSGT lines identical to the twin's.
+4. No `sublet: fault`, `sublet: call` or `R reads back` line.
+5. `TRAPTEST: done`.
+
+**Reading.** A failure of 1, 3 or 5 voids the +Spatial kernel for the campaign until explained. Boot 13 (the Full
+final kernel, board 2) may not yet be graded when this boot runs. If it is not and this boot fails 1 or 5, the cause
+is UNDECIDED between the shared kernel base and the spatial-only option until boot 13 reads. A pass here is
+evidence about the shared base too, but it does not replace boot 13 for the Full arm.

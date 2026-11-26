@@ -1,0 +1,9 @@
+#!/bin/sh
+# mtrip boot: the M-round-trip cost from U, three runs, then done.
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+echo "TRAPTEST: up, kernel $(uname -r)"
+for i in 1 2 3; do /mtrip; echo "TRAPTEST: mtrip $i rc=$?"; done
+echo "TRAPTEST: done"
+busybox poweroff -f; echo "TRAPTEST: poweroff failed"; sleep 999999
