@@ -149,7 +149,7 @@ def parse(log):
 # runs the pthread contract in the same guest with the same module: a thread's supervisor frame is
 # pinned even in unpinned mode, so that launch must acquire and release pins. (Pinned mode cannot
 # supply the control on the ON platform, which has no test CSRs.)
-LIVENESS = '''insmod capstone_vm.ko unpinned=1 || exit 1
+LIVENESS = '''insmod capstone_vm.ko unpinned=1''' + memory_mode.slots_arg() + ''' || exit 1
 echo "PIN_LIVE_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo A)"
 ./capstone-vexec pthread.dom > /tmp/live.out 2>&1
 echo "PIN_LIVE_STATUS:$?"

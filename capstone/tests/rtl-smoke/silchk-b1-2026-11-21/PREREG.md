@@ -86,3 +86,81 @@ R-68 cycles per arm 1-17: 250 250 250 250 272 272 272 272 275 275 250 1832 304 3
 board's bootrom doubleword 0x3049107300800913 (the simulation's bootrom differs) and is not graded, per the board lane's
 amendment 2, which restricted the word check to the DRAM arms before niss-superpage was read. R-68's residual stands:
 the test cannot tell the fix from deleting the splice. N = 1, board 2.
+
+## Addendum 2026-11-26: these images on Line B's final Full core b42c8c644, in simulation only (pre-registered before the run)
+
+**Why.** The four fixes are in b42c8c644's ancestry, through P1 d83d3a633. Every fix file changed after P1, so
+ancestry does not settle it. By source, each fix commit's added lines are present at b42c8c644:
+- R-68 213378a11: 9 of 9.
+- R-32 0ab365c26: 19 of 19.
+- R-72 5af46d00e: commit_stage 5 of 5. Its issue_read_operands line that is missing is the DYN-bypass lever, not R-72.
+- R-60: r60_* is present in ex_stage.sv and ariane_pkg.sv.
+This run checks the behaviour.
+
+**The tree.** capstone-ariane 4bbdbc6ed (s2pre-wt). Its core differs from b42c8c644 by one `$display` in a
+simulation-only block of capstone_sublet_life.sv. Settings: rtl_dirty=no, S12_MEM_DELAY=12, time_out 3,000,000, and
+the images rebuilt here, which reproduce SHA256SUMS byte for byte.
+
+**What Line B cannot run, and why:**
+- Every image but niss-superpage mints with the custom-3 debug family, and so does this P1 wrapper's recorder. Under
+  the Sublet format that family is illegal (decoder.sv:1227-1234), so the run defines CAPSTONE_SIM_DEBUG_MINT, the
+  simulation-only scaffold.
+- So these readings test the RTL fixes on Line B. They are NOT a silicon kit for Line B: that needs CSMINT ports and
+  sublet-life as the control.
+- va-runv uses CSRUNV, which B5b-2 step 8a deletes.
+- pcc-end and both its controls use CJALR, which is illegal under Sublet in every build (decoder.sv:1555-1557).
+
+**Predictions:**
+- **alias-store:** this kit's fixed vector, `0x5a5a 0x1234 0x0 0x1 0x18 0x5a5a 0x7 0x58`.
+- **shrinkto:** its 16 fixed values, with position 6 = 0x40.
+- **niss-superpage**, run with +CAPSTONE_FPGA_NI as well: the FIXED ratio keys, i.e. arm1/arm2 and arm10/arm9 at
+  most 1.25 and arm17/arm16 at least 0.85, with traps 0. The paddr words are recorded and are not graded here.
+- **va-runv, pcc-end, pcc-end-in, pcc-end-out:** each ends at an illegal-instruction trap at its deleted instruction,
+  and NOT its bitstream-1 vector. The recorder's contents are recorded.
+
+**Grading:**
+- A value-for-value match on alias-store and shrinkto, and the ratio keys on niss-superpage, read as FIXED ON LINE B
+  IN SIMULATION.
+- Any other vector is a finding, reported with its values.
+- If the wrapper's recorder does not run under the scaffold (an empty recorder on every image), the run is VOID and
+  says nothing about the fixes.
+
+### Result on b42c8c644's core (2026-11-26)
+
+The run: s2pre-wt `.sup/sck`, plus `.sup/sckni` with +CAPSTONE_FPGA_NI. rtl 4bbdbc6ed, dirty=no, PROVENANCE by the Anvil
+prologue. The images were rebuilt and reproduce SHA256SUMS. Vectors were read by board-vector.py from each trace.
+
+- **niss-superpage, R-68: FIXED ON LINE B IN SIMULATION.**
+  - With the NI rule: arm1/arm2 287/279 (1.03), arm10/arm9 331/333 (0.99), arm17/arm16 1916/1875 (1.02), traps 0.
+  - These are bitstream 1's simulated cycles value for value. Every paddr word is the same in the two runs (with and
+    without NI).
+  - Without the NI rule, only the device arms 12, 16 and 17 move.
+- **va-runv, pcc-end, pcc-end-in, pcc-end-out: as predicted.** Each traps cause 2 at its deleted instruction and does
+  not read its bitstream-1 vector. va-runv's recorder fills with trap prints. The pcc-end triple reads the same
+  `0x0 0x2 ...` in all three arms.
+- **alias-store (R-60) and shrinkto (R-32): VOID.** Each test executes CAPENTER in its own code, at
+  cap-alias-store.S:59 and shrinkto-readback.S:46. The trap is ILLEGAL_INSTR at 0x80000258 and 0x80000264, word
+  0x1ab5105b = custom-2 funct3 1 funct7 0x0d.
+  - CAPENTER is illegal under the Sublet format (decoder.sv:1508-1512), and capmode is tied to 0 there
+    (csr_regfile.sv:349). So neither test ever runs in the capability mode it was written for.
+  - alias-store's `0x5a5a 0x1234 0x1 0x1 0x2 0x9999 0x7 0x58` is an integer-mode run after a cause-2 trap. Its
+    0x9999 is NOT the R-60 alias.
+  - shrinkto recorded only the trap (count 1, 0x2).
+  - **Not predicted:** the pre-registration's census covered the mints, CSRUNV and CJALR, but not CAPENTER. A census
+    over every encoding b5b2-illegal.S lists finds CAPENTER in four of the five tests; niss-superpage alone uses no
+    deleted encoding.
+- **R-72 on Line B is UNREACHABLE by construction**, read from source at b42c8c644 (an rtl-oracle read, with the
+  gating lines re-read here).
+  - The check at commit_stage.sv:423-428 requires `priv_lvl_i == M && capmode_i`, and under the Sublet format
+    `capmode_d = 1'b0` (csr_regfile.sv:349). Its only other writer is reset (:3453; the register's update is :3549).
+  - The PC metadata itself CAN become a capability on Line B. CBNZ is decoded under Sublet (decoder.sv:1563-1569; the
+    reference keeps cscbnz, capstone-qemu 9289114e06 insn32.decode:970) and loads the PC metadata from its tagged
+    operand. So R-72 returns if capmode is ever restored, or in an IDS55 build.
+  - Recorded, not traced: CBNZ setting the PC metadata from protected U, and commit_stage.sv:458 and below adopting a
+    PC record id without a capmode gate (read as inert).
+
+**What R-60 and R-32 need on Line B:** a Line B-native test.
+- Mint through CSMINT in M or S. The FLU ops involved (CINCOFFSET and SHRINKTO) are not deleted.
+- Check the result through LDC/STC or a protected-U access, not through capability mode.
+- Use the B5b-2 wrapper and sublet-life as the control.
+Until then both are FIXED IN RTL on Line B by source only (their fix lines are present at b42c8c644).

@@ -1,0 +1,80 @@
+# CapstoneFoldMemOffset with -capstone-pool-base-at-entry: the chains rebased onto the pool's base entry share one
+# PseudoLLA/PseudoCapGlobalBase pair built at the top of the entry block, so a constant-pool load in a loop has a
+# loop-invariant operand. Without the option each chain keeps its own pair where it was (here, in the loop), and
+# Early MachineLICM must hoist that pair first, which it declines under high GPR pressure.
+#
+# Entries cp#0 (offset 0) and cp#1 (offset 8), both read in the loop. Chain C (cp#1, load at -16) is refused by the
+# rebase (a displacement below the base) and keeps its own entry and pair with or without the option.
+#
+# RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -capstone-gp-free -capstone-image-gp -run-pass=capstone-fold-mem-offset -verify-machineinstrs -o - %s | FileCheck %s --check-prefix=OFF
+# RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -capstone-gp-free -capstone-image-gp -capstone-pool-base-at-entry -run-pass=capstone-fold-mem-offset -verify-machineinstrs -o - %s | FileCheck %s --check-prefix=ON
+--- |
+  target triple = "capstone64"
+  define void @loop() { ret void }
+...
+---
+# OFF-LABEL: name: loop
+# OFF:       bb.0:
+# OFF-NOT:   PseudoLLA
+# OFF:       bb.1:
+# OFF:       [[A:%[0-9]+]]:gpr = PseudoLLA %const.0
+# OFF-NEXT:  [[AC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[A]], implicit $x3
+# OFF-NEXT:  {{%[0-9]+}}:fpr64 = FLD [[AC]], 0
+# OFF-NEXT:  [[B:%[0-9]+]]:gpr = PseudoLLA %const.0
+# OFF-NEXT:  [[BC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[B]], implicit $x3
+# OFF-NEXT:  {{%[0-9]+}}:fpr64 = FLD [[BC]], 8
+# OFF-NEXT:  [[C:%[0-9]+]]:gpr = PseudoLLA %const.1
+# OFF-NEXT:  [[CC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[C]], implicit $x3
+# OFF-NEXT:  {{%[0-9]+}}:gpr = LB [[CC]], -16
+
+# ON-LABEL: name: loop
+# ON:        bb.0:
+# ON:        [[P:%[0-9]+]]:gpr = PseudoLLA %const.0
+# ON-NEXT:   [[PC:%[0-9]+]]:gpcr = PseudoCapGlobalBase killed [[P]], implicit $x3
+# ON:        bb.1:
+# ON-NOT:    PseudoLLA %const.0
+# ON:        {{%[0-9]+}}:fpr64 = FLD [[PC]], 0
+# ON-NEXT:   {{%[0-9]+}}:fpr64 = FLD [[PC]], 8
+# ON-NEXT:   [[C:%[0-9]+]]:gpr = PseudoLLA %const.1
+# ON-NEXT:   [[CC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[C]], implicit $x3
+# ON-NEXT:   {{%[0-9]+}}:gpr = LB [[CC]], -16
+# ON-NOT:    PseudoLLA %const.0
+name: loop
+tracksRegLiveness: true
+constants:
+  - id: 0
+    value: 'double 1.000000e+00'
+    alignment: 8
+  - id: 1
+    value: 'double 2.000000e+00'
+    alignment: 8
+body: |
+  bb.0:
+    successors: %bb.1
+    liveins: $x10
+    %20:gpr = COPY $x10
+    %21:gpr = COPY $x0
+    PseudoBR %bb.1
+
+  bb.1:
+    successors: %bb.1, %bb.2
+    %22:gpr = PHI %21, %bb.0, %23, %bb.1
+    %0:gpr = PseudoLLA %const.0
+    %1:gpcr = PseudoCapGlobalBase %0, implicit $x3
+    %2:fpr64 = FLD %1, 0 :: (load (s64) from constant-pool, addrspace 200)
+    %3:gpr = PseudoLLA %const.1
+    %4:gpcr = PseudoCapGlobalBase %3, implicit $x3
+    %5:fpr64 = FLD %4, 0 :: (load (s64) from constant-pool, addrspace 200)
+    %6:gpr = PseudoLLA %const.1
+    %7:gpcr = PseudoCapGlobalBase %6, implicit $x3
+    %8:gpr = LB %7, -16 :: (load (s8) from constant-pool, addrspace 200)
+    %12:fpr64 = nofpexcept FADD_D %2, %5, 7, implicit $frm
+    %23:gpr = ADDI %22, 1
+    BNE %23, %20, %bb.1
+    PseudoBR %bb.2
+
+  bb.2:
+    $f10_d = COPY %12
+    $x10 = COPY %8
+    PseudoRET implicit $f10_d, implicit $x10
+...

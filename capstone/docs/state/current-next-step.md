@@ -1,3 +1,13 @@
+## 2026-11-25: Finish Line B, then the final campaign
+
+Work from [the Line B campaign plan](../plans/2026-11-25-line-b-final-campaign.md). In order:
+1. Resolve the B5b-2 mcf wedge: rtl's directed sim, then the aperture build's snapshot.
+2. Seal the combined build (FLU ungate, 4(b), drain, guard, apertures), with its kits at N=2.
+3. Re-read the SPEC test chain on it.
+4. Build the matched Plain arm.
+5. Build the train stages.
+SPEC train runs only at the very end (the lead's rule); test inputs until then. The L1D stays equal on both arms.
+
 ## 2026-11-05 — Continue with matched work slices
 
 For overhead work, use matched logical start/stop points instead of waiting

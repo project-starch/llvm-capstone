@@ -341,6 +341,11 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 
 ## S-21 — silicon only: every CSRUNV escape restores the S caller's registers and CSRs (M-mode ones included) from frame+1024, and a child thread's frame is a page the domain can write `OPEN — security, silicon only, found 2026-10-18 by the board lane reading vp2 Tier 1 boot 3-T1's repeat (confirmed from source by the claim-auditor and two-sided by the RTL lane; NOT YET DEMONSTRATED, the RTL lane's sim arm is pre-registered); RULED the same day by the semantics owner: the module makes a child frame unreachable before its first entry (the compiler lane), and the RTL keeps the caller snapshot out of the frame on the next bitstream (the RTL lane); a consequence of vp2 item D's decision 1; fix (a) ON DEV since ffb6fc71f523 (2026-10-20); measured two-sided on QEMU 2026-10-26 (dev 33a555af8e21)`
 
+> **Line B (B5b-2, the Sublet format; 904cd9c6b and later, census 2026-11-25): not reachable; live on P1.** CSRUNV, CSRETIRE
+> and CSSUPERVISE are illegal at decode before any other check (decoder.sv :1499, :1395-1397, :1484-1486 at 28fcbb646;
+> b5b2-illegal's sites 12 and 14 and its RUNV arm, 2 / 1 / 1), the supervisor's state is never set (csr_regfile.sv sets
+> sup_active only on an armed CALL, :2211, and a CSRUNV entry, :2224; CALL is deleted too), and the domain switcher's register port is tied off (cva6.sv :2451-2452 at 28fcbb646; the board lane's .vds census of 904cd9c6b's synthesis tree elaborates no capstone_dom_switcher). So no context is entered or escaped on Line B.
+
 Siblings: S-22 (the paused context's OWN state, read back from the same domain-reachable frame), Q-30 (the frame slots'
 visibility after an escape, which is how this was found). The main thread is not affected: its frame is a kernel page.
 
@@ -421,6 +426,11 @@ from a domain ON SILICON must not outrun this issue until (a) is on the board an
 
 ## S-22 — silicon only: the paused context's own state stays in its frame, so a domain that can write a child thread's frame can change that thread's satp, srevroot and mstatus on resume and reload stale tagged register copies `OPEN — security, silicon only, filed 2026-10-18 beside S-21 from the RTL lane's two-sided read; the same module fix as S-21 covers it today; the RTL fixes (a consuming resume, the hidden words out of the frame) are the RTL lane's for the next bitstream`
 
+> **Line B (B5b-2, the Sublet format; 904cd9c6b and later, census 2026-11-25): not reachable; live on P1.** CSRUNV, CSRETIRE
+> and CSSUPERVISE are illegal at decode before any other check (decoder.sv :1499, :1395-1397, :1484-1486 at 28fcbb646;
+> b5b2-illegal's sites 12 and 14 and its RUNV arm, 2 / 1 / 1), the supervisor's state is never set (csr_regfile.sv sets
+> sup_active only on an armed CALL, :2211, and a CSRUNV entry, :2224; CALL is deleted too), and the domain switcher's register port is tied off (cva6.sv :2451-2452 at 28fcbb646; the board lane's .vds census of 904cd9c6b's synthesis tree elaborates no capstone_dom_switcher). So no context is entered or escaped on Line B.
+
 Siblings: S-21 (the S caller's snapshot at frame+1024, restored on every escape; same frame, same module fix), Q-30.
 
 **The two mechanisms** (bf3db3175):
@@ -447,6 +457,11 @@ action 2 only), not to the fixed one, so the kit's predictions see what silicon 
 **Not demonstrated.** Source reading only.
 
 ## S-23 — silicon only: the S caller's first instruction fetch after a CSRUNV or CSRETIRE returns is refused (instruction access fault, mtval physical) although a loaded RWX CPMP entry covers it when M reads the CSRs; the kernel panics `PARTLY ROOT-CAUSED 2026-10-20, TWO SITES, after an adversarial audit REFUTED this entry's own first attribution (every FRTY at the instruction after the CSRUNV) and the plan sentence distilled from it. (1) DATA face: a CPMP tracker cleared by the INDEX-ONLY broadcast compare (`pmp_data_if.sv:107`) stays cleared because R-58 leaves the caller's srevroot holding the context's table, so the module's select_root/restore_root pair writes one value and raises no `revnode_ns_flush` edge (`ex_stage.sv:1417`); the next access through the slot is refused with cause 5 and a physical tval (`pmp_data_if.sv:305-313`), and the trap to M re-arms every entry (`:111-114`), which is why no M-side read can ever see the denying state. REMOVED ON SILICON by the srevroot-zero module: pb10 on tree B is a one-variable pair (module 39d8492d -> 607164b9, same bitstream, monitor, images and 4-of-4 cells both sides; the kernel hash moves with the module by construction, since the bake cpio's it into the Image) reading DRT1 1 -> 0; sql0 reads DRT1 16 -> 0 against a five-boot baseline band of 14-17 on two bitstreams. DISCLOSURES: sql0's positive control FAILED and its cells were VOID in every compared boot, so only the monitor counters compare; the srevroot readings at the refusals (0x82B00000 tree B, 0x81E00000 tree A, csupctl.table clear) come from two OTHER boots on two bitstreams; the sql0 baseline's module and monitor are INFERRED from a unique page-offset match, not printed; and the collision itself -- the refusing slot's tracked index -- has never been printed on any boot. (2) FETCH face, the one that SURVIVES the module: on six boots across both bitstreams and both modules, all 21 FRTY per boot are at the instruction after the CSRETIRE inside `retire()` (retire+0x220 in 39d8492d, retire+0x22c in 607164b9, both the first instruction of the inlined `restore_root`), i.e. INSIDE the select_root window and 4 bytes after the clearing broadcast -- so no software write can precede it, and **R-58 is NOT required for it**: inside the window select_root deliberately puts the context's table in srevroot, so the namespace flag is 1 at S regardless. **RETRACTED 2026-10-20, after an adversarial audit of the cross-namespace arm: "the cause is the index-only compare" is the wrong name for this defect.** The operative defect is that **ids carry no NAMESPACE identity**: `capstone_rev_node.anvil:3-6` masks every broadcast to `#{14'd0, index[0+:16]}`, and the physical bump mints `#{14'd0, head}` (`:314`), so a virtual (0,i) and a physical (0,i) are one tag to the tracker and **a full 30-bit compare would fire identically**. The index-only slice at `pmp_data_if.sv:107` is an ADDITIONAL collapse -- it folds a tracked generation >= 1 onto the same tag -- and nothing has shown the field exercises it: that needs a tracked id from the free-list POP path (`capstone_rev_node.anvil:289`, `node_id := #{g1, 16'd0} + pop_idx`), not the bump, and no boot has printed the refusing slot's generation. The cross-namespace arm cannot see the slice at all, both of its ids being generation 0, so it must not be cited for it; the arm that can is the batch plan's acceptance reading 4, which revokes at a recycled index. **The R-58 RTL fix is not predicted to remove the CSRETIRE+4 site** (inside the window `select_root` puts the context's table in srevroot, so the restore writes the value srevroot already holds and no flush edge fires) -- but it IS now predicted, and in simulation measured, to remove the CSRUNV+4 site, where the restore changes srevroot and the flush re-arms every tracker. Was: "The cause is the index-only compare ALONE (R-38's residual, which wants its own entry)". That a cleared tracker refuses the NEXT FETCH is MEASURED against a one-operand control (capstone-ariane 3c2cdf3f2, cap-fetchdeny: 1 cause-1 fault at the following instruction with mtval the fetch address, against 0 when a different index is broadcast), in the PHYSICAL namespace. **The CROSS-namespace step is now measured too, end to end in one arm** (capstone-ariane c7e6f604f, va-fetchsplit, three variants in simulation, N=1 per arm on a deterministic simulator): a kill broadcast issued INSIDE a virtual context, in the context's own table at srevroot, cleared a CPMP tracker holding an index minted from the M-mode PHYSICAL pool, and the caller's first instruction fetch after the escape was refused with cause 1 (`pmp_data_if.sv:246`, tval `:248`) -- faults 1, mtval = mepc = 0x80001020 = s_code+0x20, the four children at 0x100 -- against a control differing in ONE CAPNODE operand that reads faults 0 with the same four children. **The arm carries its own before/after**, which is stronger than the pair: the eight S-mode fetches at 0x80001000..0x8000101c passed through the SAME CPMP0 entry, four of them after the window's only CSR write, and the ninth at +0x20 was denied with no retired instruction and no CCSRRW in between -- and `cpmp_revnode_valid_d` has exactly three writers (adopt :88-94, the broadcast compare :100-107, the namespace flush :109-114), so a matching broadcast arrived inside that window. The coverage is split so only the caller's own code sits under the tracked entry; an earlier arm (be040f067) had one grant over the whole image, so the collision denied the CONTEXT's fetches, which is the third, previously unobserved face, now OBSERVED in simulation. **The indices are READ in simulation**: physical child 1 Revnode_id 3, the code capability 3 after the re-node, physical child 8 Revnode_id 10, and the context table's next-unused 7 after four allocations, so the context handed out virtual 3, 4, 5, 6. Two instrument limits to carry with the reading: `mtval` does NOT discriminate the CPMP site from the PMA/integer-PMP site (`:224` reports the virtual address, `:248` the physical, and the arm is identity-mapped), so the discrimination comes from the control and the in-arm before/after and nothing else; and on SILICON neither side of the collision has been printed, so what simulation settles is the MECHANISM, not the field's allocation. (3) OPEN ANOMALY: pb10's CSRUNV+4 refusals (2 on three boots, and the original panics at vm_ioctl+0xb60/+0xba4) go to 0 under the srevroot-zero module, which the mechanism does NOT predict, since that module's write IS the instruction at CSRUNV+4. Candidates: a timing or alignment perturbation from the inserted instruction, a region/index-allocation difference between the two module builds, or run-to-run variation (argued against by the baseline 2 reproducing on three boots). On tree B this site is not discriminated from an S-29 residual. **The CSRETIRE+4 site is WORKED AROUND IN THE MODULE by the node floor (2026-10-20, board 2, tree B, sql0, one variable, N=1 per arm; board lanes 57bc5147bdb0 and c1d7423a7022): dev's srz module 90bf036f reads FRTY 21, all at retire+0x220 decoded against its own .ko, and the node-floor module a4aa5668 -- the same base plus only the floor commit -- reads FRTY 0 and DRT1 0.** N=1 on each side, but the baseline it displaces is not a single reading: FRTY 21 reproduced on six boots across both bitstreams and both modules, and DRT1 sat in a 14-17 band over five, so a zero is far outside every observed value. A third arm (node-floor-2, a release line per context) read `attempted=24 succeeded=24 first_id=1024` on 21 of 21 teardowns, which REFUTES the board auditor's alternative that the floor works by silently rejecting the CSRETIRE: the retires still happen, and the floor works by changing WHICH INDEX the window's CSRETIRE broadcasts, not whether it broadcasts. Its Tier 1 passed. The floor LANDED on dev at 794d7c5815f5 (the compiler lane's squash of 770daec2 and c2b843ad with its gate records, the module source equal to node-floor-2's, and board build 54d8a3af with its own Tier 1); the artifacts read in the pair above are the module hashes. **On silicon the collision itself stays INFERRED, not read**: no boot has printed the refusing slot's tracked index, its generation, or the broadcast index, so "slot 3's region-14 physical node equalled a context's virtual index" remains the explanation that fits every reading rather than one that has been observed there. Simulation has now read both sides of an equivalent collision (va-fetchsplit, above), which is why the mechanism is no longer the uncertain part; what is uncertain is the field's allocation, and in particular whether the refusing slot's tracked id was bump-minted (generation 0, so namespace identity is the whole defect) or free-list popped (generation >= 1, which would additionally implicate the index-only compare). The DATA face is worked around by the srevroot-zero module, as above, and **the root cause of both sites is one thing, renamed by the 2026-10-20 audit: ids carry NO NAMESPACE IDENTITY**, so a virtual index and a physical index of the same value are one tag. The RTL fix is the semantics owner's ruling of 2026-10-20: the broadcast carries a namespace bit and **the CPMP trackers act only on PHYSICAL broadcasts**, with no namespace recorded per entry (an adopt-time namespace is fragile around a switch, where the escape's restore walk rewrites the caller's entries while the flag may still read virtual). The LSU revocation cache and the PC tracker keep consuming both namespaces, because they do track a context's virtual capabilities. R-58's fix is still wanted for the persistence it removes. The monitor workaround stands (capstone-sbi vp2/fetch-retry 007d81d, CAPSTONE_VP2_FETCH_RETRY) and every virtual-application claim on vp2 must still cite it. A SOFTWARE FIX for both collisions is on the module's lane (runtime/vp2-node-floor 770daec2dbd6): raise every context table's first allocatable index above the physical pool's high-water, so no virtual index can equal a physical one at all -- which is the right premise for the floor under either compare, and is why the audit's renaming does not disturb it. Nothing in the RTL assumes the old floor of 2, the gap is inert (a zero record has depth 0, which terminates a walk), and CSNODE cannot allocate below next -- but NOTHING ON vp2 EXPORTS THE PHYSICAL HIGH-WATER (0xcc0 is not implemented, Q-21), so the floor must be asserted monitor-side rather than against hardware. Siblings R-58, R-59, R-38; S-29 is a separate, real, fixed cause, REFUTED for the CSRETIRE+4 site because the CSRETIRE 4 bytes earlier executed through the same translation and page with no satp write between. Was: OPEN from 2026-10-18`
+
+> **Line B (B5b-2, the Sublet format; 904cd9c6b and later, census 2026-11-25): not reachable; live on P1.** CSRUNV, CSRETIRE
+> and CSSUPERVISE are illegal at decode before any other check (decoder.sv :1499, :1395-1397, :1484-1486 at 28fcbb646;
+> b5b2-illegal's sites 12 and 14 and its RUNV arm, 2 / 1 / 1), the supervisor's state is never set (csr_regfile.sv sets
+> sup_active only on an armed CALL, :2211, and a CSRUNV entry, :2224; CALL is deleted too), and the domain switcher's register port is tied off (cva6.sv :2451-2452 at 28fcbb646; the board lane's .vds census of 904cd9c6b's synthesis tree elaborates no capstone_dom_switcher). So no context is entered or escaped on Line B.
 
 Siblings: S-21 and S-22 (the same CSRUNV ENTRY/ESCAPE walks, a different consequence), Q-30.
 
@@ -1116,6 +1131,85 @@ silicon-specific is the cost of a delegated round.
   tick on vp2, so the workaround stands regardless. Any other program with a periodic timer faster than ~25 ms will
   storm the same way on silicon.
 
+## S-35 — silicon only (B5b-2, 904cd9c6b, board 3): SPEC mcf under Linux stops silently, an LDC at the LSU head and the store port never granted, for at least the LED window `OPEN 2026-11-25 — one instance (B5b-2 Linux boot 5, B5T mcf test, silent at uptime 2,799 s before the 3,600 s watchdog); ORIGIN UNATTRIBUTED on silicon; its shape REPRODUCED IN SIMULATION as R-80, and whether this instance is R-80 is the diagnostic seal 28fcbb646's question (pattern pre-registered, llvm-capstone land/rtl-crevoke4b c7877d008be7); observation-only apertures to read the next instance are built and gated (capstone-ariane b5b2-wedgeap 47d749153, in the combined build 28fcbb646)`
+
+Siblings: R-80 (the mechanism this shape is, DEMONSTRATED IN RTL SIMULATION: a faulting LDC that is not popped starves the
+write buffer's cache update; fix a5c45a46d). M-16 (P1 tshark stop: the same LSU head, a different store side, below). R-77 (the
+verdict probe's timeout path). R-29 / S-10b (the D$ hold this shape sits next to). The 4(b) record is
+llvm-capstone capstone/docs/plans/2026-11-25-crevoke-4b-rtl.md (the wedge section).
+
+**The snapshot.** Read by the board lane before any reset, each aperture twice, 0 unstable. Files:
+/mnt/hdd/<user>/capstone/b5b2linux/b3spec5-20261125T0453/snap/. Every aperture's driver at 904cd9c6b was traced to its
+assign (board/meas-pw fd627ad18572, corrected for 222 at 09d3e897ba19). The LED path holds each bit high for 2^20 cycles
+after any pulse (ariane_xilinx.sv's stretcher), so a bit read 0 was 0 for that whole window, and a 1 was 1 at least
+once.
+
+| sw | value | driver | reading |
+|---|---|---|---|
+| 219 | 0xd7 | driven, lsu_ctrl.operation (load_store_unit.sv:413) | 215 = LDC (CAPSTONE_SUBLET_FMT enum) |
+| 220 | 0x8c | driven, {lsu_ctrl.valid, lsu_ready, 00, fu} (:412) | valid 1, lsu_ready 0 throughout, fu CAPSTONE_DYN |
+| 221 | 0xf8 | driven, store_unit.sv:480 | commit queue 1111, data_req 1, data_gnt never 1, no_st_pending 0 |
+| 193 | 0x04 | driven, store_buffer commit_status_cnt | 4 |
+| 192 / 194 | 0x01 / 0x00 | driven | commit slot 0 valid; store unit state 0 |
+| 195 | 0x00 | UNDRIVEN (load_unit.sv:109 declares state_o, nothing assigns it) | no information |
+| 222 | 0x00 | driven, wt_axi_adapter.sv:264 {tag_state, tag writes pending, tag read in flight} (the cva6.sv:2566 '0 is the non-WT generate branch) | the adapter's tag FSM idle, no tag write pending, no tag read in flight |
+| 224 / 225 | 0x0c / 0x80 | driven bits only | ex_commit 0, dyn_ready 1, flu_ready 1; 225 only trace_buf_empty (constant 1, no tracer) |
+| commit pc | 0x3ff7fe3506 | slot 0, stale after a flush | inside mcf's domain |
+| trap log | last nontrivial M trap: cause 9 (S ecall), mepc 0xffffffff80006040 | | |
+| rev_node debug / head / serving | 0 | CONSTANT under the Sublet format | no information |
+
+**RETRACTED the same day (rtl lane, to the runtime, board and nested lanes, before any record):** "195 = 0 means the load
+unit sat in IDLE with a full load buffer, so the LDC was never issued and the R-29 hold is not involved". 195 is
+undriven. The rtl lane read the port, not its driver.
+
+**What stands, by source (904cd9c6b; 88db40027 has no synthesized LSU, load unit or D$ change, and 47d749153 / 28fcbb646 add
+only the observation-only apertures there):**
+- the write buffer's grant to the store port (wt_dcache_wbuffer.sv p_buffer) is rdy (not full, or a hit) && !ni_conflict
+  && !gran_hazard (S-07), and reads no term of the load-port controller;
+- a D$ controller in WBUF_HOLD (the R-29 hold) drives no rd_req (p_fsm's default), so the hold alone cannot starve the
+  write buffer;
+- an entry drains in four steps: the tag lookup (the only low-priority port of wt_dcache_mem's strict arbiter), the
+  memory write, its response, and the cache update (acked only when the selected high-priority read is tag-only or misses
+  the bank; a capability read always collides). A port that requests every cycle can starve the first or the last step.
+
+**Relation to M-16.** Its four non-returns on P1 read the same 219 / 220 (an LDC at the head, lsu_ready 0), but 221 = 0x02
+(the commit queue empty, no store request). So the two share the LSU head and not the store side. A matching shape is a
+candidate only. On B5b-2 the nested lane's stress form ran 1.17e8 protected allocations in one boot with no stop (M-16's
+folder, nested-workloads 5d902b54a271).
+
+**The apertures for the next instance** (observation-only, each a registered copy; lint at baseline; the observation-only
+arms identical in values and cycles; gate PASS with sizing as predicted and no FSM re-encoded):
+- 195 is driven: {load buffer flushed[1:0], valid[1:0], load unit state[3:0]};
+- 209 = {load-port, PTW-port D$ controller states};
+- 223 = {CAPSTONE-port state, write buffer full, S-07 gran_hazard, tag lookup req, its ack};
+- 192 [7:1] = the drain path {return pending, cache-update req, its ack, write in flight, memory write req, its ack,
+  ni_conflict};
+- 229's low nibble = the read ports' rd_req.
+
+Predicted readings per candidate, written before synthesis, separate every pair (the plan's table):
+- A: the load-port controller parked, starving the lookups;
+- B: the LDC in WBUF_HOLD behind a store the buffer refuses;
+- C: leaked load-buffer entries;
+- D: the port-2 controller parked;
+- E: an S-07 refusal that never clears;
+- F: the memory write never acked;
+- G: the LDC on a page-offset match;
+- H: the cache update never acked;
+- I: the PTW port parked.
+
+Both induced controls read back their rows through the real LED mux in simulation:
+- a load buffer that stops freeing reads C (195 = 0x30);
+- a withheld tag reads A's controller half (209 = 0x10, 229 = 0x04).
+
+**Directed sim** (b5b2-ldchold, the load port's R-29 / R-51 holds behind 0..8 filler stores, with and without the M
+timer): 576 and 571 holds, every one ended; no controller requested in WBUF_HOLD. The longest hold (3,398 cycles) waited
+on one write's response, consistent by source with the adapter's TAG_FILL of a fresh page. No stuck path found. Not
+constructed: a competing high-priority reader colliding every cycle (candidate H's other half).
+
+**Reproduced (R-80):** the reader that collides every cycle turned out to be the faulting LDC itself. In b5b2-ldcexc2 the
+apertures read 192 0xd1, 223 0x08, 209 0x10 and 229 0x94 (candidate H with A's controller half), and the fix is a5c45a46d.
+
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) APPLIED in the batch (capstone-ariane c721c1a2a, item 5) and in every sealed bitstream since; PRESENT ON SILICON 2026-11-04 on bitstream 3 (board 1) and ObjBounds (board 2), N = 1 each (kit rtl-smoke/q04-movc-bare-2026-11-03). C-32's board-image rule is the lead's and is not changed by this. See plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
@@ -1477,6 +1571,13 @@ te by the RTL lane, 2026-09-24.
 > re-pass R-35's acceptance fixture (exactly 7 traps).**
 
 ### R-44 — the CPMP tracker still ADOPTS any unseen revnode id as valid, so R-35's authority escape remains open for S/U-mode capability enforcement `OPEN — split out of R-35 on 2026-09-25 so that closing R-35 does not orphan it; LIVE IN PRODUCTION; fix deferred on a boot-kill risk`
+
+> **Line B (B5b-2, the Sublet format; 904cd9c6b and later, census 2026-11-25): not reachable; live on P1.** The CPMP's entries and
+> their tags change only through the CCSR write path or the domain switcher's register port (csr_regfile.sv :2189-2192,
+> :2757-2762 at 28fcbb646). The CCSR path is gated on capmode_q (:2717), which is tied to 0 under the Sublet format (:349,
+> CAPENTER deleted). Its enable is set only by CCSRRW (commit_stage.sv :233, :797), which is illegal at decode (decoder.sv
+> :1575, deleted in the reference). And the domain switcher's register port is tied off (cva6.sv :2451-2452 at 28fcbb646; the board lane's .vds census of 904cd9c6b's synthesis tree elaborates no capstone_dom_switcher). So on Line B the CPMP keeps its reset entries, untagged, and the
+> tracker has nothing to adopt. P1 and earlier lines are unchanged.
 
 > **The defect.** `core/pmp/src/pmp_data_if.sv:86-93` @ `4ad0df694`, inside `cpmp_revnode_tracking`:
 > when a CPMP entry presents a revnode id different from the one it tracks, the tracker takes it and sets
@@ -2763,7 +2864,7 @@ case was not attributed to a refused admission.
 **Fix shape (QEMU):** refuse as the RTL does, writing no event record and returning to the caller, so the module's
 path is the one exercised.
 
-## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN; SHRINKTO's off-by-one FIXED ON SILICON 2026-11-21: shrinkto 34311f6d26259cb1 reads the 16 fixed values, position 6 0x40 not the pre-fix 0x3f (board 2, resident P1 caplifive_…-pagedtbl_d83d3a633.bit read back by name, 2026-11-21, one load per image, control va-runv f0ed3fac351b60f3 PASS; kit capstone/tests/rtl-smoke/silchk-b1-2026-11-21, record docs/plans/2026-11-21-silchk-b1-board2.md at board/meas-pw 4d64c19cb53b; applies to bitstream 1 by byte-identical fix files plus the ccsrrw source check, not by a reading on bitstream 1); the two convention questions are unchanged`
+## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN; SHRINKTO's off-by-one FIXED ON SILICON 2026-11-21: shrinkto 34311f6d26259cb1 reads the 16 fixed values, position 6 0x40 not the pre-fix 0x3f (board 2, resident P1 caplifive_…-pagedtbl_d83d3a633.bit read back by name, 2026-11-21, one load per image, control va-runv f0ed3fac351b60f3 PASS; kit capstone/tests/rtl-smoke/silchk-b1-2026-11-21, record docs/plans/2026-11-21-silchk-b1-board2.md at board/meas-pw 4d64c19cb53b; applies to bitstream 1 by byte-identical fix files plus the ccsrrw source check, not by a reading on bitstream 1); the two convention questions are unchanged; ON LINE B (b42c8c644's core) SHRINKTO's off-by-one FIXED IN SIMULATION 2026-11-26, two-sided: b5b2-r32-shrinkto (capstone-ariane b5b2-hangmon-c ce6c77b73, CSMINT-minted, bounds read by LCC in M) reads P1's fixed vector exactly, and with the fix reverted (a local sim patch, the FLU unit regenerated) P1's pre-fix vector exactly; P1's shrinkto kit is VOID there (it runs CAPENTER); no Line B silicon kit yet; the two convention questions are unchanged`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
 > overlooked.** That ruling fixed each document's *outlier arithmetic* and moved no convention: the
@@ -2890,6 +2991,24 @@ path is the one exercised.
 
 
 ### R-28 — the revocation-node WRITE ops (DROP/REVOKE/MREV/SPLIT/DELIN) can mutate node state for an instruction that never retires `OPEN — NAMED BY AUDIT 2026-09-09, not demonstrated; directed arms exist (r28-interrupt-probe) but cannot reach it (see the box); the live untested route is in the commit stage; no fix`
+
+> **Line B (B5b-2, the Sublet format; 904cd9c6b and later, re-read 2026-11-25 against 4(b)): the routes recorded below are
+> closed there, two by construction; live on P1.**
+> - **The ops.** DROP, REVOKE, MREV, SPLIT and DELIN are deleted encodings. The lifetime write ops are CDERIVE_S, CREVOKE_S,
+>   CRENEW and CSMINT, and they too issue only into an empty scoreboard (issue_read_operands.sv :1654-1662 at 28fcbb646).
+> - **The interrupt route** stays closed by the RTL as recorded (an interrupt binds at decode).
+> - **The commit-stage PC-capability route** needs M with capmode (commit_stage.sv :423). capmode is tied to 0 under the
+>   Sublet format (csr_regfile.sv :349), so it is unreachable.
+> - **4(b)'s CREVOKE_S releases chunks and then answers PARTIAL, which replays the same pc: a mutation for an execution
+>   that does not retire, BY DESIGN.**
+>   - These are the reference's restartable semantics (capstone-qemu da49602d76 cap_rev_kill_step). Every release is
+>     final, and the restart resumes or rescans.
+>   - It equals the reference at the unit in every chunk and stop-after-every-chunk build (sublet-life/crevoke-chunk-diff.py,
+>     crevoke-sv-diff.py) and on silicon (crevoke4b-bare-2026-11-25, board 2).
+>   - The PARTIAL predicate includes a debug request, so debug takes the same path.
+> - **The check-then-commit split** of CREVOKE_S / CRENEW (a side-effect-free check request, then the commit) cannot be split
+>   by a flush on Line B: the op is the oldest instruction (empty scoreboard), and interrupts bind at decode.
+> - **Not re-read here:** single-step debug, and the commit_ack race against flush_csr.
 
 > **2026-09-09 (evening), RTL lane after a claim-auditor pass — STAYS OPEN, and the interrupt route is closed
 > by the RTL, not by measurement.** (1) An interrupt binds to an instruction at DECODE (`decoder.sv`:
@@ -3689,7 +3808,7 @@ everything inside delegated domains, are unaffected.
 ### R-59 — a CSRUNV frame whose `srevroot` word is between 1 and 4095 passes the switcher's non-zero precheck and then installs ZERO, so the context is admitted and runs OUTSIDE the lifetime-table namespace · `FIXED IN RTL (batch item 3, capstone-ariane 750ed72e4; on every bitstream since c721c1a2a, bitstream 2 dcc6daf6e included); CONFIRMED ON SILICON 2026-10-26 on bitstream 2 at N=2 cross-board: a frame word of 0x800 alone and of tbl | 0x800 are both refused at entry with 29 and the context never runs (kit `capstone/tests/rtl-smoke/r58-r59-q24-bare-2026-10-26`, pre-registered at land/rtl-fixes-kit `30117b74cc8f`, the board lane's pre-registration `14fe83614573`, readings vp2-tier12 `fcd6dbac2194`, both boards on `caplifive_vp2c_dcc6daf6e`, every image hash and recorder address as pre-registered, the control va-runv exact). Was: OPEN, source-derived 2026-10-19 by the RTL lane's auditor on tree A (8522d72fe), filed separately from R-58 deliberately (one issue, one folder) although both are in the same walk. `runv_precheck_step` accepts any non-zero word at dom_base+8 (capstone_dom_switcher.anvil:381-387) while the id-67 write masks the low 12 bits (csr_regfile.sv:2051), so a word in 1..4095 satisfies "srevroot non-zero" and the CSR ends up 0 -- and `vctx_table_o`'s term 2 then reads false for that context (:2876-2878). No reading yet; a one-arm test is a frame with +8 = 0x800 plus a context-side CSNODE, which should be illegal at decode where the same arm with +8 = a real 4 KiB-aligned table admits it. The fix is to make the two agree: either the precheck rejects a word with low bits set, or it tests the masked value`
 
 
-### R-60 — a load or store through a capability whose cursor lies OUTSIDE its representable window is bounds-checked against the compressed bounds decoded AT THAT CURSOR, which are the true bounds shifted by whole window spans; when that shifted decode contains the cursor the access passes and touches memory one or more spans away, without a trap · `CHARACTERISED on silicon 2026-10-20 (tree A, board 1; N=1 per arm; the bitstream identity is the run's label, not a hash). Mechanism read in RTL and audited. QEMU traps (cause 28) in every arm. Stores MEASURED. Corpus witness case 31 on BOTH bitstreams. LDC/STC by source only; FIXED ON SILICON 2026-11-21: alias-store 46ca6a4475b06ec0 reads its fixed vector 0x5a5a 0x1234 0x0 0x1 0x18 0x5a5a 0x7 0x58 (board 2, resident P1 caplifive_…-pagedtbl_d83d3a633.bit read back by name, 2026-11-21, one load per image, control va-runv f0ed3fac351b60f3 PASS; kit capstone/tests/rtl-smoke/silchk-b1-2026-11-21, record docs/plans/2026-11-21-silchk-b1-board2.md at board/meas-pw 4d64c19cb53b; applies to bitstream 1 by byte-identical fix files plus the ccsrrw source check, not by a reading on bitstream 1)`
+### R-60 — a load or store through a capability whose cursor lies OUTSIDE its representable window is bounds-checked against the compressed bounds decoded AT THAT CURSOR, which are the true bounds shifted by whole window spans; when that shifted decode contains the cursor the access passes and touches memory one or more spans away, without a trap · `CHARACTERISED on silicon 2026-10-20 (tree A, board 1; N=1 per arm; the bitstream identity is the run's label, not a hash). Mechanism read in RTL and audited. QEMU traps (cause 28) in every arm. Stores MEASURED. Corpus witness case 31 on BOTH bitstreams. LDC/STC by source only; FIXED ON SILICON 2026-11-21: alias-store 46ca6a4475b06ec0 reads its fixed vector 0x5a5a 0x1234 0x0 0x1 0x18 0x5a5a 0x7 0x58 (board 2, resident P1 caplifive_…-pagedtbl_d83d3a633.bit read back by name, 2026-11-21, one load per image, control va-runv f0ed3fac351b60f3 PASS; kit capstone/tests/rtl-smoke/silchk-b1-2026-11-21, record docs/plans/2026-11-21-silchk-b1-board2.md at board/meas-pw 4d64c19cb53b; applies to bitstream 1 by byte-identical fix files plus the ccsrrw source check, not by a reading on bitstream 1); ON LINE B (b42c8c644's core) FIXED IN SIMULATION 2026-11-26, two-sided: b5b2-r60-alias (capstone-ariane b5b2-hangmon-c 1f1740a9c; CSMINT-minted, the out-of-window store made in protected U) reads 0x5a5a 0x1234 0x0 0x1 0x18 0x5a5a 0x0 0x0 0x7 0x1 with one r60 FIRE, and with the predicate forced off (a local sim patch, diff sha256 04b5ba4f4047a94c...) 0x5a5a 0x1234 0x0 0x0 0x0 0x9999 0x0 0x0 0x1 0x0, the alias landing a span away; P1's alias-store kit is VOID there (it runs CAPENTER); no Line B silicon kit yet`
 
 **What happens** (capstone-ariane 8522d72fe, read by the compiler lane's rtl-oracle and re-read by a claim-auditor):
 - The register file holds capabilities compressed. CINCOFFSET checks only the capability type: it neither clears the tag
@@ -4187,7 +4306,7 @@ check's order and scope. Folder: `capstone/tests/fpga-repros/R67-pcc-adopts-dead
     1fc2cd5aa`.
 - A second board on C.5a has not been read.
 
-### R-68 — the MMU's non-idempotent probe splices a superpage's offset bits into the PPN at PADDR indices, so on the FPGA a load in the first 512 KiB of every 2 MiB page (vaddr[20:19] = 00) waits as if it were I/O; the same splice lets a device address mapped through a superpage escape the check `DEMONSTRATED IN SIMULATION 2026-11-06 with the FPGA's NI rule supplied to the simulation (capstone-ariane ni-superpage, pre-registered at ca49a9c22 and 874d2928a / 4eb9c0c43 before their runs); PRESENT in every sealed bitstream's tree by source (read at 1fc2cd5aa; cva6_mmu.sv and load_unit.sv identical at e7af48457 and c9c7952bd; the form is upstream CVA6's, back to 3ddf797e9); FIX IN RTL, simulation only: capstone-ariane ni-superpage 0f0905194, lint PASS at baseline; carried onto stage A as stage-b-batch fe4810dd1 (213378a11), two-sided there; NI-rule 95-sweep identical; not synthesised. Found 2026-11-06 by the runtime lane's rtl-oracle read for mcf on transparent huge pages; FIXED ON SILICON 2026-11-21 by the ratio keys: niss-superpage f34bd6e59092b95c reads arm1/arm2, arm10/arm9 and arm17/arm16 at 1.00, all 14 DRAM arms at their simulated paddr words, traps 0 (board 2, resident P1 caplifive_…-pagedtbl_d83d3a633.bit read back by name, 2026-11-21, one load per image, control va-runv f0ed3fac351b60f3 PASS; kit capstone/tests/rtl-smoke/silchk-b1-2026-11-21, record docs/plans/2026-11-21-silchk-b1-board2.md at board/meas-pw 4d64c19cb53b; applies to bitstream 1 by byte-identical fix files plus the ccsrrw source check, not by a reading on bitstream 1); the residual stands: the test cannot tell the fix from deleting the splice`
+### R-68 — the MMU's non-idempotent probe splices a superpage's offset bits into the PPN at PADDR indices, so on the FPGA a load in the first 512 KiB of every 2 MiB page (vaddr[20:19] = 00) waits as if it were I/O; the same splice lets a device address mapped through a superpage escape the check `DEMONSTRATED IN SIMULATION 2026-11-06 with the FPGA's NI rule supplied to the simulation (capstone-ariane ni-superpage, pre-registered at ca49a9c22 and 874d2928a / 4eb9c0c43 before their runs); PRESENT in every sealed bitstream's tree by source (read at 1fc2cd5aa; cva6_mmu.sv and load_unit.sv identical at e7af48457 and c9c7952bd; the form is upstream CVA6's, back to 3ddf797e9); FIX IN RTL, simulation only: capstone-ariane ni-superpage 0f0905194, lint PASS at baseline; carried onto stage A as stage-b-batch fe4810dd1 (213378a11), two-sided there; NI-rule 95-sweep identical; not synthesised. Found 2026-11-06 by the runtime lane's rtl-oracle read for mcf on transparent huge pages; FIXED ON SILICON 2026-11-21 by the ratio keys: niss-superpage f34bd6e59092b95c reads arm1/arm2, arm10/arm9 and arm17/arm16 at 1.00, all 14 DRAM arms at their simulated paddr words, traps 0 (board 2, resident P1 caplifive_…-pagedtbl_d83d3a633.bit read back by name, 2026-11-21, one load per image, control va-runv f0ed3fac351b60f3 PASS; kit capstone/tests/rtl-smoke/silchk-b1-2026-11-21, record docs/plans/2026-11-21-silchk-b1-board2.md at board/meas-pw 4d64c19cb53b; applies to bitstream 1 by byte-identical fix files plus the ccsrrw source check, not by a reading on bitstream 1); the residual stands: the test cannot tell the fix from deleting the splice; ON LINE B (b42c8c644's core) FIXED IN SIMULATION 2026-11-26: niss-superpage reads bitstream 1's fixed cycles value for value under the NI rule (arm1/arm2 1.03, arm10/arm9 0.99, arm17/arm16 1.02, traps 0; capstone/tests/rtl-smoke/silchk-b1-2026-11-21 PREREG, Line B addendum)`
 
 Siblings: none on this path. The load unit's own comment at `load_unit.sv:382` reads `TODO: dtlb_ppn_i is not reliable`.
 
@@ -4559,6 +4678,141 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
   far below MEM_END = 2^40. A refused CAPENTER does not enter capmode (`commit_stage.sv:359-364`).
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
+
+### R-81 — a lifetime-unit read whose response never arrives leaves the unit waiting forever: its memory engine has no timeout `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN; not constructed; MONITORED IN SIMULATION 2026-11-26 (capstone-ariane b5b2-hangmon-c 808ddfabd, SUP_TRACE only): over the 63 Line B tests the unit's longest read wait is 1,221 cycles and no wait reaches 100,000 (docs/plans/2026-11-26-lifetime-unit-hang-monitors.md); not constructed`
+
+Siblings: R-81, R-82 and R-83 are three ways the lifetime unit can stay busy forever; R-77 (whose PRE fix, capstone-ariane
+b5b2-prefix 7861abcfa, turns each of them into a CORE hang instead of a false 25 at about 1M cycles); R-80. All three were
+named by the claim-auditor reading the PRE fix (2026-11-25), and none has been constructed.
+
+**The path.** capstone_sublet_life.sv :356-363: one read outstanding (`rd_wait_q`), cleared only by `_mem_ch_read_res_valid`;
+nothing bounds the wait. A read that the D$ port 2 path (ex_stage.sv's page walker, pw_*, then wt_dcache) accepts and never
+answers keeps the unit out of S_IDLE, so no probe is accepted and every later lifetime op waits. Before the PRE fix such a
+hang ended for a waiting access in a false 25 at about 1M cycles; with it, the access waits too.
+
+**Common to all three on silicon** (aperture map of 28fcbb646, unchanged through b42c8c644; read from the emitters):
+- the lifetime unit's own state (st_q, rd_wait_q, wr_v_q) has NO aperture under the Sublet format: its debug endpoints
+  are tied to 0 (capstone_sublet_life.sv :289-293), so the rev_node debug bytes (bank 7, switches 241-254;
+  cva6.sv :1309-1325) read 0 and say nothing;
+- an access whose verdict missed waits at the commit head for a probe that is never accepted (commit_stage.sv
+  :966-967); the probe-pending flag has no aperture either. Commit slot 0 valid is 192 bit 0; the head's pc is 230-233;
+- the refusal record (204) stays EMPTY (0x02) or holds an earlier denial: on the fixed RTL nothing times out before
+  acceptance. A 204 of 0x21 (timeout) on b42c8c644 means a probe WAS accepted and its own read never answered (R-81).
+
+**Identifying it on silicon** (beyond the common bytes): 223[7:4], the port-2 D$ controller's state, constant non-IDLE
+(1 READ, 2 MISS_REQ, 3 MISS_WAIT, 6/7 REPLAY: the read lost inside the D$) or 0 (the response was dropped after the
+controller finished); 229 bit 3 (port 2's rd_req); 225 bit 4 (dyn_wait_rev_res) 1 if a DYN lifetime op waits on the unit;
+and the write side quiet (192 bits 6:5 and 221 bits 3:2 not stuck). A 204 of 0x21 says the probe's own read was the lost one.
+
+### R-82 — the lifetime unit's record write is never granted while the store unit holds port 3's request: the store port has strict priority and no bound `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN; not constructed; MONITORED IN SIMULATION 2026-11-26 (capstone-ariane b5b2-hangmon-c 808ddfabd, SUP_TRACE only): over the 63 Line B tests the unit's longest held write is 60 cycles and none reaches 100,000 (docs/plans/2026-11-26-lifetime-unit-hang-monitors.md); not constructed`
+
+Siblings: R-81, R-82 and R-83 are three ways the lifetime unit can stay busy forever; R-77 (whose PRE fix, capstone-ariane
+b5b2-prefix 7861abcfa, turns each of them into a CORE hang instead of a false 25 at about 1M cycles); R-80. All three were
+named by the claim-auditor reading the PRE fix (2026-11-25), and none has been constructed.
+
+**The path.** cva6.sv :2600-2603: `dcache_req_ports_rev_wr_res.data_gnt &= !dcache_req_ports_ex_cache[2].data_req` -- the
+unit's write is granted only in a cycle the store unit does not request. The unit holds the write (`wr_v_q`,
+capstone_sublet_life.sv :363) until granted, and ex_stage.sv :2272-2277 gates its grant again through the page walker
+(`rv_wr_gnt` needs PW_IDLE with bypass, or pw_wr_issue). Only committed stores request port 3, and younger stores cannot
+commit past an older waiting instruction, so the store side should drain -- the auditor's reason for calling it
+unreached -- but nothing bounds it, and a store port that requests without ever being granted by the write buffer
+(R-80's shape on the store side) would hold the unit's write out forever. A starved unit, not a wedged one.
+
+**Common to all three on silicon** (aperture map of 28fcbb646, unchanged through b42c8c644; read from the emitters):
+- the lifetime unit's own state (st_q, rd_wait_q, wr_v_q) has NO aperture under the Sublet format: its debug endpoints
+  are tied to 0 (capstone_sublet_life.sv :289-293), so the rev_node debug bytes (bank 7, switches 241-254;
+  cva6.sv :1309-1325) read 0 and say nothing;
+- an access whose verdict missed waits at the commit head for a probe that is never accepted (commit_stage.sv
+  :966-967); the probe-pending flag has no aperture either. Commit slot 0 valid is 192 bit 0; the head's pc is 230-233;
+- the refusal record (204) stays EMPTY (0x02) or holds an earlier denial: on the fixed RTL nothing times out before
+  acceptance. A 204 of 0x21 (timeout) on b42c8c644 means a probe WAS accepted and its own read never answered (R-81).
+
+**Identifying it on silicon:** 221 bit 3 (the store port's data_req) 1 throughout the stretch window, with 221 bits 7:4
+the commit queue's valid entries; 192 bits 6:5 (the write buffer's cache-update request / ack) and 223 bit 3 (write buffer
+full) for why the store port is not drained; 229 bit 3 quiet (no unit read outstanding, unlike R-81); 225 bit 4 if a DYN
+lifetime op waits.
+
+### R-83 — a flush while CSMINT's create channel waits for its response returns the LSU's sequencer to IDLE, and the lifetime unit's create response is never acked `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN (argued from the flush sources, not exhaustively); not constructed; MONITORED IN SIMULATION 2026-11-26 (capstone-ariane b5b2-hangmon-c 808ddfabd / 066c97947, SUP_TRACE only): the must-fire flush-in-CM_CRQ/CM_CRS line is 0 over the 63 Line B tests and over b5b2-csmint-irq's 256 CSMINTs under 2,334 M-timer interrupts (TICK 20-160); no flush met the sequencer outside idle at all; debug-mode entry and a racing namespace flush NOT TESTED (docs/plans/2026-11-26-lifetime-unit-hang-monitors.md)`
+
+Siblings: R-81, R-82 and R-83 are three ways the lifetime unit can stay busy forever; R-77 (whose PRE fix, capstone-ariane
+b5b2-prefix 7861abcfa, turns each of them into a CORE hang instead of a false 25 at about 1M cycles); R-80. All three were
+named by the claim-auditor reading the PRE fix (2026-11-25), and none has been constructed.
+
+**The path.** load_store_unit.sv :2255-2256: `end else if (flush_i) begin cm_q <= CM_IDLE; // never expected: an issued
+CSMINT is the oldest instruction`. The ack to the unit is `csmint_create_res_ack_o = (cm_q == CM_CRS)` (:2245), the
+request `cm_q == CM_CRQ` (:2244), wired to the unit's create channel under the Sublet format (ex_stage.sv :2012-2018). A
+flush in CM_CRQ after the request was taken, or in CM_CRS, leaves the unit in S_RESP for OP_CREATE with nobody to ack it:
+it never returns to S_IDLE. The auditor's argument that it is unreachable: every flush source is commit-driven
+(controller.sv :111-115, :121-239) and the CSMINT, the oldest instruction, has not written back. Not proven exhaustively
+(debug-mode entry, an interrupt taken at the CSMINT, and a namespace flush are the cases to check).
+
+**Common to all three on silicon** (aperture map of 28fcbb646, unchanged through b42c8c644; read from the emitters):
+- the lifetime unit's own state (st_q, rd_wait_q, wr_v_q) has NO aperture under the Sublet format: its debug endpoints
+  are tied to 0 (capstone_sublet_life.sv :289-293), so the rev_node debug bytes (bank 7, switches 241-254;
+  cva6.sv :1309-1325) read 0 and say nothing;
+- an access whose verdict missed waits at the commit head for a probe that is never accepted (commit_stage.sv
+  :966-967); the probe-pending flag has no aperture either. Commit slot 0 valid is 192 bit 0; the head's pc is 230-233;
+- the refusal record (204) stays EMPTY (0x02) or holds an earlier denial: on the fixed RTL nothing times out before
+  acceptance. A 204 of 0x21 (timeout) on b42c8c644 means a probe WAS accepted and its own read never answered (R-81).
+
+**Identifying it on silicon:** the head pc (230-233) is the CSMINT's or a later lifetime op's; 225 bit 4 (dyn_wait_rev_res)
+1 if a DYN op waits behind it; the D$ side quiet (223[7:4] 0, 229 bit 3 0) and the write side quiet (221 bit 3 0), which
+is what separates it from R-81 and R-82 -- a unit busy with no memory traffic. The decisive state (cm_q, the unit's
+st_q) has no aperture. **What would settle it:** a must-fire SUP_TRACE line on `flush_i && cm_q inside {CM_CRQ, CM_CRS}`
+across the sweep.
+
+### R-80 — an LDC whose access faults is not popped: it re-presents every cycle as a capability read on load port 1, starves the write buffer's cache update, and behind a store backlog wedges the core with its fault never taken `OPEN 2026-11-25 — DEMONSTRATED IN RTL SIMULATION (b5b2-ldcexc2, on 47d749153 and 28fcbb646; claim-audited); FIX IN RTL (capstone-ariane b5b2-ldcfix a5c45a46d, a faulting LDC pops), simulated; SYNTHESISED in a5c45a46d and in b42c8c644 (which adds R-77's fix); ON SILICON, NOT YET DISCRIMINATING: the fixed arm b5b2-ldcexc2 reads SR 2 0x18 0x1 (one cause-24 trap, no wedge) AS PREDICTED on a5c45a46d (board 3, board/meas-pw c198c50f159e) and on 14f2ef81a (board 1, f47b2a686ce2; b42c8c644 + the spatial-only parameter, ldcexc2's column equal to b42c8c644's), while the unfixed 28fcbb646 control that must wedge on silicon is unread, so the readings show the fixed arm completing, not the wedge gone; on b42c8c644 itself not yet read; the silicon candidate is S-35 (B5T mcf on 904cd9c6b), its pattern pre-registered for the diagnostic seal 28fcbb646 (llvm-capstone land/rtl-crevoke4b c7877d008be7)`
+
+Siblings: S-35 (the silicon wedge whose shape this is). R-77 (the probe deny's 25 rides the same path and breaks a hang only for
+an LDC at the commit head). R-29 / S-10b (the D$ hold next to it; not involved). The record is llvm-capstone
+capstone/docs/plans/2026-11-25-crevoke-4b-rtl.md (the S-35 and R-80 sections).
+
+**The mechanism, each link read in the simulation trace** (b5b2-ldcexc2: protected U, 16 + 1 stores through a capability to
+distinct lines, then at once an LDC through an untagged base, which raises 24 in the LSU's capability check):
+1. load_unit.sv SEND_TAG_LDC, on ex_i.valid, sends kill_req and returns to IDLE with no pop_ld_o. The exception is written
+   back (rvalid_output's SEND_TAG_LDC arm), but the LDC stays at the bypass head and is presented again. The trace shows load
+   port 1 requesting every cycle, and LED 195 / 229 show the load unit cycling SEND_TAG_LDC <-> IDLE.
+2. Each presentation is a capability-width read. A granted capability read collides with the write buffer's cache update
+   (wt_dcache_mem.sv bank_collision's rd_cap term, wr_ack_o), so the update is never acked. LED 192 reads 0xd1: return
+   pending, update requested, its ack 0.
+3. No entry evicts, so the buffer stays full (223 = 0x08: full, lookups done). The store port is refused (WEDGE-WBUF) and
+   the commit queue fills.
+4. An older store at the commit head waits for room (commit_stage.sv :627-630). The LDC is younger, never becomes the head,
+   and its fault is never taken. Nothing has a timeout on this path, so the wedge is permanent.
+
+**The controls:**
+- the same program loading through the valid base completes (0x0, 0 traps, 33,579 cycles);
+- an integer-M misaligned LDC behind the same backlog (b5b2-ldcexc) completes with cause 4 and one trap, because that
+  exception is registered once on the MMU path and the LDC stops re-presenting.
+
+So the class is the LSU's per-cycle capability-check arms on an LDC (24-28, the R-43 replay marker, the probe's timeout 25),
+behind a store backlog deep enough to fill the write buffer and the commit queue. A verdict-miss LDC waiting for its probe
+takes the same loop for the probe's duration: on 28fcbb646, b5b2-srvcost's first probe has port 1 requesting at every
+cycle 58618-58633.
+
+**A second trigger, needing no faulting access** (b5b2-crevint -DCI_YLDC on 28fcbb646, capstone-ariane b5b2-yldc
+ed1271736): an LDC whose verdict MISSES, issued during a CREVOKE walk. The replay marker takes the same path and the LDC
+re-presents (948,921 times); the walk's record writes cannot drain (WEDGE-WBUF at cycle 106,085: full, rd_req 1, rd_ack 0) and
+the CREVOKE never retires; the probe is never accepted, and R-77's PRE timeout about 1.05M cycles later does not end the
+wedge. LEDs 192 0xd0, 223 0x0a, 229 0x04, 195 0x99 (the commit head is the CREVOKE, not a store). On a5c45a46d the same arm
+completes, the LDC presenting once. Demonstrated in RTL simulation; not an attribution of any silicon instance.
+
+**The fix** (the semantics owner's ruling): `if (state_q == SEND_TAG_LDC) pop_ld_o = 1'b1;` in the exception block.
+- The LDC leaves the LSU as a faulting plain load does, and its exception is taken when it reaches the commit head.
+- The replay marker and the timeout 25 pop too. The probe outlives the pop, and commit re-fetches the LDC once the probe
+  resolves.
+- Rejected alternatives: arbiter fairness (it changes every port's timing to hide a retry that should not exist), and
+  parking the waiting LDC without requesting. That park was R-43's first shape (WNS -24.5, 0f5185a6d), and even its
+  registered form adds a term to the load unit's request path, which carries standing UNOPTFLAT names.
+
+**Readings on the fix** (memory delay 12):
+- b5b2-ldcexc2 completes, 0x18 with one trap. Its control is unchanged.
+- The B5b-2 / B5b-1 lists (56 tests) have identical values. b5b2-srvcost moves -3 cycles over 198 probes; sref and sref-gen
+  move -2 each.
+- Lint is identical by name.
+- The claim-auditor: the writeback always happens when the LDC pops, with no double pop and no new loop term.
+- UNRESOLVED: the CAPSTONE_NO_DYN_BYPASS control build does not elaborate at 28fcbb646 (issue_read_operands.sv:2109), so its
+  load-syncer path is untested. The FPGA flow does not set that define.
 
 ### R-79 — the PMP and CPMP judged a load or store with the NEIGHBOURING cycle's access type: a lone S/U store passed a region without W, and a load followed at once by a store was refused 7 `CONFIRMED ON SILICON 2026-11-23, N=2 (the r79-pmp-bare-2026-11-23 kit's pre-fix vector word for word on both: board 2 on R-75 (d) 1c5d31474, board/meas-pw 7eb67baa00a1; board 1 on P1 d83d3a633, 6f012b18b7ca); DEMONSTRATED IN SIMULATION (capstone-ariane b5b1-step3, csmint-pmp.S, both branches pre-registered, and under Sv39); FIXED ON SILICON 2026-11-23, the PMP side, board 2, N=1 (fix 09b9cf9fd, claim-audited: the defect and the fix SUPPORTED; the first B5b-1 bitstream d0afdb40f reads the kit's fixed row word for word, board/meas-pw f90b3692e7b6); the CPMP side DEMONSTRATED IN SIMULATION and fixed there (r79-cpmp, the ids55 build, capstone-ariane 27e75c38a); FIXED ON SILICON 2026-11-24 on the P1 line, the PMP and CPMP sides, board 1, N=1 (the P1-line fix seal p1-r79 7bd984edc reads the fixed rows of the r79-pmp and r79-cpmp kits word for word, PREREG 172d21085037, board/meas-pw d4fa612033ba); the pre-fix CPMP side not read on silicon; upstream CVA6 wiring (the PMP extraction, 23355d29f), so on every bitstream since`
 
@@ -4936,7 +5190,33 @@ Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the 
   The runtime lane's makerand perf null on (d) is its own reading.
 **Exposure.** The native module's `run()`/`run_x0()` (`capstone_vm.c:2009`, `:2021`, bkit91 kernel; the runtime lane's reading) put `csrw 0x5c1, zero` in the same asm statement as every CSRUNV. So the SPEC native route never takes an S trap with srevroot non-zero after an escape, and its service resumes (gcc train01: about 2,450 per run) complete on P1 silicon with every smoke 9/9. Any other CSRUNV caller, including B5b's replacement of CSRUNV, must keep that write or have this fixed.
 
-### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `OPEN 2026-11-20 — DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
+### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `OPEN 2026-11-20; FIX IN RTL 2026-11-25 (capstone-ariane b5b2-prefix 7861abcfa: the timeout counts only after acceptance; the final B5b-2 candidate b42c8c644), simulated; SYNTHESISED in b42c8c644 (sealed, sha256 6a09f34d...190a, llvm-capstone 266e59a9a095), its Tier 1 kits AS PREDICTED on boards 3 and 2 (board/meas-pw f47b2a686ce2); THE FIX ITSELF NOT MEASURED ON SILICON: no kit value moves with it (crevoke4b-bare-2026-11-25 PREREG, b42c8c644 addendum); the false 25 DEMONSTRATED on the B5b-2 line in simulation (b5b2-crevint -DCI_YLDC (b)); was: DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
+
+**B5b-2 line, 2026-11-25 (the PRE fix).** The probe is accepted only when the lifetime unit is idle (capstone_sublet_life.sv
+:235, :251), and under CAPSTONE_DYN_BYPASS an independent LDC issues during a CREVOKE walk (issue_read_operands.sv
+:598-603). So a walk longer than the PRE bound turns a LIVE capability's access into a 25. b5b2-crevint -DCI_YLDC on
+a5c45a46d with a sim-only 4,000-cycle bound (b) reads `probe-timeout pend=00000007 sent=0` and the LDC faulting 25;
+(b0) without it completes. Silicon reaches the real bound at a run of fewer than about 40,000 members (CREVOKE costs
+about 26 cycles per run member warm on the 4(b) bitstreams, 21 on 904cd9c6b; board 2's crevint captures). The semantics
+owner ruled it a defect. The fix (7861abcfa): `rvc_timeout = rvc_pend_q && rvc_sent_q && rvc_wait_q ==
+RVC_PROBE_WAIT_POST`; (c) completes with no timeout; the 57-test lists are identical to a5c45a46d's in values and cycles;
+lint identical by name. Claim-audited PLAUSIBLE-BUT-UNPROVEN: no reachable hang found, by the auditor's bound (the unit
+is never idle while refusing the probe; nothing commits past the waiting access, so the 8-entry scoreboard bounds the
+younger queries); the LCC-race arm meant to test that bound (-DCI_YLCC) was VOID in both cuts. The hangs it leaves are
+R-81, R-82 and R-83, each of which used to end here in a false 25.
+
+
+> **Line B (B5b-2; 904cd9c6b and 28fcbb646; an rtl-oracle read 2026-11-25, decisive lines re-read by the rtl lane):
+> the timeout stays and still denies with 25.**
+> - The deny path is load_store_unit.sv :356-357 (PRE 20'hFFFFE, POST 65,535), :1836, :2000-2003 and :1701-1703. It is
+>   byte-identical at both revisions.
+> - capstone_sublet_life serves a probe only when idle (904cd9c6b :176 / :188; at 28fcbb646 the probe ack is
+>   `idle_ok && (!any_dyn || !st_drained_i)`, :251), with a 16-byte read on D$ port 2.
+> - **The timeout ends a hang only if the LDC is the commit head.** After the deny, the 25 is a registered exception on an
+>   LDC that has not popped, so it is presented again, and if an older instruction holds the head, nothing flushes. That
+>   contradicts the comment at :355 ("a wedged rev-node still cannot become a core hang").
+> - This is the same mechanism as R-80, where any LSU-check exception on an LDC behind a store backlog wedges the core. R-80's
+>   fix (a faulting LDC pops, its exception taken at the commit head) closes this hole too.
 
 Siblings: R-43 (whose fix introduced the probe and chose fail-closed timeouts; its entry does not record the timeout path), R-35 (the verdict cache). R-75 and R-76 are on llvm-capstone `land/rtl-sublet-p2`, not yet on dev.
 
@@ -4986,7 +5266,7 @@ wedged (a watchdog with its own cause); a distinct exception cause for a timeout
 remove the variant's starvation at its source once it is traced. Any I$-line or other cache-geometry variant needs the sweep
 before a seal: this one passed every gate the board lane ran before synthesis, and only the sweep's two tests caught it.
 
-### R-74 — a page fill can start while a tag read of a word the page shares is in flight; the tag-word cache keeps no stale tag on the one instance measured `OPEN 2026-11-14 — MEASURED CLEAN ON ONE WINDOW INSTANCE in simulation, for the base TWC in service (fdk 3c6b9906c, the batch a47b588a1), the 16,384-entry TWC (capstone-ariane a948e4134) and the targeted variant, each with a forging control that forges. N = 1 window instance (1 of 24 fills), one test shape, the simulator built with the boards' crossbar setting: NOT a proof for every timing. A claim may cite this instance with that scope, never as "TWC fill safety is verified"`
+### R-74 — a page fill can start while a tag read of a word the page shares is in flight; the tag-word cache keeps no stale tag on the one instance measured `OPEN 2026-11-14 — MEASURED CLEAN ON ONE WINDOW INSTANCE in simulation, for the base TWC in service (fdk 3c6b9906c, the batch a47b588a1), the 16,384-entry TWC (capstone-ariane a948e4134) and the targeted variant, each with a forging control that forges. N = 1 window instance (1 of 24 fills), one test shape, the simulator built with the boards' crossbar setting: NOT a proof for every timing. A claim may cite this instance with that scope, never as "TWC fill safety is verified"; WIDENED ON LINE B 2026-11-26 (b42c8c644's core: the in-service TWC, 2^14 entries, merge, F2 targeted invalidation; the boards' crossbar is this testharness's default): b5b2-tw-fill-gap (capstone-ariane b5b2-hangmon-c 371af326d, CSMINT-minted, a forgery read as LCC type 1) reaches the window 3 times in 193 fills, twice at the page's FIRST shared tag word and once at its LAST (a boundary the P1 test never covered); as built every in-flight beat lands poisoned, 0 forged; with every protection removed (TWC_SIM_NOPOISON + NOFILLCLEAR + FILLVALIDATE) all 3 forge; N = 3 window instances, one testbench timing (memory delay 12): still NOT a proof for every timing`
 
 **The window.** Capability tags live in shadow DRAM behind `core/cache_subsystem/wt_axi_adapter.sv`, one tag byte per
 16-byte granule at `CAP_TAG_MEM_BASE = 0xBC2D2D2D`, cached in a direct-mapped tag-word cache (TWC) of 8-byte tag words.
@@ -5117,7 +5397,7 @@ The defect stays OPEN.
 **Siblings.** I-16 (a sim-trace defect found in the same session), and the TWC work on capstone-ariane
 perf/twc-reach (where this was found; that change neither fixes nor worsens it).
 
-### R-72 — the PC capability's bounds check reads only the instruction's START address: in M-mode capability mode an instruction whose upper bytes lie past bound_end commits `DEMONSTRATED IN SIMULATION 2026-11-14 on 6d0e754d5's RTL (5f41c486e by source identity), claim-audited (SUPPORTED); M-mode only; QEMU's virtual-context path checks the whole instruction, its plain M path has no PCC fetch-bounds check found; fixed in RTL by capstone-ariane 5af46d00e, in P1's ancestry; FIXED ON SILICON 2026-11-21: pcc-end f0935c425401b34d reads 0x0 0x1c 0x0 0x0 0x1, with its two controls pcc-end-in 6e67467e0074c440 and pcc-end-out 1dc587cd8489fe89 as predicted (board 2, resident P1 caplifive_…-pagedtbl_d83d3a633.bit read back by name, 2026-11-21, one load per image, control va-runv f0ed3fac351b60f3 PASS; kit capstone/tests/rtl-smoke/silchk-b1-2026-11-21, record docs/plans/2026-11-21-silchk-b1-board2.md at board/meas-pw 4d64c19cb53b; applies to bitstream 1 by byte-identical fix files plus the ccsrrw source check, not by a reading on bitstream 1)`
+### R-72 — the PC capability's bounds check reads only the instruction's START address: in M-mode capability mode an instruction whose upper bytes lie past bound_end commits `DEMONSTRATED IN SIMULATION 2026-11-14 on 6d0e754d5's RTL (5f41c486e by source identity), claim-audited (SUPPORTED); M-mode only; QEMU's virtual-context path checks the whole instruction, its plain M path has no PCC fetch-bounds check found; fixed in RTL by capstone-ariane 5af46d00e, in P1's ancestry; FIXED ON SILICON 2026-11-21: pcc-end f0935c425401b34d reads 0x0 0x1c 0x0 0x0 0x1, with its two controls pcc-end-in 6e67467e0074c440 and pcc-end-out 1dc587cd8489fe89 as predicted (board 2, resident P1 caplifive_…-pagedtbl_d83d3a633.bit read back by name, 2026-11-21, one load per image, control va-runv f0ed3fac351b60f3 PASS; kit capstone/tests/rtl-smoke/silchk-b1-2026-11-21, record docs/plans/2026-11-21-silchk-b1-board2.md at board/meas-pw 4d64c19cb53b; applies to bitstream 1 by byte-identical fix files plus the ccsrrw source check, not by a reading on bitstream 1); ON LINE B UNREACHABLE BY CONSTRUCTION (b42c8c644, by source): the check requires M with capmode, and under the Sublet format capmode_d is tied to 0 (csr_regfile.sv:349); the PC metadata can still be loaded by CBNZ, so it returns with capmode or in an IDS55 build`
 
 Siblings: none on this check. Found while clearing standard RVC for Capstone code
 (`docs/plans/2026-11-13-rvc-in-capability-mode.md`): RVC makes the shape reachable under 4-aligned bounds.
@@ -11842,12 +12122,39 @@ compared):** perlbench 0 of 69 differ (was 9), gcc 1 of 387 (was 24), imagick 0 
 the measured flags, are identical apart from `.comment`. Lit test `c87-cursor-read-fold-debug-use.ll`: on dev's
 unfixed compiler the run with debug information fails (an extra `mv a0, a0`) and the stripped run passes.
 
-**Residual, OPEN.** gcc's `calls.o`, function `emit_library_call_value_1`: Loop Strength Reduction (generic LLVM)
-reuses an existing `zext` for a loop's trip count under `-g` and forms `%wide.trip.count` without it, the first
-difference in the pass-by-pass comparison. Not Capstone code. Narrowed the same day: the loop enters LSR identical
-with debug stripped and leaves it different, so the divergence is inside LSR or the SCEV state it inherits; it
-reproduces under `llc` from the code-generation input of `calls.c` but not under `opt -passes=loop-reduce` alone on
-the module as LSR receives it.
+**Residual, OPEN.** gcc's `calls.o`, function `emit_library_call_value_1`, is the one object that still differs
+under `-g`. The site is in Loop Strength Reduction: generic LLVM code, but see the last bullet. The function reuses a
+different value for a loop's trip count:
+- with `-g`, the exit compare uses the `zext nneg` of `nargs` from for.body612's preheader;
+- without, it reuses the existing `%wide.trip.count1281`, which drops `nneg`.
+
+The loop enters LSR identical at the IR-text level, with debug information stripped, and leaves it different.
+
+**Localized, 2026-11-25** (dev's compiler 1a5d6f45, with env-gated diagnostic patches, since reverted; the measured
+build's cc1 lines; `.text` compared, the only executable section; the diagnostics are in c4/c87):
+- **The difference needs LSR's post-transform debug-salvage phase**, the loop at LoopStrengthReduce.cpp:7383 in
+  `ReduceLoopStrength` (upstream since 50724716cd70).
+  - That loop walks every top-level loop of the function, and calls `GetInductionVariable` and
+    `DbgRewriteSalvageableDVIs`, whose `SE.getSCEV` calls reach other loops' header PHIs.
+  - It runs only when `DbgGatherSalvagableDVI` recorded something (:7377), which needs debug records.
+- **Matched pair.** Run the gather, then drop its records just before :7377:
+  - the `-g` `.text` is byte-identical to the build without `-g`;
+  - the same switch without `-g` changes nothing;
+  - unpatched, the `-g` build still differs (18 symbols, all `emit_library_call_value_1` and its labels).
+  Skipping the gather entirely reads the same, but that also skips the salvage phase, so it does not separate the two.
+- **The Capstone pass that runs in the same function** (`reduceCapabilityIndexGroups`, :7375) runs before the gate
+  and is untouched by that switch.
+- **Mechanism NOT shown.** The leading candidate is ordering in ScalarEvolution's `ExprValueMap`.
+  `SCEVExpander::FindValueInExprValueMap` returns the first dominating value it holds, so the salvage scan of an
+  earlier-processed loop would put the preheader's `zext` into the map ahead of `%wide.trip.count1281`. This is an
+  inference from the code and the 2026-11-20 dumps. The visit order (loop 659 before 612) could predict the opposite
+  winner, and that is unresolved.
+- **Withdrawn, never recorded here.** A first "forget the new location-op SCEVs" variant was vacuous: it tested for
+  an existing SCEV after `getSCEV` had already made one. It said nothing about the mechanism.
+- **The earlier note "not under `opt -passes=loop-reduce` alone"** needs a qualifier. Under opt, both the `-g` and
+  the plain module take the `-g` shape (`%exitcond1282.not` on the preheader's `zext`). opt is therefore not a negative
+  control: its SCEV state differs from llc's, and its loop order is not llc's.
+- The adversarial audit's verdict: plausible but unproven, as stated here.
 
 **Before this fix**, a `-g` build of any of these benchmarks did not run the measured code: perlbench 9, gcc 24 and
 imagick 2 objects had different instructions.

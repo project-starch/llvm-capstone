@@ -1,5 +1,39 @@
 # Current Capstone state
 
+## 2026-11-25: Line B on silicon (B5b-2, the trap route) runs Linux, SPEC and the one-operand applications
+
+The submitted paper measured P1 (d83d3a633). Line B, Section 5 as written, is now on silicon:
+- **B5b-2, bitstream 904cd9c6b**, is CONFIRMED N=2 on bare kits (boards 2 and 3). It carries the Sublet format, the
+  record and the three instructions, and the trap route; CSRUNV, the supervisor, the domain switcher, the CPMP and the
+  custom-3 family are removed.
+- **Linux boots on it** with the integer-M firmware (caplifive-opensbi `trap-route-keep-tags` eb85e21c: STC/LDC of the
+  registers across M traps, causes 24-30 delegated) and the collaborator's trap-route kernel.
+  - The trap-route test reads regs 0, with its strip control 23.
+  - Under the flag-off firmware the same payload faults with cause 24, a1's tag lost with its cursor intact. Keep-tags
+    is needed for regs.S: stock N=1 boot, keep-tags N=3 boots on two bitstreams.
+  - Kit: `tests/rtl-smoke/b5b2-linux-2026-11-25/`, dev 634fd5531e99.
+- **Interruptible CREVOKE (4(b)) on silicon**, seal 88db40027: 16 arms plus the control as pre-registered (8 of them
+  discriminate the two bitstreams), a resumed-chunk stop latency of 1,130 cycles, N=1 (dev d139d076f84e). It also carries the committed-store-queue drain and the CAP_WB guard.
+- **The five one-operand applications** (SQLite, mruby, gcc, Perl makerand, tshark) ran on 904cd9c6b with stock's
+  answers. The M-16 stress form ran 1.17e8 protected allocations without a stop (one boot; bound < 2.6e-8 per
+  fast allocation; hardware not separated from the one-operand wmem revision). Records: nested-workloads ba26257f256a, 5d902b54a271.
+- **SPEC test on Line B** (images: compiler's B5T/B5TL0/B5TL1 arms, dev 937208e0991f, ILLEGAL 0):
+  - gcc passes;
+  - x264 and imagick fault with cause 24 in all three arms, tval 0. imagick's is a NULL increment by control flow, and
+    its twin passes. x264's is consistent with one (tval 0, three arms), but its source line and a completed twin run
+    are unverified. The rule that would explain both is the untagged-CINCOFFSET rule, which 904cd9c6b applies only under
+    vctx and the reference always. Its FLU ungate is in the combined build 28fcbb646, whose run on silicon is the
+    confirmation;
+  - mcf went silent after about 46 min (boot 5): a wedge with an LDC at the LSU head and four stores queued without a
+    D$ grant, mechanism open. It shares M-16's LSU-head signature (sw=219, sw=220) and differs
+    in the store port (sw=221 0xf8 against 0x02), across bitstreams; whether it is M-16's mechanism is open. 28fcbb646 carries observation apertures for it.
+- **C5** (the redundant-bounds flags as every virtual SDK's default) is on dev (e12fee7a561b), after the harness fix
+  ba66310faf14.
+
+Open for the final campaign: the mcf wedge; the combined build's seal and kits; a Plain baseline matched in kernel tick
+(the trap kernel is HZ_PERIODIC, the measured configuration NO_HZ_IDLE), THP, SMP and allocator; train stages for
+the Line B images. See [the Line B campaign plan](../plans/2026-11-25-line-b-final-campaign.md).
+
 ## 2026-11-10 — Normalized third-party defect classification
 
 The 425 declared bug-corpus records now have a normalized, auditable classification artifact:
