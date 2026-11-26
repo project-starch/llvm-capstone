@@ -631,6 +631,54 @@
    "PASS"
   ]
  },
+ "B5TL1-525.x264_r": {
+  "commands": [
+   [
+    "gen",
+    0,
+    115.76
+   ],
+   [
+    "run",
+    0,
+    4901.4
+   ]
+  ],
+  "data_hash_verdict": "EQUAL",
+  "data_outputs": [
+   "frame_0.yuv",
+   "frame_50.yuv",
+   "frame_100.yuv",
+   "frame_150.yuv",
+   "frame_155.yuv",
+   "BuckBunny_New.264",
+   "BuckBunny.yuv"
+  ],
+  "hashes": {
+   "BuckBunny.264": "d9289c034f4580703cfb5624f1bbcb9e5784ef5324b6a0d1412975135ce88501",
+   "BuckBunny.yuv": "c3a3d3e272a82bb6dd35486e55f1f05c9446308b2556e8dfb60ed1c084234459",
+   "BuckBunny_New.264": "0e453c440e686acc95e660653bf014731fffeadfed40a53700ec7afdf73e50c0",
+   "control": "24ddfaff88ca1ef17e4e3894fc334580d3d51898863f14d3b3a247fd8162090b",
+   "dataDec.txt": "a7c5fae053519034c2f002660e89c9930f6655939b355ff49db2b5bb343afd42",
+   "frame_0.yuv": "3214803d8be74416f3de93f30363f4c6b0703d0415ff259505189fd8f9c5d31d",
+   "frame_100.yuv": "7fc792cf69a27155462dec8e8778b9ec4406cdee9ff0457f40da4b42dfe13150",
+   "frame_150.yuv": "c485b156e2db47cdc4ee9e06b50261e42069930f62998e2b6d320984460857ec",
+   "frame_155.yuv": "f1352e842177ffea4580565949c4e38741c57e0c1901877aa43263911a49be95",
+   "frame_50.yuv": "bdf3b9ea5f28d7ec6055120196217205a1cdd51f38a4a36060b0347c84e91b21",
+   "inputgen_ldecod_r_base.capstone-lifetimes_x264.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "inputgen_ldecod_r_base.capstone-lifetimes_x264.out": "bb660e3cd44c57696e93ef9941ee0104ad208b9a305e1bf364e47f1b86f3b417",
+   "log.dec": "f05197f06d11d0bfde9640990bf1072e76619a09ae338f027c12555ec074ca9e",
+   "run_000-156_x264_r_base.capstone-lifetimes_x264.err": "c017b4406bedc7d6de1314fa65aee546936c645a30326c58dbb3ab21a4d1eb2e",
+   "run_000-156_x264_r_base.capstone-lifetimes_x264.out": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "image": "SP-B5TL1-x264b",
+  "reference": "the Full twin, compiler spec8 LSHOFF boot.log (B5TL1 images), sha16 per data output: frame_0.yuv 3214803d8be74416, frame_50.yuv bdf3b9ea5f28d7ec, frame_100.yuv 7fc792cf69a27155, frame_150.yuv c485b156e2db47cd, frame_155.yuv f1352e842177ffea, BuckBunny_New.264 0e453c440e686acc, BuckBunny.yuv c3a3d3e272a82bb6",
+  "validation": [
+   "NO-OUTPUT ['imagevalidate_frame_100.out']",
+   "NO-OUTPUT ['imagevalidate_frame_155.out']",
+   "NO-OUTPUT ['imagevalidate_frame_50.out']"
+  ]
+ },
  "B5TL1-538.imagick_r": {
   "commands": [
    [

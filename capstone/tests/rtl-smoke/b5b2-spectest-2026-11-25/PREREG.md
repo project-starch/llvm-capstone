@@ -372,3 +372,34 @@ not carry boot 14's kernel, so boot 14's grade does not gate them. Each image's 
    difference in an output the specdiff accepts is reported as read.
 5. Run times are not predicted. If x264 is cut by its 43,200 s bound, that is NO READING with its elapsed time, not
    a fault.
+
+## Amendment 13 (2026-11-26, before any x264b board reading on any arm): x264's pass criterion is the data outputs by hash, not specdiff
+
+**Correction of this lane's own prediction.** Amendment 10 (carried by 11) and Amendment 12 predicted x264 "rc 0 with
+specdiff pass". That cannot happen in this stage format, on any arm:
+- `target_validation` is empty in plan.json. The stage runs ldecod (gen) and x264 (run) and no imagevalidate.
+- `host_validation` runs specdiff on `imagevalidate_frame_{50,100,155}.out`, which no target command produces.
+So specdiff reads 0/3 NO-OUTPUT by construction. Every earlier board x264 test row records exactly this (spec-silicon:
+2026-11-08-train PREREG lines 1658 and 2337, 2026-10-28-board-test PREREG line 973), and the criterion used there was
+the data outputs by hash. This lane wrote the prediction without reading those rows. The +Spatial twin replay showed
+it (gen and run rc 0, specdiff 0/3 NO-OUTPUT) before any x264b image was read on a board.
+
+**Replacement criterion, binding, for every x264b image (B5T, B5TL0, B5TL1 of Amendment 11; SP-B5TL1 of
+Amendment 12).**
+- gen rc 0 and run rc 0.
+- The seven data outputs equal the reference by hash: frame_0, 50, 100, 150 and 155 .yuv, BuckBunny_New.264, and
+  BuckBunny.yuv (gen's output).
+- specdiff 0/3 NO-OUTPUT is the expected reading and is not a failure. Any other specdiff state is reported as read.
+
+**The reference** reads identically on two twins:
+- the Full twin: compiler's spec8 LSHOFF boot, B5TL1's images;
+- the spatial-only twin: SP-B5TL1-x264b, at 962 MiB, gen 115.76 s, run 4,901.4 s, no sublet line.
+Its sha16 values: frame_0 3214803d8be74416, frame_50 bdf3b9ea5f28d7ec, frame_100 7fc792cf69a27155, frame_150
+c485b156e2db47cd, frame_155 f1352e842177ffea, BuckBunny_New.264 0e453c440e686acc, BuckBunny.yuv c3a3d3e272a82bb6. The
+full values are in `twin-sp-b5tl1.json`, key B5TL1-525.x264_r, whose `data_hash_verdict` is EQUAL.
+
+B5T and B5TL0 are other builds of the same source. Their outputs are predicted equal to the same reference, because
+x264's encode is integer code. A difference would be a finding about that arm.
+
+This changes no other stage's criterion and no reading already made. The imagick, gcc, lbm, nab, xz, mcf and
+perlbench predictions stand as written.
