@@ -1,4 +1,4 @@
-# board 2, the b42c8c644 session (orch-r77c.sh), cut at 2026-11-26T07:27:45Z while the session runs on
+# board 2, the b42c8c644 session (orch-r77c.sh), cut at 2026-11-26T08:24:11Z, after its SESSION END (08:14:34Z)
 # its first boots are the seal's silicon Tier 1 kits on a second board: b5b2n (the flash), crevoke4b, wapflu, misscost
 
 ## session log
@@ -27,6 +27,16 @@
 2026-11-26T07:20:52Z misscost: already run; skipped here
 2026-11-26T07:23:35Z r6032: kit rc=0  R6032KIT b5b2-r60-alias CONFIRMED ON SILICON / b5b2-r32-shrinkto CONFIRMED ON SILICON
 2026-11-26T07:26:43Z nogrow: kit rc=0  NGKIT b5b2-nogrow CONFIRMED ON SILICON
+2026-11-26T07:37:17Z nested-mcreq: 16 RUN END rc=0 [lx 15:37:16] end: TRAPTEST: done seen; 74563 chars 17 GRADE rc=1 FileNotFoundError: [Errno 2] No such file or directory: '<path>/b5b2linux/nested-mcreq-grade-b42c8c644/native-null1/transcript.norm' 
+2026-11-26T07:42:58Z CF-B5TL1-g3: 58 RUN END rc=0 [lx 15:42:57] end: TRAPTEST: done seen; 10771 chars 58 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes 
+2026-11-26T07:42:58Z CF-B5TL1-g3 c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T07:48:36Z CFP-B5TL1-g3: 35 RUN END rc=0 [lx 15:48:34] end: TRAPTEST: done seen; 10771 chars 36 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes 
+2026-11-26T07:48:36Z CFP-B5TL1-g3 c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T08:01:34Z CF-B5TL1-g4mk: 34 RUN END rc=0 [lx 16:01:33] end: TRAPTEST: done seen; 75081 chars 34 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes 
+2026-11-26T08:01:34Z CF-B5TL1-g4mk c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T08:14:34Z CFP-B5TL1-g4mk: 33 RUN END rc=0 [lx 16:14:33] end: TRAPTEST: done seen; 75081 chars 34 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes 
+2026-11-26T08:14:34Z CFP-B5TL1-g4mk c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T08:14:34Z SESSION END
 
 ## b5b2n
 -- b5b2-cptag-diag (grade-diag.py) --
@@ -932,3 +942,304 @@ TRAPTEST: stage B5T-505.mcf_r bound 30000s
 @@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=6869.25 up1=13695.78 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
 @@SPEC-DONE 505.mcf_r test
 TRAPTEST: stage B5T-505.mcf_r rc=0
+
+## nested-mcreq (the nested lane's memcached requalification, PREREG nested-workloads 740970700451; graded by that lane, RESULT 5e7f421c064c; the grade is theirs)
+UNGATED by preflight-board-run.sh (not invoked by runner 5)
+board-lane prechecks: image sha256 against the plan line; seal sha256 and readback by name before and after; holder; booking
+board ID: 2 (booking 1585). Readback before and after: …_b42c8c644.bit rc=3 (the name matches; the console exposes no sha256).
+The in-run grade crashed (rc=1, FileNotFoundError): the board lane's appended plan step passed read-mc2.py an empty directory as NATIVE_DIR,
+a wiring error and not a reading. The PREREG's command (read-mc2.py c76d4138 <capture> <hdd>/nested/b5b2/memcached/out), run afterwards:
+stock rep 1: QUALIFIES; harness rc 0; status "stop=shutdown exit=0 stop_seconds=10.75"; transcript equal to native (1931207 B); identity 'STAT pointer_size 128'; job '{"version":1,"kind":"exit","value":0}'
+   | capstone-exec: exit image=./memcached.dom sha256=535389400f49cd1428f4cfddda17010a3ee0d98efec90433437f782fe9b66212
+stock rep 2: QUALIFIES; harness rc 0; status "stop=shutdown exit=0 stop_seconds=11.53"; transcript equal to native (1931207 B); identity 'STAT pointer_size 128'; job '{"version":1,"kind":"exit","value":0}'
+   | capstone-exec: exit image=./memcached.dom sha256=535389400f49cd1428f4cfddda17010a3ee0d98efec90433437f782fe9b66212
+stock rep 3: QUALIFIES; harness rc 0; status "stop=shutdown exit=0 stop_seconds=11.15"; transcript equal to native (1931207 B); identity 'STAT pointer_size 128'; job ''
+   | capstone-exec: exit image=./memcached.dom sha256=535389400f49cd1428f4cfddda17010a3ee0d98efec90433437f782fe9b66212
+protected rep 1: QUALIFIES; harness rc 0; status "stop=shutdown exit=0 stop_seconds=11.45"; transcript equal to native (1931207 B); identity 'STAT pointer_size 128'; job '{"version":1,"kind":"exit","value":0}'
+   | capstone-exec: exit image=./memcached.dom sha256=4108e588f238b496f2e33ccaef2c8ad366fbddb3ad9298301e34a8614c35f073
+protected rep 2: QUALIFIES; harness rc 0; status "stop=shutdown exit=0 stop_seconds=11.08"; transcript equal to native (1931207 B); identity 'STAT pointer_size 128'; job '{"version":1,"kind":"exit","value":0}'
+   | capstone-exec: exit image=./memcached.dom sha256=4108e588f238b496f2e33ccaef2c8ad366fbddb3ad9298301e34a8614c35f073
+protected rep 3: QUALIFIES; harness rc 0; status "stop=shutdown exit=0 stop_seconds=11.05"; transcript equal to native (1931207 B); identity 'STAT pointer_size 128'; job ''
+   | capstone-exec: exit image=./memcached.dom sha256=4108e588f238b496f2e33ccaef2c8ad366fbddb3ad9298301e34a8614c35f073
+6 of 6 repetitions qualify; heartbeat lines dropped inside blocks: 2
+Its stage lines and every @@UP line:
+TRAPTEST: clock set rc=0 from /clock.epoch 1795663474
+TRAPTEST: clock 2026-11-26T03:24:34Z epoch-s 1795663474
+TRAPTEST: stage M20-memcached-stock begin
+TRAPTEST: stage M20-memcached-stock bound 3600s
+@@UP 101.90
+@@UP 149.08
+@@UP 195.27
+TRAPTEST: stage M20-memcached-stock rc=0
+TRAPTEST: stage M21-memcached-protected begin
+TRAPTEST: stage M21-memcached-protected bound 3600s
+@@UP 274.53
+@@UP 321.38
+@@UP 367.56
+TRAPTEST: stage M21-memcached-protected rc=0
+
+## CF-B5TL1-g3
+capture: 10586 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955760 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 5.55 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-502.gcc_r begin
+  TRAPTEST: stage B5TL1-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197287] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144532] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.887292] sublet: .dom loader registered
+  TRAPTEST: dmesg [   35.515008] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x8245c000
+  TRAPTEST: dmesg [   42.862593] sublet: cpugcc_r_base.n[57] enters 0x3ff7000000, table 0x82496000
+
+B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+
+## CFP-B5TL1-g3
+capture: 10586 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955768 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 5.83 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-502.gcc_r begin
+  TRAPTEST: stage B5TL1-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197131] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144043] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.886891] sublet: .dom loader registered
+  TRAPTEST: dmesg [   35.700762] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82460000
+  TRAPTEST: dmesg [   43.078141] sublet: cpugcc_r_base.n[57] enters 0x3ff7000000, table 0x8249c000
+
+B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+
+## CF-B5TL1-g4mk
+capture: 74137 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         956176 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-500.perlbench_r PASS: QSTEP rc=0; read rc=0
+    READ 500.perlbench_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 557, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 275.7 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-500.perlbench_r begin
+  TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197268] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144588] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.887829] sublet: .dom loader registered
+  TRAPTEST: dmesg [   36.138275] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81caf000
+  TRAPTEST: dmesg [   51.512103] sublet: perlbench_r_bas[59] enters 0x3ff7c00000, table 0x81d03000
+
+B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes
+
+## CFP-B5TL1-g4mk
+capture: 74137 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         956184 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-500.perlbench_r PASS: QSTEP rc=0; read rc=0
+    READ 500.perlbench_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 557, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 279.75 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-500.perlbench_r begin
+  TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197199] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144253] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.887076] sublet: .dom loader registered
+  TRAPTEST: dmesg [   36.141040] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81ca6000
+  TRAPTEST: dmesg [   51.472057] sublet: perlbench_r_bas[59] enters 0x3ff7c00000, table 0x8168a000
+
+B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes
+
+## CF-B5TL1-g3: the BINDING grade, grade-spec-chain-v2.py b976d288 (Full + ports Amendment 1, nested-workloads 1ab5179e06d3); v1 above
+capture: 10586 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955760 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 5.55 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-502.gcc_r begin
+  TRAPTEST: stage B5TL1-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197287] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144532] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.887292] sublet: .dom loader registered
+  TRAPTEST: dmesg [   35.515008] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x8245c000
+  TRAPTEST: dmesg [   42.862593] sublet: cpugcc_r_base.n[57] enters 0x3ff7000000, table 0x82496000
+
+B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+
+## CFP-B5TL1-g3: the BINDING grade, grade-spec-chain-v2.py b976d288 (Full + ports Amendment 1, nested-workloads 1ab5179e06d3); v1 above
+capture: 10586 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955768 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 5.83 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-502.gcc_r begin
+  TRAPTEST: stage B5TL1-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197131] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144043] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.886891] sublet: .dom loader registered
+  TRAPTEST: dmesg [   35.700762] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82460000
+  TRAPTEST: dmesg [   43.078141] sublet: cpugcc_r_base.n[57] enters 0x3ff7000000, table 0x8249c000
+
+B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+
+## CF-B5TL1-g4mk: the BINDING grade, grade-spec-chain-v2.py b976d288 (Full + ports Amendment 1, nested-workloads 1ab5179e06d3); v1 above
+capture: 74137 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         956176 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+INBAND B5TL1-500.perlbench_r: 1 interleaved line(s) removed
+S B5TL1-500.perlbench_r PASS: QSTEP rc=0; read rc=0
+    READ 500.perlbench_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 557, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 275.7 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-500.perlbench_r begin
+  TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197268] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144588] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.887829] sublet: .dom loader registered
+  TRAPTEST: dmesg [   36.138275] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81caf000
+  TRAPTEST: dmesg [   51.512103] sublet: perlbench_r_bas[59] enters 0x3ff7c00000, table 0x81d03000
+
+B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes
+
+## CFP-B5TL1-g4mk: the BINDING grade, grade-spec-chain-v2.py b976d288 (Full + ports Amendment 1, nested-workloads 1ab5179e06d3); v1 above
+capture: 74137 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         956184 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+INBAND B5TL1-500.perlbench_r: 1 interleaved line(s) removed
+S B5TL1-500.perlbench_r PASS: QSTEP rc=0; read rc=0
+    READ 500.perlbench_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 557, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 279.75 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-500.perlbench_r begin
+  TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197199] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144253] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.887076] sublet: .dom loader registered
+  TRAPTEST: dmesg [   36.141040] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81ca6000
+  TRAPTEST: dmesg [   51.472057] sublet: perlbench_r_bas[59] enters 0x3ff7c00000, table 0x8168a000
+
+B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes
+
+## CF-B5TL1-g3 preflight: UNGATED by preflight-board-run.sh: the boot started at 07:37:22Z, before preflight was run (07:44:08Z); the reading taken afterwards is a C10 BLOCK, the same as runtime's B5TL1-g3
+# preflight-board-run.sh, run by the board lane at 2026-11-26T07:44:08Z on the step's payload with FPGA_BITSTREAM=<the b42c8c644 seal>, PREFLIGHT_DTS_NODES=65536 (declared after the same check passed on runtime's proven B5TL1-g3/B5T-g1b/B5TL1-g4mk payloads and the 1021 declaration BLOCKED on all), an empty overlay, no rungs
+=== preflight-board-run ===
+  ok     DTS matches caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644 as DECLARED 65536-node (0x3c2d2000; add the name to this table)
+  ok     firmware embeds exactly one FDT
+  ok     firmware 20 MB, under the console's 32 MB upload limit
+  ok     all 0 requested domain(s) present in the overlay
+  ok     overlay clean (78 expected files, no strays)
+  BLOCK  firmware 20 MB exceeds the 20 MB working budget -- the overlay is dirty. A clean one is ~17.5 MB; only a retained multi-megabyte domain gets it past 20.
+  warn   PREFLIGHT_CONSTRUCT unset -- artifact not checked for the construct under test
+==========================================
+  ok     C15: 0 staged .dom files, all at distinct entry VAs
+preflight: BLOCKED
+
+## CFP-B5TL1-g3 preflight: UNGATED by preflight-board-run.sh: the boot started at 07:42:59Z, before preflight was run (07:44:09Z); the reading taken afterwards is a C10 BLOCK, the same as runtime's B5TL1-g3 (ce0ca633c490c471, PASS on b42c8c644, board 3)
+# preflight-board-run.sh, run by the board lane at 2026-11-26T07:44:09Z on the step's payload with FPGA_BITSTREAM=<the b42c8c644 seal>, PREFLIGHT_DTS_NODES=65536 (declared after the same check passed on runtime's proven B5TL1-g3/B5T-g1b/B5TL1-g4mk payloads and the 1021 declaration BLOCKED on all), an empty overlay, no rungs
+=== preflight-board-run ===
+  ok     DTS matches caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644 as DECLARED 65536-node (0x3c2d2000; add the name to this table)
+  ok     firmware embeds exactly one FDT
+  ok     firmware 20 MB, under the console's 32 MB upload limit
+  ok     all 0 requested domain(s) present in the overlay
+  ok     overlay clean (78 expected files, no strays)
+  BLOCK  firmware 20 MB exceeds the 20 MB working budget -- the overlay is dirty. A clean one is ~17.5 MB; only a retained multi-megabyte domain gets it past 20.
+  warn   PREFLIGHT_CONSTRUCT unset -- artifact not checked for the construct under test
+==========================================
+  ok     C15: 0 staged .dom files, all at distinct entry VAs
+preflight: BLOCKED
+
+## CF-B5TL1-g4mk preflight: preflight GO (run 07:44:09Z; the boot started 07:48:41Z)
+# preflight-board-run.sh, run by the board lane at 2026-11-26T07:44:09Z on the step's payload with FPGA_BITSTREAM=<the b42c8c644 seal>, PREFLIGHT_DTS_NODES=65536 (declared after the same check passed on runtime's proven B5TL1-g3/B5T-g1b/B5TL1-g4mk payloads and the 1021 declaration BLOCKED on all), an empty overlay, no rungs
+=== preflight-board-run ===
+  ok     DTS matches caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644 as DECLARED 65536-node (0x3c2d2000; add the name to this table)
+  ok     firmware embeds exactly one FDT
+  ok     firmware 18 MB, under the console's 32 MB upload limit
+  ok     all 0 requested domain(s) present in the overlay
+  ok     overlay clean (78 expected files, no strays)
+  ok     firmware 18 MB within the 20 MB working budget (~149s upload)
+  warn   PREFLIGHT_CONSTRUCT unset -- artifact not checked for the construct under test
+==========================================
+  ok     C15: 0 staged .dom files, all at distinct entry VAs
+preflight: GO
+
+## CFP-B5TL1-g4mk preflight: preflight BLOCKED by the FDT count, a false positive (the second d00dfeed is 4 bytes of compressed data: totalsize 1180622853, version 4278320661); proceeded by runtime's ruling (the boot started 08:01:39Z); the fixed check (dev 6daffca3824c) reads GO
+# preflight-board-run.sh, run by the board lane at 2026-11-26T07:44:09Z on the step's payload with FPGA_BITSTREAM=<the b42c8c644 seal>, PREFLIGHT_DTS_NODES=65536 (declared after the same check passed on runtime's proven B5TL1-g3/B5T-g1b/B5TL1-g4mk payloads and the 1021 declaration BLOCKED on all), an empty overlay, no rungs
+=== preflight-board-run ===
+  ok     DTS matches caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644 as DECLARED 65536-node (0x3c2d2000; add the name to this table)
+  BLOCK  firmware does not embed exactly one FDT
+  ok     firmware 18 MB, under the console's 32 MB upload limit
+  ok     all 0 requested domain(s) present in the overlay
+  ok     overlay clean (78 expected files, no strays)
+  ok     firmware 18 MB within the 20 MB working budget (~149s upload)
+  warn   PREFLIGHT_CONSTRUCT unset -- artifact not checked for the construct under test
+==========================================
+  ok     C15: 0 staged .dom files, all at distinct entry VAs
+preflight: BLOCKED
+
+## CF-B5TL1-g3 stage and SPEC lines
+TRAPTEST: stage B5TL1-502.gcc_r begin
+@@SPEC-STAGE 502.gcc_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=42.51 up1=48.06 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 502.gcc_r test
+TRAPTEST: stage B5TL1-502.gcc_r rc=0
+
+## CFP-B5TL1-g3 stage and SPEC lines
+TRAPTEST: stage B5TL1-502.gcc_r begin
+@@SPEC-STAGE 502.gcc_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=42.72 up1=48.55 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 502.gcc_r test
+TRAPTEST: stage B5TL1-502.gcc_r rc=0
+
+## CF-B5TL1-g4mk stage and SPEC lines
+TRAPTEST: stage B5TL1-500.perlbench_r begin
+@@SPEC-STAGE 500.perlbench_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=51.16 up1=326.86 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 500.perlbench_r test
+TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+
+## CFP-B5TL1-g4mk stage and SPEC lines
+TRAPTEST: stage B5TL1-500.perlbench_r begin
+@@SPEC-STAGE 500.perlbench_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=51.12 up1=330.87 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 500.perlbench_r test
+TRAPTEST: stage B5TL1-500.perlbench_r rc=0
