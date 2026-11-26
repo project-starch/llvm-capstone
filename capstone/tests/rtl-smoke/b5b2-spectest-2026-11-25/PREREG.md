@@ -403,3 +403,30 @@ x264's encode is integer code. A difference would be a finding about that arm.
 
 This changes no other stage's criterion and no reading already made. The imagick, gcc, lbm, nab, xz, mcf and
 perlbench predictions stand as written.
+
+## Amendment 14 (2026-11-26, before the rows it covers are read): grade-spec-chain-v2.py is binding for every row not yet graded
+
+**Why.** The board lane measured how the console interleaves with SPEC's in-band blocks (board/meas-pw 5106037bcc89,
+`b5b2-inband-interleave-2026-11-26/`). On the slow UART, a kernel line or a TRAPTEST tick can land inside a
+@@SPEC-FILE or @@SPEC-HASH block. v1 (grade-spec-chain.py 4fa95eaf) undoes only @@HB lines, so:
+- a foreign line inside a FILE block crashes the decode and reads MISS. That is a loud false MISS.
+- a line split inside a HASH block is silent: the tail parses as a truncated hash. On t1.c it read e750101d…, not
+  de7b86d7…, and the stage still passed. Under Amendment 13 the same splice would read x264 as a false MISS.
+A scan of all 27 board SPEC captures and the twin's x264 found whole tick lines inside hash blocks in five captures.
+Whole lines are dropped harmlessly, so no reading made so far changed. No foreign line was found in a file block, and
+no split line anywhere.
+
+**Rule.**
+- grade-spec-chain-v2.py is the binding grader for every row of Amendments 9-13 that is not yet graded when this
+  amendment is pushed. This covers SP-B5TL1-g1b (booting on board 1), SP-B5TL1-x264b, and every remaining board-3
+  row, x264b included. The runnable copy has sha256 b976d2884c8c42d5bf85a24ce4d8507ccf8b0c489b192eff8d6965a834ab2f82,
+  and the committed copy differs only in its host path.
+- v2 removes "[ <t>] …" and "TRAPTEST: …" lines with their newline inside FILE and HASH blocks only, so split
+  lines rejoin. gzip's CRC32 then checks each file.
+- A residual foreign line in a block makes the stage NO READING, never MISS. v2 prints "INBAND <stage>: k removed"
+  when k > 0.
+- v1 runs beside it on the same capture, and is recorded. Any verdict difference between them is reported row by
+  row. Rows already graded keep their v1 verdicts.
+- v2's controls are the evidence that it fires: the seven splice shapes read PASS with step.txt equal to the clean
+  slice, a '$' corruption reads NO READING, and 12 of 14 real captures give byte-identical output.
+- Not covered, as v2 says: a corruption inside the base64 alphabet still fails the CRC and reads MISS.
