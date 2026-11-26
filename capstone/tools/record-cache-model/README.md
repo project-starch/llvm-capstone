@@ -95,3 +95,67 @@ not of the cost fit. B5a's mcf mechanism is open.
 
 **Do not use the cost model for a lever choice until it is refitted on more than two programs, with a held-out point
 outside run-to-run noise (which is not measured).**
+
+## Line B (the Sublet format): `rcm-lb.c` (2026-11-26, the rtl lane)
+
+The record-cache decision for B5b-2 is made on EVENTS from this model and a MEASURED per-miss cost. The two-parameter cycle model above was refuted out of sample and is not used. The semantics owner's threshold: build only if misses x the measured cost is at least 1.0 % of cycles on one of gcc, mcf and Perl, with no organisation adding events beyond NC.
+
+**Organisations:**
+- LB: b42c8c644's own verdict cache. 64 x 4, set = slot[5:0], full-id tags. Installs on live record writes and live unit reads; same-index reuse, then the lowest free way, then round robin. A release clears liveness in place, so the entry is kept and later denies without a probe. An E event with word 1 bit 0 set empties it (see the format below).
+- RC, GC, NC: as in `rcm.c`.
+- `rcm-lb.c`'s header has the exact rules and their source lines.
+
+**Trace format v2:** two u64 per event. Word 0 is `rcm.c`'s; word 1 is `{live[32], generation[31:0]}`.
+- Line B tags carry the generation, so a reissued slot is a different id.
+- Installs depend on whether the record read or written is live.
+- **Produced by the nested lane's Sublet tracer** (capstone-qemu nested/record-trace-lb, on the twin's own QEMU 3a9fc39167; off unless CAPSTONE_RECTRACE_V2=<prefix>): checks (c), allocations (a: CDERIVE, CRENEW including its old record's release, CSMINT's create; their operand reads are op reads of kind a), releases (r/v: CREVOKE, including the 4(b) walk's reads), other operations (o), table switches (T) and edges (E).
+- **E:** op 0 = a trap out of protected U, 1 = an srevroot write, 2 / 3 = an SRET / MRET into protected U. Word 1 bit 0 = 1 exactly when the key {srevroot, mode != M && srevroot != 0} changed, which is when b42c8c644 flushes (revnode_ns_flush_o; under CAPSTONE_SUBLET_FMT vctx_table is 1 in S and U whenever srevroot != 0, so a U <-> S switch under one srevroot does not flush). The csupctl bit-2 strobe also flushes on the RTL; the twin has no csupctl, and Line B's runtime never writes 0x7C4 (the runtime lane's search, firmware and kernels, by source and by encoding).
+- **Raw, not deduplicated, and the twin's walk is not the RTL's.** `rcm.c`'s hardware pattern is NOT ported: it was derived from the rev_node unit, while b42c8c644's Line B unit is `capstone_sublet_life.sv`, which re-reads records on purpose (two passes; re-gets before each splice write) and writes a CRENEW-in-place operand twice (S_K_NODE0 live 0, S_K_NODE1 live 1). The tracer drops the two shapes the unit never makes: an allocation's second write of its record (S_D_WCH, S_C_W, S_K_FRESH write it once) and a re-read of the operand (S_RS_R reads it once). The twin's CREVOKE is the C reference's get/put per link and makes MORE accesses than the unit: the nested lane's host count of one cap_rev_kill_step with prev and stop non-zero reads 5n + 12 records (17, 22, 27 for n = 1, 2, 3) where the unit makes 3n + 6 (measured for n = 3, below), and writes stop twice and the operand live 1 before its release.
+- **What that leaves usable.** A re-access of a slot LB already holds reuses its way, so LB's state after an operation depends only on each slot's first-install order and its final (generation, live), unless the operation displaces a slot it installed itself; `LB op_stretches ... self_evict ...` counts those. With self_evict 0, the LB check rows (the decision's input) are the RTL's IF each operation's first-install order and final states match the unit's. COMPARED (2026-11-26): the nested lane's host sequences for CDERIVE (free list empty / non-empty), CSMINT's create, CRENEW in place / out of place, CREVOKE empty and a 2-chunk CREVOKE with its re-execution match the unit on both, operation body by body. The one divergence was the OPEN: every lifetime operation (CDERIVE is two, a check then a commit) reads the first two free-list entries, and the read tap fills them live for their stored next generation (ex_stage.sv:2628-2629), while the twin traced only its own pop read, at live 0. The tracer now emits the open's reads and drops the pop read (capstone-qemu nested/record-trace-lb 702f24732b). The RTL side was MEASURED, not only read: capstone-ariane slu-walk 4bbdbc6ed, b5b2-crevint-walk3 (a one-chunk CREVOKE of 3 makes 15 record reads = 3n + 6; each open reads free[0], free[1]; the allocation does not re-read the popped record). The LSU's install on those reads is by source. The self_evict-0 condition I set for using LB cannot be met by any trace: self_evict counts per STRETCH (operations with no check between them), and a stretch that installs more than 4 slots of one set displaces its own installs on the RTL too. The first trace read 203,897. So LB is read as a BRACKET instead: `--walk dedup` replays each stretch with every slot once, at its first live access, carrying its final state (an install at its last live generation, then an invalidate if a dead write follows). That walk keeps the first-install order and drops every re-read, so a slot displaced mid-stretch is never re-installed. `--walk asis` (the default) replays the twin's re-reads. The unit's 3n + 6 walk lies between the two in re-reads; the two LB check rows are a sensitivity bracket over that, NOT a bound over every order. Shuffled or reversed orders were not used, because they change the first-install order, which the comparison above fixed. A decision whose threshold falls inside the bracket is UNDECIDED. The op rows (accesses, memory reads and writes) of every organisation are the TWIN's pattern, not the RTL's.
+- **First trace** (the nested lane's `small` arm on 702f24732b, trace sha256 c961ee6a79946085…, 23,957,851 pairs, checked here): LB check misses 20,309 asis and 19,615 dedup (3.4 % apart), over 32,861,650 checks; instructions_protected 114,582,873, instructions_all 4,763,859,720. self_evict is 203,897 asis and 79,181 dedup; by installing kind, asis a 1,716 / r 123,215 / v 78,966, and dedup a 316 / r 16 / v 78,849. So dedup's remainder is the CREVOKE walk's verify reads, which touch more than 4 slots of a set once each. deny_hit_dead and dead_record are 0: no check in this arm reads a dead id. asis reproduces 664d6a6466a2's output line for line, plus the new kind line. The share of cycles needs the program's cycle count, which is not this tool's, and the silicon per-miss cost, now read (below).
+
+**Control:** `synth-control-lb.py rcm-lb` runs a synthetic v2 trace whose LB, RC, GC and NC counts were computed by hand, and asserts each one.
+- Its cases: eviction past 4 ways, the round-robin victim, a release in place, a hit-dead deny, a same-index reissue at generation 2, a namespace edge, and a dead id's one probe.
+- `--perturb` changes one expectation, and the control must then FAIL. Both were checked: PASS rc 0; perturbed FAIL rc 1.
+- The open phase: a free entry read live at its next generation turns a later check of the stale id from a deny into a probe (probes 1, deny_hit_dead 1); at live 0, the twin's former shape, it stays a deny (0, 2). A build that does not fill on op reads FAILS.
+- self_evict: five installs of one set in one stretch count 1; four, or five split by a check, count 0. Builds that never count it, or never end a stretch, FAIL.
+- `--walk`: a stretch installs s1, displaces it with four more installs of its set, then re-reads it; a check of s1 follows. asis hits (probes 1, self_evict 2) and dedup misses (probes 2, self_evict 1). A build whose `--walk dedup` replays as asis FAILS on three counts.
+- An edge with the key unchanged must not flush: a build that flushes on every E FAILS the control on six counts.
+- A malformed trace exits 2: six malformed traces (E word 1 = 2; T, I, PI with a non-zero word 1; a record with bit 33; kind 11) must each exit 2, and E word 1 = 1 must exit 0. f82523965196 checked word 1 after the marker branches, so the four marker cases were accepted; c156970f12cd fixed it and its build passes.
+
+**Measured per-miss cost** (RTL simulation, b42c8c644's core, memory delay 12; capstone-ariane b5b2-prefix bd3932800, b5b2-srvcost and -DSC_COLD):
+- warm record (in the D$): (P3 - P2) / 33 = 14.4 cycles per verdict miss;
+- cold record (D$ evicted): (P3 - P4) / 33 = 70.0 cycles, and independently (P7 - P2) / 33 = 71.5 cycles (P7's probes read records evicted before P4).
+- These are simulation costs at a fixed 12-cycle memory. They are not the decision's input.
+
+**Silicon per-miss cost** (the decision's input): `capstone/tests/rtl-smoke/b5b2-misscost-bare-2026-11-26`, run on
+b42c8c644's seal on board 2 on 2026-11-25. The seal was read back by name. The kit's RUN lines and image hashes were
+checked by the board lane against the arming file. Result lines are at board/meas-pw f47b2a686ce2,
+`b5b2-seals-board-2026-11-25/b42c8c644-board2.result-lines.txt`.
+
+| image | SV (positions 1-13) |
+|---|---|
+| b5b2-srvcost | 0x1bd 0x674 0x688 0x674, 0x5f2 0x83 0x290 0x83 0x83 0x83 0x286 0x83, 0x8 |
+| b5b2-srvcost-cold | 0x1c2 0x674 0x682 0x674, 0x5ef 0x83 0xb2c 0x666 0x83 0x83 0x5b8 0x9b, 0x8 |
+
+- **Graded here by `mc-grade.py`** (the kit) against `expected-vectors.json`:
+  - sublet-life (SR 35): all 25 E positions exact;
+  - both images: SR 13 with position 13 = 0x8, and rule 3 (AS PREDICTED) holds.
+  - Negative test: a copy with one sublet-life E value and image 2's P3 perturbed FAILS both checks.
+- **The costs, in cycles per verdict miss:**
+  - warm: 15.9 (P3 - P2) and 15.6 (P7 - P2);
+  - cold: 37.0 (P3 - P4) and 40.4 (P7 - P2).
+  The cold cost on silicon is about half the simulation's (78.7 / 71.5).
+- **Break-even, under the rule** (both bracket ends and both readings must fall on one side of 1.0 %). On a
+  trace, misses x cost spans:
+  - cold: asis misses x 40.4 at the top, dedup misses x 37.0 at the bottom;
+  - warm: dedup misses x 15.6 at the bottom.
+  An LB miss's record may be either warm or cold in the D$, and this model does not track the D$. So:
+  - if the cold span is below 1 %, the result is NO BUILD whatever the residency;
+  - if the warm span is above 1 %, the result is BUILD;
+  - otherwise it is UNDECIDED until the D$ residency of the missed records is modelled.
+  That reading of the rule is the rtl lane's and goes to the semantics owner.
+- **On the first trace** (the `small` arm, which is NOT one of the decision's three programs):
+  - cold: 20,309 x 40.4 = 820,484 cycles and 19,615 x 37.0 = 725,755;
+  - warm: 19,615 x 15.6 = 305,994.
+  It is NO BUILD at 82.05 M cycles or more, and BUILD at 30.6 M cycles or fewer. Its cycle count is not measured.
