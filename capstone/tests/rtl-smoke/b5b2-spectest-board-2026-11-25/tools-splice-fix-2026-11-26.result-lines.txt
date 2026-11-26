@@ -1,0 +1,64 @@
+# scan-c25ldc.py (spectest Amendment 9's cause-25-at-LDC scan), repaired 2026-11-26 on the runtime lane's report; result lines
+# old sha256 28dca1e45a4241588111332d84e2e6e465225a436b41e41aefa8099ccca2d0a6, new 203b6edd6527516636fb9bf62060d408ab3766d1ea6b8b101cf2092cb1a6f9f7 (this folder's copy)
+
+## three defects in the old scanner
+1. anchored at line start: a fault line the console spliced into program output was not seen (the runtime lane's report);
+2. a fault that mapfaults.py could not map printed 'cause 25, not at an LDC' and the verdict read NONE;
+3. each fault's mapfaults block was found by pid alone and ran to the END of the output, so an unmapped fault read the NEXT fault's instruction.
+
+## positive control: nested-corpus's board 2 capture (b42c8c644; not a SPEC capture, so nothing in it maps)
+lines containing 'cause=25': 456 = 300 'sublet: fault' occurrences (150 events, each also echoed by 'TRAPTEST: dmesg') + 150 'capstone-exec: domain fault' (the launcher's report of the same events) + 6 'sublet: kernel fault' / 'capstone-exec: kernel fault' lines (2 events, in a syscall)
+old: C25LDC NONE at an LDC (140 cause-25 fault(s) elsewhere, listed above)  (140 faults listed, each NOT MAPPED yet printed 'not at an LDC')
+new rc=3: events: 150 sublet-fault cause-25 event(s), de-duplicated by (timestamp, pid, pc); 2 kernel fault(s) cause 25
+new: C25LDC NO READING: 150 of 150 cause-25 fault(s) NOT MAPPED to an instruction, so "not at an LDC" is not established for them, 2 kernel fault(s); listed above
+(the 10 events the old scan missed occur only spliced mid-line, e.g. 'CONTROL uaf-mem5[ 2243.335305] sublet: fault cause=25 pc=0x3ff7c01f00 ...')
+
+## synthetic controls: faults inserted into a copy of board 2's B5T-g1b capture before 'TRAPTEST: stage B5T-505.mcf_r rc=0'
+# mcf_r_base.native, entry 0x3ff7fe0000: vaddr 0x10188 is 'ldc s0, 0x20(sp)', vaddr 0x1001c is 'addi t0, t0, 0x248'
+A-ldc-spliced: old rc=0 C25LDC NONE: no cause-25 fault in the capture | new rc=1 C25LDC FINDING (1): cause 25 at an LDC on b42c8c644 -- against the PRE fix or a new mechanism; mapped, not cla
+B-ldc-linestart: old rc=1 C25LDC FINDING (1): cause 25 at an LDC on b42c8c644 -- against the PRE fix  | new rc=1 C25LDC FINDING (1): cause 25 at an LDC on b42c8c644 -- against the PRE fix or a new mechanism; mapped, not cla
+C-addi-spliced: old rc=0 C25LDC NONE: no cause-25 fault in the capture | new rc=0 C25LDC NONE at an LDC (1 cause-25 fault(s) elsewhere, listed above)
+D-unmapped: old rc=0 C25LDC NONE at an LDC (1 cause-25 fault(s) elsewhere, listed above) | new rc=3 C25LDC NO READING: 1 of 1 cause-25 fault(s) NOT MAPPED to an instruction, so "not at an LDC" is not establishe
+E-unmapped-then-ldc: old rc=1 C25LDC FINDING (2): cause 25 at an LDC on b42c8c644 -- against the PRE fix  | new rc=1 C25LDC FINDING (1): cause 25 at an LDC on b42c8c644 -- against the PRE fix or a new mechanism; mapped, not cla
+F-ldc-plus-dmesg-echo: old rc=0 C25LDC NONE: no cause-25 fault in the capture | new rc=1 C25LDC FINDING (1): cause 25 at an LDC on b42c8c644 -- against the PRE fix or a new mechanism; mapped, not cla
+
+## identity on every row the orchestrators scanned before the fix (15 rows: r77b2 B5T-g1b and the g2b three, r77b3's eight, spb1d's three)
+every capture has 0 'cause=' substrings (grep -a -c), and the new scanner's verdict line equals the recorded one on all 15: C25LDC NONE: no cause-25 fault in the capture
+
+## grade-mcffault.py (old b26bfc7353f30741, new c028de3b1ae2a07d): the same anchors, and the same unbounded mapfaults block
+M1-mcf-ldc-spliced: old MCF COMPLETED: no mcf fault; consistent with R-80, not evidence for it (Amendmen | new MCF CAUSE 25 AT AN LDC ON b42c8c644 (vaddr 0x10188	s0, 0x20(sp)): a FINDING against the PRE fix or a
+M2-mcf-ldc-linestart: old MCF CAUSE 25 AT AN LDC ON b42c8c644 (vaddr 0x10188	s0, 0x20(sp)): a FINDING agai | new MCF CAUSE 25 AT AN LDC ON b42c8c644 (vaddr 0x10188	s0, 0x20(sp)): a FINDING against the PRE fix or a
+(M1/M2: an mcf-pid 788 fault at the ldc vaddr 0x10188, spliced mid-line / at a line start, in a copy of board 2's B5T-g1b capture)
+identity r77b2 B5T-g1b: verdict line equal; the exposure line differs only by mcf-exposure.py's fix below
+identity r77b3 B5T-g1b: verdict line equal; the exposure line differs only by mcf-exposure.py's fix below
+
+## mcf-exposure.py (old aa1d6557c876ef35, new 17c806a6c2806ca0): anchors, and the "done" end
+# the docstring said the end of a completed stage is the last time BEFORE its QSTEP-END; the code took the last time in the whole rest of
+# the capture (validation, the stage's dmesg dump, later ticks). The end is now the up1 of its last '@@SPEC-END n run' line before QSTEP-END.
+mcf-exposure.py.bak-pre-splice:
+  B5T-g1b-b2             board 2 b42c8c644  mcf entry   6869.62 s  end  13711.85 s  exposure   6842.2 s  stage ended rc=0
+  B5T-g1b-b3             board 3 b42c8c644  mcf entry   6866.38 s  end  13710.67 s  exposure   6844.3 s  stage ended rc=0
+  boot5                  board 3 904cd9c6b  mcf entry     33.26 s  end   2799.49 s  exposure   2766.2 s  SILENCE (a wedge at or after the last kernel time)
+  B5T-g1r-b2             board 2 88db40027  mcf entry   4731.63 s  end   8331.63 s  exposure   3600.0 s  watchdog at 3600 s (no wedge)
+  B5T-g1r-b3             board 3 904cd9c6b  mcf entry   4731.97 s  end   8331.97 s  exposure   3600.0 s  watchdog at 3600 s (no wedge)
+  pooled: 23,652.7 s of mcf, 1 wedge(s)
+mcf-exposure.py:
+  B5T-g1b-b2             board 2 b42c8c644  mcf entry   6869.62 s  end  13695.78 s  exposure   6826.2 s  stage ended rc=0; end = up1 of its last @@SPEC-END run line
+  B5T-g1b-b3             board 3 b42c8c644  mcf entry   6866.38 s  end  13694.58 s  exposure   6828.2 s  stage ended rc=0; end = up1 of its last @@SPEC-END run line
+  boot5                  board 3 904cd9c6b  mcf entry     33.26 s  end   2799.49 s  exposure   2766.2 s  SILENCE (a wedge at or after the last kernel time)
+  B5T-g1r-b2             board 2 88db40027  mcf entry   4731.63 s  end   8331.63 s  exposure   3600.0 s  watchdog at 3600 s (no wedge)
+  B5T-g1r-b3             board 3 904cd9c6b  mcf entry   4731.97 s  end   8331.97 s  exposure   3600.0 s  watchdog at 3600 s (no wedge)
+  pooled: 23,620.6 s of mcf, 1 wedge(s)
+(the three rows of mcf-exposure.txt -- boot5 SILENCE and both g1r watchdog rows -- are identical; the two B5T-g1b rows change by -16.0 and -16.1 s)
+
+## preflight-board-run.sh on board 2's four CF/CFP payloads and runtime's three proven b42c8c644 payloads (asked by the runtime lane)
+# FPGA_BITSTREAM = the resident b42c8c644 seal; PREFLIGHT_DTS_NODES declared 65536 (the 1021 declaration BLOCKS on every one); empty overlay; no rungs
+# CF-B5TL1-g3 had started before this was run: it is UNGATED by preflight-board-run.sh
+B5TL1-g3: preflight: BLOCKED | firmware 20 MB exceeds the 20 MB working budget -- the overlay is dirty. A clean one is ~1;preflight: BLOCKED;
+B5T-g1b: preflight: GO | 
+B5TL1-g4mk: preflight: GO | 
+CF-B5TL1-g3: preflight: BLOCKED | firmware 20 MB exceeds the 20 MB working budget -- the overlay is dirty. A clean one is ~1;preflight: BLOCKED;
+CFP-B5TL1-g3: preflight: BLOCKED | firmware 20 MB exceeds the 20 MB working budget -- the overlay is dirty. A clean one is ~1;preflight: BLOCKED;
+CF-B5TL1-g4mk: preflight: GO | 
+CFP-B5TL1-g4mk: preflight: BLOCKED | firmware does not embed exactly one FDT;preflight: BLOCKED;
+CFP-B5TL1-g4mk's FDT count: d00dfeed at 0x14000 (totalsize 3518, version 17, the same header as CF-B5TL1-g4mk's) and at 0xd73e9a (totalsize 1180622853, version 4278320661: four bytes of compressed data). One FDT.
