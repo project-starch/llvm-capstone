@@ -147,3 +147,46 @@ against Phase B's CF-g1b on boards 2 and 3. For imagick it reads NO READING. The
 qualification gap, is unaffected. The board plans armed from fec8d4357796 are unchanged (camp-b1.plan d84532ac46260a2c,
 camp-b2.plan 14035a3ab9821615, camp-b3.plan 827186facd1d7022; each read here against the design, with the order
 S F F S S F on board 1).
+
+## Amendment 2 (2026-11-26 19:18Z, while Phase C's first CF-g3 boot runs, before any CFP-B5TL1-g3v2 boot of this campaign): port v2 gets its own Phase C2; board 2's session split
+
+**Port v2 is now the CFP-g3 row's image.** nested's board pair read as its pre-registration predicts (nested-workloads
+RESULT fab3d2fadf40, against db1188431edf with Addendum 1 c986a843f704, board 2, b42c8c644):
+- CFP-B5TL1-g3v2 (724f0027fdf5fe59) PASSES at 5.83 s;
+- its forced-failure control g3v2ff (8fad069606cbb548) stops with SUBLET-RENEW-FAILED, rc 134, and grades MISS.
+
+By that pre-registration's table, v2 replaces v1 as the row's image.
+
+**Phase C runs as armed, with port v1 (6616eecf).** Its sessions had started when the pair read. Its readings are
+reported as the v1 ports ratio, kept beside v2's.
+
+**Phase C2, added: board 2, b42c8c644.** Order: CF-B5TL1-g3, CFP-B5TL1-g3v2, CFP-B5TL1-g3v2, CF-B5TL1-g3, CF-B5TL1-g3,
+CFP-B5TL1-g3v2. That is Phase C's order with v2 in v1's place.
+- **Slot:** after camp2-x264b's .done, unless the board lane finds an earlier session boundary that cuts nothing.
+- **Image:** CFP-B5TL1-g3v2, fw_payload sha256 724f0027fdf5fe59a0a00437c9117ebc922f3c64752ee66a31345088760cf2fd,
+  21,662,216 B (`trapk/build-cfp-g3v2.done`, fast-path-refs=2). Overlay: CFP-B5TL1-g3's, except plan.json and the
+  native.
+- **C10:** "C10 BLOCK at 21662216 B (21.66 MB), proceeded by runtime's ruling; this size ran on this seal as
+  CF-B5TL1-g3 (997e2fd6fdbdecdf) and CFP-B5TL1-g3v2 (724f0027fdf5fe59)".
+- **Grading:** as every CFP row: v2 b976d288 binding, v1 beside it, with `SPEC_STAGE_ROOT=nested/b5b2/ports/gcc-v2/
+  boardroot`.
+- **Hashes:** the data hashes must equal nested's g3v2 board row (uart sha256 efd010abaf9db1bd). CF-g3's hashes stay
+  as `twin-camp.json`.
+- **Bound:** 4,500 s. Every other boot term is as above.
+- **Reported:** the v2 ports ratio from C2's same-session pairs, v1's from Phase C beside it, and nested's N=1
+  readings.
+- **Predictions:** P1 for every C2 boot. No prediction is made for v2 against v1: both read 5.83 s at N=1.
+
+**Board 2's campaign session is split into three.** The split keeps the board busy while compiler's placement control
+(stage2-placement-b42, f4a6996c72c9) waits for its twin-check amendment. The plan's lines and their order are
+unchanged:
+1. camp-b2-cb1.plan b7f00560628b76c7: Phase C, then CF-g1b;
+2. the placement session, gated on that pre-registration's Amendment 3 by 02:00Z;
+3. camp-b2-x.plan 3154c25bd29edcbe: CF-x264b.
+
+The two new plans' SPEC lines equal camp-b2.plan 14035a3ab9821615's 14, in order. That was read with Python; a control
+with two lines swapped reads DIFFER. The armed camp2 session was stopped while waiting, before any step began (.done
+`STOP rc=1 2026-11-26T18:09:35Z`).
+
+**Between Phase B's two CF long rows on board 2, the placement session's S boots run on the same seal.** They are
+recorded as part of board 2's boot history. They are not a variable this campaign reads.
