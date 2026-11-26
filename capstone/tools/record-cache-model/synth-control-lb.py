@@ -78,10 +78,17 @@ def openph(live): return (ev("a", 1, 20, 0, 1) + ev("c", 0, 20, 0, 1) + ev("r", 
 OPENPH = {"open read live 1": (openph(1), dict(probes=1, deny_hit_dead=1)),
           "open read live 0": (openph(0), dict(probes=0, deny_hit_dead=2))}
 
-def run_out(binary, body):
+# --walk: a stretch installs s1, displaces it with four more installs of set 1 (s257 takes s1's way), then re-reads
+# s1 live; a following check of s1. asis replays the re-read, which re-installs s1 (displacing s65): the check hits,
+# probes 1 (the preamble's check of s9 only), self_evict 2. dedup replays s1 once, at its first access: s257
+# displaces it for good, the check misses: probes 2, self_evict 1. A dedup that reads like asis FAILS.
+WALKBODY = b"".join(wr(s) for s in (1, 65, 129, 193, 257)) + ev("a", 0, 1, 1, 1) + ev("c", 0, 1, 1, 1)
+WALK = {"asis": dict(probes=1, self_evict=2), "dedup": dict(probes=2, self_evict=1)}
+
+def run_out(binary, body, args=()):
     with tempfile.NamedTemporaryFile(suffix=".rt2", delete=False) as f:
         f.write(body); path = f.name
-    out = subprocess.run([binary, path], capture_output=True, text=True).stdout
+    out = subprocess.run([binary, path, *args], capture_output=True, text=True).stdout
     os.unlink(path); return out
 
 def run_one(binary, body):
@@ -129,6 +136,17 @@ def main():
         got = {lines[0][i]: int(lines[0][i + 1]) for i in range(1, len(lines[0]), 2)} if lines else {}
         for c, v in want.items():
             if got.get(c) != v: print(f"MISMATCH open phase {name} {c}: got {got.get(c)} expected {v}"); bad += 1
+    for walk, want in WALK.items():
+        out = run_out(binary, ev("c", 0, 9, 1, 1) + WALKBODY, ("--walk", walk)).splitlines()
+        got = {}
+        for l in out:
+            f = l.split()
+            if l.startswith("LB probes"): got["probes"] = int(f[2])
+            if l.startswith("LB op_stretches"): got["self_evict"] = int(f[4])
+        if not any(l.startswith("LB self_evict by kind") and l.split()[-1] == walk for l in out):
+            print(f"WALK {walk} NOT REPORTED"); bad += 1
+        for c, v in want.items():
+            if got.get(c) != v: print(f"MISMATCH walk {walk} {c}: got {got.get(c)} expected {v}"); bad += 1
     for name, body in OK.items():
         rc = run_one(binary, body)
         if rc != 0: print(f"WELL-FORMED REFUSED {name}: rc {rc}, expected 0"); bad += 1

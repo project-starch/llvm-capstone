@@ -35,6 +35,13 @@
 //   (csr_regfile.sv:3008-3011), so a U <-> S switch under one srevroot does not flush. Every E is counted by op.
 // Runs: a check run of N is N checks of one id; an operation run is ONE access, as rcm.c.
 // Exit 2 on an empty, malformed or unreadable trace: no data is an error.
+//
+// --walk asis|dedup (default asis): how each op stretch is replayed. asis = the trace's own sequence. dedup = each slot
+// ONCE per stretch, at the position of its first live access (or its first touch if it has none), carrying its final
+// state: an install at the generation of its last live access, then an invalidate if a dead write follows that access.
+// Both keep the twin's first-install order; they differ only where a stretch displaces a slot it installed and a later
+// re-read re-installs it (self_evict), which is where the twin's re-reads (5n + 12 per CREVOKE) and the unit's
+// (3n + 6) could disagree. The two LB check rows are a SENSITIVITY BRACKET over that, not a bound over all orders.
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -63,16 +70,17 @@ typedef struct {
   uint64_t slot[64][4]; uint32_t gen[64][4]; uint8_t occ[64][4], live[64][4], rr[64];
   tlb_t tlb; st_t s[NCL];
   uint64_t probes, deny_hit_dead, dead_record, installs, inval, edges_flushed;
-  uint64_t stretches, self_evict, untracked;
+  uint64_t stretches, self_evict, untracked, se_kind[16];
 } lb_t;
 // An op STRETCH is a maximal run of operation events (no check, edge or table switch between them). A re-access of a
 // slot LB already holds reuses its way and displaces nothing, so LB's state after a stretch depends only on the order
 // of each slot's first install and on each slot's last (generation, live) -- NOT on how many times the operation
 // reads or writes it -- EXCEPT when the stretch displaces a slot it installed itself. self_evict counts those. When
 // it is 0, LB's check counts are the same for any access pattern with the same first-install order and final states
-// (the twin's model walks differently from b42c8c644's unit, and this is what makes the LB rows usable anyway).
+// (the twin's model walks differently from b42c8c644's unit). A real trace never reads 0: a stretch that installs
+// more than 4 slots of one set displaces its own on the RTL too. So the LB rows are read under both --walk modes.
 #define SH 16384
-static uint64_t sh_key[SH]; static uint64_t sh_ep[SH]; static uint64_t sh_epoch = 1, sh_n; static int in_op;
+static uint64_t sh_key[SH]; static uint64_t sh_ep[SH]; static uint64_t sh_epoch = 1, sh_n; static int in_op, cur_kind;
 static int sh_has(uint64_t s) { for (uint64_t h = (s * 0x9e3779b97f4a7c15ULL) >> 50, k = 0; k < SH; k++, h = (h + 1) & (SH - 1)) {
     if (sh_ep[h] != sh_epoch) return 0;
     if (sh_key[h] == s) return 1;
@@ -88,7 +96,7 @@ static void lb_install(lb_t *c, uint64_t slot, uint32_t gen) {
   unsigned set = slot & 63; int way = c->rr[set], reuse = 0;
   for (int w = 0; w < 4; w++) if (c->occ[set][w] && c->slot[set][w] == slot) { way = w; reuse = 1; }
   if (!reuse) for (int w = 3; w >= 0; w--) if (!c->occ[set][w]) { way = w; reuse = 1; }
-  if (!reuse) { if (in_op && sh_has(c->slot[set][way])) c->self_evict++; c->rr[set] = (c->rr[set] + 1) & 3; }
+  if (!reuse) { if (in_op && sh_has(c->slot[set][way])) { c->self_evict++; c->se_kind[cur_kind]++; } c->rr[set] = (c->rr[set] + 1) & 3; }
   if (in_op) sh_add(slot, c);
   c->occ[set][way] = 1; c->slot[set][way] = slot; c->gen[set][way] = gen; c->live[set][way] = 1; c->installs++;
 }
@@ -169,11 +177,63 @@ static void nc_access(nc_t *c, uint64_t slot, int write, int cl, uint64_t n) {
 
 static lb_t LB; static rc_t RC; static gc_t GC; static nc_t NC;
 
+// ---------------- the op stretch buffer (--walk)
+typedef struct { uint64_t slot, pos; uint32_t gen; uint8_t write, live, kind, cl; } opev_t;
+static opev_t *buf, *obuf; static size_t nbuf, cbuf, cobuf; static int walk_dedup;
+static void push_op(opev_t e) {
+  if (nbuf == cbuf) { cbuf = cbuf ? 2 * cbuf : 4096; buf = realloc(buf, cbuf * sizeof *buf); if (!buf) { perror("realloc"); exit(2); } }
+  e.pos = nbuf; buf[nbuf++] = e;
+}
+static void dispatch_op(const opev_t *e) {
+  if (!in_op) { in_op = 1; LB.stretches++; }
+  cur_kind = e->kind;
+  lb_op(&LB, e->slot, e->gen, e->write, e->live);
+  rc_access(&RC, e->slot, e->write, e->cl);
+  gc_op(&GC, e->slot, e->write, e->cl);
+  nc_access(&NC, e->slot, e->write, e->cl, 1);
+}
+static int by_slot_pos(const void *a, const void *b) {
+  const opev_t *x = a, *y = b;
+  if (x->slot != y->slot) return x->slot < y->slot ? -1 : 1;
+  return x->pos < y->pos ? -1 : x->pos > y->pos;
+}
+static int by_pos(const void *a, const void *b) { const opev_t *x = a, *y = b; return x->pos < y->pos ? -1 : x->pos > y->pos; }
+static size_t nob;
+static void out_ev(opev_t e, uint64_t pos) {
+  if (nob == cobuf) { cobuf = cobuf ? 2 * cobuf : 4096; obuf = realloc(obuf, cobuf * sizeof *obuf); if (!obuf) { perror("realloc"); exit(2); } }
+  e.pos = pos; obuf[nob++] = e;
+}
+// end of a stretch: replay the buffered op events (asis: as traced; dedup: one canonical event pair per slot), then end it
+static void stretch_end(void) {
+  if (!walk_dedup || nbuf < 2) { for (size_t i = 0; i < nbuf; i++) dispatch_op(&buf[i]); }
+  else {
+    qsort(buf, nbuf, sizeof *buf, by_slot_pos); nob = 0;
+    for (size_t i = 0, j; i < nbuf; i = j) {
+      for (j = i; j < nbuf && buf[j].slot == buf[i].slot; j++) ;
+      size_t fl = (size_t)-1, ll = 0, dw = (size_t)-1; int lwr = 0;
+      for (size_t k = i; k < j; k++) {
+        if (buf[k].live) { if (fl == (size_t)-1) fl = k; ll = k; if (buf[k].write) lwr = 1; }
+      }
+      for (size_t k = (fl == (size_t)-1 ? i : ll + 1); k < j; k++) if (buf[k].write && !buf[k].live) { dw = k; break; }
+      if (fl != (size_t)-1) {
+        opev_t e = buf[fl]; e.gen = buf[ll].gen; e.live = 1; e.write = lwr;
+        out_ev(e, 2 * buf[fl].pos);
+        if (dw != (size_t)-1) out_ev(buf[dw], 2 * buf[fl].pos + 1);   // the invalidate, right after the install
+      } else if (dw != (size_t)-1) out_ev(buf[dw], 2 * buf[dw].pos);
+      else out_ev(buf[i], 2 * buf[i].pos);                            // dead reads only: no LB effect
+    }
+    qsort(obuf, nob, sizeof *obuf, by_pos);
+    for (size_t i = 0; i < nob; i++) dispatch_op(&obuf[i]);
+  }
+  nbuf = 0; sh_end();
+}
+
 int main(int argc, char **argv) {
-  if (argc < 2) { fprintf(stderr, "usage: rcm-lb TRACE_V2 [--with-pcc]\n"); return 2; }
+  if (argc < 2) { fprintf(stderr, "usage: rcm-lb TRACE_V2 [--with-pcc] [--walk asis|dedup]\n"); return 2; }
   int with_pcc = 0;
   for (int i = 2; i < argc; i++) {
     if (!strcmp(argv[i], "--with-pcc")) with_pcc = 1;
+    else if (!strcmp(argv[i], "--walk") && i + 1 < argc && (!strcmp(argv[i + 1], "asis") || !strcmp(argv[i + 1], "dedup"))) walk_dedup = !strcmp(argv[++i], "dedup");
     else { fprintf(stderr, "unknown option %s\n", argv[i]); return 2; }
   }
   int fd = open(argv[1], O_RDONLY); if (fd < 0) { perror(argv[1]); return 2; }
@@ -191,7 +251,7 @@ int main(int argc, char **argv) {
     if (kind > K_E || (kind == K_E ? (y >> 1) != 0 : (kind >= K_T ? y != 0 : (y >> 33) != 0))) {
       fprintf(stderr, "malformed event at %llu\n", (unsigned long long)i); return 2;
     }
-    if (kind == K_T || kind == K_E || kind <= K_P) sh_end();   // a check, an edge or a table switch ends a stretch
+    if (kind == K_T || kind == K_E || kind <= K_P) stretch_end();   // a check, an edge or a table switch ends a stretch
     if (kind == K_T) { tables++; lb_flush(&LB); rc_flush(&RC); gc_flush(&GC); tlb_clear(&NC.tlb); continue; }
     if (kind == K_I) { lastI = x & ((1ULL << 56) - 1); continue; }
     if (kind == K_PI) { lastP = x & ((1ULL << 56) - 1); continue; }
@@ -209,13 +269,10 @@ int main(int argc, char **argv) {
       gc_check(&GC, slot, cl); if (cnt > 1) { GC.s[cl].acc += cnt - 1; GC.s[cl].hit += cnt - 1; }
       nc_access(&NC, slot, 0, cl, cnt);
     } else {
-      if (!in_op) { in_op = 1; LB.stretches++; }
-      lb_op(&LB, slot, gen, write, live);
-      rc_access(&RC, slot, write, cl);
-      gc_op(&GC, slot, write, cl);
-      nc_access(&NC, slot, write, cl, 1);
+      push_op((opev_t){ .slot = slot, .gen = gen, .write = write, .live = live, .kind = kind, .cl = cl });
     }
   }
+  stretch_end();
   if (!recs) { fprintf(stderr, "no record events\n"); return 2; }
   printf("trace %s\nevents %llu tables %llu edges %llu instructions_all %llu instructions_protected %llu with_pcc %d\n",
          argv[1], (unsigned long long)ne, (unsigned long long)tables, (unsigned long long)edges,
@@ -233,6 +290,9 @@ int main(int argc, char **argv) {
          (unsigned long long)LB.inval, (unsigned long long)LB.edges_flushed);
   printf("LB op_stretches %llu self_evict %llu untracked %llu\n", (unsigned long long)LB.stretches,
          (unsigned long long)LB.self_evict, (unsigned long long)LB.untracked);
+  printf("LB self_evict by kind a %llu r %llu v %llu o %llu walk %s\n", (unsigned long long)LB.se_kind[K_A],
+         (unsigned long long)LB.se_kind[K_R], (unsigned long long)LB.se_kind[K_V], (unsigned long long)LB.se_kind[K_O],
+         walk_dedup ? "dedup" : "asis");
   printf("E by op %llu %llu %llu %llu\n", (unsigned long long)ev[K_E][0], (unsigned long long)ev[K_E][1],
          (unsigned long long)ev[K_E][2], (unsigned long long)ev[K_E][3]);
   printf("RC flush_writebacks %llu\nEND\n", (unsigned long long)RC.flush_wb);
