@@ -98,8 +98,15 @@ claims and rows that b42c8c644 has not yet answered:
     between compiler and rtl: a scapmode CSR, or a flop loaded from bit 0 of the srevroot write, which adds no
     flush for processes without the flag. The decoder output sits in a cone on the UNOPTFLAT list, so the
     synthesis-only gate comes first.
-11. nested: **Perl's CRENEW variant.** It was deferred on 23 Nov for want of a CRENEW bitstream, and b42c8c644 has
-    one. The liveness-test half stays out: nothing decodes it, and it saves 0.032 % of instructions.
+11. nested: **Perl's CRENEW variant on the trap route.** The variant was already measured on 24 Nov in the
+    one-operand QEMU environment (oneop), with fixtures (nested-allocator-workloads.md, the three "perlbench item 3"
+    sections):
+    - heads: -11.68 M image instructions;
+    - bodies: -0.31 %;
+    - hash entries and op slabs: a net cost on suns.pl.
+    What Line B adds is generations, so renewal happens in place, and the B5TL1 build. The arm is perl-fullren on the
+    trap-route twin, pre-registered. The liveness-test half stays out: nothing decodes it, and it saves 0.032 % of
+    instructions.
 12. rtl: three section-5 claims, read at b42c8c644:
     - **Record TLB: present**, 16 entries, fully associative, flushed whole on a namespace flush
       (ex_stage.sv:2218).
@@ -112,8 +119,13 @@ claims and rows that b42c8c644 has not yet answered:
 13. rtl + board: the hardware-cost table rebuilt from b42c8c644, 14f2ef81a and rvbase utilization. The spatial-only row
     becomes a measurement. The record-cache row has no hardware.
 14. compiler + runtime: the embedded suites (BEEBS, RV8, the CoreMark-derived benchmark) as Line B images, then rows.
-15. nested + runtime: the application cost rows on b42c8c644. Only CPython and memcached have one. The paper's table
-    also has mruby, Perl, PHP, SQLite, PostgreSQL and Wireshark, and the large-subtree revoke time.
+15. nested + runtime: the application cost rows (Table 3) on b42c8c644. Table 3's rows are SQLite, CPython,
+    PostgreSQL, FFmpeg, mruby, Perl, memcached and PHP, all measured on P1. On b42c8c644:
+    - only CPython has a prot-against-stock cost reading (nested-cpymem, +6.8 %, pyperformance on the msghdr kernel);
+    - memcached has a qualification (6 of 6), not Table 3's mc-crusher cost;
+    - SQLite and mruby have rows only on the superseded seal 904cd9c6b;
+    - PostgreSQL and FFmpeg have no Line B row at all.
+    The large-subtree revoke time is owed too.
 
 **The long pole is x264.** Its test run needs more than about 12,180 s on b42c8c644 (Amendment 11), so three runs
 on each of four arms come to about 40 board-hours for x264 alone. x264b images therefore go into each board's longest
