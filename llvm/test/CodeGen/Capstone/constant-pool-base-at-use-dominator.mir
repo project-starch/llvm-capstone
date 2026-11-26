@@ -1,0 +1,210 @@
+# CapstoneFoldMemOffset with -capstone-pool-base-at-use-dominator: the chains rebased onto the pool's base entry share
+# one PseudoLLA/PseudoCapGlobalBase pair, as with -capstone-pool-base-at-entry, but the pair is built at the nearest
+# common dominator of the shared loads, moved out of every loop containing that block into the outermost one's
+# preheader, and only for loads in a loop. A path that enters no such loop builds no base.
+#
+# @cold: both loads are on a branch the return path skips, in no loop. At entry the pair is in bb.0, on every path; at
+# the use dominator nothing is shared, and each chain keeps its own pair beside its load, as with neither option.
+# @guarded_nest: both loads are in an inner loop, behind a guard. At the use dominator the pair leaves both loops for
+# the outer loop's preheader, bb.1: not the entry block (the guarded path builds none) and not in either loop (the
+# loads' operand is invariant in both).
+# @hot_dominator, Perl_pp_modulo's shape: each load is on its own cold branch (1/16), in no loop, and their common
+# dominator is the entry block. At entry the pair is built there, on every path; at the use dominator each chain keeps
+# its own pair beside its load.
+#
+# RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -capstone-gp-free -capstone-image-gp -capstone-pool-base-at-entry -run-pass=capstone-fold-mem-offset -verify-machineinstrs -o - %s | FileCheck %s --check-prefix=ENTRY
+# RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -capstone-gp-free -capstone-image-gp -capstone-pool-base-at-use-dominator -run-pass=capstone-fold-mem-offset -verify-machineinstrs -o - %s | FileCheck %s --check-prefix=UD
+--- |
+  target triple = "capstone64"
+  define void @cold() { ret void }
+  define void @guarded_nest() { ret void }
+  define void @hot_dominator() { ret void }
+...
+---
+# ENTRY-LABEL: name: cold
+# ENTRY:       bb.0:
+# ENTRY:       [[P:%[0-9]+]]:gpr = PseudoLLA %const.0
+# ENTRY-NEXT:  [[PC:%[0-9]+]]:gpcr = PseudoCapGlobalBase killed [[P]], implicit $x3
+# ENTRY:       bb.1:
+# ENTRY-NOT:   PseudoLLA
+# ENTRY:       {{%[0-9]+}}:fpr64 = FLD [[PC]], 0
+# ENTRY-NEXT:  {{%[0-9]+}}:fpr64 = FLD [[PC]], 8
+# ENTRY:       bb.2:
+
+# UD-LABEL:    name: cold
+# UD:          bb.0:
+# UD-NOT:      PseudoLLA
+# UD:          bb.1:
+# UD:          [[A:%[0-9]+]]:gpr = PseudoLLA %const.0
+# UD-NEXT:     [[AC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[A]], implicit $x3
+# UD-NEXT:     {{%[0-9]+}}:fpr64 = FLD [[AC]], 0
+# UD-NEXT:     [[B:%[0-9]+]]:gpr = PseudoLLA %const.0
+# UD-NEXT:     [[BC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[B]], implicit $x3
+# UD-NEXT:     {{%[0-9]+}}:fpr64 = FLD [[BC]], 8
+# UD:          bb.2:
+name: cold
+tracksRegLiveness: true
+constants:
+  - id: 0
+    value: 'double 1.000000e+00'
+    alignment: 8
+  - id: 1
+    value: 'double 2.000000e+00'
+    alignment: 8
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $x10
+    %20:gpr = COPY $x10
+    %21:gpr = COPY $x0
+    BEQ %20, %21, %bb.2
+    PseudoBR %bb.1
+
+  bb.1:
+    successors: %bb.2
+    %0:gpr = PseudoLLA %const.0
+    %1:gpcr = PseudoCapGlobalBase %0, implicit $x3
+    %2:fpr64 = FLD %1, 0 :: (load (s64) from constant-pool, addrspace 200)
+    %3:gpr = PseudoLLA %const.1
+    %4:gpcr = PseudoCapGlobalBase %3, implicit $x3
+    %5:fpr64 = FLD %4, 0 :: (load (s64) from constant-pool, addrspace 200)
+    PseudoBR %bb.2
+
+  bb.2:
+    PseudoRET
+...
+---
+# ENTRY-LABEL: name: guarded_nest
+# ENTRY:       bb.0:
+# ENTRY:       PseudoLLA %const.0
+# ENTRY:       bb.1:
+
+# UD-LABEL:    name: guarded_nest
+# UD:          bb.0:
+# UD-NOT:      PseudoLLA
+# UD:          bb.1:
+# UD:          [[P:%[0-9]+]]:gpr = PseudoLLA %const.0
+# UD-NEXT:     [[PC:%[0-9]+]]:gpcr = PseudoCapGlobalBase killed [[P]], implicit $x3
+# UD:          bb.2:
+# UD-NOT:      PseudoLLA
+# UD:          bb.3:
+# UD-NOT:      PseudoLLA
+# UD:          {{%[0-9]+}}:fpr64 = FLD [[PC]], 0
+# UD-NEXT:     {{%[0-9]+}}:fpr64 = FLD [[PC]], 8
+# UD-NOT:      PseudoLLA
+# UD:          bb.5:
+name: guarded_nest
+tracksRegLiveness: true
+constants:
+  - id: 0
+    value: 'double 1.000000e+00'
+    alignment: 8
+  - id: 1
+    value: 'double 2.000000e+00'
+    alignment: 8
+body: |
+  bb.0:
+    successors: %bb.5, %bb.1
+    liveins: $x10
+    %20:gpr = COPY $x10
+    %21:gpr = COPY $x0
+    BEQ %20, %21, %bb.5
+    PseudoBR %bb.1
+
+  bb.1:
+    successors: %bb.2
+    PseudoBR %bb.2
+
+  bb.2:
+    successors: %bb.3
+    %22:gpr = PHI %21, %bb.1, %25, %bb.4
+    PseudoBR %bb.3
+
+  bb.3:
+    successors: %bb.3, %bb.4
+    %23:gpr = PHI %21, %bb.2, %24, %bb.3
+    %0:gpr = PseudoLLA %const.0
+    %1:gpcr = PseudoCapGlobalBase %0, implicit $x3
+    %2:fpr64 = FLD %1, 0 :: (load (s64) from constant-pool, addrspace 200)
+    %3:gpr = PseudoLLA %const.1
+    %4:gpcr = PseudoCapGlobalBase %3, implicit $x3
+    %5:fpr64 = FLD %4, 0 :: (load (s64) from constant-pool, addrspace 200)
+    %24:gpr = ADDI %23, 1
+    BNE %24, %20, %bb.3
+    PseudoBR %bb.4
+
+  bb.4:
+    successors: %bb.2, %bb.5
+    %25:gpr = ADDI %22, 1
+    BNE %25, %20, %bb.2
+    PseudoBR %bb.5
+
+  bb.5:
+    PseudoRET
+...
+---
+# ENTRY-LABEL: name: hot_dominator
+# ENTRY:       bb.0:
+# ENTRY:       [[P:%[0-9]+]]:gpr = PseudoLLA %const.0
+# ENTRY-NEXT:  [[PC:%[0-9]+]]:gpcr = PseudoCapGlobalBase killed [[P]], implicit $x3
+# ENTRY:       bb.1:
+# ENTRY-NOT:   PseudoLLA
+# ENTRY:       {{%[0-9]+}}:fpr64 = FLD [[PC]], 0
+# ENTRY:       bb.3:
+# ENTRY-NOT:   PseudoLLA
+# ENTRY:       {{%[0-9]+}}:fpr64 = FLD [[PC]], 8
+
+# UD-LABEL:    name: hot_dominator
+# UD:          bb.0:
+# UD-NOT:      PseudoLLA
+# UD:          bb.1:
+# UD:          [[A:%[0-9]+]]:gpr = PseudoLLA %const.0
+# UD-NEXT:     [[AC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[A]], implicit $x3
+# UD-NEXT:     {{%[0-9]+}}:fpr64 = FLD [[AC]], 0
+# UD:          bb.2:
+# UD-NOT:      PseudoLLA
+# UD:          bb.3:
+# UD:          [[B:%[0-9]+]]:gpr = PseudoLLA %const.0
+# UD-NEXT:     [[BC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[B]], implicit $x3
+# UD-NEXT:     {{%[0-9]+}}:fpr64 = FLD [[BC]], 8
+# UD:          bb.4:
+name: hot_dominator
+tracksRegLiveness: true
+constants:
+  - id: 0
+    value: 'double 1.000000e+00'
+    alignment: 8
+  - id: 1
+    value: 'double 2.000000e+00'
+    alignment: 8
+body: |
+  bb.0:
+    successors: %bb.1(0x08000000), %bb.2(0x78000000)
+    liveins: $x10, $x11
+    %20:gpr = COPY $x10
+    %21:gpr = COPY $x11
+    BEQ %20, $x0, %bb.1
+    PseudoBR %bb.2
+
+  bb.1:
+    successors: %bb.4
+    %0:gpr = PseudoLLA %const.0
+    %1:gpcr = PseudoCapGlobalBase %0, implicit $x3
+    %2:fpr64 = FLD %1, 0 :: (load (s64) from constant-pool, addrspace 200)
+    PseudoBR %bb.4
+
+  bb.2:
+    successors: %bb.3(0x08000000), %bb.4(0x78000000)
+    BEQ %21, $x0, %bb.3
+    PseudoBR %bb.4
+
+  bb.3:
+    successors: %bb.4
+    %3:gpr = PseudoLLA %const.1
+    %4:gpcr = PseudoCapGlobalBase %3, implicit $x3
+    %5:fpr64 = FLD %4, 0 :: (load (s64) from constant-pool, addrspace 200)
+    PseudoBR %bb.4
+
+  bb.4:
+    PseudoRET
+...
