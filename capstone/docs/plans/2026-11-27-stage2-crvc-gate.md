@@ -64,3 +64,26 @@ Reported:
 Flash: per the compiler lane's PREREG design (seal control on b42c8c644 first, then the reflash to this seal), after
 the placement RESULTS gives P_s. The seal's readback name goes into the compiler lane's amendment before the first
 boot. Launch follows the board lane's synth-guard rules (40 GB for the gate).
+
+## Gate result (board lane, apollo, 2026-11-26 20:20-21:09Z; graded independently by the rtl lane from the grade file)
+
+**PASS on all three keys.** Output: `/mnt/hdd/<user>/synth/b5b2crvc-796af23d9-gate-out`. The run stopped after
+synthesis by design (run.exit 143, the same as the base gate). The largest Vivado process was 8,012 MB, with no alarm.
+
+| key | read | grade |
+|---|---|---|
+| 1 memory | TM peak 4,970.3 MB (base 4,968.2, +2.1); whole-run peak 5,101 MB | PASS |
+| 2 loops | 'Found timing loop' 0, Synth 8-326 0, check_timing 0 (toy 1), LUTLP-1 0 (toy 1) | PASS |
+| 3 core LUT | 124,832 (-447 vs 125,279) | PASS |
+
+Predictions against readings:
+- **id_stage_i:**
+  - LUT 1,620 (+190), inside +30..+250.
+  - FF 314 (+10) against a predicted +0: **missed**. The 796af23d9 diff adds no flop to id_stage.sv or
+    compressed_decoder.sv. Core FF is +8 in all, with issue_stage_i -5, so this reads as retiming re-homing. It is not
+    attributed.
+- **csr_regfile_i:**
+  - FF 2,768 (+1, crvc_q), as predicted.
+  - LUT 4,438 (-53) against "under +30": inside, though the sign is re-homing.
+- **Every other module:** within +-2,500. The largest moves are i_issue_read_operands -1,046 and ex_stage_i +601;
+  RAMB36 is unchanged.
