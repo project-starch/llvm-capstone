@@ -111,11 +111,26 @@ if [[ -f "$FW" ]]; then
          *)     bad "unknown bitstream $BITSTREAM -- DTS pairing would go unchecked: add it to this table, or set PREFLIGHT_DTS_NODES=65536|1021 for this run after checking its node count" ;;
        esac ;;
   esac
-  python3 -c "
-import sys
-d=open('$FW','rb').read()
-sys.exit(0 if d.count(bytes.fromhex('d00dfeed'))==1 else 1)" \
-    && ok "firmware embeds exactly one FDT" || bad "firmware does not embed exactly one FDT"
+  # Count FDT HEADERS, not magic bytes: d00dfeed also occurs by chance inside compressed initramfs data (CFP-B5TL1-g4mk,
+  # 2026-11-26: a second hit at 0xd73e9a read totalsize 1,180,622,853, version 4,278,320,661, and this check BLOCKED a
+  # payload with one FDT). A hit is an FDT header when totalsize fits in the bytes left and is at least the 40-byte header,
+  # version is 16..17, last_comp_version is at most 17, and off_dt_struct and off_dt_strings fall inside totalsize.
+  # Controls (negative-tested before first use): that false hit passes; two real FDTs BLOCK; a truncated real FDT BLOCKS.
+  _fdt=$(python3 -c "
+import struct, sys
+d = open(sys.argv[1], 'rb').read(); hits = []; i = d.find(b'\xd0\x0d\xfe\xed')
+while i >= 0:
+    hits.append(i); i = d.find(b'\xd0\x0d\xfe\xed', i + 1)
+ok = []
+for i in hits:
+    if len(d) - i < 40: continue
+    ts, ost, ostr, _, ver, lc = struct.unpack('>IIIIII', d[i + 4:i + 28])
+    if 40 <= ts <= len(d) - i and 16 <= ver <= 17 and lc <= 17 and ost < ts and ostr < ts: ok.append(i)
+print(len(ok), len(hits), ' '.join(hex(i) for i in ok))
+sys.exit(0 if len(ok) == 1 else 1)" "$FW")
+  _frc=$?; read -r _fn _fh _fat <<< "$_fdt"
+  (( _frc == 0 )) && ok "firmware embeds exactly one FDT header (at $_fat; ${_fh} magic hit(s), $(( _fh - _fn )) not a header)" \
+    || bad "firmware does not embed exactly one FDT header (${_fn:-?} valid of ${_fh:-?} magic hit(s)${_fat:+ at $_fat})"
 
   # C8 -- the console REJECTS an image over 32 MB, and it does so only after the board has
   # been locked and power-cycled, so an oversize image costs a full boot slot and returns
