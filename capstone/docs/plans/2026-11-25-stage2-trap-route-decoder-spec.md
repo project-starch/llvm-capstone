@@ -19,6 +19,9 @@ mode therefore has to belong to the task's address space, the way the lifetime t
 
 ### The CSR
 
+**SUPERSEDED (2026-11-26):** the mode's home is bit 0 of the srevroot write, not a new CSR. See "The mode's home,
+converged with rtl" at the end. The scapmode text below is kept as the trail.
+
 - **`scapmode`, CSR 0x5C3**, in the S custom read/write range next to `srevroot` (0x5C1).
   - It is free at 904cd9c6b (riscv_pkg.sv has only CSR_SREVROOT = 12'h5C1 in that range), in the reference model
     (cpu_bits.h: 0x5C0 scapctl, 0x5C1 srevroot, 0x5C2 stagtest, test-only) and in the trap kernel.
@@ -275,3 +278,56 @@ Converted at P1's CRVC fetch figures, it would be perl 0 to -3.1 %, for scale on
 
 The new seal never replaces the campaign seal unless it reads as above AND the lead agrees. The decoder change sits
 in the issue path, so a synthesis-only run comes before any full build.
+
+## The mode's home, converged with rtl (2026-11-26): bit 0 of the srevroot write
+
+This supersedes scapmode (CSR 0x5C3) above and in the Line B section. The design is rtl's. The runtime lane's
+criteria, in order: no cost or behaviour for any process without the flag; the protected-U predicate and the table
+address bit-identical; a guard that can verify the mode; the least diff on the collaborator's series. This design
+meets all four. scapmode costs a flushing write per switch, or a conditional write.
+
+**RTL (csr_regfile.sv).**
+- **Write:** a write of srevroot keeps `srevroot_d = {wdata[63:12], 12'b0}` as today (:2076). It also loads a separate
+  flop, `crvc_d = wdata[0]`, which resets to 0. The table address, and the protected-U predicate `srevroot_q != 0`
+  (:3009-3017), are bit-identical to today.
+- **Read:** srevroot reads `{srevroot_q[63:12], 11'b0, crvc_q}`, so bit 0 reads back. On b42c8c644 it reads 0.
+- **Effective mode:** `crvc_o = crvc_q && priv == U && srevroot_q != 0`. The srevroot_q term is an addition to rtl's
+  `crvc_q && priv == U`: without it, a write of exactly 1 (the boot probe's own write, or a bug) would put an
+  ordinary process in the mode.
+- **No new flush:** the srevroot write already sets flush_o.
+- **Every srevroot writer at b42c8c644:**
+  - the CSR write at :2076;
+  - the read at :1104, which must return bit 0;
+  - **the domain-switch register path at :2146** (`7'd67: srevroot_d = {dom_switch_reg_req_i.data[63:12], 12'b0}`).
+    Open for rtl: whether that path is reachable on Line B, where CSRUNV is illegal. If it is, it must load or clear
+    crvc_q as well. Otherwise a switch through it leaves a stale mode bit.
+- **Synthesis first:** the decode cone is on the UNOPTFLAT list (rtl), so the synthesis-only gate comes first.
+
+**Kernel: a patch on trapk's final tree, applied by recipe and listed in the pre-registration.** The collaborator's
+series is not edited in place.
+- **binfmt.h:300, the only change on the bind path.** The ELF loader binds `c->table_pa | crvc`, with crvc from
+  `e_flags & EF_CAPSTONE_CRVC`. capstone_root is used only as srevroot's value: it is set at bind
+  (capstone_task.c:25) and written at switch_mm (context.c:321), and the return-to-U guard (entry.S:419) and
+  arch_exit_mmap (capstone_task.c:49) compare it. So these need no change:
+  - **switch_mm** already writes the whole value at every switch, so a process without the flag writes 0 in bit 0
+    and pays nothing;
+  - **the guard** compares the whole value read back, so a lost or stale bit kills the task before U. That makes it
+    the mode's verification, by construction.
+- **The boot probe.** Before any protected process exists: write 1 to srevroot, read it back, write 0.
+  - A hart without the mode reads 0, and the loader then REFUSES a flagged image. In standard RVC, c.ldcsp would run
+    silently as c.fldsp.
+  - No illegal-CSR fixup is needed, because srevroot exists on b42c8c644.
+- **sublet-table.c:132, select_root, one line.** It compares the srevroot it reads with `c->table_pa`. For a CRVC
+  process the read carries bit 0, so it would rewrite srevroot and restore_root would write it back. That is two
+  extra flushing writes per capability window in S, paid only by flagged processes. It is correct, since S never
+  decodes in the mode, but it would bias CRVC's own measurement. The patch compares `(old & ~1UL)` instead.
+- **The test loader** (sublet_trap.c:135, TRAP_TEST, off in the final kernel) binds `table_pa` without the bit, so
+  its programs decode standard RVC.
+
+**Firmware.** The misaligned emulator reads srevroot (M can): bit 0, with `srevroot[63:12] != 0` and MPP = U. When
+these say the trapping instruction was decoded in the mode, it redirects the trap to S rather than emulating Q0 001
+as C.FLD.
+
+**Reference model (qemu-crv).** The same register semantics, srevroot's read returning bit 0, under
+x-capstone-crvc. The mode is a TB flag, `crvc && priv == U && srevroot != 0`. The twin-only all-protected-U property
+of the step-4 plan stays for the fetch measurement.
