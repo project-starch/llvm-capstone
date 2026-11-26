@@ -8064,6 +8064,116 @@ boots**.
 - The commit pc names a site only.
 - The trap-log decode is unresolved.
 
+### Pre-registration: M-16's heartbeat pair on P1, boots hbA and hbB on board 2: does printing move the stop? (written 2026-11-26 15:46 host time (+08), before either boot)
+
+**Question.**
+- On P1, every full-form run with a heartbeat every 10,000 packets stopped between packets 100,000 and 110,000: s1 and
+  red1's r3.
+- Both runs with a finer heartbeat stopped at 34,000-36,300 packets, mid-line on a UART load: loc1's l1 (every 100) and
+  loc2's s2 (every 1,000, seed 2). See "Result: loc1 and loc2".
+- Does the heartbeat alone move the stop, with the seed and the sequence held fixed?
+- runtime granted board 2 for this, after the four Full + ports boots, with a P1 flash.
+
+**The two boots.** Each command is a new process, K = 212, seed 1, protected image only (`a15d30b2…`, red1's).
+
+| boot | kit (bkit91 stage) | command 0 | command 1, last |
+|---|---|---|---|
+| hbA | `p1red/hbA` (`hbA.SHA256SUMS` `fb21b798…`) | c0: mode a, 99,000 packets, heartbeat every 1,000 | h10k: mode a, 300,000, every 10,000 |
+| hbB | `p1red/hbB` (`hbB.SHA256SUMS` `c79a1a76…`) | c0, the same | h100: mode a, 300,000, every 100 |
+
+- **hbB is loc1's kit byte for byte** (`hbB.SHA256SUMS` equals `loc1.SHA256SUMS`), so hbB is a second draw of loc1.
+- hbA's files differ from loc1's in exactly `train/plan.json` and `train/run.sh`. Its stage is `make-stage-red.py`
+  (`a65700ac…`) with `--cmd c0:sublet:a:99000:212:1000:1 --cmd h10k:sublet:a:300000:212:10000:1`, built by
+  `mk-hbA-stage.sh`.
+- h10k's arguments are red1's r3's (mode a, 300,000, K 212, report 10,000, seed 1). In red1, r3 ran after r0-r2 in
+  the same boot. Here it runs after c0 alone.
+- Two boots, because both command-1 arms may stop. By the ordering rule, a boot holds at most one arm that may wedge,
+  and it runs last.
+
+**Chain.**
+- `p1s100/nat-run3p.sh` (`9c3525d4…`) on board 2 with `p1red/p1hb.conf` (loc's conf with TAG `p1hb-m16hb` and the list
+  changed) and `p1red/p1hb.list` (hbA, then hbB, each 2,700 s with a 210-minute booking).
+- It flashes P1 (`…-tagoverlap6c-pagedtbl_d83d3a633`), with the seal's sha256 checked, and reads the bitstream back by
+  name. It leaves the board on P1. The board lane then puts b42c8c644 back on board 2.
+- The kit multiplies 2,700 s into `BAKED_TIMEOUT=10800`, and a stop holds the full budget.
+- **Both boots will be UNGATED** (the kit's `PREFLIGHT=0`), as loc1 and loc2 were.
+- Board-free checks (`p1red/recheck.sh`, run for real on each kit):
+  - hbA: bake rc 0, stubbed returning and non-returning runs rc 0, firmware rc 0, 23,760,392 B, `664b9d1ef18d54b3`;
+  - hbB: the same, firmware `d11fee562f7b1e29`;
+  - both: the dom_stack gate PASS (25,872 B of 32,768 B), monitor `22a907f`.
+- Stubbed dry run of the chain (`p1red/hb-dry/`, board calls stubbed): it reached `DONE board 2`, and the runner
+  read `BAKED_TIMEOUT=10800` for both boots.
+
+**Twin references.**
+- hbA: `nst-hbA-twin`, the twin run of this exact stage (`nst-run.sh` slot 28, the natio images, record size 262,144).
+  - It is queued on the QEMU lock behind another lane's run at this writing. Its serial's sha256 goes in an addendum
+    before either boot is graded.
+  - It must reproduce both references, by `p1red/check-hbA-twin.py` (`dae47152…`): c0's STRESS lines and rc equal
+    `nst-loc1-twin`'s c0, and h10k's equal `nst-red-board2`'s r3 (`02055366…`). Exit 0 means both are equal, 1 means
+    a difference, and 2 means a command is missing.
+  - Controls: a log spliced from those two references exits 0. The same with one STRESS line changed exits 1 and names
+    the line. loc1's twin standing in for hbA exits 2, with h10k missing.
+  - If it does not exit 0, the twin's difference is reported first, and hbA is not graded against that twin.
+- hbB: `nst-loc1-twin` (`21612e7b…`), the twin run of this exact stage.
+
+**Reader.**
+- `p1red/read-red2.py` (`3d2b9c35…`), run as `read-red2.py <board.txt> <twin serial.log>`.
+- It is read-red.py (`64782291…`) with one change. A command with no `@@SPEC-END` whose last STRESS line is a strict
+  prefix of the twin's line at that index is read as NO RETURN on its complete lines, and the cut text is printed. It
+  also names the BLOCK allocator's derive (`0x3ff676acfe`) when the commit pc reads it.
+- Re-test (`p1red/rtest-loc/r2-*.out`):
+  - loc1's and loc2's board captures: c0 RETURNED, and l1 and s2 NO RETURN with their cuts printed, exit 0. read-red.py
+    read OTHER here.
+  - Both twins against themselves: RETURNED, exit 0.
+  - The 100k cut control: NO RETURN at packet 100,000, exit 0.
+  - loc2's twin against loc1's: OTHER, exit 1.
+  - loc1's capture with its cut line changed so that it is no longer a prefix (`fast=7053624 bl`): OTHER, exit 1.
+
+**Hypotheses.**
+- **HW (window):** the full form at seed 1 stops at a point between packets 100,000 and 110,000, whatever the heartbeat.
+- **HP (print):** the stop depends on the heartbeat, through the printing itself or the console and interrupt activity
+  it brings. A finer heartbeat stops it early.
+- At a heartbeat of 10,000 both predict a stop in the window. At 100, HW predicts the window and HP an early stop.
+
+**Predictions.**
+1. The smoke passes in both boots, and c0 returns in both, equal to the twin.
+2. **hbA, h10k does not return.** Its last complete line is at packet 100,000, with the stop before the twin's 110,000.
+   The commit pc reads `0x3ff676ca68` and sw=220 `0x8c` (HW and HP alike).
+3. **hbB, h100:**
+   - HP predicts a stop before packet 100,000, as loc1's at 36,300;
+   - HW predicts a stop between 100,000 and 109,900.
+
+**What each outcome says.**
+- **c0 does not return:** a stop before 99,000 at a heartbeat of 1,000. That boot's command 1 is lost, and the stop is
+  reported with its last line and elapsed time.
+- **hbA:**
+  - **h10k stops in the window with M-16's signature:** the window holds at a heartbeat of 10,000 for the third time,
+    and the first with only c0 before it in the boot. It cannot separate HW from HP alone.
+  - **h10k stops before packet 100,000:** against HW. The window at 10,000 was not a fixed point.
+  - **h10k returns:** the window is not deterministic at 10,000, against HW, and the stop's rate reopens.
+- **hbB:**
+  - **h100 stops before 100,000:** against HW at this heartbeat. A second early stop at a heartbeat of 100 (loc1 was the
+    first).
+    - Its signature is read as for loc1: M-16's commit pc, or the BLOCK allocator's derive (then reported as itself), or
+      another.
+    - Its packet count against l1's 36,300 says whether the early stop sits at a point too.
+  - **h100 stops in 100,000-110,000:** loc1's early stop did not recur. That is consistent with HW, and against HP.
+  - **h100 returns:** neither predicts it.
+- **Together:**
+  - hbA in the window and hbB early: **the heartbeat moves the stop** (HP), at N = 1 for each arm. The window is then a
+    property of the 10,000 heartbeat, not of the sequence alone.
+  - Both in the window: HW, and loc1's early stop does not recur.
+  - Any other pair is reported as itself.
+- **Elapsed time** at a stop is read from the watchdog's 15 s bins, as for loc1 and loc2. It is not a hypothesis test
+  here.
+- **A stop elsewhere in the code, or with another signature,** is reported as itself and not merged with M-16, as before.
+
+**Limits.**
+- One draw per arm, and both boots are ungated.
+- The heartbeat changes both the print volume and the console's interrupt load. This pair cannot tell which of those
+  matters.
+- The commit pc names a site only.
+
 ## M-16's return rate on Line B: the protected tshark in repeated B5b-2 boots (2026-11-25)
 
 ### Pre-registration: Fig. 10's protected Wireshark workload in five boots on a Line B board, queued (written 2026-11-25 19:29, before any of the boots)
