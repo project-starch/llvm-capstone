@@ -140,6 +140,14 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
   per-miss cost is NOT a proxy for it.
 - An LB-size candidate adds no new miss type, so its BUILD needs only removed misses x warm.
 - A program without its board row is UNDECIDED, and no estimate is written for it.
+- **A candidate-specific NO BUILD** (third ruling, 2026-11-26): the candidate's removed misses x the COLD cost, minus
+  the candidate's own misses x c at c's PROVEN lower bound. Under 1 % is NO BUILD for that candidate. This is the
+  candidate's best case, so every reading agrees.
+  - Until c is bounded, its lower bound is 0.
+  - A lower bound from simulation counts once it is checked against the unit's read waits. It is written, with its
+    source, beside the verdict.
+- **Residency:** the full-stream D$-residency pass waits for the program's board run time. It is asked of the nested
+  lane only if the run lands in the UNDECIDED band.
 
 **Verdicts, per program** (rule as ruled above; each row carries its cost pair and its denominator's source):
 
@@ -169,8 +177,17 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
     - 256x4 removes 7,807,101 and needs 487 s or less;
     - 128x8 removes 7,148,851 and needs 446 s or less;
     - 128x4 and 64x8 need 137 and 127 s or less.
-  - RC removes at most 136,290,618 check misses, minus its own line fills. RC is UNDECIDED until RC's miss cost is
-    bounded.
+  - RC (removed 136,290,618; its own check misses 44,836,912; c = RC's miss cost):
+    - **c's proven lower bound is 2 cycles**, from simulation:
+      - Source: capstone-ariane b5b2-hangmon-c cf72629ad, whose SUP_TRACE-only R81-RD line prints every lifetime-unit
+        read's latency from request to response. s2pre-wt `.sup/hmlat`, dirty=no.
+      - Over 69 Line B tests and 46,358 reads: minimum 2 cycles (261 reads), 4 cycles for 92 %, maximum 1,225 (the
+        cold srvcost reads).
+      - An RC miss makes at least one unit read. A D$-hit latency is on-chip, so the cycles carry over to silicon.
+      - One read, not four: a line-fill design could fetch the line in one access, so four reads are not proven.
+    - RC BUILD needs a run of 8,146 s or less at c = 2 (8,505 s at c = 0; 5,707 s at c = 15.6, not proven).
+    - RC candidate NO BUILD at c = 2 needs a run of 21,666 s or more (22,024 s at c = 0).
+    - Between those, the result is UNDECIDED, and only the residency pass resolves it.
 
 **The denominator: board 3, B5TL1-g3 on b42c8c644, 502.gcc_r PASS** (board/meas-pw f47b2a686ce2, b42c8c644-board3 result lines).
 - The run's time is the SPEC-END line's up1 50.54 minus up0 44.78 = 5.76 s. The row prints no cycle count, so cycles are
