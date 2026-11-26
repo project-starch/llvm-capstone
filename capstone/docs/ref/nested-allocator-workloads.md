@@ -8853,6 +8853,25 @@ stock pair on the same seal and kernel?
   sources.
 - **A silence stop or a stage cut:** no reading for that boot. The wedge snapshot goes to runtime.
 
+**Amendment 1 (2026-11-26 14:27 host time (+08), before any of the four boots): the grader becomes grade-spec-chain-v2.py, with v1 recorded beside it.**
+- **Why.** nested-corpus showed that on silicon a kernel printk can land inside a program's own console output
+  (result above, 0e8089933116). The board lane then found that v1 (`4fa95eaf…`) is wrong on two shapes:
+  - a foreign line inside an `@@SPEC-FILE` block reads MISS, which protection did not cause;
+  - a mid-line splice inside an `@@SPEC-HASH` block silently truncates a hash.
+- **v2** is `<hdd>/b5b2linux/grade-spec-chain-v2.py`, sha256 `b976d2884c8c42d5…`. It is the board lane's, pre-registered at
+  llvm-capstone board/meas-pw `5106037bcc89`.
+  - It is v1 plus one step: inside those blocks only, it removes every `[ <t>] …` and `TRAPTEST: …` line with its
+    newline, so that a split line rejoins.
+  - A line still foreign afterwards makes the stage NO READING, never MISS. gzip's CRC32 checks every decoded file.
+- **Checked here:**
+  - v2 on `ports/grade-ctl/`: pos-g3 and pos-g4mk PASS, neg-g3 and neg-g4mk MISS, exit codes 0, 0, 1, 1, as under v1;
+  - a copy of pos-g3 with a kernel fault line spliced mid-line into the t1.c output's SPEC-FILE block: v1 MISS, exit 1;
+    v2 PASS with `INBAND … 1 interleaved line(s) removed`, exit 0;
+  - the twin capture of the stage pair: v2's output is identical to v1's (all four PASS).
+- **Binding:** v2's verdict, with the same stage roots as registered (`ports/boardroot` for the CFP boots). v1's line is
+  recorded beside it. A stage where the two differ is reported with both readings and v2's INBAND line.
+- Nothing else changes: the boots, the payloads, the predictions and the outcome readings.
+
 ### Pre-registration: B5b-2 board boot "nested-corpus", SQLite then PHP engine-repros (written 2026-11-26 04:17 host time (+08), 20:17Z on Nov 25, before the boot)
 
 **What it is.** Runtime's B5b-2 item 1 on silicon: the engine-repro corpus on the trap route, in one boot.
