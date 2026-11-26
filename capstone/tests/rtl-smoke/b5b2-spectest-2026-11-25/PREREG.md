@@ -313,3 +313,62 @@ Boot bound 43,200 s plus upload and boot.
 (Amendment 10's prediction, carried). The run time is not predicted. If the 43,200 s bound cuts it, that is NO READING
 with its elapsed time, not a fault. A cause-24 fault at CINCOFFSET refutes the FLU ungate, as in Amendment 4.
 Amendment 9's cause-25-at-LDC rule applies.
+
+## Amendment 12 (2026-11-26, before any boot of these images): the +Spatial SPEC test rows (SP-B5TL1) on 14f2ef81a
+
+**What.** B5TL1's SPEC test stages on the spatial-only seal 14f2ef81a (b42c8c644 + CAPSTONE_SPATIAL_ONLY; its kits
+on silicon at 74fe0e8d943e), with a kernel that drops the lifetime checks to match. These are qualification rows
+like the Full ones of Amendments 9-11. They use the same pinned bring-up kernel and firmware, so they are not the
+campaign's timed rows (campaign plan on dev, 456cc1d92987).
+
+**Images** (`SHA256SUMS.sp`, `overlay-files.sp.sha256`), 5 fw_payloads:
+
+| image | stages, in order (bound) | fw_payload sha256 | bytes |
+|---|---|---|---|
+| SP-B5TL1-g2i | imagick (3,600 s) | 5064e3d5a4eca94f… | 17,463,304 |
+| SP-B5TL1-g3 | gcc (the init's default bound, 3,600 s) | 82df0a839d958e81… | 21,657,608 |
+| SP-B5TL1-g4mk | perlbench makerand only (default 3,600 s) | b799fdff2387d173… | 19,560,456 |
+| SP-B5TL1-g1b | lbm 3,600, nab 3,600, xz 7,200, mcf 30,000 s | d5653c64a40fd37d… | 19,560,456 |
+| SP-B5TL1-x264b | x264 (43,200 s) | 62ea4930f5a1ac0d… | 21,657,608 |
+
+- **Overlays.** Each is byte-identical to its B5TL1 source: g1b 29/29 files, g3 8/8, g4mk 561/561, x264b 12/12.
+  g2i is B5TL1-g2b's overlay without the x264 stage. Only stages.order and stages.bound differ, and the
+  comparison names those two files, so it can fire.
+- **Kernel.** The tree `trapk/fpga-v1-spatial` is a copy of the pinned `fpga-v1` with the committed
+  `sublet-spatial-only.patch` (b5b2-linux, e247b4fdd995). Its .config differs from fpga-v1's only in
+  CONFIG_RISCV_CAPSTONE_SPATIAL_ONLY=y, apart from the initramfs path. It is HZ_PERIODIC with TRAP_TEST on and has
+  no msghdr loader, as the Full qualification rows.
+- **Firmware.** keep-tags with FW_FAST_RDTIME off: 0 `fw_fast_mtime_addr` references in each fw_payload.elf. DTB
+  caplifive-b5b2.dtb.
+- **Label defect, inherited.** B5TL1-g4mk's plan.json names the B5T exe path and hash 371553e3…, from its source
+  stage. The shipped binary is B5TL1's perlbench f3c8c80d71844564, checked by hash. The grader does not read that
+  field.
+
+**The twin readings these predictions come from** (`twin-sp-b5tl1.json`):
+- The platform: the spatial-only QEMU (c4/spatial-gates qemu-on.sh), at the board's usable DRAM (`-m 962M`, the DTS
+  node 0x3C2D2000), each image's own Image, one image per acquisition of the QEMU lock. The runner is
+  `trapk/boot-long.py`.
+- A first replay at boot.py's 512 MiB and 300 s silence limit lost mcf and x264 to the silence limit and every xz
+  command to the OOM killer (rc 137, about 476 MB RSS). That replay is void: it read the harness, not the images.
+- Graded per stage with spec-silicon's `run-stage.py read` on each stage's own QSTEP slice, against
+  `tree-board/SPEC17`:
+  - imagick 2/2 commands rc 0, specdiff PASS. test_output.tga is 3f70992184b213de…, the same as on the Full twin
+    (compiler's spec8).
+  - gcc 1/1, PASS. perlbench 1/1, PASS, 557 hashed files. lbm 1/1 PASS. nab 1/1 PASS. xz 12/12 PASS. mcf 1/1, 2/2 PASS.
+  - No `sublet: fault` or `call` line in any boot.
+  - x264: the twin run is still in progress when this is written. Its reading goes into the RESULTS before any
+    board boot of x264b.
+
+**Board.** Board 1, with 14f2ef81a resident and checked by readback, after boot 14. Order: g2i, g3, g4mk, g1b, then
+x264b, one image per boot. Each boot's bound is the sum of its stage bounds plus upload and boot. These images do
+not carry boot 14's kernel, so boot 14's grade does not gate them. Each image's own smoke control gates it.
+
+**Predictions.**
+1. Every boot prints `ok` and `TRAPTEST: control smoke.dom rc=7`. A failed control voids that boot.
+2. Every stage ends rc 0 with specdiff PASS, on every image. Binding.
+3. No `sublet: fault` or `sublet: call` line. A cause-24 fault at CINCOFFSET refutes the FLU ungate, as in
+   Amendment 4. Amendment 9's cause-25-at-LDC rule applies.
+4. Each stage's output hash set equals the twin's in `twin-sp-b5tl1.json`. Not binding: a silicon-versus-twin
+   difference in an output the specdiff accepts is reported as read.
+5. Run times are not predicted. If x264 is cut by its 43,200 s bound, that is NO READING with its elapsed time, not
+   a fault.
