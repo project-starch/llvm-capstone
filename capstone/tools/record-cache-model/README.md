@@ -154,10 +154,10 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
 | program | trace (nested lane, twin) | LB check misses asis / dedup | cycle denominator (board row) | share at cold 40.4 | share at warm 15.6 | verdict |
 |---|---|---|---|---|---|---|
 | 502.gcc_r test (t1.c) | spec-gcc.2262833, sha256 0cfc265bfa31dbb2..., recomputed here | 8,921 / 8,921 (self_evict 0) | 144.0 M = 5.76 s x 25 MHz | 0.250 % | 0.097 % | **NO BUILD** |
-| 505.mcf_r test (inp.in) | spec-mcf.2201746, sha256 633ca24aabba3062..., recomputed here | 181,127,530 / 181,127,654 (self_evict 124) | not yet: B5TL1-g1b on b42c8c644 | -- | -- | **UNDECIDED** (no board row) |
+| 505.mcf_r test (inp.in) | spec-mcf.2201746, sha256 633ca24aabba3062..., recomputed here | 181,127,530 / 181,127,654 (self_evict 124) | 165.03 G = 6,601.15 s x 25 MHz (board 3, B5TL1-g1b 539b2ef41ee4d444) | 4.434 % | 1.712 % | **UNDECIDED**: LB 1024x8 and RC; every smaller LB size NO BUILD |
 | 500.perlbench_r test (makerand.pl, the campaign's g4mk stage) | spec-perl3.2883687, sha256 1af7b0c90ab7cb56..., recomputed here | 277,290 / 277,290 (self_evict 0) | 6.8925 G = 275.70 s x 25 MHz (board 2, CF-B5TL1-g4mk e82d42ebe558cb18) | 0.163 % | 0.063 % | **NO BUILD** |
 
-**505.mcf_r test (inp.in): UNDECIDED, because its board row does not exist yet.**
+**505.mcf_r test (inp.in): UNDECIDED on its board row** (2026-11-26, below): two candidates remain, LB 1024x8 and RC.
 - The trace is the nested lane's spec-mcf.2201746: 65,420,275,952 B, sha256 633ca24aabba3062..., recomputed here. It
   has 4,088,767,247 events and 61 tables.
 - The image: mcf_r_base.native a1daec395a9e7260..., which equals board-stages B5TL1/505.mcf_r (recomputed here) and
@@ -170,7 +170,7 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
   126,537,860.
 - The floor is set by LB's 524,176 namespace flushes, about 241 misses per flush. A verdict cache that survives an
   edge is a lever this model cannot measure: the trace says only that the key changed, not to which key.
-- The rule's break-even run times at 25 MHz. These are thresholds, not estimates; mcf's B5TL1-g1b run time decides.
+- The rule's break-even run times at 25 MHz. These are thresholds, not estimates; the run time below is B5TL1-g1b's.
   - NO BUILD (ceiling, cold 40.4) at 29,270 s or more. g1b's mcf stage bound is 30,000 s, so even a run cut at the
     bound decides.
   - BUILD (removed x warm 15.6) by LB size:
@@ -199,6 +199,29 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
         figure), RC BUILD is impossible on mcf at any run time.
     - RC candidate NO BUILD at c = 2 needs a run of 21,666 s or more (22,024 s at c = 0).
     - Between those, the result is UNDECIDED, and only the residency pass resolves it.
+- **The denominator: board 3, B5TL1-g1b on b42c8c644, 505.mcf_r PASS** (N = 1; graders v2 b976d288 and v1 PASS, no
+  cause line; the resident name read back before and after).
+  - The run's time is its own SPEC-END line, `up0=6854.08 up1=13455.23`: 6,601.15 s, 165.03 G cycles at 25 MHz.
+    Read here from the raw capture (uart sha256 0184faff239659d3), in stage B5TL1-505.mcf_r, rc=0.
+  - The image is the traced binary. The board lane read mcf_r_base.native a1daec395a9e7260... from the payload's
+    embedded initramfs, which is the image above. The runtime lane checked the payload against SHA256SUMS.g1b.
+  - Disclosed: this is the qualification kernel (fpga-v1, periodic tick, no fast rdtime), not the campaign relink. A
+    CF-B5TL1-g1b row does not exist yet.
+- **Read against the thresholds above:** 6,601 s lies between BUILD (3,406 s for 1024x8) and NO BUILD (29,270 s), so
+  the rule decides only part of it.
+  - Ceiling: 4.434 % at cold, so not NO BUILD.
+  - LB 256x4, 128x8, 128x4, 64x8: candidate NO BUILD, at 0.191 / 0.175 / 0.054 / 0.050 % even at the cold cost.
+  - LB 1024x8: UNDECIDED, 0.516 % at warm and 1.336 % at cold.
+    - It is a BUILD exactly when its 54,589,670 removed misses cost more than 30.2 cycles on average, that is when
+      more than 59.0 % of them are cold.
+    - What decides it is the D$-residency of those misses.
+  - RC: candidate NO BUILD fails (3.282 % at cold with c = 2).
+    - A BUILD needs its saving at warm to exceed 1 % with c at its upper bound: c < 10.6 cycles. At the cold cost,
+      c < 86.0 cycles.
+    - So RC is BUILD or UNDECIDED, never NO BUILD, at this run time.
+    - What decides it is a proven upper bound on c, together with the residency of RC's 136,290,618 removed misses.
+  - The residency pass is the nested lane's full-stream D$-residency model, checked on silicon. It was asked for on
+    2026-11-26 because the run landed in this band, as the ruling prescribes.
 
 **500.perlbench_r test (makerand.pl): NO BUILD** (decided 2026-11-26 on its board row, below).
 - The trace is the nested lane's spec-perl3.2883687: 10,130,629,600 B, sha256 1af7b0c90ab7cb56..., recomputed here. It
