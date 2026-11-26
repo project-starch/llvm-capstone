@@ -8184,6 +8184,74 @@ boots**.
   matters.
 - The commit pc names a site only.
 
+### Result: hbA and hbB. hbA's h10k stops in the window with M-16's signature, and hbB's h100 stops early, at loc1's point with loc1's signature: the heartbeat moves the stop, N = 1 per arm (board 2, P1, 2026-11-26 16:16-22:35 host time, read against 10aa598e5f94 with Addendum 1 870e5874aca7)
+
+**Platform.**
+
+| boot | booking | host time | board.txt sha256 | preflight |
+|---|---:|---|---|---|
+| hbA | 1590 | 16:16:55-19:27:00 | `9ac389ffac24c939…` | UNGATED (`PREFLIGHT=0`), as registered |
+| hbB | 1597 | 19:27:00-22:35:17 | `da015787447b701b…` | UNGATED, as registered |
+
+- The chain flashed P1 (`…-tagoverlap6c-pagedtbl_d83d3a633`) at 16:14:41-16:16:54, rc 0, and read it back by name. It
+  ends `DONE board 2`, left on P1.
+- Each boot's bake manifest equals its board-free recheck's (`cmp`). The native kernel and the firmware are rebuilt at
+  each bake, so their hashes differ from the recheck's, as on every kit of this form:
+  - hbA: kernel `b75ede8eaf092898`, firmware `4f37771ddc64d7d6`;
+  - hbB: kernel `c48786ddf2a61005`, firmware `4659cf692fee68ea`.
+  - Both firmware images are 23,760,392 B.
+- Each boot took its full 10,800 s budget, as a stop does. The SPEC verdict is rc 2, `no @@SPEC-DONE`, as registered.
+- **Disclosed (hbA):** the board lane's dry run of another script started a local `run_sup_bare-hold.py` with
+  `FPGA_BOARD=2`, in three stretches of about 24 s in all (08:33:45Z-08:46:08Z). It used `board-busy.py` only and took
+  no hub lease. hbA's driver.log shows only board-lane leases, from its own runner and booking, and its watchdog no
+  stall. The row stands. hbB's driver.log shows the same: only its own runner's and booking's leases.
+
+**Grades.** `read-red2.py` (`3d2b9c35…`), exit 0 on both.
+
+| boot | command | reference | reading | last complete line | signature |
+|---|---|---|---|---|---|
+| hbA | c0 | nst-hbA-twin (`d12cb8b8…`) | RETURNED, 101 STRESS lines equal, done 99,000 | — | — |
+| hbA | h10k (every 10,000) | the same | **NO RETURN** after 11 lines equal | `pkt=100000 fast=19432859` | commit pc `0x3ff676ca68` (the registered CDERIVE), sw=220 `0x8c` |
+| hbB | c0 | nst-loc1-twin (`21612e7b…`) | RETURNED, 101 lines equal, done 99,000 | — | — |
+| hbB | h100 (every 100) | the same | **NO RETURN** after 365 lines equal, cut mid-line (`pkt=3`, a prefix of the twin's next) | `pkt=36400 fast=7073023` | commit pc `0x3ff676acfe`, the BLOCK allocator's derive (`wmem_block_sublet_alloc`+0x452); sw=220 `0x8c` |
+
+- hbA: trap log `0x89`, mepc `0xffffffff80007376`, tval `0x73`, as loc2's. The stop lies between 19,432,859 and
+  21,375,862 fast allocations, the twin's next line. 38,671,221 protected fast allocations were completed in the boot.
+- hbB: trap log `0x89`, mepc `0xffffffff80030dc6`, tval `0xa0d63`. The stop lies between 7,073,023 and 7,092,478. The
+  console's last bytes are `STRESS pkt=3`, the start of the 36,500 line. 26,311,385 protected fast allocations were
+  completed.
+- **Elapsed at the stop**, from the watchdog's 15 s bins. c0's chunks end in the 885-900 s bin in both boots.
+  - hbA: h10k's 11 lines arrive from the 1,020-1,035 s bin to the 1,395-1,410 s bin, about 375 s, and nothing after.
+  - hbB: h100's lines arrive from the 1,020-1,035 s bin to the 1,185-1,200 s bin, 150-180 s, and nothing after. loc1's
+    l1 stopped at 135-165 s.
+
+**Against the predictions.**
+1. **Met:** the smoke passes in both (9 of 9), and c0 returns in both, equal to its twin.
+2. **Met:** hbA's h10k does not return, and its last complete line is at packet 100,000. Its commit pc is
+   `0x3ff676ca68`, and sw=220 reads `0x8c`.
+3. **HP's branch:** hbB's h100 stops before packet 100,000, at 36,400. HW predicted 100,000-109,900.
+
+**What it says, by the registered readings.**
+- **hbA:** the window holds at a heartbeat of 10,000 for the third time (s1, red1's r3, h10k), and for the first time
+  with only c0 before it in the boot.
+- **hbB:** a second early stop at a heartbeat of 100. It is against HW at this heartbeat.
+  - Its signature is the BLOCK allocator's derive, as loc1's was. It is reported as that stop, not as M-16's.
+  - Its point matches loc1's. loc1's l1 was cut printing the 36,300 line, and h100 was cut printing the 36,500 line:
+    200 packets apart in a 300,000-packet sequence, both mid-line, and both at 150-180 s.
+- **Together:** hbA in the window and hbB early. By the registered table, **the heartbeat moves the stop (HP)**, at
+  N = 1 per arm.
+  - The window at 100,000-110,000 is then a property of the 10,000 heartbeat, not of the sequence alone.
+  - The two heartbeats stop in different places: M-16's CDERIVE for every 10,000, and the BLOCK derive for every 100.
+    So the finer heartbeat does not move the same stop earlier. It meets a different one first, at a point that
+    recurred within 200 packets.
+  - loc2 (every 1,000, seed 2) stopped early at 34,000 with M-16's CDERIVE, which this pair does not explain.
+
+**Limits.**
+- One draw per arm, and both boots are ungated.
+- The heartbeat changes both the print volume and the console's interrupt load, and this pair cannot tell which one
+  matters.
+- The commit pc names a site only. A mid-line cut places both early stops at a UART write, by the console's arrival.
+
 ## M-16's return rate on Line B: the protected tshark in repeated B5b-2 boots (2026-11-25)
 
 ### Pre-registration: Fig. 10's protected Wireshark workload in five boots on a Line B board, queued (written 2026-11-25 19:29, before any of the boots)
