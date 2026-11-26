@@ -91,9 +91,11 @@ is not measured yet. No +Spatial cost or saving is read from these rows. That is
 
 The g1b and g4mk pairs, same B5TL1 userland, Full (board 3) / +Spatial (board 1), N=1 each: lbm 1,052.26 / 1,051.55,
 nab 752.86 / 748.94, xz 4,863.14 / 4,853.66, mcf 6,601.15 / 6,247.42, perlbench 282.94 / 293.96. Perl is the one
-stage where the spatial-only seal is slower (by 11.02 s). It is open and not read as a seal property: the twin's
-instruction counts for the two images are being taken, to tell different work from a per-instruction or board
-difference.
+stage where the spatial-only seal is slower (by 11.02 s). It is open and not read as a seal property. The twin does the same work on both: capmix3 on
+the campaign g4mk images (CF on the trap-route QEMU, CS on the spatial-only QEMU, same initrd, 962 MiB) counts
+3,094,621,929 perl image instructions on each, 4,075,990,306 / 4,075,990,211 user instructions in all, and
+1,062,083,667 / 1,061,576,239 kernel instructions (`trapk/perlcount/RESULT.txt`). The gap is therefore cost per
+instruction, the board, or noise. The twin cannot separate these. The campaign's same-board pairs can.
 
 ## The matched pair (Amendment 9): 28fcbb646 against b42c8c644, board 2
 
