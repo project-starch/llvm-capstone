@@ -9102,6 +9102,116 @@ stock pair on the same seal and kernel?
 - The port's image identity is read from the payload, not from the capture.
 - Both g3 boots are ungated. CFP-g4mk was preflight-BLOCKED by a false positive and ran on runtime's ruling.
 
+### Pre-registration: CFP-B5TL1-g3 v2, gcc's port with a fail-stop CRENEW, on b42c8c644 (written 2026-11-26 19:59 host time (+08), 11:59Z, before any board boot of v2)
+
+**Why v2.**
+- On Line B a CRENEW can return an untagged 0, and then the old lifetime is left live. This happens when the slot is at
+  its last generation and the table cannot grow. RTL at b42c8c644: `core/capstone_sublet_life.sv:487-488`, then
+  `S_K_DEC0` at `:595-598`, with decision 1 at `:319-324`. The model: `target/riscv/op_helper.c:1190-1209` and
+  `:1224-1228`.
+- gcc's port (v1, `oneop/gcc-arms/all-abc-bm-ls-tfl-phi`) stores through the result at once at every renew site, and
+  it cannot re-derive there. In `bitmap_elt_clear_from` a 0 would end the free chain silently, with the old lifetime
+  still live.
+- runtime asked for a fail-stop instead (agreed with this lane). v2's `sublet_renew` (`gcc-v2/sublet-port.h`,
+  `31ca7f89…`) does three things on 0:
+  - it ends the old lifetime with `sublet_release` (CREVOKE);
+  - it writes `SUBLET-RENEW-FAILED` to stderr;
+  - it calls `__builtin_abort`.
+- **That release cannot itself fail.** CREVOKE checks the tag and the lifetime and takes no allocation decision:
+  - in the model, `helper_cskill` (`op_helper.c:1169-1189`) never calls `capstone_alloc_slot`;
+  - in the RTL, `:488` sends a CREVOKE, or a CRENEW with a generation to spare, straight to `S_K_PV_R`, and only an
+    out-of-place CRENEW reaches `S_K_DEC0`;
+  - after a failed renew the old lifetime is live, as above, so the release finds it.
+- v2 differs from v1 only in `sublet-port.h` (`diff` against oneop's: that function and its comment).
+
+**The CFP-g3 v1 row stays as recorded.**
+- For its run to have met a 0, one slot would need a renewal out of place inside gcc's own process: at least 2^32 − 2
+  releases of that slot (`GEN_LIM` = `32'hffff_ffff`, `capstone_sublet_life.sv:116`, b42c8c644's 2b bound; step 2a's
+  2^30 − 1 does not apply to this seal), with the table also unable to grow.
+- The trap kernel keeps one table per address space (`sublet-table.c:2`), and a fresh slot starts at generation 0
+  (`cap_rev_table_abi.h:24`).
+- The run took 5.83 s, about 1.46·10^8 cycles at 25 MHz. That is fewer cycles than the releases a 0 would need.
+
+**The images** (`gcc-v2/build-gcc-v2.sh` `9a132f3b…`, built as `build-ports.sh` builds gcc-port: B5TL1's own
+502.gcc_r tree, its 387 compile lines and `link.txt`, llvm-c9, the B5TL1 SDK; each of the 11 port sources is first
+checked byte-equal to oneop's stock source):
+
+| arm | what differs | strip.dom sha256 | scan | CDERIVE | CREVOKE | CRENEW |
+|---|---|---|---|---:|---:|---:|
+| gcc-port (v1, above) | — | `cff54b2a361867f2` | ILLEGAL=0 | 81 | 9 | 44 |
+| gcc-port2 (v2) | `sublet-port.h` | `bd308d5ab7187be8` | ILLEGAL=0 | 81 | 52 | 44 |
+| gcc-port2ff (control) | v2 + `-DSUBLET_RENEW_FORCE_FAIL` on every compile line | `1a9b370a6298307e` | ILLEGAL=0 | 81 | 16 | 1 |
+
+- v2's 43 extra CREVOKEs are the fail-stop's release, inlined at the renew sites.
+- In gcc-port2ff every renewal reads as failed without executing CRENEW. Its one CRENEW is the runtime's.
+- The stages `gcc-v2/stages/v2` and `stages/v2ff` are the port stage (`ports/stages/502.gcc_r`) with only the image
+  and plan.json replaced (`diff -rq`).
+
+**Fixture** (`gcc-v2/build-bmfx.sh` `65348165…`): the port's bitmap fixture (`bmfx`), built three ways (v1, v2, v2ff),
+all ILLEGAL=0. Modes:
+- 0: a live element is read;
+- 1: a freed element is read (a stale pointer);
+- 2: an element's old pointer is read after it was reused;
+- 3: a reused element is read through its new pointer.
+
+**The twin requalification** (`gcc-v2/twin-gcc2.sh` `d62bdcc5…`, 2026-11-26, console log `932a4b6b…`):
+- qemu-crv, Image `749fed26…`, at the board's memory, as `twin-ports.sh`;
+- one boot runs the fixture (12 runs), then B5TL1F (v2ff's stage), then B5TL1P (v2's).
+
+| build | mode 0 | mode 1 | mode 2 | mode 3 |
+|---|---|---|---|---|
+| bmfx-v1 | reads, rc 0 | faults, cause 25, rc 139 | faults, cause 25, rc 139 | reads, rc 0 |
+| bmfx-v2 | reads, rc 0 | faults, cause 25, rc 139 | faults, cause 25, rc 139 | reads, rc 0 |
+| bmfx-v2ff | reads, rc 0 | `SUBLET-RENEW-FAILED`, `Aborted`, rc 134 | the same, rc 134 | reads, rc 0 |
+
+- v2 protects exactly as v1 does. v2ff stops at the first renewal with the line, in exactly the modes that renew.
+- **Stages,** graded by `grade-spec-chain-v2.py` (`b976d288…`) with `SPEC_STAGE_ROOT=gcc-v2/twinroot`:
+  - B5TL1P (v2): **PASS**, QSTEP rc 0, specdiff 1/1. The twin's run took 1.54 s (v1 1.47 s, stock 1.25 s, above).
+  - B5TL1F (v2ff): the command's rc is **134**. Its in-band `.err` decodes to `SUBLET-RENEW-FAILED`, `Aborted`, and
+    the kernel line reads `signal 6 has a handler, caught signals are not supported: killed`. The grader reads
+    **MISS** (`rc!=0: 1`, specdiff 0/1), not NO READING. So a fail-stop on the board reads as a failed stage.
+  - No `sublet: fault` line in either stage. The four in the capture are the fixture's modes 1 and 2.
+- **Disclosed (an instrument slip):** the grade as scripted exits 2, `ERROR stage A0FX-gccbm is not in the expected
+  list`. The grader refuses a stage it was not given, and the fixture stage was in the boot. The stubbed dry run had not
+  reached the grader with the fixture stage in the log. The stage pair was graded on a copy of the capture with the
+  fixture's QSTEP block removed (6,264 characters, `boot-nofx.log` `ba3a9f1c…`), and that is the grade above. The
+  fixture's lines are read from the full capture.
+
+**The board boot.**
+- **CFP-B5TL1-g3v2:** the CFP-B5TL1-g3 payload with `stages/v2` in place of the port stage. runtime builds it on the
+  same kernel and firmware, and checks its overlay against the stage. Its hash is recorded in an addendum before the
+  boot.
+- Optional, if runtime grants it: **CFP-B5TL1-g3v2ff**, the same with `stages/v2ff`. It checks that the fail-stop's
+  line and rc reach a silicon capture.
+- Seal: b42c8c644, read back by name before and after. runtime allocates board and slot. It pairs with CF-B5TL1-g3
+  (`997e2fd6…`) only on the same board and seal.
+- If the logs carry no preflight-gate line, the boot is reported **UNGATED**. The g3 payloads exceed C10's 20 MB
+  budget (21.66 MB), as above.
+
+**Predictions.**
+1. CFP-g3v2: smoke `C=ok`, the stage **PASS** (QSTEP rc 0, specdiff 1/1), no `SUBLET-RENEW-FAILED` and no
+   `sublet: fault` line.
+2. CFP-g3v2ff, if run: the command's rc is 134, its `.err` holds `SUBLET-RENEW-FAILED`, and the grader reads MISS.
+3. **No time prediction.** v2's `up1 − up0` against the stock pair's 5.55 s and v1's 5.83 s is a reading, N = 1.
+
+**Grader.** `SPEC_STAGE_ROOT=<hdd>/nested/b5b2/ports/gcc-v2/boardroot python3 <hdd>/b5b2linux/grade-spec-chain-v2.py
+<UART> <out> B5TL1-502.gcc_r`, with `boardroot/B5TL1/502.gcc_r` the boot's stage (v2 or v2ff). The boot holds one stage,
+so the expected list is that stage alone.
+- Controls in board form (`gcc-v2/grade-ctl/`), from the twin capture's stages renamed to the board name:
+  - `pos` (B5TL1P) with `boardroot` reads PASS, exit 0;
+  - `neg`, `pos` with one base64 character flipped in the `.s` output's in-band file, reads MISS, exit 1;
+  - `ff` (B5TL1F) with `boardroot-ff` reads MISS (`rc!=0: 1`), exit 1.
+
+**How each outcome reads.**
+- **PASS:** v2 replaces v1 as the CFP-g3 row's image, and v1's reading stays beside it.
+- **MISS with `SUBLET-RENEW-FAILED`:** a renewal failed on silicon. That is a finding about the table's growth, reported
+  to runtime with the capture.
+- **MISS without the line, or a fault line:** reported as itself, against the port's sources.
+- **A silence stop:** no reading. The wedge snapshot goes to runtime.
+
+**Limits.** gcc's t1.c only, one boot per arm. The fail-stop path is shown by the forced-failure control, not by a real
+failure: a real one needs 2^32 − 2 releases of one slot, which no test input reaches.
+
 ### Pre-registration: B5b-2 board boot "nested-corpus", SQLite then PHP engine-repros (written 2026-11-26 04:17 host time (+08), 20:17Z on Nov 25, before the boot)
 
 **What it is.** Runtime's B5b-2 item 1 on silicon: the engine-repro corpus on the trap route, in one boot.
