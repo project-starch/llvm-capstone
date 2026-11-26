@@ -120,8 +120,35 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
 - The open phase: a free entry read live at its next generation turns a later check of the stale id from a deny into a probe (probes 1, deny_hit_dead 1); at live 0, the twin's former shape, it stays a deny (0, 2). A build that does not fill on op reads FAILS.
 - self_evict: five installs of one set in one stretch count 1; four, or five split by a check, count 0. Builds that never count it, or never end a stretch, FAIL.
 - `--walk`: a stretch installs s1, displaces it with four more installs of its set, then re-reads it; a check of s1 follows. asis hits (probes 1, self_evict 2) and dedup misses (probes 2, self_evict 1). A build whose `--walk dedup` replays as asis FAILS on three counts.
+- `--lb SETSxWAYS` (the verdict-cache size; default 64x4, the RTL's): installs separated by checks, then a check of
+  slot 1, under each geometry.
+  - Expected probes: 64x4 2, 64x8 1, 128x4 1 for one slot list; 64x4 1, 32x4 2 for a second.
+  - Six malformed geometries must exit 2.
+  - A build that parses `--lb`, reports the geometry asked for, and models 64x4 FAILS on three counts.
+  - On `small`, the default and an explicit `--lb 64x4` reproduce the previous build's output line for line, plus
+    the new `LB geometry` line.
 - An edge with the key unchanged must not flush: a build that flushes on every E FAILS the control on six counts.
 - A malformed trace exits 2: six malformed traces (E word 1 = 2; T, I, PI with a non-zero word 1; a record with bit 33; kind 11) must each exit 2, and E word 1 = 1 must exit 0. f82523965196 checked word 1 after the marker branches, so the four marker cases were accepted; c156970f12cd fixed it and its build passes.
+
+**Verdict-cache size** (`--lb`, the `small` arm only; LB check misses, asis / dedup):
+
+| geometry | misses |
+|---|---|
+| 32x4 | 44,611 / 45,117 |
+| 64x4 (b42c8c644) | 20,309 / 19,615 |
+| 128x4 | 11,441 / 11,344 |
+| 256x4 | 10,601 / 10,601 |
+| 64x8 | 10,728 / 10,700 |
+| 128x8 | 10,582 / 10,582 |
+| 512x8 | 10,582 / 10,582 |
+| 4096x32 | 10,579 / 10,579 |
+
+- The floor, about 10,580, is first-touch misses plus the refills after LB's 8,280 namespace flushes. No size removes
+  it.
+- So on this arm a larger verdict cache can remove at most 9,730 misses (asis) or 9,036 (dedup), and 128x4 or 64x8
+  already removes most of that.
+- The size decision uses the same rule as the record cache: the misses REMOVED x the cost pair, against the
+  program's measured cycles. It is made per program on gcc, mcf and Perl, not on this arm.
 
 **Measured per-miss cost** (RTL simulation, b42c8c644's core, memory delay 12; capstone-ariane b5b2-prefix bd3932800, b5b2-srvcost and -DSC_COLD):
 - warm record (in the D$): (P3 - P2) / 33 = 14.4 cycles per verdict miss;
@@ -154,7 +181,17 @@ checked by the board lane against the arming file. Result lines are at board/mea
   - if the cold span is below 1 %, the result is NO BUILD whatever the residency;
   - if the warm span is above 1 %, the result is BUILD;
   - otherwise it is UNDECIDED until the D$ residency of the missed records is modelled.
-  That reading of the rule is the rtl lane's and goes to the semantics owner.
+  **Ruled by the semantics owner (the runtime lane, 2026-11-26), as written above:**
+  - NO BUILD only when the saving is under 1 % at the COLD cost, taking the higher of the pair (40.4);
+  - BUILD only when it is over 1 % at the WARM cost, taking the lower (15.6);
+  - anything between is UNDECIDED.
+  An UNDECIDED is resolved by exactly one of two things:
+  - (a) a model of the missed records' D$ residency, checked against one silicon reading before it is used;
+  - (b) a variant kit on silicon whose missed records sit in a known residency.
+  No interpolation between warm and cold is allowed. Every verdict records:
+  - the cost pair;
+  - the program-cycle denominator and its source, which must be a board row cited by image hash and never a twin
+    figure.
 - **On the first trace** (the `small` arm, which is NOT one of the decision's three programs):
   - cold: 20,309 x 40.4 = 820,484 cycles and 19,615 x 37.0 = 725,755;
   - warm: 19,615 x 15.6 = 305,994.

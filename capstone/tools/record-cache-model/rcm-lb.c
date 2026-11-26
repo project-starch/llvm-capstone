@@ -65,9 +65,13 @@ static int tlb_access(tlb_t *t, uint64_t page) {
 }
 static void tlb_clear(tlb_t *t) { t->n = 0; }
 
-// ---------------- LB: b42c8c644's verdict cache
+// ---------------- LB: b42c8c644's verdict cache (64 x 4); --lb SETSxWAYS models another size of it, with the same
+// placement rules: set = slot[log2(SETS)-1:0], same-index reuse, then the lowest free way, then the round-robin victim.
+#define LB_MAXS 4096
+#define LB_MAXW 32
+static unsigned lb_sets = 64, lb_ways = 4;
 typedef struct {
-  uint64_t slot[64][4]; uint32_t gen[64][4]; uint8_t occ[64][4], live[64][4], rr[64];
+  uint64_t slot[LB_MAXS][LB_MAXW]; uint32_t gen[LB_MAXS][LB_MAXW]; uint8_t occ[LB_MAXS][LB_MAXW], live[LB_MAXS][LB_MAXW], rr[LB_MAXS];
   tlb_t tlb; st_t s[NCL];
   uint64_t probes, deny_hit_dead, dead_record, installs, inval, edges_flushed;
   uint64_t stretches, self_evict, untracked, se_kind[16];
@@ -93,21 +97,21 @@ static void sh_add(uint64_t s, lb_t *c) { if (sh_n >= SH / 2) { c->untracked++; 
   } }
 static void sh_end(void) { if (in_op) { sh_epoch++; sh_n = 0; in_op = 0; } }
 static void lb_install(lb_t *c, uint64_t slot, uint32_t gen) {
-  unsigned set = slot & 63; int way = c->rr[set], reuse = 0;
-  for (int w = 0; w < 4; w++) if (c->occ[set][w] && c->slot[set][w] == slot) { way = w; reuse = 1; }
-  if (!reuse) for (int w = 3; w >= 0; w--) if (!c->occ[set][w]) { way = w; reuse = 1; }
-  if (!reuse) { if (in_op && sh_has(c->slot[set][way])) { c->self_evict++; c->se_kind[cur_kind]++; } c->rr[set] = (c->rr[set] + 1) & 3; }
+  unsigned set = slot & (lb_sets - 1); int way = c->rr[set], reuse = 0;
+  for (int w = 0; w < (int)lb_ways; w++) if (c->occ[set][w] && c->slot[set][w] == slot) { way = w; reuse = 1; }
+  if (!reuse) for (int w = lb_ways - 1; w >= 0; w--) if (!c->occ[set][w]) { way = w; reuse = 1; }
+  if (!reuse) { if (in_op && sh_has(c->slot[set][way])) { c->self_evict++; c->se_kind[cur_kind]++; } c->rr[set] = (c->rr[set] + 1) % lb_ways; }
   if (in_op) sh_add(slot, c);
   c->occ[set][way] = 1; c->slot[set][way] = slot; c->gen[set][way] = gen; c->live[set][way] = 1; c->installs++;
 }
 static void lb_invalidate(lb_t *c, uint64_t slot) {
-  unsigned set = slot & 63;
-  for (int w = 0; w < 4; w++) if (c->occ[set][w] && c->slot[set][w] == slot && c->live[set][w]) { c->live[set][w] = 0; c->inval++; }
+  unsigned set = slot & (lb_sets - 1);
+  for (int w = 0; w < (int)lb_ways; w++) if (c->occ[set][w] && c->slot[set][w] == slot && c->live[set][w]) { c->live[set][w] = 0; c->inval++; }
 }
 // a check: hit live (allow), hit dead (deny, no probe), or a miss (a probe: one record read, an install if live)
 static void lb_check(lb_t *c, uint64_t slot, uint32_t gen, int rec_live, uint64_t n) {
-  unsigned set = slot & 63; st_t *s = &c->s[CL_CHECK]; s->acc += n;
-  for (int w = 0; w < 4; w++) if (c->occ[set][w] && c->slot[set][w] == slot && c->gen[set][w] == gen) {
+  unsigned set = slot & (lb_sets - 1); st_t *s = &c->s[CL_CHECK]; s->acc += n;
+  for (int w = 0; w < (int)lb_ways; w++) if (c->occ[set][w] && c->slot[set][w] == slot && c->gen[set][w] == gen) {
     s->hit += n; if (!c->live[set][w]) c->deny_hit_dead += n; return;
   }
   s->miss++; s->mrd++; c->probes++;
@@ -123,7 +127,7 @@ static void lb_op(lb_t *c, uint64_t slot, uint32_t gen, int write, int live) {
   if (write) { if (live) lb_install(c, slot, gen); else lb_invalidate(c, slot); }
   else if (live) lb_install(c, slot, gen);
 }
-static void lb_flush(lb_t *c) { memset(c->occ, 0, sizeof c->occ); memset(c->live, 0, sizeof c->live); tlb_clear(&c->tlb); c->edges_flushed++; }
+static void lb_flush(lb_t *c) { memset(c->occ, 0, sizeof c->occ[0] * lb_sets); memset(c->live, 0, sizeof c->live[0] * lb_sets); tlb_clear(&c->tlb); c->edges_flushed++; }
 
 // ---------------- RC, GC, NC: rcm.c's organisations, unchanged
 typedef struct { uint64_t tag[64][2]; uint8_t valid[64][2], dirty[64][2], lru[64]; tlb_t tlb; st_t s[NCL]; uint64_t flush_wb; } rc_t;
@@ -229,11 +233,17 @@ static void stretch_end(void) {
 }
 
 int main(int argc, char **argv) {
-  if (argc < 2) { fprintf(stderr, "usage: rcm-lb TRACE_V2 [--with-pcc] [--walk asis|dedup]\n"); return 2; }
+  if (argc < 2) { fprintf(stderr, "usage: rcm-lb TRACE_V2 [--with-pcc] [--walk asis|dedup] [--lb SETSxWAYS]\n"); return 2; }
   int with_pcc = 0;
   for (int i = 2; i < argc; i++) {
     if (!strcmp(argv[i], "--with-pcc")) with_pcc = 1;
     else if (!strcmp(argv[i], "--walk") && i + 1 < argc && (!strcmp(argv[i + 1], "asis") || !strcmp(argv[i + 1], "dedup"))) walk_dedup = !strcmp(argv[++i], "dedup");
+    else if (!strcmp(argv[i], "--lb") && i + 1 < argc) {
+      unsigned s = 0, w = 0; char x = 0, tail = 0;
+      if (sscanf(argv[++i], "%u%c%u%c", &s, &x, &w, &tail) != 3 || x != 'x' || !s || (s & (s - 1)) || s > LB_MAXS || !w || w > LB_MAXW) {
+        fprintf(stderr, "--lb wants SETSxWAYS, SETS a power of 2 <= %d, 1 <= WAYS <= %d: %s\n", LB_MAXS, LB_MAXW, argv[i]); return 2; }
+      lb_sets = s; lb_ways = w;
+    }
     else { fprintf(stderr, "unknown option %s\n", argv[i]); return 2; }
   }
   int fd = open(argv[1], O_RDONLY); if (fd < 0) { perror(argv[1]); return 2; }
@@ -293,6 +303,7 @@ int main(int argc, char **argv) {
   printf("LB self_evict by kind a %llu r %llu v %llu o %llu walk %s\n", (unsigned long long)LB.se_kind[K_A],
          (unsigned long long)LB.se_kind[K_R], (unsigned long long)LB.se_kind[K_V], (unsigned long long)LB.se_kind[K_O],
          walk_dedup ? "dedup" : "asis");
+  printf("LB geometry %u sets x %u ways\n", lb_sets, lb_ways);
   printf("E by op %llu %llu %llu %llu\n", (unsigned long long)ev[K_E][0], (unsigned long long)ev[K_E][1],
          (unsigned long long)ev[K_E][2], (unsigned long long)ev[K_E][3]);
   printf("RC flush_writebacks %llu\nEND\n", (unsigned long long)RC.flush_wb);

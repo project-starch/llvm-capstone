@@ -85,6 +85,17 @@ OPENPH = {"open read live 1": (openph(1), dict(probes=1, deny_hit_dead=1)),
 WALKBODY = b"".join(wr(s) for s in (1, 65, 129, 193, 257)) + ev("a", 0, 1, 1, 1) + ev("c", 0, 1, 1, 1)
 WALK = {"asis": dict(probes=1, self_evict=2), "dedup": dict(probes=2, self_evict=1)}
 
+# --lb SETSxWAYS: installs separated by checks of slot 9 (so no stretch spans two), then a check of slot 1. Probes count
+# the first check of 9 (a miss that installs) plus the check of 1. A: 1, 65, 129, 193, 257 share set 1 at 64 sets, so
+# the fifth evicts slot 1 (the round-robin victim, way 0): 2 probes at 64x4; 8 ways keep it, and at 128 sets they split
+# {1, 129, 257} / {65, 193}: 1 probe. B: 1, 33, 65, 97, 129 split {1, 65, 129} / {33, 97} at 64 sets (1 probe) and share
+# set 1 at 32 (2 probes). A build that ignores --lb reads 64x4 everywhere and FAILS on three counts.
+def geo(slots): return b"".join(wr(s) + ev("c", 0, 9, 1, 1) for s in slots) + ev("c", 0, 1, 1, 1)
+GEO = [("A", (1, 65, 129, 193, 257), "64x4", 2), ("A", (1, 65, 129, 193, 257), "64x8", 1),
+       ("A", (1, 65, 129, 193, 257), "128x4", 1), ("B", (1, 33, 65, 97, 129), "64x4", 1),
+       ("B", (1, 33, 65, 97, 129), "32x4", 2)]
+GEO_BAD = ["48x4", "64x0", "64x33", "8192x4", "64x4x", "64"]
+
 def run_out(binary, body, args=()):
     with tempfile.NamedTemporaryFile(suffix=".rt2", delete=False) as f:
         f.write(body); path = f.name
@@ -147,6 +158,18 @@ def main():
             print(f"WALK {walk} NOT REPORTED"); bad += 1
         for c, v in want.items():
             if got.get(c) != v: print(f"MISMATCH walk {walk} {c}: got {got.get(c)} expected {v}"); bad += 1
+    for name, slots, g, want in GEO:
+        out = run_out(binary, ev("c", 0, 9, 1, 1) + geo(slots), ("--lb", g)).splitlines()
+        pr = [int(l.split()[2]) for l in out if l.startswith("LB probes")]
+        sets, ways = g.split("x")
+        if f"LB geometry {sets} sets x {ways} ways" not in out: print(f"GEOMETRY {g} NOT REPORTED"); bad += 1
+        if pr != [want]: print(f"MISMATCH geometry {name} {g} probes: got {pr} expected {want}"); bad += 1
+    for g in GEO_BAD:
+        with tempfile.NamedTemporaryFile(suffix=".rt2", delete=False) as f:
+            f.write(ev("c", 0, 5, 1, 1)); path = f.name
+        rc = subprocess.run([binary, path, "--lb", g], capture_output=True, text=True).returncode
+        os.unlink(path)
+        if rc != 2: print(f"BAD GEOMETRY ACCEPTED {g}: rc {rc}, expected 2"); bad += 1
     for name, body in OK.items():
         rc = run_one(binary, body)
         if rc != 0: print(f"WELL-FORMED REFUSED {name}: rc {rc}, expected 0"); bad += 1
