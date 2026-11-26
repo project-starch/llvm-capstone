@@ -299,8 +299,12 @@ meets all four. scapmode costs a flushing write per switch, or a conditional wri
   - the CSR write at :2076;
   - the read at :1104, which must return bit 0;
   - **the domain-switch register path at :2146** (`7'd67: srevroot_d = {dom_switch_reg_req_i.data[63:12], 12'b0}`).
-    Open for rtl: whether that path is reachable on Line B, where CSRUNV is illegal. If it is, it must load or clear
-    crvc_q as well. Otherwise a switch through it leaves a stale mode bit.
+    It is NOT under a define or a generate condition. It is part of the always-active domain-switch register write,
+    taken whenever the switcher issues reg_id 67 (enable at :477-480). Its comment names CSRUNV's ENTRY walk as the
+    issuer, and the runtime lane relays rtl's statement that this is CSRUNV's path, gone under Sublet. That is a
+    statement about the switcher, not about this line, and rtl is asked to confirm it from the switcher's source.
+  - **Either way, the change clears crvc_q there (`crvc_d = 1'b0` beside :2146).** Under Line B no CSRUNV context
+    uses CRVC, so the clear costs nothing, and the path cannot leave a stale bit if it is live after all.
 - **Synthesis first:** the decode cone is on the UNOPTFLAT list (rtl), so the synthesis-only gate comes first.
 
 **Kernel: a patch on trapk's final tree, applied by recipe and listed in the pre-registration.** The collaborator's
