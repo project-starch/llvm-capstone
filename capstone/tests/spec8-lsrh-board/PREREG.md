@@ -288,3 +288,22 @@ CF-B5TL1-g3's, and CF-B5TL1-g3 has run on b42c8c644. Their rows say so.
 
 **Preflight runs before every boot,** and its exit line is kept in that boot's run log. This is checked from the
 log, not assumed. A boot with no preflight exit line is recorded as ungated.
+
+## Amendment 3 (2026-11-26, before the first boot): the X bracket is gated on the S bracket
+
+This records the runtime lane's scheduling grant. The S bracket runs on board 2, after the current pair of boots and
+the reflash back to b42c8c644.
+
+**The X bracket runs only after the S bracket's outcome:**
+- **S holds on all four of its stages:** X runs in board 2's next long unattended window, under the same rules.
+- **Any S stage fails:** LSRH is out, by "What decides" above. X does not run, and x264 is recorded as not booted.
+- **An S stage is UNDECIDED:** the S bracket is repeated once, as above, before X is considered.
+
+**Why x264 waits.** On the twin, x264's LSRH change is +20,594,314 of 506.6 G instructions (+0.004 %, 8.1 % of its
+band). On the board that is far below any plausible run-to-run spread. X can only find a cycle effect that the count
+cannot see. No x264-specific cycle mechanism is claimed. x264_me_search_ref, the one hot changed function, is 25
+instructions longer under LSRH, a change of the same kind S's stages carry. So S tests that question first, in about
+1 h against 12 to 36 h.
+
+**The decision now has two steps.** Moving from S to X needs all four S stages to hold. LSRH enters the campaign only
+if all five on-stages hold, x264 included.
