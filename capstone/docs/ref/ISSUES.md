@@ -4732,7 +4732,7 @@ the commit queue's valid entries; 192 bits 6:5 (the write buffer's cache-update 
 full) for why the store port is not drained; 229 bit 3 quiet (no unit read outstanding, unlike R-81); 225 bit 4 if a DYN
 lifetime op waits.
 
-### R-83 — a flush while CSMINT's create channel waits for its response returns the LSU's sequencer to IDLE, and the lifetime unit's create response is never acked `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN (argued from the flush sources, not exhaustively); not constructed; MONITORED IN SIMULATION 2026-11-26 (capstone-ariane b5b2-hangmon-c 808ddfabd / 066c97947, SUP_TRACE only): the must-fire flush-in-CM_CRQ/CM_CRS line is 0 over the 63 Line B tests and over b5b2-csmint-irq's 256 CSMINTs under 2,334 M-timer interrupts (TICK 20-160); no flush met the sequencer outside idle at all; debug-mode entry and a racing namespace flush NOT TESTED (docs/plans/2026-11-26-lifetime-unit-hang-monitors.md)`
+### R-83 — a flush while CSMINT's create channel waits for its response returns the LSU's sequencer to IDLE, and the lifetime unit's create response is never acked `HYPOTHESIZED 2026-11-25 by the claim-auditor; UNREACHABLE NOT PROVEN (argued from the flush sources, not exhaustively); not constructed; MONITORED IN SIMULATION 2026-11-26 (capstone-ariane b5b2-hangmon-c 808ddfabd / 066c97947, SUP_TRACE only): the must-fire flush-in-CM_CRQ/CM_CRS line is 0 over the 63 Line B tests and over b5b2-csmint-irq's 256 CSMINTs under 2,334 M-timer interrupts (TICK 20-160); no flush met the sequencer outside idle at all; the racing NAMESPACE flush MEASURED 2026-11-26 (b5b2-csmint-ns, c96d0cafc: 64 CSMINTs each bracketed by srevroot writes read 0x40 0x23 0x0 0x0 as predicted, R83-FLUSH 0, R83-NSEDGE 0, the NSEDGE zero without a positive control); DEBUG-MODE entry reduced by source (decoder.sv:2249-2252, issue_read_operands.sv:1380/1659-1663, csr_regfile.sv:2551, load_store_unit.sv:2309-2323) to the interrupt channel csmint-irq measured, plus a single step that comes after writeback; not measured; progbuf path untraced (docs/plans/2026-11-26-lifetime-unit-hang-monitors.md)`
 
 Siblings: R-81, R-82 and R-83 are three ways the lifetime unit can stay busy forever; R-77 (whose PRE fix, capstone-ariane
 b5b2-prefix 7861abcfa, turns each of them into a CORE hang instead of a false 25 at about 1M cycles); R-80. All three were
@@ -4744,7 +4744,7 @@ request `cm_q == CM_CRQ` (:2244), wired to the unit's create channel under the S
 flush in CM_CRQ after the request was taken, or in CM_CRS, leaves the unit in S_RESP for OP_CREATE with nobody to ack it:
 it never returns to S_IDLE. The auditor's argument that it is unreachable: every flush source is commit-driven
 (controller.sv :111-115, :121-239) and the CSMINT, the oldest instruction, has not written back. Not proven exhaustively
-(debug-mode entry, an interrupt taken at the CSMINT, and a namespace flush are the cases to check).
+(debug-mode entry, an interrupt taken at the CSMINT, and a namespace flush are the cases to check; 2026-11-26: the interrupt and namespace cases measured, debug mode reduced by source, see the status line).
 
 **Common to all three on silicon** (aperture map of 28fcbb646, unchanged through b42c8c644; read from the emitters):
 - the lifetime unit's own state (st_q, rd_wait_q, wr_v_q) has NO aperture under the Sublet format: its debug endpoints

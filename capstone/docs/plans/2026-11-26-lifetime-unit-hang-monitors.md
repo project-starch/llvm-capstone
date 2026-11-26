@@ -85,3 +85,34 @@ first, each pre-registered in the test's header before any run:
 - R81-RDMAX at most 186 cycles and R82-WRMAX at most 35; both LONG monitors are 0.
 - **Not tested:** debug-mode entry at a CSMINT, and a namespace flush (an srevroot write) racing one. R-83 stays
   HYPOTHESIZED; this narrows it, it does not close it.
+
+## R-83's namespace and debug-mode cases (2026-11-26)
+
+**The namespace case, measured.** b5b2-csmint-ns (capstone-ariane b5b2-hangmon-c c96d0cafc, pre-registered in its header
+before the run) brackets each of 64 CSMINTs with srevroot writes: `csrw srevroot, tbl; CSMINT; csrw srevroot, 0; CSMINT`,
+32 rounds, on b5b2-sbdrain's paged table grown to 512 slots. It adds one monitor, R83-NSEDGE: a namespace edge
+(revnode_ns_flush_i) while the sequencer is not idle.
+- Run: s2pre-wt `.sup/nsrace`, rtl c96d0cafc, dirty=no, memory delay 12.
+- AS PREDICTED: `0x40 0x23 0x0 0x0` (64 mints without an exception, a nonzero rd, 0, no M exception), R83-CRQ 65,
+  R83-FLUSH 0, R83-NSEDGE 0. Result recorded in the test header (d617d842d).
+- The NSEDGE zero has no positive control. R83-CRQ shows the monitor block is live, not that NSEDGE can fire. So it
+  agrees with the source argument (CSMINT starts only at the commit head, and an srevroot write takes effect at its own
+  commit) without proving the case unreachable, and it enters no claim.
+
+**The debug-mode case: reduced by source, not measured.** Reduced by source (decoder.sv:2249-2252,
+issue_read_operands.sv:1380/1659-1663, csr_regfile.sv:2551, load_store_unit.sv:2309-2323) to the interrupt channel
+csmint-irq measured, plus a single step that comes after writeback; not measured; progbuf path untraced.
+- An external debug request is a decode-time marker on the decoded instruction (decoder.sv:2249-2252), the channel the
+  interrupt marker four lines above it uses. A marked instruction is never dispatched to a unit
+  (issue_read_operands.sv:1380), so a marked CSMINT never starts the sequencer. A marked younger instruction flushes
+  only at its own commit, after the older CSMINT, which the issue guard (:1659-1663) held until nothing older was in
+  flight.
+- Single step enters debug on commit (csr_regfile.sv:2551). CSMINT writes back in CM_WB, after CRQ and CRS
+  (load_store_unit.sv:2309-2323), and commits after its writeback.
+- No arm (the semantics owner's ruling): the testharness drives debug_req only from the DM, and a forced request parks
+  the core in the debug ROM, so an arm gives one entry per run and only the monitor lines, whose zero has no positive
+  control. It could not separate the readings better than the source does.
+- Untraced: a CSMINT run from a debugger's program buffer inside debug mode.
+
+R-83 stays HYPOTHESIZED: every named case is now measured (interrupt, namespace) or reduced by source (debug mode), and
+none of the zeros is a proof.
