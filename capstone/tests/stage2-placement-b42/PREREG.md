@@ -150,3 +150,23 @@ afterwards. Sizes and changes against LSHOFFL:
 **The session boots LSHOFFL first and LSHOFFL2 last. Between them, it boots exactly the PL arms that pass the twin
 check on all four stages,** in the order PL1 to PL5. An arm that passes on only some stages is booted, and only its
 passing stages enter P_s. P_s is computed over LSHOFFL and the booted arms as before.
+
+## Amendment 2 (2026-11-27, before any twin or board reading of the PL arms): the board images
+
+Built by c4/spec8/board/make-board.sh, the S-LSHOFFL script, from each PL arm's exes. Each overlay check reads: 574
+files equal to source, 4 natives equal to the arm, 0 mismatches. Each payload is 25,856,520 bytes, keep=y,
+fast-path-refs=2.
+
+| image | fw_payload.bin sha256 |
+|---|---|
+| S-LSHOFFL (LSHOFFL and LSHOFFL2) | 21d18193b86359a88047d30036c0ef01407fa4c0805b2e794d2a7f781040c2cb (the ZCB pair's OFF image) |
+| S-PL1 | 684b81534935abf36c2fff66c73d38d00d01831ebbe0df38bb74a3c3bde717a8 |
+| S-PL2 | 24e1097ad75d0da0c96510d8715ca69e09b688b5a716b2674d5b48f59eddfdc7 |
+| S-PL3 | 136615641b452558eb4066e2955eeb70e46e1b69dd6b751301c3b516db868f2d |
+| S-PL4 | 1919e53e73562558b3fd2b4f7cf633b6965a0a6cb1efc9fe8aa626dc9c4672e0 |
+| S-PL5 | c7ff79012d367c165e80ed66c20f6893ed7a4e343c1e36cf53834a9466b2022f |
+
+- **The PL images and S-LSHOFFL differ only in the overlay's four natives.** The kernel Image and the firmware
+  binary differ too, since the Image embeds the overlay and the firmware embeds the Image.
+- **Which of them boot** is decided by the twin check alone, in an amendment pushed before the first board boot. That
+  amendment gives the verdict per arm and per stage.
