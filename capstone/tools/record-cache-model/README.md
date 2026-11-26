@@ -222,6 +222,27 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
     - What decides it is a proven upper bound on c, together with the residency of RC's 136,290,618 removed misses.
   - The residency pass is the nested lane's full-stream D$-residency model, checked on silicon. It was asked for on
     2026-11-26 because the run landed in this band, as the ruling prescribes.
+  - The silicon check the ruling requires does not exist yet: no b42c8c644 mcf row counts D$ misses (the runtime
+    lane's grep of all three captures). The order:
+    1. The nested lane's v3 trace with the D$ model gives the prediction, board-free.
+    2. Then a board row on b42c8c644 that counts around mcf's stage. It is a new image, pre-registered against that
+       prediction, with a keep-tags firmware variant.
+  - **That row's counters** (b42c8c644, perf_counters.sv / csr_regfile.sv; six counters, mhpmcounter3..8, MHPMCounterNum = 6):
+    - Access:
+      - mhpmevent3..8 are M-only (csr_regfile.sv:819-847), so firmware programs them;
+      - S or U reads hpmcounter3..8 only with mcounteren bits 3..8 (:758), and U also needs scounteren (:664);
+      - mcountinhibit is at :792;
+      - read at the stage's start and end.
+    - Prior art for the path: the hpm-bare-2026-11-03 kit (lane land/rtl-hpm-kit 289ad4e544d8).
+
+    | event | what it counts (perf_counters.sv) | why |
+    |---|---|---|
+    | 0x02 | L1D miss (:115): wt_dcache_missunit.sv:226 `mshr_allocate && !miss_nc`, every allocating cacheable miss on ANY D$ port, the lifetime unit's port 2 and the PTW included | the count the model predicts; the model must include the same populations |
+    | 0x17 | R-43 replays (:138) | approximately the silicon's verdict-cache misses, a cross-check of the 181,127,530 (whether LDC/STC misses replay the same way is checked before calling it equal) |
+    | 0x11 | L1D accesses (:133-134), ports ex_cache[0..2] only (cva6.sv:2493), so EXCLUDING the lifetime unit's port | with 0x02 and the model, separates program from record misses |
+    | 0x1d | record-TLB walk started (:147) | the model's record TLB (round-robin in the RTL, ex_stage.sv:2395-2398) |
+    | 0x1f | paged-table record access (:149) | the same, its denominator |
+    | 0x04 | DTLB misses | PTW traffic, the model's blind spot |
 
 **500.perlbench_r test (makerand.pl): NO BUILD** (decided 2026-11-26 on its board row, below).
 - The trace is the nested lane's spec-perl3.2883687: 10,130,629,600 B, sha256 1af7b0c90ab7cb56..., recomputed here. It
