@@ -14,19 +14,19 @@ at the very end.
 | Spatial-only seal **14f2ef81a** (b42c8c644 + CAPSTONE_SPATIAL_ONLY) | kits on silicon, board 1: every binding image reads its vector except b5b2-cptag position 22 (the H-fetch instrument, intermittent) | 74fe0e8d943e |
 | Trap route, deletions, CLDRAW/CSTRAW/CPTAG, one-operand CREVOKE, CRENEW, CSMINT, interruptible CREVOKE | on silicon (CSMINT and 4(b) at N=1) | b5b2 plan; 5d45de462acf; d139d076f84e |
 | Growth and failure rules | cause 30 and table growth on silicon at N=2: crevoke4b's b5b2-sbdrain-none/-fill/-fence/-mint read 0x1e 0x0 0x100 0x1, and -sret (U's CDERIVE raises 30, delegated to S, S grows and srets, the retry allocates) reads 0x1 0x0 0x1 0x0, on boards 3 and 2. NOGROW (the no-fault failure on a table that cannot grow) is on silicon too: b5b2-nogrow reads `0x0 0x7 0x100 0x0` beside its control b5b2-nogrow-ctl's `0x1e 0x7 0x100 0x1` (board 2, b42c8c644, 2026-11-26; kit b5b2-nogrow-bare-2026-11-26, pre-registered at fec2f2e16400), the pair differing only in the growth word | crevoke4b expected-vectors-b42c8c644.json; board/meas-pw f47b2a686ce2; NOGROW: board/meas-pw 371f7706e0e5 |
-| Record cache (5.2) | model only; the P1 version was refuted, the Line B port is in progress | 1c7617108984; 68cce3377964, b35fb24d8e97 |
+| Record cache (5.2) | model only; the P1 version was refuted. Line B decisions by the semantics owner's rule (BUILD only on a warm gain over 1 %, NO BUILD only under 1 % cold): gcc NO BUILD; perlbench NO BUILD on Full's g4mk row (CF-B5TL1-g4mk e82d42eb, 275.70 s: 0.163 % cold, about 6x under the line; the image traced from its booted bytes to the traced binary); mcf UNDECIDED until B5TL1-g1b's board row | 1c7617108984; perlbench e3fd98c877e5, 7338479886c4 |
 | Linux on B5b-2 | boots; fast rdtime 119 cycles per op; msghdr loader on dev (eaee80a0fa70), memcached served on silicon | b5b2-linux kit; 098cae0f858b |
-| Final kernels | Full (NO_HZ_IDLE, TRAP_TEST off): boot 13 on b42c8c644 4 of 4 as predicted (rdtime 119.7, getppid 1,267). +Spatial (+ RISCV_CAPSTONE_SPATIAL_ONLY): boot 14 owed, attempt 1 NO READING (infra) | runtime/b5b2-linux 098479a070eb; board/meas-pw f47b2a686ce2 |
+| Final kernels | Full (NO_HZ_IDLE, TRAP_TEST off): boot 13 on b42c8c644 4 of 4 as predicted (rdtime 119.7, getppid 1,267). +Spatial (+ RISCV_CAPSTONE_SPATIAL_ONLY): boot 14 on 14f2ef81a read as predicted. Both recipes and the option are on dev | runtime/b5b2-linux 098479a070eb, ec0ecb7c7427; dev d93ebefc8188, baf238ae8e8a |
 | Trap kernel's record table | grows on demand by batches through cause 30; ceiling `sublet.node_max_pages` (0 = the format's 2^31 records); `sublet.table_growths` and `nogrow_sets` readable | `arch/riscv/mm/sublet-table.c:51-58,81-120` of the series |
-| SPEC test, Full arms on b42c8c644 | board 3's session in progress: B5T-g2b imagick PASS; x264 moved to x264b images at 43,200 s (Amendment 11) | spectest PREREG Amendments 9-11 |
-| SPEC test, +Spatial (SP-B5TL1, five images) | built; twin 7 of 8 stages rc 0 with specdiff PASS at the board's 962 MiB, x264 running | spectest Amendment 12 (to come) |
-| One-operand applications | CPython on b42c8c644 +6.8 % (N=1); memcached served on both arms, 0 of 6 by its criterion because the board has no RTC; the rest on superseded seals | nested-workloads 098cae0f858b |
-| Optimised gcc and perl ports | advanced on the twin and P1; **in no arm of this campaign** | nested-allocator-workloads.md |
+| SPEC test, Full arms on b42c8c644 (qualification) | every stage read so far passes: B5T-g1b on boards 3 and 2 (mcf completes, 6,828.57 / 6,826.53 s, consistent with R-80 by Amendment 8), B5TL0-g1b, imagick on six g2b rows, gcc on three g3 rows; no cause-25 at an LDC. Owed: B5TL1-g1b (running), the g4mk rows, the three x264b, ldcexc2 | spectest RESULTS (runtime/b5b2-linux cc8f664b1480); Amendments 9-14 |
+| SPEC test, +Spatial (SP-B5TL1, five images) | board 1 on 14f2ef81a: g2i imagick, g3 gcc, g4mk perlbench PASS; g1b running, x264b last. Twin: 8 of 8 stages, x264 by its data hashes (Amendment 13) | spectest Amendments 12-14 (4d544800ea81, e7b3046cf5e8, e660fa0215ae); RESULTS |
+| One-operand applications | CPython on b42c8c644 +6.8 % (N=1). memcached requalified on b42c8c644 with the final Full kernel and the clock set from /init: 6 of 6, both arms, transcripts equal to native's. That boot was ungated, and it also changed the kernel, so it is not a one-variable rerun of the 0-of-6 boot. The rest are on superseded seals | nested-workloads 098cae0f858b; requalification PREREG 740970700451, RESULT 5e7f421c064c |
+| Optimised gcc and perl ports | the Full + ports arm read on board 2, b42c8c644, final Full kernel, N=1, every stage PASS under v2 and v1: gcc t1.c stock 5.55 s, port 5.83 s (1.050); perl makerand.pl stock 275.70 s, port 279.75 s (1.015). The twin had predicted 1.176 and 0.958, so a twin ratio is not a predictor of a board ratio for these ports | nested-workloads PREREG c4732c42a52b, Amendment 1 1ab5179e06d3, RESULT a162a8aefb60 |
 | Compiler, this week | pool-base-at-entry refuted as a default (nab +0.382 %, perlbench +0.369 %); LSRH (LSR run-time end + hoist) costs neither and keeps imagick -1.68 M; eight-stage twin gate pre-registered | compiler/imagick-loop-shapes 1430c473c2c6, 8bf6a86af81f |
+| Directed simulation on b42c8c644's RTL | R-74 (tag-fill race): reached at every memory delay 0-15. 0 forged as built. Single and paired protection removals name the protection that decides each instance: the no-epoch write inside a fill for early beats (delays 0-1), poison or that write for poisoned ones. Not a proof for every timing. R-83's namespace case AS PREDICTED; its debug-mode case reduced by source, not measured | dev 214e2fd87624, da65421d4fd6 |
 
-**Stale until this rewrite:** this doc named 904cd9c6b/28fcbb646 as current and said +Spatial existed only on P1.
-ISSUES R-77 ("NOT YET SYNTHESISED") and R-80 ("NOT YET SYNTHESISED OR ON SILICON") still need their entries updated
-(rtl lane).
+**Stale until the 26 Nov rewrite:** this doc named 904cd9c6b/28fcbb646 as current and said +Spatial existed only on P1.
+ISSUES R-77 and R-80 now read ON SILICON.
 
 ## The arms of the final campaign
 
@@ -61,7 +61,7 @@ Board time is the critical path; everything that needs no board runs beside it.
 
 **Without a board, now (in parallel):**
 1. runtime: spectest Amendment 12 (the +Spatial rows, from the twin); this doc; land the +Spatial kernel option and
-   both final-kernel recipes after boot 14.
+   both final-kernel recipes after boot 14. **Done** (Amendments 12-14; dev d93ebefc8188, baf238ae8e8a).
 2. nested + compiler: the perlbench bodies, HE and op-slab port made to build on the one-operand SDK; then the gcc
    and perlbench ports rebuilt on the trap SDK as B5TL1-paired SPEC test stages (make-stage.py), scanned
    for illegal operations, run on the twin at 962 MiB; then their pre-registration. memcached's requalification with
@@ -71,7 +71,9 @@ Board time is the critical path; everything that needs no board runs beside it.
    R-74, R-81, R-82, R-83, and a core-level NOGROW arm; R-60/68/72/32's kits in simulation on b42c8c644; the assertion
    side-build ported to b42c8c644; ISSUES R-77/R-80 entries.
 5. runtime: the campaign images, every arm's stages relinked on the final kernels with FW_FAST_RDTIME, overlays
-   byte-identical to the qualification images; then their twin replay at 962 MiB.
+   byte-identical to the qualification images; then their twin replay at 962 MiB. Images built (CF and CS for five
+   groups, CFP for g3 and g4mk; `trapk/build-campaign.done`, `build-campaign-ports.done`). The twin replay is queued
+   behind the compiler's LSHOFFR on the shared QEMU lock.
 6. runtime: twin memory checks of every train input at 962 MiB, so train boots do not meet the OOM the first +Spatial
    twin replay met at 512 MiB.
 7. compiler + board: the Plain SPEC images paired with B5TL1, and the Plain test rows on rvbase, pre-registered.
@@ -89,8 +91,11 @@ unattended window, one image per boot. Every other stage of an arm fits in one b
 - Board 3 (b42c8c644): finish the Full SPEC test session (g2b remainder, g3, g1b, g4mk, ldcexc2, x264b).
 - Board 2 (b42c8c644): nested-corpus (SQLite and PHP engine repros); boot 13 is read.
 - Board 1 (14f2ef81a): boot 14; then the +Spatial SPEC test rows (Amendment 12), x264b last.
-- Then, as their pre-registrations land: Full + ports; the LSRH board form (LSHOFF, LSRH, LSHOFF2 in one session,
-  lbm off); Plain rows on rvbase.
+- Then, as their pre-registrations land: Full + ports (**read**, board 2: four boots, above); the LSRH board form
+  (LSHOFF, LSRH, LSHOFF2 in one session, lbm off); Plain rows on rvbase.
+- Every boot runs preflight-board-run.sh first and keeps its exit line. Two boots on 26 Nov did not (nested-mcreq,
+  CF-B5TL1-g3), and their rows say so. A preflight BLOCK is proceeded past only by a ruling recorded in the row, e.g.
+  C10's 20 MB budget for 21.66 MB payloads already proven on the same seal.
 - Last: three runs per arm, board-constant pairs, drift-balanced order, intervals; then SPEC train for all arms.
   SQLite --size 100 and the Fig. 10 Perl suns.pl row go here.
 
