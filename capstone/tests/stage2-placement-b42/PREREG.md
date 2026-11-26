@@ -119,3 +119,34 @@ The question this answers is open, so these are stated without strong priors.
   small P_s does not show that no placement would reproduce E_s.
 - Which cache, predictor or TLB effect carries any P_s.
 - P1, x264, mcf, xz and lbm.
+
+## Amendment 1 (2026-11-27, after the relinks were built and before any twin or board reading of them): two more pad arms
+
+**The relinks, built by c4/placement/relink-pl.sh.** LSHOFFL's own exes and link lines were checked unchanged
+afterwards. Sizes and changes against LSHOFFL:
+
+| native | LSHOFFL .text | PL1 | PL2 | PL3 |
+|---|---:|---:|---:|---:|
+| perlbench_r | 1,865,584 | +9,484 | +292 | +1,040 |
+| cpugcc_r | 8,144,164 | +27,000 | +39,008 | +1,052 |
+| imagick_r | 1,772,332 | +12,620 | +14,716 | +1,056 |
+| nab_r | 267,140 | -4 | +4 | +1,040 |
+
+- **PL1 and PL2 are not placement alone.** They change the size of 1,073 and 894 of perlbench's 4,761 functions. The
+  object shuffle changes the distances that RISC-V linker relaxation reads (calls, and the gp-relative forms), so it
+  changes instructions.
+  - Prediction 1's "exact equality for PL1 and PL2" is withdrawn before any reading.
+  - They are now predicted to fail the twin rule (±0.001 %) on perlbench, gcc and imagick.
+  - The twin rule stays as written, and decides.
+- **PL3 shifts everything after the runtime by 1,040 B, and changes no function's size** on perlbench or nab. The
+  extra 12 and 16 B on gcc and imagick are alignment between input sections.
+
+**Added, so that the session keeps at least three placement controls if PL1 and PL2 fail:**
+- **PL4:** as PL3, with a pad of 2,064 B (129 × 16).
+- **PL5:** as PL3, with a pad of 3,088 B (193 × 16).
+- Together with PL3 (1,040 B) and LSHOFFL (0), the in-page shifts are 0, 1,040, 2,064 and 3,088 B. They are spread
+  across the page, and none is a multiple of 32.
+
+**The session boots LSHOFFL first and LSHOFFL2 last. Between them, it boots exactly the PL arms that pass the twin
+check on all four stages,** in the order PL1 to PL5. An arm that passes on only some stages is booted, and only its
+passing stages enter P_s. P_s is computed over LSHOFFL and the booted arms as before.
