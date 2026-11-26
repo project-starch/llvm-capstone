@@ -8568,6 +8568,86 @@ reference.
   - The two `-1` fixtures cannot pass on a board without an RTC.
 - The cpymem board/twin ratio for corpus case 21: CPython reads 8.9× stock and 7.3× prot. memcached's repetitions read ~10× in uptime per repetition (board 49-50 s, twin 3.5-6.5 s).
 
+### Pre-registration: memcached's requalification on b42c8c644, the clock set before the server starts (written 2026-11-26 13:50 host time (+08), before the boot)
+
+**Question.**
+- nested-cpymem's memcached qualified 0 of 6 by its criterion.
+- Every transcript was the same on both arms, and each differed from native's only in the two answers that read the
+  wall clock. The cause is the board's missing RTC.
+- The twin reproduced the whole difference by the clock alone (`cm/epoch`, result above).
+- Does memcached qualify 6 of 6 on silicon when the clock is set before the server starts? Nothing else changes.
+
+**What changes, and what does not.**
+- The stage scripts, images and harness are nested-cpymem's, byte for byte:
+  - M20/M21 of `ovl-cm3`;
+  - stock `53538940…`, protected `4108e588…`;
+  - mc-harness `fde5d3c7…`;
+  - stage bounds 3,600 s each.
+- runtime's rule applies: the test and its workload are not edited.
+- The change is in the boot environment only. `/init` (`cm/clock/ovl-clk/init`, `5dc641dd…`) is init-ordered-bound with
+  two lines before the smoke:
+  - when `/clock.epoch` exists, the clock is set from it (`date -s @<seconds>`);
+  - a `TRAPTEST: clock <UTC> epoch-s <seconds>` line is printed in every case.
+- The board image's `/clock.epoch` reads `1795663474` (2026-11-26T03:24:34Z, the host time when the overlay was made).
+  The two fixtures need only a clock more than 30 days past the epoch (`REALTIME_MAXDELTA`, memcached.h:1064) that runs
+  forward. Both hold for any such value.
+
+**Platform.**
+- Board: b42c8c644, the full B5b-2 seal. The board lane runs it, on the board runtime allocates, with its runner as for
+  nested-cpymem (booking and readbacks before and after, the silence stop, the STOP file).
+- Boot bound: 9,000 s. That is the two stage bounds (7,200 s) plus 1,800 s for upload, boot and the smoke; on the twin
+  the two stages took under 4 min.
+- If the runner's logs carry no preflight-gate line, the boot is reported **UNGATED**.
+- Payload `<hdd>/nested/b5b2/cm/clock/payload-board/fw_payload.bin`, sha256 `194a54623cd3056a…`, 19,565,064 B:
+  - runtime's fpga-final make-payload.sh (the campaign's final Full kernel: NO_HZ_IDLE, TRAP_TEST off, the msghdr
+    loader in), Image `c87952a9…`;
+  - keep-tags firmware with `FW_FAST_RDTIME=y` (2 fast-path references);
+  - `caplifive-b5b2-wide.dtb` (`3d223e80…`, `dom_wide_grants=1`), the DTB nested-cpymem and the twin used;
+  - initramfs = base-rootfs + `ovl-board` (manifest equal to the payload's `overlay-files.sha256`).
+- **Disclosed:** the kernel is the campaign's final Full kernel, not nested-cpymem's (6d4504f8b073 + the msghdr loader,
+  `f97b98f1…`). So this boot differs from nested-cpymem in the kernel and the payload as well as the clock. Its reading
+  is the server row on the campaign kernel, not a one-variable rerun.
+
+**Twin, as predicted and as read** (`cm/clock/run-clock.sh`, `c45cacdab8950eb0`). Both arms run with QEMU's RTC at the
+epoch, the board's clock, on the same `/init`; they differ only in `/clock.epoch`:
+QEMU is qemu-crv (`ea5c05f3…`), with Image `749fed26…`, the keep-tags fw_jump.elf and `sublet.dom_wide_grants=1`, as in
+twin-cm3. The two overlays' manifests differ in that one file and nowhere else.
+- **set** (lock granted after a wait, done 13:44:01; initramfs `3795d28c…`; console log `fc95df40…`):
+  - the kernel reads `setting system clock to 1970-01-01T00:00:02 UTC`;
+  - the /init line reads `TRAPTEST: clock set rc=0 from /clock.epoch 1795660718` and
+    `TRAPTEST: clock 2026-11-26T02:38:38Z`;
+  - **all six transcripts are native's**, `ee1522c8…`;
+  - read-mc2.py: 6 of 6, exit 0.
+- **unset** (done 13:47:24; initramfs `3ce605b5…`; console log `e6c35de3…`):
+  - `TRAPTEST: clock 1970-01-01T00:00:02Z epoch-s 2`;
+  - all six are `028c99b2…`, nested-cpymem's board transcript, with `get_hits` 337 and `get_misses` 5;
+  - read-mc2.py: 0 of 6, exit 1.
+- So on the twin, setting the clock in /init is enough to give native's transcript. The control shows the check fires.
+
+**Predictions on the board.**
+1. A `TRAPTEST: clock 2026-11-26T…Z` line before the smoke.
+2. memcached 6 of 6 qualify: every transcript equals native's 1,931,207 B (`ee1522c8…`), each server stops on
+   `shutdown` with exit 0, identity reads `STAT pointer_size 128`, and each exit line names its image.
+
+**Grader.**
+- `python3 <hdd>/nested/b5b2/memcached/read-mc2.py <UART capture> <hdd>/nested/b5b2/memcached/out` (`c76d4138…`).
+- read-mc2.py is read-mc.py (`15d33f37…`) with one change. Inside an RG_FILE block, whole `TRAPTEST: tick <uptime>`
+  lines are dropped and counted, and a block that still does not decode is reported UNREADABLE and fails.
+- Controls:
+  - nested-cpymem's board capture: 0 of 6, 1 tick line dropped, no crash (read-mc.py had stopped there);
+  - twin-cm3's log: 6 of 6;
+  - twin-cm3's log with a tick line inserted inside a transcript block: 6 of 6, 1 dropped;
+  - the same with a non-base64 line added as well: that repetition is UNREADABLE and FAILS, exit 1.
+- Exit 0 means 6 of 6; exit 1 means read and failed; exit 2 means no stage.
+
+**How each outcome reads.**
+- **6 of 6:** memcached is served on silicon by the msghdr loader on both arms with native's transcript. The server row
+  qualifies on the campaign kernel.
+- **The two clock answers differ again with the clock line present:** the clock did not hold, and the clock line's value
+  is read. That is not a protection verdict.
+- **Any other difference:** reported as itself, with its arm.
+- **No clock line, or a 1970 clock line:** the set failed. That is no reading for this question.
+
 ### Pre-registration: B5b-2 board boot "nested-corpus", SQLite then PHP engine-repros (written 2026-11-26 04:17 host time (+08), 20:17Z on Nov 25, before the boot)
 
 **What it is.** Runtime's B5b-2 item 1 on silicon: the engine-repro corpus on the trap route, in one boot.
