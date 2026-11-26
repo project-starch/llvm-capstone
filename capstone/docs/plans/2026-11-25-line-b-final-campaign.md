@@ -13,7 +13,7 @@ at the very end.
 | Final Full seal **b42c8c644** (a5c45a46d + R-77's PRE fix; R-80's fix) | sealed and graded, clk_out1 +0.605, 150,303 LUT; kits on silicon on two boards as the first boots of each session, graded against the simulated vectors: board 3 b5b2n 21/21, crevoke4b 16/16, wapflu 1/1, Linux boot 3 P1-P4 ok; board 2 b5b2n 21/21, crevoke4b 16/16, wapflu 1/1, misscost both AS PREDICTED | 266e59a9a095; vectors fca456c2aad8, 1258f0833b60; readings board/meas-pw f47b2a686ce2 |
 | Spatial-only seal **14f2ef81a** (b42c8c644 + CAPSTONE_SPATIAL_ONLY) | kits on silicon, board 1: every binding image reads its vector except b5b2-cptag position 22 (the H-fetch instrument, intermittent) | 74fe0e8d943e |
 | Trap route, deletions, CLDRAW/CSTRAW/CPTAG, one-operand CREVOKE, CRENEW, CSMINT, interruptible CREVOKE | on silicon (CSMINT and 4(b) at N=1) | b5b2 plan; 5d45de462acf; d139d076f84e |
-| Growth and failure rules (NOGROW, cause 30) | RTL and simulation; no silicon test | sublet_life.sv; sublet-life-diff.py |
+| Growth and failure rules | cause 30 and table growth on silicon at N=2: crevoke4b's b5b2-sbdrain-none/-fill/-fence/-mint read 0x1e 0x0 0x100 0x1, and -sret (U's CDERIVE raises 30, delegated to S, S grows and srets, the retry allocates) reads 0x1 0x0 0x1 0x0, on boards 3 and 2. NOGROW (the no-fault failure on a table that cannot grow) is tested only at the unit level (sublet-life-diff.py), with a core-level arm to build | crevoke4b expected-vectors-b42c8c644.json; board/meas-pw f47b2a686ce2 |
 | Record cache (5.2) | model only; the P1 version was refuted, the Line B port is in progress | 1c7617108984; 68cce3377964, b35fb24d8e97 |
 | Linux on B5b-2 | boots; fast rdtime 119 cycles per op; msghdr loader on dev (eaee80a0fa70), memcached served on silicon | b5b2-linux kit; 098cae0f858b |
 | Final kernels | Full (NO_HZ_IDLE, TRAP_TEST off): boot 13 on b42c8c644 4 of 4 as predicted (rdtime 119.7, getppid 1,267). +Spatial (+ RISCV_CAPSTONE_SPATIAL_ONLY): boot 14 owed, attempt 1 NO READING (infra) | runtime/b5b2-linux 098479a070eb; board/meas-pw f47b2a686ce2 |
@@ -68,7 +68,7 @@ Board time is the critical path; everything that needs no board runs beside it.
    the clock set before the server starts (twin first).
 3. compiler: the LSRH eight-stage twin gate; pool-base built only on paths that use the base.
 4. rtl: the record-cache model decision on Line B traces (cache RTL only on a modelled gain); directed simulation for
-   R-74, R-81, R-82, R-83, NOGROW and cause 30; R-60/68/72/32's kits in simulation on b42c8c644; the assertion
+   R-74, R-81, R-82, R-83, and a core-level NOGROW arm; R-60/68/72/32's kits in simulation on b42c8c644; the assertion
    side-build ported to b42c8c644; ISSUES R-77/R-80 entries.
 5. runtime: the campaign images, every arm's stages relinked on the final kernels with FW_FAST_RDTIME, overlays
    byte-identical to the qualification images; then their twin replay at 962 MiB.
