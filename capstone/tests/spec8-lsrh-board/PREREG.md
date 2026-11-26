@@ -269,3 +269,22 @@ per arm, or 35,000 s for three arms.
 - No session window covering 35,000 s has been offered.
 
 So this amendment does not add them.
+
+## Amendment 2 (2026-11-26, before the first boot): image size and preflight
+
+This records the runtime lane's ruling on the preflight size check (C10), received after Amendment 1.
+
+**The S images, 25,856,520 bytes.** No payload of this size is known to have booted on b42c8c644, so preflight's C10
+blocks them.
+- They proceed by runtime's ruling. Each S row records: "C10 BLOCK at 25.86 MB, proceeded by runtime's ruling; size
+  not previously proven on b42c8c644."
+- The first S boot is the size's own proof. If its upload, JTAG load or initramfs unpack fails:
+  - that boot is NO READING (infra), not an LSHOFF or LSRH reading;
+  - the session stops there, before the next S image.
+- If a rebuild takes an S image past 26,000,000 bytes, it does not boot without a new ruling.
+
+**The X images, 21,662,216 bytes,** are size-proven. They equal CF-B5TL1-x264b's payload size, which is also
+CF-B5TL1-g3's, and CF-B5TL1-g3 has run on b42c8c644. Their rows say so.
+
+**Preflight runs before every boot,** and its exit line is kept in that boot's run log. This is checked from the
+log, not assumed. A boot with no preflight exit line is recorded as ungated.
