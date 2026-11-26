@@ -113,3 +113,27 @@ inputs are P1's ZCB1 fetch savings; Line B's twin fetch reading is not yet taken
 - x264 and xz, the two stages with the largest P1 Zcb fetch savings (1.29 % and 1.26 %). x264 costs at least about
   14,300 s per boot. xz read flat on P1 silicon.
 - P1.
+
+## Amendment 1 (2026-11-26, after ZCB-OFF1 and before any ON reading): what a reading can be attributed to
+
+ZCB-OFF1 had landed when this was written. ZCB-ON1 was booting, and no ON reading had been seen.
+
+**The gate, the gain rule, the drift control and "What decides" are unchanged.** This adds a limit on what a reading
+is attributed to.
+
+**Why:** the LSRH S bracket on this bitstream (tests/spec8-lsrh-board RESULTS, e09ecb0844a4) read perlbench +1.27 %
+and nab +0.31 %.
+- That is for images whose twin counts differ by -34 instructions and -0.042 %.
+- LSRH moves 4,717 of perlbench's 4,761 functions.
+- On b42c8c644 the I$ and D$ are 32 KiB, 8 ways, 16 B lines (config package :93-98). So the set index lies inside the
+  4 KiB page offset, and a relink moves code across sets and lines. ZCBB, too, moves nearly every function against
+  LSHOFFL.
+
+**So:**
+- **A gain, or a gate failure, here is attributed to "the ZCBB image", not to Zcb itself.** It enters "What decides"
+  as written.
+- Before ZCB is proposed as a campaign row, its board effect is to be compared against a placement control: LSHOFFL
+  relinked with only its layout perturbed, instruction-identical on the twin. That control is pre-registered with
+  stage 2's cycle band, not here.
+- If the control's spread on a stage reaches the reading's size, the reading is recorded as indistinguishable from
+  placement.
