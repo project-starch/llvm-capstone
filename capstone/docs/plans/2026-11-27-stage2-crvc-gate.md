@@ -87,3 +87,43 @@ Predictions against readings:
   - LUT 4,438 (-53) against "under +30": inside, though the sign is re-homing.
 - **Every other module:** within +-2,500. The largest moves are i_issue_read_operands -1,046 and ex_stage_i +601;
   RAMB36 is unchanged.
+
+## Full build result (board lane, apollo, 2026-11-26 21:58-23:14Z; graded by the rtl lane from the routed reports)
+
+Run: `/mnt/hdd/<user>/synth/b5b2crvcf-796af23d9-full`, exit 0, 1h15m05s, peak RSS 24.07 GB, guard REASON=ok.
+
+| key | read | grade |
+|---|---|---|
+| placed LUT | 149,891 (seal 150,303, -412), band 150,403 +- 3,000 | PASS |
+| placed FF | 68,514 (seal 68,506, +8), band 68,507 +- 2,000 | PASS |
+| routed | 0 routing errors; 197,909 of 197,909 routable nets fully routed | PASS |
+| congestion | placer region sizes N 8x8/8x8, S 1x1/4x4, E 8x8/4x4, W 2x2/4x4 (level <= 3); router: no hotspot or initial-estimate line | PASS |
+| loops | check_timing loops 0 and latch_loops 0 (build report); LUTLP-1 0 at synth and opt (in flight); routed methodology DRC 0 TIMING-23 / LUTLP-1 rows | PASS; on the routed dcp too (board lane, twc/b5b2crvc/post-full.log): CHECKLOOPS 0 and T23 COUNT=0 (toy 1/1), LUTLP-1 COUNT=0 (toy 1) |
+| WNS clk_out1 | +1.796 (seal +0.605, +1.191), band [-3.135, +4.345] | PASS |
+
+Reported, not graded:
+- design WNS +0.176 on a MIG path (seal +0.177); TNS 0; WHS +0.031 (seal +0.043); BRAM tiles 117 = the seal.
+- **Sealed** 2026-11-26 23:16:40Z (board lane) as caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-
+  shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r75d-b5b2n-crev4b-wap-flu-r80-
+  r77-crvc_796af23d9.bit, 11,443,722 B, sha256 0149657ee39f6ff8cf744d9081f9e8ed55362f81400174de4af9c523dd56790b,
+  recomputed here from `<hdd>/capstone/bitstreams/`. Tarball synth-796af23d9-exit0.tar.gz sha256 3f136eb7555fe80e...;
+  its .bit is identical, and its PROVENANCE HEAD is 796af23d9. Collector peak 3.57 GB.
+- No readback name yet. The flash follows the compiler lane's PREREG (the seal control on b42c8c644 first, after the
+  placement RESULTS).
+- **Worst 20 on clk_out1:** all from i_issue_read_operands fu_data_q_reg[0][cap_data][cap_metadata_a][14], the seal's
+  family, +1.796 to +2.554 at 93-94 levels (the seal's +0.605 at 84). They end in fu_data_q cap_metadata/rd_metadata or
+  i_scoreboard mem_q cap_result rs1_metadata.
+- **Worst 500** (n = 500, +1.796 to +6.846; each path's cells matched by name):
+  - compressed decoder (`*/id_stage_i/*decoder*`): 0 paths;
+  - id_stage_i: 244 paths, 35 cells;
+  - POS i_issue_read_operands 480 paths (480 on the seal), NEG 0.
+  - **The id_stage prediction MISSED:** I predicted near 0. Read against the seal (board lane, crvc-paths2.tcl on both routed dcps, twc/b5b2full/bp/{crvcf,seal-b42}-paths2.log):
+    - b42c8c644's seal: id_stage_i is on 137 paths over 36 cells, decoder 0, POS 480, NEG 0.
+    - Three of this build's four heavy cells (213 paths each) are the seal's three heavy cells by exact name (106 each):
+      fu_data_q[0][cap_data][rs1][4]_i_2 (LUT5), fu_data_q[0][cap_data][rs1][4]_i_5 (LUT6), issue_q[0][valid]_i_2 (LUT6).
+      The fourth is mem_q[6][sbe][cap_result][dom_switch_req][base_addr][63]_i_3 (LUT4, 4 paths on the seal); the
+      seal's fourth is mem_q[7][issued]_i_2. The other cells on both are one-path fu_data_q rd_metadata LUT6s.
+    - So the rise from 137 to 244 is more paths through cells the seal already has. It is not a cell the change added.
+    - The limit: a name match cannot see flattened compressed_decoder logic named after its output nets, so
+      "decoder 0" is a name count, not a cone proof.
+- **Final word to the compiler lane:** flashable from the rtl side, in their PREREG's order.
