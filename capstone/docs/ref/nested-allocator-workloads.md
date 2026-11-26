@@ -8354,10 +8354,9 @@ reference.
 
 **Platform, as read back.**
 - Board 2, booked by the board lane's runner and released (UNBOOK 200).
-- The readback before the boot names `…-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit`: the full B5b-2 seal, as registered.
-- The readback after the boot returned no name (rc 3). The board lane's runner records it; it does not touch this boot's readings.
+- Read back as b42c8c644 by name before and after the boot, `…-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit`: the full B5b-2 seal, as registered. Both readbacks give rc 3, which means the name matched and the console exposes no sha256.
 - Image `ccecad78bfcb78b0…`, as registered.
-- The runner's logs carry no preflight-gate line, so this boot is reported **UNGATED**.
+- **UNGATED** by preflight-board-run.sh (runner 5 does not invoke it). The board lane's own prechecks ran: the image sha256 against the arming file, the seal's sha256, and the readback by name before and after.
 - Capture: uart.txt sha256 `b1043a2b6bcb3ebe…`, 78,673 B. The grader's boot.txt (CR dropped) is sha256 `ffb832f8715f1a63…`.
 
 **Grader, as registered** (`grade-cm.py`, `90c39ded…`): **exit 1.**
