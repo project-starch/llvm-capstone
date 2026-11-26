@@ -11,6 +11,10 @@ fell between the same two heartbeats, and the revocation unit's serving index re
 every other M-16 stop. In the same boot, BLOCK_FAST alone ran 1.9·10^8 allocations without stopping ("On P1 again" below). The
 hypothesis this leaves, at N = 2, is that on P1 the stop is tied to a point in the full form's allocation sequence
 rather than to a constant per-allocation rate.
+Two more P1 boots on 2026-11-26 (loc1, loc2) printed a heartbeat every 100 or 1,000 packets instead of every 10,000.
+Both stopped far earlier, at 34,000-36,300 packets, each cut mid-line on the UART's 16-byte boundary. One of them
+(loc2, seed 2) has M-16's signature. The other (loc1, seed 1) names the BLOCK allocator's derive as its slot-0 site
+and is reported as itself ("On P1, the localisation boots" below).
 
 **Wrong symptom? Siblings, so a reader with a neighbouring symptom is redirected:**
 - `../R27-revnode-orphan-response/`: a silent deadlock after a pipeline flush during the DYN unit's revocation-node
@@ -261,6 +265,46 @@ command.
   - which piece of state the stop depends on;
   - whether the unprotected image stops: it did not run on the board.
 
+## On P1, the localisation boots loc1 and loc2: the finer-heartbeat runs stop early (board 1, 2026-11-26)
+
+**Run.** Pre-registration: nested-workloads `553f00e2239f`, Amendment 1, and the twin addendum `4b606bdca102`. The full
+result is in the lane doc (`docs/ref/nested-allocator-workloads.md`, "Result: loc1 and loc2").
+- Two boots on P1 (`…-tagoverlap6c-pagedtbl_d83d3a633`), board 1, 07:10-13:26 (+0800). Both are UNGATED
+  (`PREFLIGHT=0`).
+- Each boot is `src/tsapp-stress-red.c`'s protected image, mode a (the full form), K 212, run twice:
+  - c0: seed 1, cut at 99,000 packets, heartbeat every 1,000, as the control;
+  - then loc1's l1 (seed 1, heartbeat every 100, 300,000 packets), or loc2's s2 (seed 2, every 1,000).
+- Board lines: `results/p1-board1-loc1.txt`, `results/p1-board1-loc2.txt`.
+
+**What it read.**
+- **c0 returned in both boots**, every line equal to the twin's, in 369.3 s.
+- **l1 and s2 did not return.**
+  - Every complete STRESS line equals the twin's.
+  - The last line is cut mid-line: l1 at `pkt=36300 fast=7053623 bl`, s2 at
+    `pkt=34000 fast=6608300 block=599700 free=`.
+  - In both, the console's last chunks are whole 16-byte UART loads.
+  - By the watchdog's clock, l1 stopped 135-165 s after it started and s2 120-150 s after.
+  - The registered reader (`src/read-red.py`) calls both OTHER, because it has no case for a partial last line. The
+    NO RETURN reading is by hand.
+- **s2 has M-16's signature:** commit pc `0x3ff676ca68`, the registered CDERIVE in `wmem_block_fast_sublet_alloc`, and
+  sw=220 `0x8c`.
+- **l1 does not, and is reported as itself.**
+  - Its commit pc `0x3ff676acfe` is `wmem_block_sublet_alloc`+0x452, the same inlined derive in the BLOCK allocator.
+    The slot-0 pc names a site only.
+  - Its trap-log row (mepc `0xffffffff802100a2`, tval `0x09093783`) differs from every other stop's.
+  - sw=220 reads `0x8c`.
+- The serving index reads `0x10e6` (l1) and `0x1147` (s2), not the stress stops' `0x1381`.
+
+**What it says.**
+- Every full-form run on P1 with a heartbeat every 10,000 packets stopped between packets 100,000 and 110,000 (s1,
+  red1). Both runs with a finer heartbeat stopped at 34,000-36,300 packets, mid-line.
+- A fixed time from process start near 364-400 s (T) is against s2.
+- A count trigger set by seed 1's counts is against s2 too: 6.6·10^6 fast allocations, against seed 1's window at
+  1.9·10^7.
+- **H2 is not tested at seed 1.** l1 stopped before the window, at another site.
+- s2 changed both the seed and the heartbeat, so a seed-dependent point is not shown either. A stop that depends on
+  the print pattern, or on console or interrupt activity, is open.
+
 ## What it shows, and what it does not
 
 - **The stop needs nothing of tshark beyond this allocation path.** There is no dissection, no capture input, a far
@@ -301,6 +345,9 @@ If the stop sits at a point in the sequence (H2), the next steps locate that poi
      narrows it to 100 packets. This cannot separate position from elapsed time.
    - Mode a with another seed may also stop under H2, so it goes in a boot of its own. H2 predicts that the stop moves
      or goes away.
+   - **Run 2026-11-26** ("On P1, the localisation boots" above). Both finer-heartbeat runs stopped early, at
+     34,000-36,300 packets, so the window was not reached. The next boot that follows from it changes only the
+     heartbeat, seed 1 every 10,000 packets against seed 1 every 100. It is not pre-registered.
    - **Mode a runs about 3.6 ms a packet on P1**, from r2's 918 s for 300,000 packets and the twin's f/a ratio of
      0.84. So 100,000 packets take about 364 s, which matches both stops. red1's pre-registration said 60-75 s per
      10,000 packets, and that figure was wrong. The control's 99,000 packets end at about 360 s, at the edge of
@@ -328,4 +375,7 @@ If the stop sits at a point in the sequence (H2), the next steps locate that poi
 - `results/p1-board1-red1.txt`: the P1 reduction boot's result lines and aperture block.
 - `results/twin-red1.txt`: its twin's lines.
 - `results/twin-locate.txt`: the twin's 100-packet lines from 99,000 to 110,000 (mode a, seed 1).
+- `results/p1-board1-loc1.txt`, `results/p1-board1-loc2.txt`: the localisation boots' result lines (the verdicts,
+  c0's and the stopping command's begin and end lines, every 10,000th heartbeat, the last three and the cut line) and
+  aperture blocks.
 - `SHA256SUMS`: these files.

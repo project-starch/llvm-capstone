@@ -7916,6 +7916,121 @@ they gate the grading.
     - The commit pc equals the CDERIVE, and sw=220 equals P1's 0x8c.
   - loc2's twin read against loc1's: exit 1, s2 OTHER at its first line (seed 2). So the comparison fires.
 
+### Result: loc1 and loc2. c0 returns in both, then l1 and s2 each stop early, about 34,000-36,300 packets into their run (board 1, P1, 2026-11-26 07:10-13:26 host time, read against 553f00e2239f as amended, with addendum 4b606bdca102)
+
+**Run.**
+- Board 1, on P1 (`…-tagoverlap6c-pagedtbl_d83d3a633`). The chain's own bitstream check passed, and the board was
+  released (UNBOOK 200).
+- loc1 ran 07:10-10:18 and loc2 10:18-13:26. Each held its 10,800 s budget.
+- **Both boots are UNGATED** (the kit's `PREFLIGHT=0`), as registered.
+- Captures: loc1 `board.txt` `83afe3ce…`, loc2 `board.txt` `a4a94787…`. The result lines and aperture blocks are in M-16's folder
+  (`results/p1-board1-loc1.txt`, `results/p1-board1-loc2.txt`).
+
+**The registered reader** (`read-red.py` `64782291…`, against `nst-loc1-twin` and `nst-loc2-twin`): **exit 1 on both
+boots**.
+- c0 is RETURNED in both.
+- l1 and s2 are each OTHER, "first STRESS line differing from the twin".
+- **What the OTHER is:**
+  - Every complete STRESS line of l1 (363) and of s2 (34) equals the twin's.
+  - The one differing line is the command's last. It is cut mid-line, and it is a strict prefix of the twin's:
+    `pkt=36300 fast=7053623 bl` and `pkt=34000 fast=6608300 block=599700 free=`.
+  - Neither command has a `@@SPEC-END`.
+  - So both have the NO RETURN shape. The reader has no partial-line case (`read-red.py:25`, `:56-59`), and its re-test
+    cut (`cut-l1-100k.txt`) ended on a whole line, so the re-test never exercised one.
+  - The NO RETURN reading below is by hand, with the facts above. The registered exit stays 1.
+- **A core stop, not a lost console** (checked by an auditor, then here):
+  - the console socket kept delivering lease events for about 10,000 s after the last UART chunk;
+  - the switches stayed at 0 throughout;
+  - a returning P1 boot's final apertures read differently: tsu-r3 reads sw=220 `0x40` and a kernel pc, where these read
+    `0x8c` and a wmem allocator pc.
+
+**Readings.**
+
+| | loc1 | loc2 |
+|---|---|---|
+| smoke | PASS, 9 steps | PASS, 9 steps |
+| c0 (seed 1, cut at 99,000) | RETURNED, 101 lines equal to the twin's, 369.35 s | RETURNED, 101 lines, 369.29 s |
+| stopping command | l1: seed 1, heartbeat every 100 packets | s2: seed 2, heartbeat every 1,000 |
+| last complete line | `pkt=36200 fast=7034256 block=640144 free=320568` | `pkt=33000 fast=6414056 block=581944 free=291055` |
+| cut line | `pkt=36300 fast=7053623 bl` | `pkt=34000 fast=6608300 block=599700 free=` |
+| elapsed at the stop, by the watchdog's clock | 135-165 s | 120-150 s |
+| commit pc | `0x3ff676acfe` | `0x3ff676ca68` (the registered CDERIVE) |
+| sw=220 | `0x8c` | `0x8c` |
+| sw=225 | `0x92` | `0x96` |
+| trap-log mepc / tval | `0xffffffff802100a2` / `0x09093783` | `0xffffffff80007376` / `0x73` |
+| rev-node serving index | `0x10e6` | `0x1147` |
+
+- **Elapsed time.**
+  - The watchdog counts console chunks in 15 s bins, and `run.sh` unpacks the image before each `@@SPEC-BEGIN`.
+  - c0's chunks span the bins that bracket its 369.3 s, which is the positive control.
+  - l1 ran from the 1,006-1,021 s bin to the 1,156-1,171 s bin, and s2 from 990-1,005 s to 1,125-1,140 s.
+  - At c0's 3.73 ms a packet, the packet counts give about 135 s and 127 s.
+- **l1's commit pc.**
+  - It maps, with the bias that places this image's registered CDERIVE at `0x3ff676ca68` (vaddr + `0x3ff5ff0000`), to
+    vaddr `0x77acfe` = `wmem_block_sublet_alloc`+0x452.
+  - That is the BLOCK allocator, not BLOCK_FAST.
+  - Its bytes there (`add t0,t0,a2; scc t2,a1,t0; 5b 95 83 a2; j`) are identical to the registered site's at
+    `wmem_block_fast_sublet_alloc`+0x45c. So it is the same inlined derive in the sibling function.
+  - The commit pc is slot-0 residue, so it names a site, not the faulting instruction.
+- **l1's trap-log row also differs.** Every earlier M-16 stop with a block (stress1, tsu-r1, tsu-r2, red1), and loc2,
+  reads mepc `0x…80007376` / tval `0x73`. loc1 reads `0x…802100a2` / `0x09093783`.
+  - The decode is UNRESOLVED. An auditor resolved it against loc2's kernel build to `ld a5,0x90(s2)` in
+    `cv_step_locked` and assumed the text did not move between the two builds.
+  - That row is the last M-mode trap, which a returning boot reads too, not a stop marker.
+- **Both cuts fall on the UART's 16-byte boundaries.**
+  - loc1's last chunk is the 32 bytes `STRESS pkt=36300 fast=7053623 bl`.
+  - loc2's last three are 16 bytes each: `STRESS pkt=34000`, ` fast=6608300 bl` and `ock=599700 free=`.
+  - So the UART sent what the kernel had loaded, and the next refill never came. The program's stdout is line-buffered
+    (`_IOLBF`).
+  - Every earlier stress stop (heartbeat every 10,000 packets) ended on a whole line.
+  - This is an observation, not a mechanism.
+
+**Against the predictions.**
+1. **Met.** Smoke passes in both boots, and c0 returns in both, equal to the twin.
+2. **loc1, missed except for "does not return".** l1 does not return, but:
+   - its last line is at 36,200 packets, outside 100,000-109,900;
+   - its commit pc is not `0x3ff676ca68`;
+   - sw=220 reads `0x8c`, as predicted.
+3. **loc2.** s2 does not stop between its packets 100,000 and 110,000, which is what H2 predicted. It stops at about
+   34,000 packets, at 120-150 s, far from T's about 364-400 s.
+
+**What each outcome says, read as registered.**
+- **c0 returns:** no stop before 99,000 packets in either seed-1 control.
+- **l1: two registered rules apply, and the text gives no order between them.**
+  - "l1 stops before packet 100,000: against H2. It is consistent with T only if its elapsed time falls near 364-400 s",
+    and it does not.
+  - "A stop elsewhere in the code, or with another signature: reported as itself, and not merged with M-16." Its commit
+    pc and its trap-log row both differ from M-16's.
+  - Read plainly, "not merged" makes l1 no M-16 draw. Then **loc1 leaves H2 and T untested** rather than refuted: l1
+    stopped before it reached the window, at another site.
+  - Reported as itself: a stop of the full form at seed 1, about 36,300 packets in, with the BLOCK allocator's derive
+    as the slot-0 site and sw=220 `0x8c`.
+- **s2: "stops elsewhere".** That is against a count trigger set by seed 1's counts: s2 stopped at 6.6·10^6 fast
+  allocations, where seed 1's window starts at 19.4·10^6.
+  - It is against T: 120-150 s, not 364-400 s.
+  - As registered, it is "consistent with a seed-dependent point in the sequence". **That attribution is not earned
+    here.** s2 changed two things from red1's r3: the seed, and the heartbeat (every 1,000 packets, against r3's
+    10,000).
+  - l1 kept seed 1 with a finer heartbeat still (every 100) and also stopped early.
+  - A stop that depends on the print pattern survives as an alternative, and so does one tied to console or interrupt
+    activity, given the mid-line cuts.
+
+**So, after loc1 and loc2.**
+- **On the record now:**
+  - every full-form run on P1 with a heartbeat every 10,000 packets stopped between packets 100,000 and 110,000
+    (s1, red1);
+  - both runs with a finer heartbeat stopped at 34,000-36,300 packets and 120-165 s, mid-line.
+- T as registered, a fixed time from process start near 364-400 s, is against s2. Neither boot tests H2 at seed 1.
+- **The next boot** (not pre-registered here) would hold seed and sequence fixed and change only the heartbeat: seed 1,
+  every 10,000 packets, against seed 1, every 100. That tests whether printing moves the stop. Step 3's spinner
+  (`Next reductions`) is the other half.
+
+**Limits.**
+- Two boots, one draw each, both ungated.
+- The elapsed times come from the console's arrival, binned at 15 s.
+- The commit pc names a site only.
+- The trap-log decode is unresolved.
+
 ## M-16's return rate on Line B: the protected tshark in repeated B5b-2 boots (2026-11-25)
 
 ### Pre-registration: Fig. 10's protected Wireshark workload in five boots on a Line B board, queued (written 2026-11-25 19:29, before any of the boots)
