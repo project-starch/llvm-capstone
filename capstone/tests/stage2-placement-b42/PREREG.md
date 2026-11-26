@@ -170,3 +170,75 @@ fast-path-refs=2.
   binary differ too, since the Image embeds the overlay and the firmware embeds the Image.
 - **Which of them boot** is decided by the twin check alone, in an amendment pushed before the first board boot. That
   amendment gives the verdict per arm and per stage.
+
+## Amendment 3 (2026-11-27, after the twin boots and before any board boot of a PL image): the twin verdicts and the boot list
+
+**boot: LSHOFFL, PL1, PL2, PL3, PL4, PL5, LSHOFFL2**
+
+This line is the session's boot list, in its order. Each listed arm boots its image with all four stages. The table
+under "The verdicts" decides only which stages enter P_s.
+
+| boot | image | fw_payload.bin sha256 (Amendment 2) | stages that enter P_s |
+|---|---|---|---|
+| LSHOFFL | S-LSHOFFL | 21d18193b86359a88047d30036c0ef01407fa4c0805b2e794d2a7f781040c2cb | all four |
+| PL1 | S-PL1 | 684b81534935abf36c2fff66c73d38d00d01831ebbe0df38bb74a3c3bde717a8 | nab |
+| PL2 | S-PL2 | 24e1097ad75d0da0c96510d8715ca69e09b688b5a716b2674d5b48f59eddfdc7 | nab, perlbench |
+| PL3 | S-PL3 | 136615641b452558eb4066e2955eeb70e46e1b69dd6b751301c3b516db868f2d | all four |
+| PL4 | S-PL4 | 1919e53e73562558b3fd2b4f7cf633b6965a0a6cb1efc9fe8aa626dc9c4672e0 | all four |
+| PL5 | S-PL5 | c7ff79012d367c165e80ed66c20f6893ed7a4e343c1e36cf53834a9466b2022f | all four |
+| LSHOFFL2 | S-LSHOFFL | 21d18193b86359a88047d30036c0ef01407fa4c0805b2e794d2a7f781040c2cb | B_s and the drift window only |
+
+So P_s is taken over:
+- nab: LSHOFFL, PL1, PL2, PL3, PL4 and PL5;
+- perlbench: LSHOFFL, PL2, PL3, PL4 and PL5;
+- gcc and imagick: LSHOFFL, PL3, PL4 and PL5.
+
+**Unchanged:** B_s, the drift control (its window from the two LSHOFFL boots, now applied to all seven), UNDECIDED,
+and every use under "What the reading is used for". A stage that fails the twin rule is booted with its arm but never
+read.
+
+### The twin boots
+
+- **The boots:** c4/spec8/PLT1..PLT5, one per arm, on spec8's init with the four board stages (nab, gcc, imagick,
+  perlbench).
+- **The platform:** capstone-qemu c42ff84d0799 (sha256 457477d73dde1a2d), with no CRVC or Zcb property, capmix3 at
+  shift 1, under the QEMU lock.
+- **Every boot:** rc 0, 4/4 stages ended, none cut, no SIGILL.
+- **The binaries are the board's.** Each PLT dir's four natives are byte-identical to its arm's strip.dom images,
+  20 of 20. Those are the files Amendment 2's overlay check found in each S-PL payload.
+- **Order:** they ran PLT3, PLT4, PLT5, PLT1, PLT2. They were moved ahead of step 4's last twin boot so that this
+  amendment lands before the board slot. A twin count does not depend on boot order.
+- **The reference** is S4-LSHOFFL, as pre-registered. The ±0.001 % band is, in instructions: nab 71,548, gcc 217,
+  imagick 945, perlbench 30,946.
+- **The one sublet fault in each boot** is the known `.perl-native` cause=28 at pc 0x3ff7c01498. It occurs in
+  perlbench's test.pl command, outside the timed makerand window, and it is in S4-LSHOFFL too.
+
+### The verdicts
+
+Instructions are against S4-LSHOFFL (nab 7,154,811,027; gcc 21,710,898; imagick 94,485,851; perlbench
+3,094,620,533).
+
+| arm | nab | gcc | imagick | perlbench | outputs |
+|---|---|---|---|---|---|
+| PL1 | -28: **pass** | -14,086 (-0.065 %): fail | +21,645 (+0.023 %): fail | +3,841,211 (+0.124 %): fail | EQUAL, 4/4 |
+| PL2 | -311: **pass** | +2,321 (+0.011 %): fail | +17,178 (+0.018 %): fail | +8,161 (+0.00026 %): **pass** | EQUAL, 4/4 |
+| PL3 | 0: **pass** | 0: **pass** | -178 (-0.00019 %): **pass** | 0: **pass** | EQUAL, 4/4 |
+| PL4 | 0: **pass** | 0: **pass** | -178: **pass** | 0: **pass** | EQUAL, 4/4 |
+| PL5 | 0: **pass** | 0: **pass** | -178: **pass** | 0: **pass** | EQUAL, 4/4 |
+
+- **imagick's -178 is the same in all three pad arms.** Step 4's control 1 read exactly that count for LSHOFFL
+  itself on this binary (94,485,673, at shift 4). So it is S4-LSHOFFL's reading that lies 178 above. That is inside
+  the band, and it is not attributed.
+- **PL3's fetch bytes** (fetch8, the pre-registered reader):
+  - equal to LSHOFFL's on nab and perlbench;
+  - gcc -2 B, which is the 12 B of inter-section alignment that Amendment 1 noted;
+  - imagick -712 B, which is its 178 instructions.
+
+### Predictions graded
+
+- **PL3, PL4 and PL5 pass on every stage: HOLDS.**
+- **PL1 fails on perlbench, gcc and imagick: HOLDS.** It passes nab.
+- **PL2 fails on perlbench, gcc and imagick: REFUTED on perlbench.**
+  - It read +8,161 instructions there, 0.00026 %, inside the band. It holds on gcc and imagick, and PL2 passes nab.
+  - PL2's perlbench changes the size of 894 functions (Amendment 1), so its twin difference is not zero. The rule
+    decides, and its perlbench enters P_s as the rule says.
