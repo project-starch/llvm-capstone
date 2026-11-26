@@ -155,7 +155,7 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
 |---|---|---|---|---|---|---|
 | 502.gcc_r test (t1.c) | spec-gcc.2262833, sha256 0cfc265bfa31dbb2..., recomputed here | 8,921 / 8,921 (self_evict 0) | 144.0 M = 5.76 s x 25 MHz | 0.250 % | 0.097 % | **NO BUILD** |
 | 505.mcf_r test (inp.in) | spec-mcf.2201746, sha256 633ca24aabba3062..., recomputed here | 181,127,530 / 181,127,654 (self_evict 124) | not yet: B5TL1-g1b on b42c8c644 | -- | -- | **UNDECIDED** (no board row) |
-| 500.perlbench_r test (makerand.pl, the campaign's g4mk stage) | spec-perl3.2883687, sha256 1af7b0c90ab7cb56..., recomputed here | 277,290 / 277,290 (self_evict 0) | not yet: Full's g4mk on b42c8c644 | -- | -- | **UNDECIDED** (no board row) |
+| 500.perlbench_r test (makerand.pl, the campaign's g4mk stage) | spec-perl3.2883687, sha256 1af7b0c90ab7cb56..., recomputed here | 277,290 / 277,290 (self_evict 0) | 6.8925 G = 275.70 s x 25 MHz (board 2, CF-B5TL1-g4mk e82d42ebe558cb18) | 0.163 % | 0.063 % | **NO BUILD** |
 
 **505.mcf_r test (inp.in): UNDECIDED, because its board row does not exist yet.**
 - The trace is the nested lane's spec-mcf.2201746: 65,420,275,952 B, sha256 633ca24aabba3062..., recomputed here. It
@@ -200,7 +200,7 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
     - RC candidate NO BUILD at c = 2 needs a run of 21,666 s or more (22,024 s at c = 0).
     - Between those, the result is UNDECIDED, and only the residency pass resolves it.
 
-**500.perlbench_r test (makerand.pl): UNDECIDED, because its board row does not exist yet.**
+**500.perlbench_r test (makerand.pl): NO BUILD** (decided 2026-11-26 on its board row, below).
 - The trace is the nested lane's spec-perl3.2883687: 10,130,629,600 B, sha256 1af7b0c90ab7cb56..., recomputed here. It
   has 633,164,350 events and 17 tables. It comes from the campaign's own stage, SP-B5TL1-g4mk.
 - The image: perlbench_r_base.native f3c8c80d71844564..., which equals g4mkroot's B5TL1/500.perlbench_r native
@@ -211,6 +211,25 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
   - NO BUILD on the ceiling (cold 40.4) at a run of 44.8 s or more;
   - a larger LB removes at most 86 misses;
   - RC's candidate NO BUILD at c = 2 (removed 277,062 x 40.4 - 228 x 2) is at 44.8 s or more as well.
+- **The denominator: board 2, CF-B5TL1-g4mk on b42c8c644, 500.perlbench_r PASS** (N = 1; the resident name read
+  back before and after; graders v2 and v1 PASS, no cause line).
+  - The run's time is its own SPEC-END line, `up0=51.16 up1=326.86`: 275.70 s, 6.8925 G cycles at 25 MHz.
+    Read here from the raw capture (uart sha256 2522348b57230d99), the stage named B5TL1-500.perlbench_r.
+  - Shares: 277,290 x 40.4 is 0.1625 % of it (warm 15.6: 0.063 %); RC's candidate saving 277,062 x 40.4 -
+    228 x 2 is 0.1624 %. Both are about 6x under the 1 % line, so neither run-to-run noise nor the kernel
+    choice below can move the verdict.
+- **The image is the traced binary, checked from the booted bytes here.** Payload e82d42ebe558cb18 carries
+  the build's Image at 0x200000 (full compare). Its gzip member at Image + 0x6109c0 decompresses to the build's
+  initramfs.cpio. That holds overlay.cpio 5a07486727a883fe... at 0x767000, which packs
+  stages/B5TL1-500.perlbench_r/stage/bin/native/perlbench_r_base.native as f3c8c80d71844564..., the traced image.
+  The board lane and the runtime lane reached the same binary independently.
+- **Disclosed:** this payload is the campaign relink: the final Full kernel with the firmware's fast rdtime
+  (FW_FAST_RDTIME=y), built from /mnt/hdd/<user>/capstone/trapk/fpga/spec/CF-B5TL1-g4mk.
+  - It is not the qualification payload 192a5a755b9fb8b8.... The board lane diffed the two initramfs entry by
+    entry: 1,107 entries, 0 differing in content. Only the kernel differs.
+  - Its hashes are not yet in a committed kit; they go into the campaign pre-registration.
+- **Not the denominator:** CFP-B5TL1-g4mk (Full + ports, 432e6ae27d5aa062..., 279.75 s) runs the ports build
+  b4eb3e6f267f5f34... (the board lane's reading of the payload bytes, not re-read here), not the traced binary.
 
 **The denominator: board 3, B5TL1-g3 on b42c8c644, 502.gcc_r PASS** (board/meas-pw f47b2a686ce2, b42c8c644-board3 result lines).
 - The run's time is the SPEC-END line's up1 50.54 minus up0 44.78 = 5.76 s. The row prints no cycle count, so cycles are
