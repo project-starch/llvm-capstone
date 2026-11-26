@@ -93,8 +93,8 @@ unattended window, one image per boot. Every other stage of an arm fits in one b
 - Board 1 (14f2ef81a): boot 14; then the +Spatial SPEC test rows (Amendment 12), x264b last.
 - Then, as their pre-registrations land: Full + ports (**read**, board 2: four boots, above); the LSRH board form
   (LSHOFF, LSRH, LSHOFF2 in one session, lbm off); Plain rows on rvbase.
-- Every boot runs preflight-board-run.sh first and keeps its exit line. Two boots on 26 Nov did not (nested-mcreq,
-  CF-B5TL1-g3), and their rows say so. A preflight BLOCK is proceeded past only by a ruling recorded in the row, e.g.
+- Every boot runs preflight-board-run.sh first and keeps its exit line. Three boots on 26 Nov did not (nested-mcreq,
+  CF-B5TL1-g3, CFP-B5TL1-g3: it started at 07:42:59Z, before the preflight runs at 07:44Z), and their rows say so. A preflight BLOCK is proceeded past only by a ruling recorded in the row, e.g.
   C10's 20 MB budget for 21.66 MB payloads already proven on the same seal.
 - Last: three runs per arm, board-constant pairs, drift-balanced order, intervals; then SPEC train for all arms.
   SQLite --size 100 and the Fig. 10 Perl suns.pl row go here.
