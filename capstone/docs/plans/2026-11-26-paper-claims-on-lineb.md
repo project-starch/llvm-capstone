@@ -62,7 +62,8 @@ lower.
   query answers live: `S_Q_W`, capstone_sublet_life.sv:398, `rlive_q <= !rsp_bad_q && (r_gen(rsp_w1_q) == id_gen)`,
   with no retired-generation term.
 - The LSU's probe path excludes the retired word (ex_stage.sv:2628-2629), so this shape cannot allow an access.
-- The divergence is wider, and is filed as **ISSUES R-84** (claim-audited).
+- This is ISSUES R-84 (A), claim-audited, and row D11 of the B5b-1 format plan's divergence table. The other two shapes first filed there, a slot at or above `next` and a header that fails validation, are that table's D1 and D4, recorded and ruled on 2026-11-22. I re-derived them (corrected in R-84).
+- Superseded detail, kept for the record:
   - The query reads the record alone, so it also answers live for a slot at or above `next`, and for any slot of a
     table whose header fails validation. Both are measured on scratch streams; the reference answers dead.
   - Its only sender under Sublet is LCC selector 0, which grants no authority.

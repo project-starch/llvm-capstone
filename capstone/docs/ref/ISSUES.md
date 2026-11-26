@@ -4761,63 +4761,67 @@ is what separates it from R-81 and R-82 -- a unit busy with no memory traffic. T
 st_q) has no aperture. **What would settle it:** a must-fire SUP_TRACE line on `flush_i && cm_q inside {CM_CRQ, CM_CRS}`
 across the sweep.
 
-### R-84 — the lifetime unit's liveness query reads the record alone, so it answers LIVE where the reference answers dead: a retired slot queried at generation 2^32 - 1, a slot at or above `next`, and any slot of a table whose header fails validation `OPEN 2026-11-26 — MEASURED at the unit level (capstone_sublet_life against the reference harness); claim-audited; the only instruction that sends the query under Sublet is LCC selector 0, which grants no authority; whether the ACCESS path (the LSU's probe, which reads the same record) shares the last two shapes is NOT TESTED`
+### R-84 — since step 2b the lifetime unit's liveness query does not exclude the retired generation: a retired slot queried at generation 2^32 - 1 answers LIVE (the reference answers dead); and the access path's half of the format plan's recorded divergence D4 (a table whose header fails validation) measured: an access through a previously issued capability is ALLOWED `OPEN 2026-11-26 — MEASURED (unit level for the query, core level for the access); claim-audited; CORRECTED the same day: this entry first presented the format plan's D1 and D4 as new shapes`
+
+**Correction (2026-11-26, the same day as filing).**
+- This entry first listed three shapes as new: a retired slot at generation 2^32 - 1, a slot at or above `next`, and a
+  table whose header fails validation.
+- The last two are the B5b-1 format plan's recorded divergences D1 and D4 (docs/plans/2026-11-22-b5b1-format.md,
+  "The divergences, classed"). Both are classed fail-open, and both carry the semantics owner's 2026-11-22 ruling:
+  "None of D1-D4 is a hardware fix request". sublet-life-diff's divergence arms d1-norule / d1-rule / d4-bad-magic
+  encode them.
+- I searched ISSUES but not the plans by the construct's name, and re-derived them.
+- What is new is (A) and (B) below. The retired-generation query is now also row D11 of that table.
 
 Siblings:
-- S-30, the shadow-tag array writable by S. It is how a capability holding an id no instruction issues can exist.
+- S-30, the shadow-tag array writable by S. It is the only way a capability can hold an id that no instruction
+  issues.
 - R-74 (its record-path analogue is in docs/plans/2026-11-26-paper-claims-on-lineb.md).
 
-**The difference.**
-- RTL, capstone_sublet_life.sv on b42c8c644, `S_Q_W` (:397-401): `rlive_q <= !rsp_bad_q && (r_gen(rsp_w1_q) ==
-  id_gen)` after reading only the record (:391-396, "no header: the page-initialisation rule makes a never-used slot
-  read retired").
-- Reference, capstone-qemu da49602d76: `sublet_resolve` (cap_rev_table.c:388-401) answers dead unless the table opened
-  (`t->ok`) and the slot is in [min, next). Then `cap_rev_table_sublet_live_word` (:460-463) also requires the
-  generation not to be retired: `!sublet_retired(gen) && gen == id_gen`.
+**(A) The retired generation in the query.** New since step 2b (317af40e8), which moved the retirement limit to
+GEN_LIM = 2^32 - 1.
+- **The rule on each side.**
+  - RTL, capstone_sublet_life.sv on b42c8c644, `S_Q_W` (:397-401): `rlive_q <= !rsp_bad_q && (r_gen(rsp_w1_q) ==
+    id_gen)`, after reading only the record. There is no GEN_RET term; `got()` at :312 has one.
+  - Reference, capstone-qemu da49602d76: `cap_rev_table_sublet_live_word` (cap_rev_table.c:460-463) is
+    `!sublet_retired(gen) && gen == id_gen`.
+- **Measured** with sublet-life-diff.py, cases kill-hi-gen and paged-kill-hi-gen (capstone-ariane b5b2-hangmon-c
+  a4305cb8d; reference harness built from da49602d76; tb_sublet_life built with Verilator 5.020). 84 of 86 cases are
+  equal, and these two differ.
+  - A record released at 2^32 - 2 retires exactly as the reference does: the record dump, the retired count, nothing
+    pushed, and the next CDERIVE.
+  - Then `live {2^32 - 1, slot}` reads 0 in the reference and 1 in the RTL. The -ctl cases one generation lower are
+    equal.
+- **Reach** (claim-audited, the auditor's report on file).
+  - Under Sublet the query's only sender is LCC selector 0 (capstone_dyn_unit.anvil:349 via :402). The _S lifetime ops
+    resolve through S_RS_W, which refuses GEN_RET (:480), and LDC/STC bypass the DYN unit.
+  - No instruction issues an id at generation 2^32 - 1:
+    - a fresh slot gets 0;
+    - allocation refuses a GEN_RET record (:447);
+    - every release pushes at most 2^32 - 2 (:627, :671, :780);
+    - CRENEW in place requires gen + 1 < GEN_LIM (:487-488).
+  - Such an id needs a forged tag, S-30's path, which forges any live id anyway.
+  - The LSU's read tap (ex_stage.sv:2628-2629) and write tap (:2547-2548) exclude the retired word, so (A) cannot
+    allow an access.
+  - **Class: fail-open at LCC selector 0 only, which grants no authority.**
+  - The fix, if wanted, is one term: `&& r_gen(rsp_w1_q) != GEN_RET` in S_Q_W.
 
-**Measured** (sublet-life-diff.py, capstone-ariane b5b2-hangmon-c a4305cb8d; the reference harness built from
-da49602d76; tb_sublet_life built with Verilator 5.020). 84 of 86 differential cases are equal. The two that differ
-are this entry's first shape.
-- **A retired slot at generation 2^32 - 1.** `kill-hi-gen` and `paged-kill-hi-gen` release a record at 2^32 - 2, so the
-  slot retires.
-  - Everything else equals the reference: the record dump, the retired count, nothing pushed, and the next CDERIVE.
-  - `live {2^32 - 1, slot}`: the reference answers 0, the RTL 1.
-  - The `-ctl` cases one generation lower are equal.
-- **A slot at or above `next`** (a flat table, next 3, memory zero there): `live 5` and `live 4` read 0 in the reference
-  and 1 in the RTL, because generation 0 matches the zero word. A scratch stream; it is not yet one of the
-  differential's cases.
-- **A header that fails validation** (next 0x99 > capacity): the reference answers `live 2` with 0, the RTL with 1. Both
-  refuse the CDERIVE with 29. Also a scratch stream.
-
-**Reach (claim-audited 2026-11-26, the auditor's report on file).**
-- **The consumer.** Under Sublet the query's only sender is LCC selector 0 (capstone_dyn_unit.anvil:349 via :402):
-  - REVOKE, SPLIT, TIGHTEN, CALL, RETURN and CSSUPERVISE are illegal;
-  - CDERIVE and CREVOKE decode to their _S forms, which resolve through S_RS_W, and that state refuses GEN_RET (:480);
-  - LDC and STC bypass the DYN unit.
-  So a wrong LIVE is a value software can see, not an access.
-- **No instruction issues an id with generation 2^32 - 1, or one at or above next.**
-  - A fresh slot gets generation 0.
-  - A free pop gets the stored generation, and allocation refuses GEN_RET (:447).
-  - Every release pushes at most 2^32 - 2 (:627, :671, :780).
-  - CRENEW in place requires gen + 1 < GEN_LIM (:487-488).
-  - CSMINT takes create's id unchanged.
-  - The custom-3 mint is simulation-only and illegal under Sublet.
-- **Such an id exists only through a forged tag.** A plain store into the shadow-tag array (S-30) forges it. That same
-  store forges any live id too, so the first two shapes add nothing to S-30 for an attacker.
-- **The third shape needs no forgery.** A capability issued under a valid header is queried after the header has been
-  corrupted. The table belongs to the kernel, trusted S.
-- **The access path is not covered by this entry.**
-  - The LSU's read tap excludes the retired word (ex_stage.sv:2628-2629), and so does its write tap (:2547-2548). So
-    the FIRST shape cannot allow an access.
-  - The probe reads the same record alone, so the second and third shapes may also be ALLOWED on an access: an id at
-    or above next on a flat table, and any previously issued id after the header is corrupted. NOT TESTED.
-
-**What would settle the access half:** a core-level arm and its control.
-- The arm: issue a capability, corrupt its table's header (next 0x99), namespace-change to empty the verdict cache, and
-  load through it. The reference faults 25, since `t->ok` is false. The RTL either faults or completes.
-- The control: the same arm with the header intact. It completes.
-- The record-only reading is the design's stated choice (the page-initialisation rule), so whether a corrupt header must
-  fail closed on access is the semantics owner's ruling, not this entry's.
+**(B) D4 on the access path, measured** (b5b2-hdrbad and its control, capstone-ariane b5b2-hangmon-c, pre-registered at
+eb0c93868, read at 82af380a4, s2pre-wt .sup/hdrbad1, dirty=no).
+- The arm: a capability issued under a valid header, then the header's magic zeroed, a namespace change (which empties
+  the verdict cache and the record TLB), and a load through it.
+- **The access is ALLOWED and completes.** The probe reads the record alone and resolves ALLOW. LCC selector 0 answers
+  live. The CDERIVE that opens the table right after refuses with 29.
+  - HB_BAD reads 0x100 0x0 0x0 0x1 0x1d 0x1.
+  - The control reads 0x100 0x0 0x0 0x1 0x0 0x0.
+- The reference, by its source, faults 25 there: its live cache is valid only while the cached header bytes are
+  unchanged (capstone_table.c:322-325), and the table that fails to open makes every id dead.
+- So D4's fail-open class holds on the access path too. Until now D4 was measured at the unit's query only.
+- The semantics owner's ruling (2026-11-26):
+  - outside the threat model, since a corrupt header needs a trusted-kernel defect;
+  - the record-only read accepted;
+  - this reading brought to them before the entry is called closed, because failing closed on a corrupt header may be
+    worth one comparator.
 
 ### R-80 — an LDC whose access faults is not popped: it re-presents every cycle as a capability read on load port 1, starves the write buffer's cache update, and behind a store backlog wedges the core with its fault never taken `OPEN 2026-11-25 — DEMONSTRATED IN RTL SIMULATION (b5b2-ldcexc2, on 47d749153 and 28fcbb646; claim-audited); FIX IN RTL (capstone-ariane b5b2-ldcfix a5c45a46d, a faulting LDC pops), simulated; SYNTHESISED in a5c45a46d and in b42c8c644 (which adds R-77's fix); ON SILICON, NOT YET DISCRIMINATING: the fixed arm b5b2-ldcexc2 reads SR 2 0x18 0x1 (one cause-24 trap, no wedge) AS PREDICTED on a5c45a46d (board 3, board/meas-pw c198c50f159e) and on 14f2ef81a (board 1, f47b2a686ce2; b42c8c644 + the spatial-only parameter, ldcexc2's column equal to b42c8c644's), while the unfixed 28fcbb646 control that must wedge on silicon is unread, so the readings show the fixed arm completing, not the wedge gone; on b42c8c644 itself not yet read; the silicon candidate is S-35 (B5T mcf on 904cd9c6b), its pattern pre-registered for the diagnostic seal 28fcbb646 (llvm-capstone land/rtl-crevoke4b c7877d008be7)`
 
