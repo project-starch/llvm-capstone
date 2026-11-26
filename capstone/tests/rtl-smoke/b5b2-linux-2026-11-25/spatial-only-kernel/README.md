@@ -28,5 +28,16 @@ references (searched for id comparisons and CV_ID_ uses), so a shared id 3 is no
 - One defect found on the way and fixed: the first version kept `!record` in the root check. On the spatial twin
   the record lookup returns NULL (the table is never populated), and the pair read 91 / 139 like the control.
 
-**Not covered:** silicon; the board kernel config (this is the twin config); the final NO_HZ_IDLE Full kernel, which
-the +Spatial kernel must equal apart from this option.
+**On silicon (boot 14, board 1, the spatial-only seal 14f2ef81a, 2026-11-26).** The final +Spatial kernel is
+`build/build-kernel-final-spatial.sh`: the final NO_HZ_IDLE Full kernel plus this option, and its .config differs from
+the Full kernel's only in CONFIG_RISCV_CAPSTONE_SPATIAL_ONLY=y. It read:
+- the smoke control rc=7;
+- mtrip in band;
+- msgt native and protected rc 0 with fails=0 and the twin's five lines;
+- no sublet fault, call or R-reads-back line.
+The protected msgt run is the step that goes through the spatial-only root check. See RESULTS.md, "Boot 14".
+
+The qualification SPEC images (spectest Amendment 12) use the same option on the pinned bring-up tree instead
+(`trapk/fpga-v1-spatial`). That tree's .config differs from fpga-v1's only in this option.
+
+**Not covered:** the Full kernel's refusal on silicon. It is read only on the spatial-only twin above.

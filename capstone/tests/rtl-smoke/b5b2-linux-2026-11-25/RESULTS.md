@@ -96,7 +96,7 @@ What this establishes:
 **Consequence for the campaign:** both arms' firmware carries FW_FAST_RDTIME=y, so neither pays the M trip for
 rdtime. Plain's firmware stays stock apart from that flag.
 
-## The final campaign Full kernel (built, not yet booted)
+## The final campaign kernels: the recipes (booted as boots 13 and 14, below)
 
 `build/build-kernel-final.sh`, tree `trapk/fpga-final` (a copy of the board tree, so it carries the series and the
 msghdr loader; the script's fresh-tree branch applies the loader patch but has not been run from scratch). Against
@@ -106,13 +106,13 @@ holds its keys. Checks:
   Capstone options and the initramfs path. NO_HZ_IDLE, HZ=100, HZ_PERIODIC off and SMP off agree.
 - The test-only symbols `sublet_test_enter` and `sublet_test_fault` are absent from its vmlinux (0) and present in
   the bring-up kernel's (2). `sublet_copy_msghdr_from_user` is present (1).
-- Not yet run: a boot of this kernel (twin or board) with a .dom program. Without TRAP_TEST the regs.S test cannot
-  run; its first boot needs a .dom smoke program as the control.
+- Without TRAP_TEST the regs.S test cannot run, so its boots use a .dom smoke program as the control (boot 13).
 
 The +Spatial twin of that kernel is `build/build-kernel-final-spatial.sh` (tree `trapk/fpga-final-spatial`): its .config
 differs from the Full kernel's only in CONFIG_RISCV_CAPSTONE_SPATIAL_ONLY=y (and the initramfs path). Its smoke image,
 the same overlay as boot 13, is `trapk/fpga-final-spatial/smoke-out/fw_payload.bin` b2e2c905521d2e68…, for rtl's
-spatial-only seal once it exists. Not yet booted.
+spatial-only seal. Boot 14 used a later image instead, smoke2 (c975128b…), which adds msgt and FW_FAST_RDTIME; this
+one was not booted.
 
 ## Boot 13: the final campaign Full kernel on b42c8c644 (board 2, 2026-11-25 22:52-22:56Z), 4 of 4 as predicted
 
