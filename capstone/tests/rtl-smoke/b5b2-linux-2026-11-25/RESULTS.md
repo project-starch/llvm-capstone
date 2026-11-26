@@ -106,3 +106,26 @@ The +Spatial twin of that kernel is `build/build-kernel-final-spatial.sh` (tree 
 differs from the Full kernel's only in CONFIG_RISCV_CAPSTONE_SPATIAL_ONLY=y (and the initramfs path). Its smoke image,
 the same overlay as boot 13, is `trapk/fpga-final-spatial/smoke-out/fw_payload.bin` b2e2c905521d2e68…, for rtl's
 spatial-only seal once it exists. Not yet booted.
+
+## Boot 13: the final campaign Full kernel on b42c8c644 (board 2, 2026-11-25 22:52-22:56Z), 4 of 4 as predicted
+
+Pre-registered as Amendment 6 (8caa259c163c). Image 798c53e0…, which the board lane checked against its arming file.
+The seal read back by name as `…_b42c8c644.bit` before and after the boot. The result lines are on board/meas-pw at
+f47b2a686ce2 (`b5b2-seals-board-2026-11-25/b42c8c644-board2.result-lines.txt`, section boot13).
+
+| Prediction | Reading |
+|---|---|
+| 1. control `ok`, smoke.dom rc=7 | `okTRAPTEST: control smoke.dom rc=7` |
+| 2. mtrip x3: rdtime 100-140, rdcycle 5.00-5.2, getppid 1,221-1,297, cycles_per_tick 1.99, backwards 0 | rdtime 119.70-119.72, rdcycle 5.00, getppid 1,266.94-1,267.95, cycles_per_tick 1.99, backwards 0, rc 0 on all three |
+| 3. no `sublet: fault` or `call` line | none |
+| 4. `TRAPTEST: done` | present |
+
+- rdtime matches boot 11's keep + fast reading (119.2-119.3): the fast path is in the firmware.
+- getppid is 0.6 % above boot 11's 1,259.3 and inside the band. Prediction 2 expected TRAP_TEST off to remove a few
+  cycles, and this reading does not show it. One reading, so the difference is not resolved.
+- The kernel prints neither CONFIG_HZ nor NO_HZ_IDLE, so the boot does not show the tick configuration. That comes
+  from the build's .config (`config-keys-final.txt`).
+
+**Consequence:** the Full kernel stands for the campaign (Amendment 6's void condition did not fire). Boot 14 (the
++Spatial kernel on 14f2ef81a, board 1) attempt 1 was NO READING for infrastructure reasons (a GDB timeout after a
+completed load, booking 1566), and it is still owed.
