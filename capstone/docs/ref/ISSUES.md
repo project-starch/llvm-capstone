@@ -4761,7 +4761,7 @@ is what separates it from R-81 and R-82 -- a unit busy with no memory traffic. T
 st_q) has no aperture. **What would settle it:** a must-fire SUP_TRACE line on `flush_i && cm_q inside {CM_CRQ, CM_CRS}`
 across the sweep.
 
-### R-84 — since step 2b the lifetime unit's liveness query does not exclude the retired generation: a retired slot queried at generation 2^32 - 1 answers LIVE (the reference answers dead); and the access path's half of the format plan's recorded divergence D4 (a table whose header fails validation) measured: an access through a previously issued capability is ALLOWED `OPEN 2026-11-26 — MEASURED (unit level for the query, core level for the access); claim-audited; CORRECTED the same day: this entry first presented the format plan's D1 and D4 as new shapes`
+### R-84 — since step 2b the lifetime unit's liveness query does not exclude the retired generation: a retired slot queried at generation 2^32 - 1 answers LIVE (the reference answers dead); and the access path's half of the format plan's recorded divergence D4 (a table whose header fails validation) measured: an access through a previously issued capability is ALLOWED `CLOSED 2026-11-26 — MEASURED (unit level for the query, core level for the access); claim-audited; no hardware change by the semantics owner's ruling (both halves fail-open outside the threat model; D11 added to the format plan's divergence table); CORRECTED the same day: this entry first presented the format plan's D1 and D4 as new shapes`
 
 **Correction (2026-11-26, the same day as filing).**
 - This entry first listed three shapes as new: a retired slot at generation 2^32 - 1, a slot at or above `next`, and a
@@ -4822,6 +4822,12 @@ eb0c93868, read at 82af380a4, s2pre-wt .sup/hdrbad1, dirty=no).
   - the record-only read accepted;
   - this reading brought to them before the entry is called closed, because failing closed on a corrupt header may be
     worth one comparator.
+- **The ruling on this reading (the semantics owner, 2026-11-26): no hardware change. It stays fail-open, as D4's class.**
+  - Only a trusted-kernel defect corrupts T's header: T is kernel memory and is walked physically.
+  - The fail-closed form is not one comparator. It needs a flop for "opened since the last namespace edge" and an open
+    triggered by the probe, and it has a functional false-25 hazard in the window before the first open. That trades
+    a real functional risk inside the guarantee for hardening outside it.
+  - (A) is closed the same way: fail-open at LCC selector 0 only, row D11 of the format plan's table.
 
 ### R-80 — an LDC whose access faults is not popped: it re-presents every cycle as a capability read on load port 1, starves the write buffer's cache update, and behind a store backlog wedges the core with its fault never taken `OPEN 2026-11-25 — DEMONSTRATED IN RTL SIMULATION (b5b2-ldcexc2, on 47d749153 and 28fcbb646; claim-audited); FIX IN RTL (capstone-ariane b5b2-ldcfix a5c45a46d, a faulting LDC pops), simulated; SYNTHESISED in a5c45a46d and in b42c8c644 (which adds R-77's fix); ON SILICON, NOT YET DISCRIMINATING: the fixed arm b5b2-ldcexc2 reads SR 2 0x18 0x1 (one cause-24 trap, no wedge) AS PREDICTED on a5c45a46d (board 3, board/meas-pw c198c50f159e) and on 14f2ef81a (board 1, f47b2a686ce2; b42c8c644 + the spatial-only parameter, ldcexc2's column equal to b42c8c644's), while the unfixed 28fcbb646 control that must wedge on silicon is unread, so the readings show the fixed arm completing, not the wedge gone; on b42c8c644 itself not yet read; the silicon candidate is S-35 (B5T mcf on 904cd9c6b), its pattern pre-registered for the diagnostic seal 28fcbb646 (llvm-capstone land/rtl-crevoke4b c7877d008be7)`
 
