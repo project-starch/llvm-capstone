@@ -130,6 +130,36 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
 - An edge with the key unchanged must not flush: a build that flushes on every E FAILS the control on six counts.
 - A malformed trace exits 2: six malformed traces (E word 1 = 2; T, I, PI with a non-zero word 1; a record with bit 33; kind 11) must each exit 2, and E word 1 = 1 must exit 0. f82523965196 checked word 1 after the marker branches, so the four marker cases were accepted; c156970f12cd fixed it and its build passes.
 
+**Verdicts, per program** (rule as ruled above; each row carries its cost pair and its denominator's source):
+
+| program | trace (nested lane, twin) | LB check misses asis / dedup | cycle denominator (board row) | share at cold 40.4 | share at warm 15.6 | verdict |
+|---|---|---|---|---|---|---|
+| 502.gcc_r test (t1.c) | spec-gcc.2262833, sha256 0cfc265bfa31dbb2..., recomputed here | 8,921 / 8,921 (self_evict 0) | 144.0 M = 5.76 s x 25 MHz | 0.250 % | 0.097 % | **NO BUILD** |
+
+**The denominator: board 3, B5TL1-g3 on b42c8c644, 502.gcc_r PASS** (board/meas-pw f47b2a686ce2, b42c8c644-board3 result lines).
+- The run's time is the SPEC-END line's up1 50.54 minus up0 44.78 = 5.76 s. The row prints no cycle count, so cycles are
+  that time x the core clock.
+- The core clock is 25 MHz, by three independent readings:
+  - the payload's own DTB: timebase 12,500,000 and cpu clock-frequency 25,000,000 (the board lane's parse);
+  - silicon: 2.0 cycles per mtime tick (crevint-lat 30062/15031; boot 13's mtrip 1.99);
+  - kernel time against host wall time within about 0.1 % over 14,499 s.
+  The verdict holds for any clock above 6.26 MHz.
+- The image, as loaded: fw_payload.bin sha256 ce0ca633c490c4713cbde33f88ba4c2d474b21907273b273c989067d00c94ef8, pinned
+  by the plan and checked before the load.
+- Its overlay holds cpugcc_r_base.native f800e015d161c911... (10,310,640 B), and the same in/t1.c (de7b86d79a68965a),
+  plan.json and run.sh. Recomputed here, the traced stage directory (c4/b5b2spec/board-stages/B5TL1/502.gcc_r, the
+  path in the nested lane's spec-chain.sh) holds the same native, input, plan.json and run.sh. The native's mtime is
+  2026-11-25, before the trace.
+- The twin's kernel (Image 749fed26) is not the board's (7e47228e...). The record traffic is the user-space
+  allocator's, and the trace's S-mode checks are 299 of 6,525,939, so the kernel does not move the row.
+
+**Reading the gcc row:**
+- At the cold cost it is 360,408 cycles (0.250 %); at the warm, 139,168 (0.097 %). Both are under 1 %, so it is NO
+  BUILD for a record cache on gcc.
+- The verdict-cache size is NO BUILD too. The floor at 4096x32 is 8,897 misses, so no size removes more than 24.
+- The smoke background (15 misses in spec-smoke.2198060) is left in. That is the conservative side for a NO BUILD.
+- Still owed: mcf and perl, each on its own B5TL1 trace and board row.
+
 **Verdict-cache size** (`--lb`, the `small` arm only; LB check misses, asis / dedup):
 
 | geometry | misses |
