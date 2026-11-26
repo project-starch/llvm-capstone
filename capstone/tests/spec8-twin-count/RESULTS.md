@@ -95,8 +95,20 @@ gcc's stage is one compile of t1.c, which takes 1.9 s. Its only diagnostic is a 
   - In nab, log -5,124,002 against hypot +5,124,002 are adjacent. LSHON's libm block sits 0xac bytes later, which is
     not a multiple of 16.
   - The stage totals sum the whole image range and are unaffected.
-  - One candidate is away from a boundary: nab's mme34, +36.5 M. It starts at 0x144a8 in both arms and is 76 bytes
-    longer in LSHON (its successor ephi moves from 0x1698c to 0x169d8). That is a lead, not an attribution.
+  - One candidate is away from a boundary: nab's mme34, +36.5 M. It starts at 0x144a8 in both arms and is 8 bytes
+    and 16 instructions longer in LSHON (6,354 to 6,362 bytes by llvm-nm -S; 16 instructions by the spec8s fnsig.py
+    comparison). That is a lead, not an attribution.
+    - Corrected after the first push: 8abd11010c5b said 76 bytes. That is how far ephi moves (0x1698c to 0x169d8),
+      and it includes mme34's neighbours, md +60 among them.
+    - Its register allocation differs throughout. In LSHON one callee-saved register holds a base for the whole
+      function, and the spills of callee-saved registers change.
+  - perlbench's hottest interpreter ops have the same length in both arms (Perl_pp_nextstate, pp_padsv, pp_and,
+    pp_const, pp_gvsv, pp_sassign); only their global displacements change. So perlbench's increase does not come from
+    an entry cost in those ops.
+    - Of perlbench's 36 functions that change size, the largest are S_pack_rec +176, S_regcppop +88 and
+      Perl_pp_formline -60.
+    - SPEC fixes perl's hash and random seeds (spec_config.h PERL_HASH_SEED; util.c Perl_seed and
+      Perl_get_hash_seed under SPEC), so its count is expected to repeat across boots. That is not yet read.
   - Finding the cause needs shift-1 profiles and arms that split the options. Neither was run here.
 - Cycles. These are instruction counts on the trap twin.
 - P1.
