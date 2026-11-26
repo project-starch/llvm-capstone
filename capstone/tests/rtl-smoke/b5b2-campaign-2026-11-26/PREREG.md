@@ -190,3 +190,18 @@ with two lines swapped reads DIFFER. The armed camp2 session was stopped while w
 
 **Between Phase B's two CF long rows on board 2, the placement session's S boots run on the same seal.** They are
 recorded as part of board 2's boot history. They are not a variable this campaign reads.
+
+## Amendment 3 (2026-11-26, before any C2 boot): C2's hash target is the decoded files, not the capture
+
+Amendment 2 said C2's v2 data hashes "must equal nested's g3v2 board row (uart sha256 efd010abaf9db1bd)". Read
+literally, that keys on the capture, and no new capture can equal it: a capture holds uptimes and timings. The
+uart hash identifies the reference row. It is not a match target.
+
+The target is that row's decoded in-band files (`B5TL1-502.gcc_r/files/capstone-lifetimes/`). Their sha256, first 16,
+were read here from `nested/b5b2/ports/gcc-v2/board-grade/g3v2`:
+- `t1.opts-O3_-finline-limit_50000.s`: 58111208509dd871;
+- `.err`: 0c86179b08efc831 (gcc's own printf warning only);
+- `.out`: e3b0c44298fc1c14 (empty).
+
+Each C2 CFP boot must also carry payload 724f0027fdf5fe59, graded with `SPEC_STAGE_ROOT=nested/b5b2/ports/gcc-v2/boardroot`.
+Pointed out by the nested lane.
