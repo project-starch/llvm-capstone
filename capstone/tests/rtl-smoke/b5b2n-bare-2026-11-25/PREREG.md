@@ -290,3 +290,30 @@ The same 23 images (byte-identical: SHA256SUMS unchanged; every ELF in `out/` re
 The same 23 images (byte-identical: SHA256SUMS unchanged) were simulated on capstone-ariane b5b2-prefix b42c8c644 (core = 7861abcfa), rtl_dirty=no (s2fix-wt `.sup/r77n`), with this kit's settings. Their vectors are in `expected-vectors-b42c8c644.json`, which has the same fields as `expected-vectors.json` plus `sim_rtl`.
 
 **Every image reads exactly this kit's vector, in every position.** The grading rule above applies unchanged on that seal, with `expected-vectors-b42c8c644.json`'s `vector` as the column.
+
+## Addendum 2026-11-26: the spatial-only core 14f2ef81a, pre-registered before its board session
+
+**Role:** BINDING in board 1's spatial-only kit boot (runtime's allocation, 2026-11-26).
+
+**The seal:** caplifive_…-r77-spatial_14f2ef81a.bit, sha256 df9de4d49b21b475934e3a90ee81722ece98f6b1207c893bbc9a475e4c928be9 (graded SP-FULL PASS, llvm-capstone land/rtl-crevoke4b 42fa22984689). The resident name is read back and the seal is cited by its sha256.
+
+**The vectors:** the same 23 images, byte-identical (images/ unchanged since this kit's pin; every `out/*.elf` objcopies to its `images/*.bin`; SHA256SUMS verifies), were simulated through the Anvil prologue at `S12_MEM_DELAY=12` on capstone-ariane b5b2-spatial 14f2ef81a (core 5ff493d0a: the lifetime unit replaced by `capstone_sublet_life_stub`), rtl_dirty=no, time_out 3,000,000 (s2fix-wt `.sup/spk`, PROVENANCE 2026-11-25T18:48:16Z). They are in `expected-vectors-14f2ef81a.json`, with the same fields as `expected-vectors.json` plus `sim_rtl`.
+
+**Against the Full core's column** (b42c8c644's (`expected-vectors-b42c8c644.json`)): b5b2-cptag, b5b2-cptag-diag, b5b2-cptag2, b5b2-ctxport-edgem, b5b2-ctxport-f4ctl, b5b2-illegal, b5b2-illegal-csup, b5b2-illegal-runv, b5b2-raw, b5b2-rawlcc, b5b2-rule2, b5b2-rule2-pair, b5b2-scratch read identically. The positions that move (class in brackets; u = ungraded):
+
+| image | sha16 | rec | SR | positions that move, Full → spatial-only |
+|---|---|---|---|---|
+| b5b2-ctxport-f4 | 181314f837d650ae | 0x80016000 | 6 | 1[E] 0x19 → 0x0; 3[E] 0x0 → 0x77; 6[E] 0x1 → 0x0 |
+| b5b2-ctxport-widehi | 6cc824e6251f2435 | 0x80016000 | 6 | 4[E] 0xfffffe06 → 0x6; 5[E] 0xfffffe08 → 0x6 |
+| b5b2-ctxport-widelo | a63b405dc6afe16d | 0x80016000 | 6 | 4[E] 0x8000206 → 0x6; 5[E] 0x8000208 → 0x6 |
+| b5b2-mwrite | c3649488c6fa4a71 | 0x8000d240 | 8 | 3[E] 0x19 → 0x0; 8[E] 0x2 → 0x1 |
+| b5b2-nsedge | 58f34a2d73763cc5 | 0x80012280 | 17 | 3[E] 0x19 → 0x0; 7[E] 0x19 → 0x0; 9[E] 0x19 → 0x0; 11[E] 0x19 → 0x0; 14[E] 0x19 → 0x0; 15[E] 0x19 → 0x0; 17[E] 0x6 → 0x0 |
+| b5b2-sref | cc6b5db7c5447797 | 0x8000e040 | 20 | 9[E] 0x5 → 0x3; 10[E] 0x4 → 0x3; 12[E] 0x7 → 0x3; 13[E] 0x7 → 0x3 |
+| b5b2-sref-gen | 6d449998da2ac553 | 0x8000e040 | 20 | 9[E] 0x5 → 0x3; 10[E] 0x4 → 0x3; 12[E] 0x6000000080000007 → 0x3; 13[E] 0x7 → 0x3; 14[E] 0xc0000001 → 0x0 |
+| b5b2-uprot | d4734d0fa2fa859e | 0x8000d000 | 19 | 3[E] 0x19 → 0x0; 6[E] 0x19 → 0x1c; 13[E] 0x19 → 0x0; 19[E] 0x6 → 0x4 |
+| b5b2-uprot-mis | 28bb4f2bea4a0f80 | 0x8000d000 | 23 | 3[E] 0x19 → 0x0; 6[E] 0x19 → 0x1c; 12[E] 0x19 → 0x4; 17[E] 0x19 → 0x0; 23[E] 0xa → 0x8 |
+| sublet-life | ecbfe9171c0dbbbf | 0x80003200 | 35 | 4[E] 0x19 → 0x0; 7[E] 0x19 → 0x0; 11[E] 0x19 → 0x1d; 12[E] 0x19 → 0x0; 15[E] 0x8000000000010000 → 0x0; 16[E] 0x6 → 0x0; 17[E] 0x300000003 → 0x0; 18[E] 0x8 → 0x0; 21[E] 0x1000000000 → 0x0; 22[E] 0x100000000 → 0x0; 23[E] 0x1400000000 → 0x0; 24[E] 0x400000000 → 0x0; 26[Eu] 0x200000000 → 0x0; 35[E] 0x6 → 0x3 |
+
+Each move is the stub's stated semantics (llvm-capstone capstone/docs/plans/2026-11-26-spatial-only-lineb.md, "The 57 Line B tests: what MUST change"): every lifetime op completes with no effect, so a stale access is not refused (25 → 0, or the next check's cause: 25 → 28 where the access is also out of bounds; 25 → 4 where it is also misaligned; a dead-parent CDERIVE goes on to its size check, 29, at sublet-life's position 11, the plan's in-tree reading; the trap counts fall by the 25s that became no fault); CREVOKE takes a few cycles and the run stays live; ids read the root they were derived from; the lifetime table is never written (sublet-life's table positions read 0). The kit's bare wrapper sits one slot above the in-tree tests (Full reads 0x7 where the in-tree test reads 0x6), so here the table tests' root is {0,3}: their ids read 0x3, and ctxport-widehi/-widelo's echoes read 0x6.
+
+**On the 14f2ef81a seal** the rules above apply unchanged, with `expected-vectors-14f2ef81a.json`'s `vector` as the column. sublet-life's VOID rule reads its 14f2ef81a vector. That vector differs from every Full column at the positions above, so a board left on a Full bitstream is caught by this kit, as well as by the readback.
