@@ -1,0 +1,22 @@
+# Record-access trace v3: D$ residency of LB probes (nested lane, 2026-11-26/27)
+
+These are the instruments behind the mcf and gcc v3 traces in `capstone/docs/ref/nested-allocator-workloads.md`, in the
+section "mcf's record-cache population depends on the emulator's speed".
+
+- QEMU is capstone-qemu `nested/record-trace-dc` `c3f93ba340`. It holds the tracer, the D$ model
+  `target/riscv/cap_rev_dc.h` (b42c8c644's wt_dcache: 256 sets × 8 ways × 16 B, an invalid way first, else an LFSR),
+  and the 16-byte capability hooks. The binary used was `d6e8ed5e`.
+- `dcplugin.c` is the TCG plugin. It owns the model, feeds it every guest data read, and writes `snap=FILE` (the model's
+  totals at each store to UART0's THR, physical 0x10000000). Built against QEMU's `qemu-plugin.h` and `cap_rev_dc.h`;
+  the plugin used was `.so` `0136be18`.
+- `dc-window.py BOOTLOG SNAP DCPLUGIN` maps the console's `@@SPEC-BEGIN/END` markers to model counts. It exits 1 when it
+  finds no window or when D > 64.
+- `rcm-lb-dc.c` is the rtl lane's `rcm-lb.c` (dev `6d87efe8d50a`), with an LB0 fixed at 64x4 and residency tallies per
+  population. On a v2 trace it reproduces `rcm-lb`'s rows exactly.
+- The drivers:
+  - `trace-spec-dc.sh` with `chain-dc.sh` runs the traces without icount;
+  - `trace-spec-dc-ic.sh`, `boot-plugin-ic.py`, `ovl-ic/init` and `chain-ic.sh` run them under `-icount`;
+  - `diag-boot.sh` and `run-b3-mcf.sh` run the B3 window check.
+
+The committed copies replace the account's paths with `<hdd>/` and `<home>/`, so they do not run as committed.
+`RAN-SHA256.txt` lists the sha256 prefixes of the files as they ran.

@@ -9787,3 +9787,62 @@ stopped first, and it had not booted):
 - Both sides run without Sstc (sstc=false on the twin, none on CVA6), so every tick is an M round trip on both.
 - A silicon-only source of M trips is not modelled: rdtime traps to M on g1b and reads natively in QEMU. The rtl
   lane's hpm row (0x07/0x08) bounds it.
+
+### Result: mcf -icount shift 7 and shift 6. Both pass the gate, and the removed population falls with the flush rate: 26.6 M at shift 6, 7.1 M at shift 7 (trap-route twin, 2026-11-27 05:57-07:10 host time, read against 7650843941fe with Amendment 1 bb10424b43e8)
+
+The instruments are in `capstone/tests/record-trace/dc-v3/`.
+
+| trace | instructions_all | E op 3 | LB flushes | 64x4 misses | 1024x8 misses | removed by 1024x8 | its cold fraction | RC misses | removed by RC | its cold fraction | cold, all 64x4 misses |
+|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---|---|
+| v2 `2201746` | 28,755,599,119 | 262,027 | 524,115 | 181,127,530 | 126,537,860 | 54,589,670 | (no residency) | 44,836,912 | 136,296,671 | (no residency) | (no residency) |
+| v3 `1497224` | 28,973,518,919 | 407,870 | 815,879 | 181,419,844 | 152,912,523 | 28,507,321 | 0.947827 | 44,837,086 | 136,588,885 | 0.988114 | 0.990315 |
+| shift 6 `2017382` | 30,006,969,512 | 934,432 | 1,869,763 | 182,301,573 | 155,684,303 | 26,617,270 | 0.944564 | 44,838,441 | 137,469,116 | 0.98600 | 0.98871 |
+| shift 7 `1876342` | 32,179,748,437 | 2,002,722 | 4,009,249 | 184,032,220 | 176,901,864 | 7,130,356 | 0.82811 | 44,843,400 | 139,194,783 | 0.97963 | 0.98390 |
+
+- Cold fractions are given to the precision at which the four seeds agree. They differ in the sixth digit.
+- Window D$ reads:
+  - shift 6: 9,558,342,792, miss fraction 0.38708;
+  - shift 7: 10,183,136,384, miss fraction 0.37313;
+  - v3: 9,252,067,167, miss fraction 0.39195.
+
+**Prediction 1 (gate) holds.** Both runs read B5TL1-505.mcf_r PASS, WINDOW-OK at D 3, mismatch_vs_LB0 0, and bit44
+equal to the 64x4 misses.
+- Guest time followed icount. The last heartbeat came at 4,025.90 s against a total of 4,119 s
+  (instructions_all × 128 ns) at shift 7, and at 1,825.96 s against 1,920 s at shift 6. v3 ended at 845.72 s.
+- The protected instructions (26,644,263,390 and 26,644,263,394) and the check events agree with v2 and v3 to within
+  a few counts.
+
+**Prediction 2 (the control) holds per instructions_all, and not per protected instruction.** The pre-registration
+did not name the denominator.
+- E op 3 per instructions_all at shift 7 is 1.9985 times shift 6's, inside 1.6 to 2.1.
+- Per protected instruction, which is the same count in both runs, the ratio is 2.143, outside the band.
+- The timer mechanism predicts exactly 2 per instructions_all: guest time is instructions_all × 2^shift, and each
+  added tick adds kernel instructions. So the reading is taken, with this disclosure.
+- Both runs exceed v3's 407,870, as predicted.
+
+**Prediction 3 holds:** v2 54.59 M > v3 28.51 M > shift 6 26.62 M > shift 7 7.13 M. The removed population is not a smooth
+function of E op 3:
+
+| step | E op 3 rises | removed population |
+|---|---:|---|
+| v2 to v3 | 1.56× | halves |
+| v3 to shift 6 | 2.29× | falls 7 % |
+| shift 6 to shift 7 | 2.14× | falls 73 % |
+
+Without icount, ticks land at wall-clock time rather than at instruction counts. That may place them differently in
+the program; this is not tested. So no interpolation between the shifts is read here.
+
+**What this reads.** In the twin, the 1024x8 verdict cache's removed population on mcf is set by the namespace flush
+rate, and so by the timer's ticks per instruction. Silicon's ticks per instruction (100 Hz on fpga-v1) lie between
+shift 6 and shift 7 by the rtl lane's arithmetic. Both ends of that bracket remove fewer than 40,849,010 misses, which
+is the rtl lane's all-cold threshold. The grading, and the comparison with silicon's M round trips (hpm 0x07/0x08,
+which also covers rdtime's traps to M on silicon), are the rtl lane's.
+
+**Limits.**
+- N=1 per shift.
+- The PTW is invisible to the D$ model, so its effect is an estimate.
+- The RC refill path is an assumption.
+- Probe-internal accesses are not reported.
+- The window is ±D (3 bytes) plus the tty drain lag.
+- The twin's kernel ticks at 250 Hz under NO_HZ_IDLE, while fpga-v1's is HZ_PERIODIC at 100 Hz. The shifts match the
+  tick rate, not the kernel.
