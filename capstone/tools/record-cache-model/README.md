@@ -178,14 +178,24 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
     - 128x8 removes 7,148,851 and needs 446 s or less;
     - 128x4 and 64x8 need 137 and 127 s or less.
   - RC (removed 136,290,618; its own check misses 44,836,912; c = RC's miss cost):
-    - **c's proven lower bound is 2 cycles**, from simulation:
+    - **c's lower bound is 2 cycles, the minimum observed** (not shown to be the unit's structural floor; no RTL path
+      was traced to make it one), from simulation:
       - Source: capstone-ariane b5b2-hangmon-c cf72629ad, whose SUP_TRACE-only R81-RD line prints every lifetime-unit
         read's latency from request to response. s2pre-wt `.sup/hmlat`, dirty=no.
       - Over 69 Line B tests and 46,358 reads: minimum 2 cycles (261 reads), 4 cycles for 92 %, maximum 1,225 (the
         cold srvcost reads).
       - An RC miss makes at least one unit read. A D$-hit latency is on-chip, so the cycles carry over to silicon.
       - One read, not four: a line-fill design could fetch the line in one access, so four reads are not proven.
-    - RC BUILD needs a run of 8,146 s or less at c = 2 (8,505 s at c = 0; 5,707 s at c = 15.6, not proven).
+    - **RETRACTED 2026-11-26: "RC BUILD needs a run of 8,146 s or less at c = 2"** (dev 6be718f28fb9). RC's own misses
+      are SUBTRACTED from its saving, so a BUILD must hold at c's UPPER bound. c = 2 is RC's most favourable value and
+      gives no BUILD threshold (the semantics owner's correction).
+    - **RC BUILD is UNDECIDED at any run time until c has a proven upper bound.**
+      - The warm saving, 136,290,618 x 15.6 - 44,836,912 x c, is positive only for c < 47.4 cycles. So a BUILD needs a
+        64-byte line fill costing under about 1.2 cold record fetches of 16 bytes.
+      - No ceiling is proven: 40.4 is the AVERAGE cold verdict miss, not a maximum, and a 64-byte fill spans four of
+        the D$'s 16-byte lines.
+      - Under either candidate ceiling, four cold fetches (161.6) or the worst observed read (1,225, a simulation
+        figure), RC BUILD is impossible on mcf at any run time.
     - RC candidate NO BUILD at c = 2 needs a run of 21,666 s or more (22,024 s at c = 0).
     - Between those, the result is UNDECIDED, and only the residency pass resolves it.
 
