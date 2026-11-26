@@ -151,8 +151,8 @@ of 4 first. Image c975128b…, the smoke2 build with FW_FAST_RDTIME.
 | 5. `TRAPTEST: done` (binding) | present |
 
 - The spatial-only path is used. Prediction 3's protected msgt is the step whose root check accepts R without its
-  record. On this seal the Full kernel's check refuses it (the twin pair of e247b4fdd995), and here it passes with
-  fails=0.
+  record. On the spatial-only twin the Full kernel refuses R (the twin pair of e247b4fdd995).
+  That refusal has not been read on silicon. Here the step passes with fails=0.
 - rdtime and getppid match boot 13's Full kernel on b42c8c644 within 0.2 % (119.70-119.72, 1,266.9-1,268.0).
 
 **Consequence:** the +Spatial final kernel stands for the campaign's +Spatial arm. Both final kernels are now read
