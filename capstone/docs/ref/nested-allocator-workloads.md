@@ -9034,13 +9034,16 @@ stock pair on the same seal and kernel?
 
 | boot | booking | payload | host time | uart sha256 | preflight |
 |---|---:|---|---|---|---|
-| CF-B5TL1-g3 (stock) | 1586 | `997e2fd6fdbdecdf…` | 15:37:23-15:42:58 | `ef564f145a309141…` | UNGATED (preflight run after it started) |
-| CFP-B5TL1-g3 (port) | 1587 | `6616eecf0c797071…` | 15:43:00-15:48:36 | `5e4b0123351f21a8…` | BLOCK by C10's 20 MB budget (21.66 MB); runtime ruled past it |
+| CF-B5TL1-g3 (stock) | 1586 | `997e2fd6fdbdecdf…` | 15:37:23-15:42:58 | `ef564f145a309141…` | UNGATED; read afterwards, BLOCK by C10's 20 MB budget |
+| CFP-B5TL1-g3 (port) | 1587 | `6616eecf0c797071…` | 15:43:00-15:48:36 | `5e4b0123351f21a8…` | UNGATED; read afterwards, BLOCK by C10's 20 MB budget (21.66 MB) |
 | CF-B5TL1-g4mk (stock) | 1588 | `e82d42ebe558cb18…` | 15:48:42-16:01:34 | `2522348b57230d99…` | GO |
 | CFP-B5TL1-g4mk (port) | 1589 | `432e6ae27d5aa062…` | 16:01:41-16:14:34 | `4c1171058609dd33…` | BLOCK by C10's FDT count; runtime ruled past it |
 
 - The board lane ran the boots and preflight-board-run.sh. Every boot's readback names `…-r80-r77_b42c8c644.bit`
   before and after, and every booking was released.
+- Preflight ran once, at 07:44:09Z, on all four payloads. The two g3 boots had started before it (07:37:22Z and
+  07:42:59Z, their chain.log START lines), so both are UNGATED and their BLOCK is an after-the-fact reading. The g4mk
+  boots started after it.
 - **C10's BLOCKs are not about the payloads' contents.**
   - The g3 size BLOCK hits runtime's own B5TL1-g3 payload identically, and that payload ran on this seal.
   - The FDT BLOCK on CFP-g4mk is a false positive. The payload has the one real FDT at `0x14000` (3,518 B, version 17),
@@ -9087,7 +9090,7 @@ stock pair on the same seal and kernel?
 **Limits.**
 - One boot per arm. Test-size inputs only: gcc's t1.c and perl's makerand.pl.
 - The port's image identity is read from the payload, not from the capture.
-- Two of the four boots were preflight-BLOCKED by C10 and ran on runtime's ruling, and one is ungated.
+- Both g3 boots are ungated. CFP-g4mk was preflight-BLOCKED by a false positive and ran on runtime's ruling.
 
 ### Pre-registration: B5b-2 board boot "nested-corpus", SQLite then PHP engine-repros (written 2026-11-26 04:17 host time (+08), 20:17Z on Nov 25, before the boot)
 
