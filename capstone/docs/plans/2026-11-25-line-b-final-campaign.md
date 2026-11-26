@@ -83,6 +83,38 @@ Board time is the critical path; everything that needs no board runs beside it.
 9. runtime: the re-registrations named by Addendum 236 (Addendum 231, the ordering half of 232, t202s2's two rows),
    restated for the Line B arms.
 
+**Added on 26 Nov, after the lead re-read the submitted paper (ebc1700a) against Line B.** These are the paper's
+claims and rows that b42c8c644 has not yet answered:
+10. compiler + rtl: **stage 2 on Line B**, by the lead's decision to try it and prove a benefit. The mode's home is
+    a CSR `scapmode` (0x5C3), because Line B deleted CSRUNV; option B, proposed at compiler/stage2-trap-spec
+    3477097bd5af. Order:
+    - fetch bytes on the Line B twin (CRVC, ZCB and CRVCZ arms against LSHOFF);
+    - a pre-registered cycle band and go/no-go: at least 1 % on perl or gcc, no stage worse than noise;
+    - the decoder RTL, directed simulation, the synth-only gate, then a separate seal, b42c8c644 + decoder;
+    - on the board, the on/off pair on that seal, plus the off image on both seals as the control.
+    It replaces the campaign seal only if it reads AND the lead agrees. **Zcb with a capability base needs no new
+    seal:** b42c8c644 decodes Zcb (config pkg:77, compressed_decoder.sv:152-153, rtl). Its pair therefore runs on
+    the campaign seal: N=3 per arm, with P1's ZCB9 (perl -0.33 %) as the prior. The mode's home is being settled
+    between compiler and rtl: a scapmode CSR, or a flop loaded from bit 0 of the srevroot write, which adds no
+    flush for processes without the flag. The decoder output sits in a cone on the UNOPTFLAT list, so the
+    synthesis-only gate comes first.
+11. nested: **Perl's CRENEW variant.** It was deferred on 23 Nov for want of a CRENEW bitstream, and b42c8c644 has
+    one. The liveness-test half stays out: nothing decodes it, and it saves 0.032 % of instructions.
+12. rtl: three section-5 claims, read at b42c8c644:
+    - **Record TLB: present**, 16 entries, fully associative, flushed whole on a namespace flush
+      (ex_stage.sv:2218).
+    - **Record-path ordering against an in-flight release:** the mechanism is present (load_store_unit.sv:1838-1841
+      rvc_set_kill, :1471-1475; commit_stage.sv:951-954), but no directed test covers it. The test being written
+      is b5b2-relrace, pre-registered.
+    - **Retirement at generation exhaustion:** present (capstone_sublet_life.sv:627-628). The unit-level case covers
+      only CRENEW at the limit, and no test releases by CREVOKE at 2^32-2. A core-level test and a
+      sublet-life-diff case are being written.
+13. rtl + board: the hardware-cost table rebuilt from b42c8c644, 14f2ef81a and rvbase utilization. The spatial-only row
+    becomes a measurement. The record-cache row has no hardware.
+14. compiler + runtime: the embedded suites (BEEBS, RV8, the CoreMark-derived benchmark) as Line B images, then rows.
+15. nested + runtime: the application cost rows on b42c8c644. Only CPython and memcached have one. The paper's table
+    also has mruby, Perl, PHP, SQLite, PostgreSQL and Wireshark, and the large-subtree revoke time.
+
 **The long pole is x264.** Its test run needs more than about 12,180 s on b42c8c644 (Amendment 11), so three runs
 on each of four arms come to about 40 board-hours for x264 alone. x264b images therefore go into each board's longest
 unattended window, one image per boot. Every other stage of an arm fits in one boot of a few hours.
@@ -97,7 +129,8 @@ unattended window, one image per boot. Every other stage of an arm fits in one b
   CF-B5TL1-g3, CFP-B5TL1-g3: it started at 07:42:59Z, before the preflight runs at 07:44Z), and their rows say so. A preflight BLOCK is proceeded past only by a ruling recorded in the row, e.g.
   C10's 20 MB budget for 21.66 MB payloads already proven on the same seal.
 - Last: three runs per arm, board-constant pairs, drift-balanced order, intervals; then SPEC train for all arms.
-  SQLite --size 100 and the Fig. 10 Perl suns.pl row go here.
+  SQLite --size 100 and the Fig. 10 Perl suns.pl row go here. The paper measures gcc on its **train** input, so
+  gcc's SPEC test rows here are qualification only, and gcc's paper-footing row comes with train.
 
 ## Dispositions written now
 
@@ -110,7 +143,7 @@ open.
   already read as not relied on (capstone-ariane 88db40027).
 - **The I-cache 64-byte-line variant** is rebased on b42c8c644 only if board time remains after the campaign. It is
   not part of the final rows.
-- **Stage 2 instructions** stay out of the final bitstream unless the lead rules otherwise.
+- **Stage 2 instructions**: the lead ruled on 26 Nov to try them on a separate seal and prove a benefit (item 10). They stay out of the campaign seal unless that experiment reads and the lead agrees.
 - **C2 and C3** stop by the compiler lane's own gates: no safe increment reaches 0.2 % (1c4f472055e6), and C3's
   excess is under its 0.5 % gate (1eaf15006691). These are gate results, not a ruling by the lead.
 - **Huge pages** are not a Line B lever, because the trap-route kernel requires THP off (the matching rules above).
@@ -126,6 +159,12 @@ open.
 
 ## Questions that are the lead's (none of them blocks the order above)
 
-- Landing the measured runtime (alloc-lean) and the measured codegen default on dev.
-- Stage 2 instructions in a bitstream.
+- Landing the measured runtime and the measured codegen default on dev. The runtime lane recommends both.
+  - Codegen: dev's compiler with the measured flags reproduces 10 of 11 measured images byte for byte, and gcc by its
+    version string only (history 20-11-2026_18-28-19).
+  - Runtime: on Line B that means trap/eval plus runtime/trap-alloc-lean (B5TL1). On b42c8c644 it is the faster arm:
+    gcc test 5.76 s against 7.13-7.15 s, imagick -1.8 %. Part of trap/eval is the collaborator's series, so it lands
+    through its owner.
+- Stage 2: option A or B for the mode (proceeding on B), and whether a stage-2 seal may replace the campaign seal if
+  it reads.
 - Any paper wording that follows from the Line B rows.
