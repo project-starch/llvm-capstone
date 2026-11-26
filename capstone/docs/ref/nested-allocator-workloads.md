@@ -3262,6 +3262,39 @@ its stage holds (`nested/rectrace/traces/INDEX.md` on the capstone work volume, 
   FRCDKMS images, not FRCDKMSa3, so two more traces on those images (gcc 3ed5c0be…, mcf 3d7e6211…) are being taken,
   with context-edge markers, which B5a needs to flush its caches.
 
+### Line B record-access traces (format v2) for rcm-lb: B5TL1's mcf, gcc and perlbench (trap-route twin, 2026-11-26)
+
+**Purpose.** The rtl lane's record-cache model for Line B (`rcm-lb`, rtl land/rtl-crevoke4b `b35fb24d8e97`) needs
+record-access traces of the campaign's own SPEC test stages (brief 7.4). This lane provides them.
+
+**Tracer.**
+- capstone-qemu branch `nested/record-trace-lb` (`a248037c2a..702f24732b`, pushed), binary `a1564de7…`. It writes
+  format v2. On Line B it writes no csupctl, because this QEMU has no csupctl CSR.
+- Each trace is one twin boot through `<hdd>/nested/rectrace-lb/trace-spec.sh` (`4d669078…`):
+  - one B5TL1 stage, copied whole into the overlay;
+  - Image `749fed26…`, the keep-tags fw_jump.elf, `sublet.dom_wide_grants=1`, 963M;
+  - the global QEMU lock taken shared, with the domain lock.
+- rcm-lb is built here from `b35fb24d8e97` (`rcm-lb.c` `f589001a…`, `cc -O2 -Wall`). Its synthetic control PASSes,
+  and a one-event perturbation of it FAILs.
+- rtl's ruling: LB is read under both walks, `asis` and `--walk dedup`. A threshold inside the bracket is UNDECIDED.
+
+| stage (B5TL1) | image | answer | trace | bytes | sha256 | instructions all / protected | LB check misses asis / dedup | checks | self_evict asis / dedup |
+|---|---|---|---|---:|---|---:|---:|---:|---:|
+| smoke only (background) | `smoke.dom` | rc 7 | `spec-smoke.2198060` | 4,528 | | 574.6 M / 1,396 | 15 / 15 | 383 | 0 / 0 |
+| 505.mcf_r test (board-stages = SP g1b's) | `a1daec395a9e7260` | specdiff PASS | `spec-mcf.2201746` | 65,420,275,952 | `633ca24aabba3062…` | 28.76 G / 26.64 G | 181,127,530 / 181,127,654 | 10,044,639,808 | 124 / 124 |
+| 502.gcc_r t1.c (board-stages = SP g3's) | `f800e015d161c911` | specdiff PASS | `spec-gcc.2262833` | 29,076,816 | `0cfc265bfa31dbb2…` | 930.7 M / 21.7 M | 8,921 / 8,921 | 6,525,939 | 0 / 0 |
+| 500.perlbench_r makerand.pl (SP-B5TL1-g4mk's stage) | `f3c8c80d71844564` | specdiff PASS | `spec-perl3.2883687` | 10,130,629,600 | `1af7b0c90ab7cb56…` | 5.78 G / 3.09 G | 277,290 / 277,290 | 1,216,156,215 | 0 / 0 |
+
+- Each traced stage directory is `diff -rq`-identical to its source.
+- rtl recomputed gcc's trace sha256 and its rcm-lb numbers on dev's build and got the same.
+- **Disclosed: a void first perl boot.** The stage path passed was a symlink to an absolute path, and the first
+  `trace-spec.sh` copied the link itself. The guest ran a dangling stage (rc 2), the grader read it as MISS, and the trace
+  is the smoke background only (`spec-perl.2276518`, 4,736 B).
+  - The script now resolves the path and refuses a copy without `stage/run.sh` or with absolute symlinks. That refusal
+    is tested on a negative case.
+  - The re-run traces the campaign's own perl stage (g4mk, makerand.pl), which is what the Full row pairs, not test.pl.
+- The traces were taken on the twin's kernel. So a board row matches them by the stage image, not by the kernel.
+
 ### gcc's three allocators with one-operand CREVOKE and CRENEW (QEMU, 2026-11-20): +0.78 % instructions in gcc's code
 
 **Question.** What does the collaborator's port of gcc's pools, GC heap and obstacks (one-operand CREVOKE and CRENEW,
