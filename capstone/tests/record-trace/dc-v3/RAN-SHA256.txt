@@ -15,3 +15,4 @@ a9206793127dbf67  rcm-lb-dc-thin.c
 4a87796a5a00c93e  chain-tk.sh
 8683f912fa078ea0  trace-spec-dc-tk.sh
 27cfeedc00e9985d  dcstar.py
+fae0a3e24e68d75f  silicon-split.py

@@ -27,6 +27,10 @@ section "mcf's record-cache population depends on the emulator's speed".
   - `dcstar.py` (report-only, added after the mcf-tk6 pre-registration) reads `tick-bins.py`'s complement lines and
     prints dc\*, the D$ cost at which Y/X crosses the threshold, with the MPKI ratio rest/slice. `results-tk6/` holds
     the run's `bins.out` and `dcstar.out`.
+- `silicon-split.py` (2026-11-27) reads the runtime lane's TICKLOG3 tick log. It uses that lane's own
+  `read-ticklog.py` (`table`, `markers`, `window` and its program-instruction formula), maps silicon's ticks onto
+  mcf-tk6's slice by position in program instructions, and fits the slice's and the rest's silicon CPI by least
+  squares. It has a correlation gate with a rotated control and a `--selftest`.
 - The drivers:
   - `trace-spec-dc.sh` with `chain-dc.sh` runs the traces without icount;
   - `trace-spec-dc-ic.sh`, `boot-plugin-ic.py`, `ovl-ic/init` and `chain-ic.sh` run them under `-icount`;

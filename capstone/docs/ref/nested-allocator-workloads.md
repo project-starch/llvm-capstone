@@ -10067,3 +10067,75 @@ instruction counts here come from the I marks, which are placed every 1024 runs.
 - N=1.
 
 The instruments are in `capstone/tests/record-trace/dc-v3/`; `results-tk6/` holds `bins.out` and `dcstar.out`.
+
+### Pre-registration: silicon's own CPI on mcf's LB-miss slice and on the rest, from the runtime lane's tick log (written 2026-11-27 11:43 host time (+08), 03:43Z, before the board boot that writes the log)
+
+**Why.**
+- mcf-tk6 (above) leans against BUILD on a proxy.
+- The runtime lane's tick-log boot (b5b2-ticklog-2026-11-27 with Amendment 1, runtime/b5b2-linux `340a17e4b463`)
+  records each of silicon's timer intervals: cycles, instret, hpm3 (L1D misses), and the shares of the kernel and the
+  M path.
+- So the slice's and the rest's CPI can be read on silicon itself. The rtl lane asked for this split beside its
+  re-placement test, which is the binding one (n against 40,849,010).
+
+**The instrument.** `rectrace-dc/silicon-split.py` (`fae0a3e2`), committed to `capstone/tests/record-trace/dc-v3/`.
+- **Silicon side.** It reads the capture through the runtime lane's `read-ticklog.py` (`502e7573` at `340a17e4b463`;
+  its `table`, `markers` and `window`, loaded without the file's final `main()` call), cut at mcf's own `up0`/`up1`.
+  - Program instructions per interval come from the reader's formula:
+    Δinstret − ΔKinstret − ΔMTI-instret − Δother-instret − 251 × ΔMTI-n − 170 × ΔKentries.
+- **Twin side.** mcf-tk6's 467,257 joined intervals. The slice is tick-bins.py's: the top decile of instructions by
+  LB0 misses per 1000 instructions (46,854 intervals).
+- **Mapping.** By position in program instructions: silicon's cumulative program count against the twin's
+  instructions_protected, each normalised over the window.
+  - Each silicon tick gets a slice weight w_k, the share of its range that overlaps slice intervals.
+  - Not by tick rank: silicon ticks every 250,000 cycles, the twin every 62,500 instructions.
+- **Estimator.** Least squares on cycles_k = X · w_k · i_k + Y · (1 − w_k) · i_k.
+  - The plain weighted ratios are printed beside it. A tick that mixes slice and rest code biases them toward the
+    mean.
+- **Graded variant.** Silicon's total cycles over program instructions, since ticks fall in total cycle time.
+- **Reported, not graded:**
+  - program cycles (Δcycle − ΔKcycle) over program instructions;
+  - the all-mode pairing (minstret against instructions_all). It drifts: 17.2 % of ic7's instructions_all is not
+    protected.
+- **Gate (alignment).** Over the window's ticks, the Pearson r of silicon's hpm3 per instruction against the twin's
+  all-source D$ misses per instruction, mapped onto the same ranges.
+  - It must exceed 0.3, and exceed by 0.2 the r of a control whose twin intervals are rotated by half the window.
+  - Otherwise the split reads UNALIGNED and is not read.
+
+**Calibration before this pre-registration.**
+- **Selftest.** A silicon log synthesized from mcf-tk6's intervals (slice CPI 2.0, rest 6.0, a tick every 250,000
+  cycles) gives X 1.9995 and Y 5.9994 at r 0.987. The weighted ratios give 2.052 and 5.994, which is the bias above.
+  The rotated control gives r 0.108. PASS.
+- **Parse path, on the runtime lane's -icount twin capture** (ticklog/twin-dry3, TICKLOG3, `--icount-shift 7`):
+  - the table decodes (sha256 7db09dfc…);
+  - the window is [126.39, 3733.62] s, 360,498 ticks;
+  - the program sum is 26,663,701,473, which equals that lane's own key-match reading (+0.073 % against
+    26,644,263,390).
+  - The twin's hpm3 is not a miss count, so every variant reads UNALIGNED (r 0.008 against 0.023, and nan on the
+    all-mode key). The gate refuses a reading it cannot align.
+
+**Predictions** (on the board capture, read with `--fw-fixed 251 --k-entry 170`, the reader's constants):
+1. **The gate.** The graded variant reads ALIGNED.
+2. **The slice is dearer than the mean on silicon: X / mean ≥ 1.0 on the graded variant.**
+   - BUILD would need X / mean ≤ 411/660 = 0.6227, which is Y/X ≥ 1.6732 at a 10 % slice.
+   - mcf-tk6's calibrated proxy put X / mean near 2.6.
+   - A reading between 0.6227 and 1.0 is reported as against BUILD with prediction 2 failed.
+   - A reading ≤ 0.6227 is reported as BUILD-side on this split, and the binding test stays the rtl lane's.
+3. **Recorded, not predicted:**
+   - silicon's hpm3 per 1000 instructions on each side, and its ratio rest/slice against the twin's 0.2235;
+   - both reported variants;
+   - the program sum against 26,644,263,390;
+   - the weighted ratios.
+
+**What is read, and by whom.**
+- This lane reports silicon's X, Y and X / mean on the slice that mcf-tk6 defines.
+- The rtl lane grades the lever on its re-placement.
+- If the capture's own controls FAIL (`read-ticklog.py` exit 1), the split is still computed and labelled VOID.
+- If the table is UNREADABLE (exit 2), nothing is read.
+
+**Limits.**
+- The slice is the twin's. Silicon's program may differ from the twin's at the instruction level wherever the kernels
+  differ: page-fault handling, and HZ 100 against 250.
+- The mapping is by normalised position, so a uniform rate difference cancels. A local drift does not; the gate's r
+  measures it.
+- One boot, N=1.
