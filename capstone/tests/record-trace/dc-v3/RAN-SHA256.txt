@@ -10,3 +10,7 @@ da30a84712958358  run-b3-mcf.sh
 b21df69514b22fbd  ovl-ic/init
 83c9b03ac58c6621  diag/diag-boot.sh
 a9206793127dbf67  rcm-lb-dc-thin.c
+94d4aa3cd7f254b8  rcm-lb-dc-ticks.c
+624d2762d832b287  tick-bins.py
+4a87796a5a00c93e  chain-tk.sh
+8683f912fa078ea0  trace-spec-dc-tk.sh

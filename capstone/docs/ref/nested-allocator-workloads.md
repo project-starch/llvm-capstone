@@ -9910,3 +9910,92 @@ The grading is the rtl lane's, and it reads candidate NO BUILD with placement op
 from its 3/4 and 7/8 thins of shift 6, the population reaches 40.85 M between 408,816 and 467,219 ticks, near
 411 k. Silicon's tick count is 660,115. That curve is the rtl lane's reading; this lane reproduced the 1/2 points
 only.
+
+### Pre-registration: where mcf's removed misses lie between ticks, against the D$ miss rate (mcf-tk6, written 2026-11-27 09:58 host time (+08), 01:58Z, before the run)
+
+**Why.**
+- The 1024x8 removed population depends on where the timer ticks fall, not only on how many there are (the
+  correction above).
+- Silicon places ticks in cycle time, so a region gets ticks in proportion to its CPI. On the rtl lane's
+  uniform-placement curve, BUILD needs the regions where 1024x8 helps to get at most about 411/660 of the mean tick
+  density.
+- The deciding reading is silicon's own tick positions (the runtime and rtl lanes'). This run gives the twin-side
+  lean only.
+
+**What is already read, from the existing traces** (`rcm-lb-dc-ticks`, one cumulative replay row per MTI). Interval
+instruction counts here come from the I marks, which are placed every 1024 runs.
+- shift 6 (`spec-mcf-ic6.2017382`):
+  - The top decile of instructions by LB0 misses per 1000 instructions has 47,588 intervals and 2.98 G instructions,
+    90.8 % of them protected.
+  - It holds 178,119,069 LB0 misses (59.77 per 1000 instructions, 97.7 % of all) and 26,587,773 of the 26,617,270
+    removed (99.9 %).
+  - It makes 350.6 checks per 1000 instructions, against 136.8 overall.
+- v3 (`spec-mcf.1497224`, wall-clock ticks):
+  - The same slice holds 99.5 % of removed.
+  - It took ticks at about 1 per 66 k instructions, against 143-185 k elsewhere. The emulator is slow where the tracer
+    models every check.
+  - So v3's slice saw about ic6's uniform density, which is why v3's population sits next to ic6's.
+- **So the test reduces to the slice against the rest.**
+  - Let X and Y be their CPIs. Uniform placement means density is proportional to CPI. BUILD then needs
+    X / (0.1 X + 0.9 Y) ≤ 411/660, which is Y / X ≥ 1.6732, whatever the mean CPI.
+  - The rtl lane's form: with a mean of 5.7, X ≤ 3.53 and Y ≥ 5.94.
+- **The traces carry no program D$ data between ticks.** Their v3 bits are the residency of record lines only.
+
+**The run.** `rectrace-dc/chain-tk.sh` (`4a87796a`) repeats mcf-ic6 (B5TL1 505.mcf_r test, `-icount shift=6`) under
+`trace-spec-dc-tk.sh` (`8683f912`).
+- The QEMU is built from capstone-qemu `nested/record-trace-dc` `a1cbef0ede`, binary `f1d9a277`, in its own build
+  directory; the runs above used `d6e8ed5e`.
+- With `CAPSTONE_RECTRACE_TICKS=1` it also writes `<trace>.ticks`. Each MTI gets one row: the event index, the exact
+  instructions_all and _protected, and the D$ model's reads and misses, for all sources and for the program source.
+  The trace format is unchanged.
+- Everything else is the mcf-ic6 run's: plugin `0136be18`, `boot-plugin-ic.py`, `ovl-ic/init`, the kernel and the
+  stage.
+- The chain:
+  1. `dc-window.py`, `grade-spec-chain-v2.py`, and `rcm-lb-dc --lb 1024x8` beside `rcm-lb-dc-ticks --lb 1024x8 --ticks`
+     (`94d4aa3c`);
+  2. if the gate passes, `tick-bins.py` (`624d2762`).
+- **Calibration before this pre-registration:**
+  - A smoke boot without a stage (shift 6) wrote 5,384 rows, 64.7 k instructions apart; 4 ms of guest time at 64 ns
+    per instruction is 62.5 k.
+  - With no protected root no MTI edge is put in the trace, so all but one row read put 0. The one edge put joins the
+    replay's row at event index 153.
+  - An index moved by one reports "unjoined 1" and exits 1.
+  - `tick-bins.py` reproduces hand-computed values on synthetic rows, and its BUILD and against branches both fire.
+  - Without a ticks file its output is byte-identical to the ic6 binning above.
+- **Dry runs** (kept in `rectrace-dc/attic-dry-tk/`), stubbed on mcf-ic6's recorded artifacts:
+  - gate pass with tick-bins failing (no rows);
+  - gate pass with tick-bins stubbed;
+  - a gate stop (B3's console, no window).
+  - The removed-equality stop was not exercised.
+
+**Predictions.**
+1. **Gate.** PASS, WINDOW-OK, mismatch_vs_LB0 0, bit44 equal to the 64x4 misses, a non-empty ticks file, and the two
+   replays agreeing on removed_lb.
+2. **The run repeats mcf-ic6.**
+   - instructions_protected within 10 of 26,644,263,394;
+   - MTI edges within 1 % of 467,219;
+   - removed_lb within 2 % of 26,617,270.
+   - Outside these bands the bins are still read, but labelled as a run that differs from ic6.
+3. **The join.**
+   - Every replay row joins (unjoined 0).
+   - The exact instruction counts put at least 99 % of removed_lb in the top LB0 decile, as the mark-placed ic6
+     reading did.
+4. **The slice's program D$ misses per 1000 instructions are at least the rest's.** This is the hypothesis: the
+   check-dense slice is mcf's pointer chasing. Either outcome is reported.
+5. **Recorded, not predicted:**
+   - the deciles by D$ MPKI and by LB0 misses per 1000 instructions, with each decile's D$ MPKI;
+   - the complement table. It gives X and Y, and Y/X against 1.6732, for LB costs 40.4 and 15.6 (the rtl lane's cold
+     and warm), D$ costs 20, 40 and 80 cycles, and program-only or all-source D$ misses. It also gives a calibrated row
+     at each LB cost, whose D$ cost makes the whole program's proxy equal 5.7.
+
+**What is read, and by whom.**
+- This lane reports where the twin's D$ misses lie relative to the removed population: the lean.
+- The verdict stays the rtl lane's, on silicon's tick positions.
+
+**Limits.**
+- The proxy CPI is 1 + LB0 misses × LB cost + D$ misses × D$ cost. It leaves out branches, the I$, the TLBs, the PTW
+  (invisible to the D$ model) and any overlap between stalls.
+- The D$ costs are listed values, not measurements.
+- The calibrated row's 5.7 rests on about 29 G silicon instructions, which is unmeasured.
+- The slice is defined on the twin's instruction counts, kernel included, at 250 Hz with NO_HZ_IDLE.
+- N=1.
