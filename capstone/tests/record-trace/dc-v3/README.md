@@ -31,6 +31,9 @@ section "mcf's record-cache population depends on the emulator's speed".
   `read-ticklog.py` (`table`, `markers`, `window` and its program-instruction formula), maps silicon's ticks onto
   mcf-tk6's slice by position in program instructions, and fits the slice's and the rest's silicon CPI by least
   squares. It has a correlation gate with a rotated control and a `--selftest`.
+  - `silicon-split-diag.py` (post hoc, after the board reading) recomputes the alignment gate in variants: Spearman,
+    ticks without a non-timer kernel entry, and program-only misses on both sides. It grades nothing. Its output and
+    the registered split's output are in `results-silicon/`.
 - The drivers:
   - `trace-spec-dc.sh` with `chain-dc.sh` runs the traces without icount;
   - `trace-spec-dc-ic.sh`, `boot-plugin-ic.py`, `ovl-ic/init` and `chain-ic.sh` run them under `-icount`;

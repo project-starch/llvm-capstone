@@ -16,3 +16,4 @@ a9206793127dbf67  rcm-lb-dc-thin.c
 8683f912fa078ea0  trace-spec-dc-tk.sh
 27cfeedc00e9985d  dcstar.py
 fae0a3e24e68d75f  silicon-split.py
+bdeedcc544e5c77f  silicon-split-diag.py

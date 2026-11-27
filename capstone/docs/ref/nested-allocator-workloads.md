@@ -10139,3 +10139,54 @@ The instruments are in `capstone/tests/record-trace/dc-v3/`; `results-tk6/` hold
 - The mapping is by normalised position, so a uniform rate difference cancels. A local drift does not; the gate's r
   measures it.
 - One boot, N=1.
+
+### Result: the silicon split. The registered alignment gate reads UNALIGNED on the graded key, so the split is NOT READ; the gate's correlation was dragged down by page-fault ticks, which a post-hoc check shows (board 2, b42c8c644, the runtime lane's tick2-b2 capture; read 2026-11-27 15:24 host time, 07:24Z, against 920444052e26)
+
+**The capture.**
+- `tick2-b2-20261127T0342-ticklog/uart.txt`, sha256 da46fa15…, 11,353,873 B; its table's sha256 is 06958338….
+- It was read through the runtime lane's `read-ticklog.py` (`502e7573`) with `--fw-fixed 251 --k-entry 170`. That lane
+  reads every control of the capture as PASS.
+- The mcf window is [105.28, 6752.71] s, 664,520 ticks.
+- The program sum is 26,679,585,857, which equals the runtime lane's own reading (+0.13 % against the twin key
+  26,644,263,390; that lane puts the residue at about 53 instructions per tick, unsubtracted).
+- Mean CPI over the window: 166,185,499,490 total cycles over program instructions is 6.229. The 5.7 used above rested
+  on an unmeasured instruction count.
+
+**Prediction 1 fails: the graded variant reads UNALIGNED, so the split is not read.**
+- The registered gate needs r > 0.3 and r more than 0.2 above the rotated control's r. It read r 0.2215 against the
+  rotated control's 0.0684.
+- So the graded X and Y are not a reading here, and prediction 2 is not graded.
+
+| variant | r (rotated) | gate | X | Y | X / mean |
+|---|---|---|---:|---:|---:|
+| program key, total cycles (GRADED) | 0.2215 (0.0684) | UNALIGNED, not read | 14.16 | 3.82 | 2.27 |
+| program key, program cycles (reported) | 0.2215 (0.0684) | UNALIGNED | 12.72 | 3.48 | 2.28 |
+| all-mode key, total cycles (reported, drifts) | 0.4640 (0.0855) | ALIGNED | 7.04 | 3.74 | 1.30 |
+
+The X, Y and X / mean of the two UNALIGNED rows are printed by the tool, and they are not readings.
+
+**Why the gate failed (post hoc, `silicon-split-diag.py`; this changes nothing above).**
+- 26,852 of the 664,520 ticks carry a non-timer kernel entry; on the twin these are mostly store page faults. Silicon's hpm3 per
+  program instruction is extreme in those ticks, and the Pearson r is dominated by them.
+- On the same pair the rank correlation is 0.6445, against 0.1246 rotated.
+- Dropping those ticks gives a Pearson r of 0.3969 (rotated 0.0783).
+- With program-only misses on both sides (Δhpm3 − ΔKhpm3 against the twin's program source), and those ticks
+  dropped, the r is 0.6578 (rotated 0.1575).
+- **The instrument's slip.** The gate was a Pearson correlation, and its only positive control was a synthetic log
+  with no such outliers. The twin's -icount capture has the page faults, but its hpm3 counts nothing, so it could not
+  show this.
+- A rank correlation, or a control carrying the real log's kernel-entry ticks, would have caught it before the
+  reading.
+
+**Recorded, not graded.**
+- Silicon's hpm3 per 1000 program instructions, on the slice as mapped: 479.0 on the slice and 115.1 on the rest. The
+  ratio rest/slice is 0.240, against the twin's 0.2235 (all sources).
+- That is the same direction and nearly the same ratio as the twin, but it comes from the UNALIGNED mapping.
+
+**What this reads.**
+- Nothing is graded from the split.
+- Post hoc, the alignment exists by rank, and the unread numbers point the same way as mcf-tk6 (X / mean 2.27 against
+  the proxy's about 2.6). That is a description, not a test.
+- The binding test is the rtl lane's re-placement, which does not use this gate.
+
+**Limits.** N=1. The post-hoc checks were chosen after the data were seen.
