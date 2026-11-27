@@ -1,0 +1,222 @@
+# board 3, b42c8c644: spectest Amendment 11 x264b rows (B5T, B5TL0, B5TL1)
+# cut at 2026-11-27T20:46:14Z; session r77b3x-20261125T2250
+
+## orchestrator log
+2026-11-25T22:50:26Z armed
+2026-11-26T09:31:29Z the b42c8c644 full chain ended
+2026-11-26T09:31:29Z gates PASS: seal b42c8c644 sha 6a09f34d50842e01; plan ARMED by the board lane after reading every pin below (sha16 61ae11396ac8b064)
+2026-11-26T09:31:29Z RESIDENT: the previous session read back caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit (RK 2026-11-26 09:30); no flash
+2026-11-26T19:54:49Z B5T-x264b: 47 RUN END rc=0 [lx 03:54:46] end: TRAPTEST: done seen; 19789 chars 48 GRADE rc=0 B5B2-SPECCHAIN C=ok B5T-525.x264_r=PASS done=yes 
+2026-11-26T19:54:49Z B5T-x264b c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-27T06:18:41Z B5TL0-x264b: 40 RUN END rc=0 [lx 14:18:40] end: TRAPTEST: done seen; 19799 chars 41 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL0-525.x264_r=PASS done=yes 
+2026-11-27T06:18:41Z B5TL0-x264b c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-27T16:42:43Z B5TL1-x264b: 42 RUN END rc=0 [lx 00:42:41] end: TRAPTEST: done seen; 19824 chars 43 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=PASS done=yes 
+2026-11-27T16:42:43Z B5TL1-x264b c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-27T16:42:43Z SESSION END
+
+## .done
+(no .done: the session is still running, or predates the status trap)
+
+### boot B5T-x264b
+#### chain.log
+LX 2026-11-26 09:31:30 START dry=0 board 3 image 783d32767e276897
+FREE board 3
+LX 2026-11-26 09:31:31 holder started
+LX 2026-11-26 09:31:31 BOOKED 1595
+[fpga-board] 3
+[fpga-lease] board 3: held, until 1795685990.519808, purpose 'nv-readback.py pid 3517922'
+[fpga-users] board 3 start 1
+[fpga-users] board 3 start 1 max 1 end 1; samples (count@seconds): 1@0s
+[fpga-lease] board 3: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-26 09:31:31 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3
+LX 2026-11-26 19:54:47 RUN END rc=0 [lx 03:54:46] end: TRAPTEST: done seen; 19789 chars
+[fpga-board] 3
+[fpga-lease] board 3: held, until 1795723386.775758, purpose 'nv-readback.py pid 657460'
+[fpga-users] board 3 start 1
+[fpga-users] board 3 start 1 max 1 end 1; samples (count@seconds): 1@0s
+[fpga-lease] board 3: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-26 19:54:48 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+LX 2026-11-26 19:54:48 GRADE rc=0 B5B2-SPECCHAIN C=ok B5T-525.x264_r=PASS done=yes
+UNBOOK 1595: 200
+LX 2026-11-26 19:54:49 UNBOOKED 1595
+LX 2026-11-26 19:54:49 END
+#### grade (v2, binding)
+capture: 19280 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         954648 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5T-525.x264_r PASS: QSTEP rc=0; read rc=1; X264 (Amendment 13): gen+run rc 0, 7/7 data outputs EQUAL
+    READ 525.x264_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 15, in-band 2, specdiff 0/3 PASS
+    run0: rc 0 33839.95 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    specdiff NO-OUTPUT ['imagevalidate_frame_100.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_100.out imagevalidate_frame_100.out :: (specdiff tail omitted)
+    specdiff NO-OUTPUT ['imagevalidate_frame_155.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_155.out imagevalidate_frame_155.out :: (specdiff tail omitted)
+    specdiff NO-OUTPUT ['imagevalidate_frame_50.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_50.out imagevalidate_frame_50.out :: (specdiff tail omitted)
+    X264 capstone-lifetimes: data outputs 7/7 equal the reference; specdiff 3x NO-OUTPUT (expected)
+  TRAPTEST: stage B5T-525.x264_r begin
+  TRAPTEST: stage B5T-525.x264_r bound 43200s
+  TRAPTEST: stage B5T-525.x264_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209139] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.181825] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.965067] sublet: .dom loader registered
+  TRAPTEST: dmesg [   27.740960] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82460000
+  TRAPTEST: dmesg [ 2168.324036] sublet: x264_r_base.nat[112] enters 0x3ff7f00000, table 0x8249b000
+
+B5B2-SPECCHAIN C=ok B5T-525.x264_r=PASS done=yes
+#### c25
+events: 0 sublet-fault cause-25 event(s), de-duplicated by (timestamp, pid, pc); 0 kernel fault(s) cause 25
+C25LDC NONE: no cause-25 fault in the capture
+#### capture stage/SPEC lines
+TRAPTEST: stage B5T-525.x264_r begin
+@@QSTEP-BEGIN B5T-525.x264_r
+TRAPTEST: stage B5T-525.x264_r bound 43200s
+@@SPEC-STAGE 525.x264_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 gen capstone-lifetimes 0
+@@SPEC-END 0 gen capstone-lifetimes 0 rc=0 up0=34.14 up1=2161.49 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 run capstone-lifetimes 0
+@@SPEC-END 1 run capstone-lifetimes 0 rc=0 up0=2167.94 up1=36007.89 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 525.x264_r test
+@@QSTEP-END B5T-525.x264_r rc=0
+TRAPTEST: stage B5T-525.x264_r rc=0
+TRAPTEST: done
+
+### boot B5TL0-x264b
+#### chain.log
+LX 2026-11-26 19:54:49 START dry=0 board 3 image 0b483e78cdbcf6f3
+FREE board 3
+LX 2026-11-26 19:54:50 holder started
+LX 2026-11-26 19:54:50 BOOKED 1617
+[fpga-board] 3
+[fpga-lease] board 3: held, until 1795723389.2410789, purpose 'nv-readback.py pid 657715'
+[fpga-users] board 3 start 1
+[fpga-users] board 3 start 1 max 1 end 1; samples (count@seconds): 1@0s
+[fpga-lease] board 3: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-26 19:54:51 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3
+LX 2026-11-27 06:18:40 RUN END rc=0 [lx 14:18:40] end: TRAPTEST: done seen; 19799 chars
+[fpga-board] 3
+[fpga-lease] board 3: held, until 1795760819.4302824, purpose 'nv-readback.py pid 3279427'
+[fpga-users] board 3 start 1
+[fpga-users] board 3 start 1 max 1 end 1; samples (count@seconds): 1@0s
+[fpga-lease] board 3: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-27 06:18:41 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+LX 2026-11-27 06:18:41 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL0-525.x264_r=PASS done=yes
+UNBOOK 1617: 200
+LX 2026-11-27 06:18:41 UNBOOKED 1617
+LX 2026-11-27 06:18:41 END
+#### grade (v2, binding)
+capture: 19290 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         954648 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL0-525.x264_r PASS: QSTEP rc=0; read rc=1; X264 (Amendment 13): gen+run rc 0, 7/7 data outputs EQUAL
+    READ 525.x264_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 15, in-band 2, specdiff 0/3 PASS
+    run0: rc 0 33865.01 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    specdiff NO-OUTPUT ['imagevalidate_frame_100.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_100.out imagevalidate_frame_100.out :: (specdiff tail omitted)
+    specdiff NO-OUTPUT ['imagevalidate_frame_155.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_155.out imagevalidate_frame_155.out :: (specdiff tail omitted)
+    specdiff NO-OUTPUT ['imagevalidate_frame_50.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_50.out imagevalidate_frame_50.out :: (specdiff tail omitted)
+    X264 capstone-lifetimes: data outputs 7/7 equal the reference; specdiff 3x NO-OUTPUT (expected)
+  TRAPTEST: stage B5TL0-525.x264_r begin
+  TRAPTEST: stage B5TL0-525.x264_r bound 43200s
+  TRAPTEST: stage B5TL0-525.x264_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209161] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.181824] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.964531] sublet: .dom loader registered
+  TRAPTEST: dmesg [   27.379085] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x8245e000
+  TRAPTEST: dmesg [ 2167.052578] sublet: x264_r_base.nat[112] enters 0x3ff7f00000, table 0x82481000
+
+B5B2-SPECCHAIN C=ok B5TL0-525.x264_r=PASS done=yes
+#### c25
+events: 0 sublet-fault cause-25 event(s), de-duplicated by (timestamp, pid, pc); 0 kernel fault(s) cause 25
+C25LDC NONE: no cause-25 fault in the capture
+#### capture stage/SPEC lines
+TRAPTEST: stage B5TL0-525.x264_r begin
+@@QSTEP-BEGIN B5TL0-525.x264_r
+TRAPTEST: stage B5TL0-525.x264_r bound 43200s
+@@SPEC-STAGE 525.x264_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 gen capstone-lifetimes 0
+@@SPEC-END 0 gen capstone-lifetimes 0 rc=0 up0=33.76 up1=2160.27 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 run capstone-lifetimes 0
+@@SPEC-END 1 run capstone-lifetimes 0 rc=0 up0=2166.67 up1=36031.68 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 525.x264_r test
+@@QSTEP-END B5TL0-525.x264_r rc=0
+TRAPTEST: stage B5TL0-525.x264_r rc=0
+TRAPTEST: done
+
+### boot B5TL1-x264b
+#### chain.log
+LX 2026-11-27 06:18:41 START dry=0 board 3 image b325125819d4e8f0
+FREE board 3
+LX 2026-11-27 06:18:42 holder started
+LX 2026-11-27 06:18:42 BOOKED 1665
+[fpga-board] 3
+[fpga-lease] board 3: held, until 1795760821.1856647, purpose 'nv-readback.py pid 3279513'
+[fpga-users] board 3 start 1
+[fpga-users] board 3 start 1 max 1 end 1; samples (count@seconds): 1@0s
+[fpga-lease] board 3: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-27 06:18:43 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3
+LX 2026-11-27 16:42:42 RUN END rc=0 [lx 00:42:41] end: TRAPTEST: done seen; 19824 chars
+[fpga-board] 3
+[fpga-lease] board 3: held, until 1795798260.9132605, purpose 'nv-readback.py pid 3809003'
+[fpga-users] board 3 start 1
+[fpga-users] board 3 start 1 max 1 end 1; samples (count@seconds): 1@0s
+[fpga-lease] board 3: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-27 16:42:43 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+LX 2026-11-27 16:42:43 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=PASS done=yes
+UNBOOK 1665: 200
+LX 2026-11-27 16:42:43 UNBOOKED 1665
+LX 2026-11-27 16:42:43 END
+#### grade (v2, binding)
+capture: 19314 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         954648 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-525.x264_r PASS: QSTEP rc=0; read rc=1; X264 (Amendment 13): gen+run rc 0, 7/7 data outputs EQUAL
+    READ 525.x264_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 15, in-band 2, specdiff 0/3 PASS
+    run0: rc 0 33881.05 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    specdiff NO-OUTPUT ['imagevalidate_frame_100.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_100.out imagevalidate_frame_100.out :: (specdiff tail omitted)
+    specdiff NO-OUTPUT ['imagevalidate_frame_155.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_155.out imagevalidate_frame_155.out :: (specdiff tail omitted)
+    specdiff NO-OUTPUT ['imagevalidate_frame_50.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_50.out imagevalidate_frame_50.out :: (specdiff tail omitted)
+    X264 capstone-lifetimes: data outputs 7/7 equal the reference; specdiff 3x NO-OUTPUT (expected)
+  TRAPTEST: stage B5TL1-525.x264_r begin
+  TRAPTEST: stage B5TL1-525.x264_r bound 43200s
+  TRAPTEST: stage B5TL1-525.x264_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209127] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.182135] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.964764] sublet: .dom loader registered
+  TRAPTEST: dmesg [   27.388507] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82463000
+  TRAPTEST: dmesg [ 2168.061967] sublet: x264_r_base.nat[112] enters 0x3ff7e00000, table 0x82492000
+
+B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=PASS done=yes
+#### c25
+events: 0 sublet-fault cause-25 event(s), de-duplicated by (timestamp, pid, pc); 0 kernel fault(s) cause 25
+C25LDC NONE: no cause-25 fault in the capture
+#### capture stage/SPEC lines
+TRAPTEST: stage B5TL1-525.x264_r begin
+@@QSTEP-BEGIN B5TL1-525.x264_r
+TRAPTEST: stage B5TL1-525.x264_r bound 43200s
+@@SPEC-STAGE 525.x264_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 gen capstone-lifetimes 0
+@@SPEC-END 0 gen capstone-lifetimes 0 rc=0 up0=33.81 up1=2161.21 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 run capstone-lifetimes 0
+@@SPEC-END 1 run capstone-lifetimes 0 rc=0 up0=2167.68 up1=36048.73 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 525.x264_r test
+@@QSTEP-END B5TL1-525.x264_r rc=0
+TRAPTEST: stage B5TL1-525.x264_r rc=0
+TRAPTEST: done

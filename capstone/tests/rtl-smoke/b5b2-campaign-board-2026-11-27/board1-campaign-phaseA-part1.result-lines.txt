@@ -1,0 +1,246 @@
+# board 1: b5b2-campaign Phase A, first session (S block; the step-05 flash power-on timeout)
+# cut at 2026-11-27T20:46:14Z; session camp2-b1-20261126T1544
+
+## orchestrator log
+2026-11-26T15:44:39Z armed dry=0 board 1 plan <path>/b5b2linux/camp-b1.plan; waits for pid 2897945 (start 657647116)
+2026-11-26T20:05:41Z the previous session (pid 2897945) ended
+2026-11-26T20:05:41Z gates PASS: PREREG fec8d4357796, 12 sums; both seals resolve; preflight 6daffca3824c; v2 b976d288, v1 4fa95eaf; plan sha16 d84532ac46260a2c
+2026-11-26T20:05:41Z 01 RESIDENT 14f2ef81a: 2026-11-26 20:05:21 in <path>/b5b2linux/spb1e-20261126T0550-SP-B5TL1-x264b/chain.log; no flash
+2026-11-26T20:05:41Z 02 CS-B5TL1-g2i: PREFLIGHT exit 0 GO at 20:05:41Z
+2026-11-26T20:05:41Z IDLE: board free after 0 s
+2026-11-26T20:11:03Z 02 CS-B5TL1-g2i: 02 RUN END rc=0 [lx 04:11:01] end: TRAPTEST: done seen; 11340 chars 02 READBACK after = caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r 03 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS done=yes  | v1: B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS done=yes
+2026-11-26T20:11:03Z 02 CS-B5TL1-g2i: host clock (continue, done seen): 04:09:14 04:10:41 | c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T20:11:03Z 03 CS-B5TL1-g3: PREFLIGHT exit 1 BLOCKED at 20:11:03Z by C10's 20 MB working budget only: C10 BLOCK at 21662216 B (21.66 MB), proceeded by runtime's ruling; first boot of this size on 14f2ef81a, the size proof
+2026-11-26T20:11:03Z IDLE: board free after 0 s
+2026-11-26T20:16:14Z 03 CS-B5TL1-g3: 12 RUN END rc=0 [lx 04:16:11] end: TRAPTEST: done seen; 10771 chars 13 READBACK after = caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r 14 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes  | v1: B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+2026-11-26T20:16:14Z 03 CS-B5TL1-g3: host clock (continue, done seen): 04:14:39 04:15:51 | c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T20:16:14Z 03 CS-B5TL1-g3: SIZE PROOF on 14f2ef81a: 21,662,216 B loaded and reached /init
+2026-11-26T20:16:14Z 04 CS-B5TL1-g4mk: PREFLIGHT exit 0 GO at 20:16:14Z
+2026-11-26T20:16:19Z IDLE: board free after 5 s
+2026-11-26T20:28:51Z 04 CS-B5TL1-g4mk: 51 RUN END rc=0 [lx 04:28:50] end: TRAPTEST: done seen; 75081 chars 51 READBACK after = caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r 51 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes  | v1: B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes
+2026-11-26T20:28:51Z 04 CS-B5TL1-g4mk: host clock (continue, done seen): 04:19:42 04:28:30 | c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T20:30:21Z 05 FLASH b42c8c644 rc=1: FLASH END caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoc STOP: flash rc=1 RESULT FAILED: b42c8c644 not read back resident on board 1 
+2026-11-26T20:30:21Z STOP: the flash to b42c8c644 did not read it back; nothing more runs
+
+## .done
+STOP rc=1 2026-11-26T20:30:21Z STOP: the flash to b42c8c644 did not read it back; nothing more runs
+
+### boot 02-CS-B5TL1-g2i
+#### chain.log
+LX 2026-11-26 20:05:41 START dry=0 board 1 image d4f6eca29a5cf00c
+LX 2026-11-26 20:05:41 PREFLIGHT exit 0 GO at 20:05:41Z
+FREE board 1
+LX 2026-11-26 20:05:42 holder started
+LX 2026-11-26 20:05:42 BOOKED 1619
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795724041.337582, purpose 'nv-readback.py pid 695713'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit' sha256 NOT EXPOSED
+LX 2026-11-26 20:05:43 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit rc=3
+LX 2026-11-26 20:11:02 RUN END rc=0 [lx 04:11:01] end: TRAPTEST: done seen; 11340 chars
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795724361.6436827, purpose 'nv-readback.py pid 705545'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit' sha256 NOT EXPOSED
+LX 2026-11-26 20:11:02 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+LX 2026-11-26 20:11:03 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS done=yes
+UNBOOK 1619: 200
+LX 2026-11-26 20:11:03 UNBOOKED 1619
+LX 2026-11-26 20:11:03 END
+#### grade (v2, binding)
+capture: 11144 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         956400 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-538.imagick_r PASS: QSTEP rc=0; read rc=0
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 8, in-band 4, specdiff 1/1 PASS
+    run0: rc 0 11.21 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-538.imagick_r begin
+  TRAPTEST: stage B5TL1-538.imagick_r bound 3600s
+  TRAPTEST: stage B5TL1-538.imagick_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197101] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144950] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.889103] sublet: .dom loader registered
+  TRAPTEST: dmesg [   24.982621] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81c5e000
+  TRAPTEST: dmesg [   31.634463] sublet: imagick_r_base.[61] enters 0x3ff7c00000, table 0x81c98000
+
+B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS done=yes
+#### grade v1 (beside): B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS done=yes
+#### c25
+events: 0 sublet-fault cause-25 event(s), de-duplicated by (timestamp, pid, pc); 0 kernel fault(s) cause 25
+C25LDC NONE: no cause-25 fault in the capture
+#### capture stage/SPEC lines
+TRAPTEST: stage B5TL1-538.imagick_r begin
+@@QSTEP-BEGIN B5TL1-538.imagick_r
+TRAPTEST: stage B5TL1-538.imagick_r bound 3600s
+@@SPEC-STAGE 538.imagick_r test arms=capstone-lifetimes commands=1 validations=1
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=31.28 up1=42.49 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 val capstone-lifetimes 0
+@@SPEC-END 1 val capstone-lifetimes 0 rc=0 up0=48.55 up1=53.98 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 538.imagick_r test
+@@QSTEP-END B5TL1-538.imagick_r rc=0
+TRAPTEST: stage B5TL1-538.imagick_r rc=0
+TRAPTEST: done
+
+### boot 03-CS-B5TL1-g3
+#### chain.log
+LX 2026-11-26 20:11:03 START dry=0 board 1 image 22289beb47fab482
+LX 2026-11-26 20:11:03 PREFLIGHT exit 1 BLOCKED at 20:11:03Z by C10's 20 MB working budget only: C10 BLOCK at 21662216 B (21.66 MB), proceeded by runtime's ruling; first boot of this size on 14f2ef81a, the size proof
+FREE board 1
+LX 2026-11-26 20:11:04 holder started
+LX 2026-11-26 20:11:04 BOOKED 1620
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795724363.5571594, purpose 'nv-readback.py pid 705861'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit' sha256 NOT EXPOSED
+LX 2026-11-26 20:11:04 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit rc=3
+LX 2026-11-26 20:16:12 RUN END rc=0 [lx 04:16:11] end: TRAPTEST: done seen; 10771 chars
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795724671.7193873, purpose 'nv-readback.py pid 725172'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit' sha256 NOT EXPOSED
+LX 2026-11-26 20:16:13 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+LX 2026-11-26 20:16:14 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+UNBOOK 1620: 200
+LX 2026-11-26 20:16:14 UNBOOKED 1620
+LX 2026-11-26 20:16:14 END
+#### grade (v2, binding)
+capture: 10586 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955760 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 5.49 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-502.gcc_r begin
+  TRAPTEST: stage B5TL1-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.196931] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144455] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.887895] sublet: .dom loader registered
+  TRAPTEST: dmesg [   35.556521] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82460000
+  TRAPTEST: dmesg [   42.886173] sublet: cpugcc_r_base.n[57] enters 0x3ff7000000, table 0x82499000
+
+B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+#### grade v1 (beside): B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+#### c25
+events: 0 sublet-fault cause-25 event(s), de-duplicated by (timestamp, pid, pc); 0 kernel fault(s) cause 25
+C25LDC NONE: no cause-25 fault in the capture
+#### capture stage/SPEC lines
+TRAPTEST: stage B5TL1-502.gcc_r begin
+@@QSTEP-BEGIN B5TL1-502.gcc_r
+@@SPEC-STAGE 502.gcc_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=42.53 up1=48.02 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 502.gcc_r test
+@@QSTEP-END B5TL1-502.gcc_r rc=0
+TRAPTEST: stage B5TL1-502.gcc_r rc=0
+TRAPTEST: done
+
+### boot 04-CS-B5TL1-g4mk
+#### chain.log
+LX 2026-11-26 20:16:19 START dry=0 board 1 image 323afc81e43818b1
+LX 2026-11-26 20:16:19 PREFLIGHT exit 0 GO at 20:16:14Z
+FREE board 1
+LX 2026-11-26 20:16:20 holder started
+LX 2026-11-26 20:16:20 BOOKED 1622
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795724679.5956926, purpose 'nv-readback.py pid 725932'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit' sha256 NOT EXPOSED
+LX 2026-11-26 20:16:21 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit rc=3
+LX 2026-11-26 20:28:51 RUN END rc=0 [lx 04:28:50] end: TRAPTEST: done seen; 75081 chars
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795725429.9642606, purpose 'nv-readback.py pid 850797'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit' sha256 NOT EXPOSED
+LX 2026-11-26 20:28:51 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+LX 2026-11-26 20:28:51 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes
+UNBOOK 1622: 200
+LX 2026-11-26 20:28:51 UNBOOKED 1622
+LX 2026-11-26 20:28:51 END
+#### grade (v2, binding)
+capture: 74137 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         956176 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+INBAND B5TL1-500.perlbench_r: 1 interleaved line(s) removed
+S B5TL1-500.perlbench_r PASS: QSTEP rc=0; read rc=0
+    READ 500.perlbench_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 557, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 279.57 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-500.perlbench_r begin
+  TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.196997] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.144570] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.887998] sublet: .dom loader registered
+  TRAPTEST: dmesg [   36.223101] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81cad000
+  TRAPTEST: dmesg [   51.603249] sublet: perlbench_r_bas[59] enters 0x3ff7c00000, table 0x81cfe000
+
+B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes
+#### grade v1 (beside): B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes
+#### c25
+events: 0 sublet-fault cause-25 event(s), de-duplicated by (timestamp, pid, pc); 0 kernel fault(s) cause 25
+C25LDC NONE: no cause-25 fault in the capture
+#### capture stage/SPEC lines
+TRAPTEST: stage B5TL1-500.perlbench_r begin
+@@QSTEP-BEGIN B5TL1-500.perlbench_r
+@@SPEC-STAGE 500.perlbench_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=51.25 up1=330.82 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 500.perlbench_r test
+@@QSTEP-END B5TL1-500.perlbench_r rc=0
+TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+TRAPTEST: done
+
+### boot 05-flash-b42c8c644
+#### chain.log
+FS 2026-11-26 20:28:51 START dry=0 board 1 seal b42c8c644
+FS 2026-11-26 20:28:51 seal b42c8c644 sha 6a09f34d50842e01 (local sha256 equal to the verdict's); fallback 14f2ef81a sha df9de4d49b21b475934e3a90ee81722ece98f6b1207c893bbc9a475e4c928be9 (local, equal to its verdict's)
+FS 2026-11-26 20:28:52 holder started FPGA_BOARD=1
+FS 2026-11-26 20:28:52 BOOKED 1624
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795725431.7115846, purpose 'nv-readback.py pid 850901'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit' sha256 NOT EXPOSED
+NVRB MISMATCH
+FS 2026-11-26 20:28:53 FLASH BEGIN caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit (resident readback rc=1)
+[flash 04:28:53] local sha256 matches the synth lane's sealed hash
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795725432.0209186, purpose 'flash-bitstream.py pid 850921'
+[flash 04:28:53] resident before: 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit'
+[flash 04:28:53] not in the server store -- uploading via API
+packet queue is empty, aborting
+[flash 04:29:49] upload HTTP 201
+[flash 04:29:50] present in the server store
+[flash 04:30:20] powered off
+[fpga-lease] board 1: released (HTTP 200)
+Traceback (most recent call last):
+  File "<path>/wt-spec/capstone/tests/rtl-smoke/drivers/flash-bitstream.py", line 82, in <module>
+    rc = main(); print(f"rc={rc}", flush=True); os._exit(rc)
+         ^^^^^^
+  File "<path>/wt-spec/capstone/tests/rtl-smoke/drivers/flash-bitstream.py", line 63, in main
+    c.power(True); time.sleep(15.0)
+    ^^^^^^^^^^^^^
+  File "<path>/wt-spec/capstone/tests/rtl-smoke/fpga_driver/fpga_console.py", line 971, in power
+    self.wait_state(C.POWER_STATE_EVENT, want, timeout, since=mark)
+  File "<path>/wt-spec/capstone/tests/rtl-smoke/fpga_driver/fpga_console.py", line 611, in wait_state
+    raise ActionTimeout(
+fpga_driver.fpga_console.ActionTimeout: timed out waiting for power_state=='on' (last={'state': 'off', 'server_epoch': 1794399223555})
+FS 2026-11-26 20:30:21 FLASH END caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=1
+FS 2026-11-26 20:30:21 STOP: flash rc=1
+UNBOOK 1624: 200
+FS 2026-11-26 20:30:21 UNBOOKED 1624
+FS 2026-11-26 20:30:21 RESULT FAILED: b42c8c644 not read back resident on board 1
+FS 2026-11-26 20:30:21 END

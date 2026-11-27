@@ -1,0 +1,88 @@
+# board 1: Phase A resumed (the flash retry read back; CF-g2i failed start on a dead socket, the rerun busy race)
+# cut at 2026-11-27T20:46:14Z; session camp6r1-b1-20261126T2055
+
+## orchestrator log
+2026-11-26T20:55:53Z armed dry=0 board 1 plan <path>/b5b2linux/camp-b1-r1.plan; waits for <path>/b5b2linux/camp2-b1-20261126T1544.done
+2026-11-26T20:55:53Z the previous session ended: 'STOP rc=1 2026-11-26T20:30:21Z STOP: the flash to b42c8c644 did not read it back; nothing more runs'
+2026-11-26T20:55:53Z the previous session (pid 1) ended
+2026-11-26T20:55:53Z gates PASS: PREREG fec8d4357796, 12 sums; both seals resolve; preflight 6daffca3824c; v2 b976d288, v1 4fa95eaf; plan sha16 75b427d9bf41a016
+2026-11-26T20:55:53Z size proof on 14f2ef81a carried in: camp2-b1-20261126T1544-03-CS-B5TL1-g3, 20:16:14Z
+2026-11-26T20:55:53Z 01 RESIDENT 14f2ef81a: 2026-11-26 20:28:51 in <path>/b5b2linux/camp2-b1-20261126T1544-04-CS-B5TL1-g4mk/chain.log; no flash
+2026-11-26T20:58:07Z 02 FLASH b42c8c644 rc=0: FLASH END caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoc READBACK after flash = caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic3 RESULT b42c8c644 RESIDENT on board 1 (caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb6 
+2026-11-26T20:58:07Z 03 CF-B5TL1-g2i: PREFLIGHT exit 0 GO at 20:58:07Z
+2026-11-26T20:58:07Z IDLE: board free after 0 s
+2026-11-26T21:09:56Z 03 CF-B5TL1-g2i: 56 STOP: board 1 busy  | v1: 
+2026-11-26T21:09:56Z 03 CF-B5TL1-g2i: host clock (continue, done seen): none| c25: 
+2026-11-26T21:09:56Z STOP: 03 CF-B5TL1-g2i: a pre-run STOP (STOP: board 1 busy); nothing more runs
+
+## .done
+STOP rc=1 at 2026-11-26T21:09:56Z | last: 2026-11-26T21:09:56Z STOP: 03 CF-B5TL1-g2i: a pre-run STOP (STOP: board 1 busy); nothing more runs
+
+### boot 02-flash-b42c8c644
+#### chain.log
+FS 2026-11-26 20:55:53 START dry=0 board 1 seal b42c8c644
+FS 2026-11-26 20:55:53 seal b42c8c644 sha 6a09f34d50842e01 (local sha256 equal to the verdict's); fallback 14f2ef81a sha df9de4d49b21b475934e3a90ee81722ece98f6b1207c893bbc9a475e4c928be9 (local, equal to its verdict's)
+FS 2026-11-26 20:55:54 holder started FPGA_BOARD=1
+FS 2026-11-26 20:55:54 BOOKED 1627
+FS 2026-11-26 20:55:56 power state before the flash: PWR state 'off' api None
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795727055.1028624, purpose 'nv-readback.py pid 1280079'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit' sha256 NOT EXPOSED
+NVRB MISMATCH
+FS 2026-11-26 20:55:56 FLASH BEGIN caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit (resident readback rc=1)
+[flash 04:55:56] local sha256 matches the synth lane's sealed hash
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795727055.4171975, purpose 'flash-bitstream.py pid 1280144'
+[flash 04:55:56] resident before: 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77-spatial_14f2ef81a.bit'
+[flash 04:55:57] present in the server store
+[flash 04:56:12] flashing caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit (~90 s)
+[flash 04:57:43] MANDATORY power cycle: off 8 s, on 15 s
+[flash 04:58:06] resident AFTER power cycle: 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit'
+[flash 04:58:06] powered off
+[flash 04:58:06] unlocked
+[fpga-lease] board 1: released (HTTP 200)
+rc=0
+FS 2026-11-26 20:58:06 FLASH END caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=0
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795727185.1499164, purpose 'nv-readback.py pid 1313015'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+FS 2026-11-26 20:58:07 READBACK after flash = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3
+FS 2026-11-26 20:58:07 RESULT b42c8c644 RESIDENT on board 1 (caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit read back); fallback 14f2ef81a registered locally, sha checked
+UNBOOK 1627: 200
+FS 2026-11-26 20:58:07 UNBOOKED 1627
+FS 2026-11-26 20:58:07 END
+
+### boot 03-CF-B5TL1-g2i
+#### chain.log
+LX 2026-11-26 21:09:56 START dry=0 board 1 image a7056375868e93af
+LX 2026-11-26 21:09:56 PREFLIGHT exit 0 GO at 20:58:07Z
+BUSY board 1: pid 1313099 (python3 <path>/csmintkit/run_sup_bare-hold.py <path>/) has FPGA_BOARD=1
+LX 2026-11-26 21:09:56 STOP: board 1 busy
+LX 2026-11-26 21:09:56 END
+#### rt.log
+2026-11-26T20:59:51Z FAILED START camp6r1-b1-20261126T2055-03-CF-B5TL1-g2i: no OpenSBI banner, no UART byte; RERUN of a boot that failed to start (once; kept as camp6r1-b1-20261126T2055-03-CF-B5TL1-g2i.failed-start-1). First attempt: 2026-11-26 20:58:08 BOOKED 1628 2026-11-26 20:59:51 RUN END rc=1  2026-11-26 20:59:51 UNBOOKED 1628 
+2026-11-26T21:09:56Z the RERUN could not start (a pre-run STOP: 2026-11-26 21:09:56 STOP: board 1 busy); NO READING (infra); no further try
+
+### boot 03-CF-B5TL1-g2i.failed-start-1
+#### chain.log
+LX 2026-11-26 20:58:07 START dry=0 board 1 image a7056375868e93af
+LX 2026-11-26 20:58:07 PREFLIGHT exit 0 GO at 20:58:07Z
+FREE board 1
+LX 2026-11-26 20:58:08 holder started
+LX 2026-11-26 20:58:08 BOOKED 1628
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795727187.866532, purpose 'nv-readback.py pid 1313112'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-26 20:58:10 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3
+LX 2026-11-26 20:59:51 RUN END rc=1 
+[fpga-board] 1
+[fpga-lease] board 1: held, until 1795727289.9187608, purpose 'nv-readback.py pid 1338371'
+[fpga-lease] board 1: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-26 20:59:51 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+UNBOOK 1628: 200
+LX 2026-11-26 20:59:51 UNBOOKED 1628
+LX 2026-11-26 20:59:51 END

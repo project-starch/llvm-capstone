@@ -1,0 +1,19 @@
+## incident: a dry run's busy holder named board 2 while nested's hbA ran there (2026-11-26, board lane)
+The board lane dry-ran orch-lsrh.sh with DRY=1. run-one-e.sh's DRY mode, inherited by run-one-f.sh, stubs the book, readback,
+runner and unbook calls. It does NOT stub the busy holder: run_sup_bare-hold.py started with FPGA_BOARD=2, the real board,
+where the nested lane's M-16 hbA boot was running (P1 d83d3a633; its lease started 16:17:55 local).
+Holder windows on board 2, from the dry runs' own chain.log (holder started .. END), UTC (+8 h for local):
+  08:33:45-08:33:46, 08:43:51, 08:44:52-08:45:16, 08:45:18-08:45:42, 08:45:44-08:46:08.
+  Between 08:33:46 and 08:43:51 the dry run's rerun wrapper only polled board-busy.py 2, which is a read.
+What the holder can affect: board-busy.py reads it as "board 2 in use". It is a local process and is not a hub lease.
+What hbA's own logs show (out-nat-p1hb-m16hb-b2/hbA):
+  - driver.log: one console connection for the whole run (one "connecting", one "connected"), with no disconnect or
+    reconnect; 16 lease_state events, all with holder board-lane, purpose 'run_baked_rungs_fpga.py pid 3168168', queue [],
+    offer None. No other holder or claimant appears.
+  - watchdog.log near the windows (lease+950 s, +1556 s, +1617..1693 s): QUIET lines only, each silence begun before its
+    window (around 900 s and around 1410 s); no gap or restart begins inside a window.
+  - nat-run3p.sh calls board-busy.py only before its flash (done at 16:14-16:16). The kit's driver
+    (run_baked_rungs_fpga.py, fpga_console.py) never consults board-busy.py or the holder processes.
+So no contact with hbA is found. The reading's standing is the nested lane's to decide.
+Fix: run-one-f.sh holds DRY_HOLD_BOARD (default 9) in DRY, verified by a dry run whose live holder read FPGA_BOARD=9.
+run-one-e.sh is unchanged, because running orchestrators use it; any further DRY run uses the -f copy only.

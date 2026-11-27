@@ -1,0 +1,243 @@
+# board 2, b42c8c644: the S bracket resumed (orch-lsrh2.sh): S-LSRH, S-LSHOFF2
+# cut at 2026-11-27T20:46:14Z; session lsrh2-b2-20261126T1517
+
+## orchestrator log
+2026-11-26T15:17:42Z armed dry=0
+2026-11-26T15:17:42Z resuming after lsrh-b2-20261126T0848: S-LSHOFF read b42c8c644 back after its run (2026-11-26 15:08:03)
+2026-11-26T15:17:42Z gates PASS: seal b42c8c644 sha 6a09f34d50842e01; preflight 6daffca3824c; v2 b976d288, v1 4fa95eaf
+2026-11-26T15:17:42Z S-LSRH: PREFLIGHT exit 1 BLOCKED at 15:17:42Z by C10's 20 MB working budget only: C10 BLOCK at 25856520 B (25.86 MB), proceeded by runtime's ruling; size proven on this seal by the S bracket's first boot (S-LSHOFF, fb1c99ffd26a26c9)
+2026-11-26T15:17:42Z IDLE: board free after 0 s
+2026-11-26T15:45:29Z S-LSRH: 42 PREFLIGHT exit 1 BLOCKED at 15:17:42Z by C10's 20 MB working budget only: C10 BLOCK at 25856520 B (25.86 MB), proceeded by runtime's ruling; size proven on this seal by the S br 28 RUN END rc=0 [lx 23:45:27] end: TRAPTEST: done seen; 81647 chars 28 READBACK after = caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r 28 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS B5TL1-538.imagick_r=PASS B5TL1-500.perlbench_r=PASS B5TL1-544.nab_r=PASS done=yes  | v1: B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS B5TL1-538.imagick_r=PASS B5TL1-500.perlbench_r=PASS B5TL1-544.nab_r=PASS done=yes
+2026-11-26T15:45:29Z S-LSRH: in-band: INBAND B5TL1-500.perlbench_r: 1 interleaved line(s) removed  sublet-fault substrings: 0
+2026-11-26T15:45:29Z S-LSHOFF2: PREFLIGHT exit 1 BLOCKED at 15:45:29Z by C10's 20 MB working budget only: C10 BLOCK at 25856520 B (25.86 MB), proceeded by runtime's ruling; size proven on this seal by the S bracket's first boot (S-LSHOFF, fb1c99ffd26a26c9)
+2026-11-26T15:45:34Z IDLE: board free after 5 s
+2026-11-26T16:13:17Z S-LSHOFF2: 34 PREFLIGHT exit 1 BLOCKED at 15:45:29Z by C10's 20 MB working budget only: C10 BLOCK at 25856520 B (25.86 MB), proceeded by runtime's ruling; size proven on this seal by the S br 16 RUN END rc=0 [lx 00:13:15] end: TRAPTEST: done seen; 81647 chars 16 READBACK after = caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r 17 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS B5TL1-538.imagick_r=PASS B5TL1-500.perlbench_r=PASS B5TL1-544.nab_r=PASS done=yes  | v1: B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS B5TL1-538.imagick_r=PASS B5TL1-500.perlbench_r=PASS B5TL1-544.nab_r=PASS done=yes
+2026-11-26T16:13:17Z S-LSHOFF2: in-band: INBAND B5TL1-500.perlbench_r: 1 interleaved line(s) removed  sublet-fault substrings: 0
+2026-11-26T16:13:17Z S BRACKET END: three boots read (S-LSHOFF in lsrh-b2-20261126T0848; S-LSRH, S-LSHOFF2 here); X not booked (Amendment 3: the compiler lane's S verdict first)
+
+## .done
+DONE rc=0 2026-11-26T16:13:17Z S BRACKET END: three boots read (S-LSHOFF in lsrh-b2-20261126T0848; S-LSRH, S-LSHOFF2 here); X not booked (Amendment 3: the compiler lane's S verdict first)
+
+### boot S-LSHOFF2
+#### chain.log
+LX 2026-11-26 15:45:34 START dry=0 board 2 image fb1c99ffd26a26c9
+LX 2026-11-26 15:45:34 PREFLIGHT exit 1 BLOCKED at 15:45:29Z by C10's 20 MB working budget only: C10 BLOCK at 25856520 B (25.86 MB), proceeded by runtime's ruling; size proven on this seal by the S bracket's first boot (S-LSHOFF, fb1c99ffd26a26c9)
+FREE board 2
+LX 2026-11-26 15:45:35 holder started
+LX 2026-11-26 15:45:35 BOOKED 1601
+[fpga-board] 2
+[fpga-lease] board 2: held, until 1795708434.7069962, purpose 'nv-readback.py pid 217154'
+[fpga-users] board 2 start 2
+[fpga-users] board 2 start 2 max 2 end 2; samples (count@seconds): 2@0s
+[fpga-lease] board 2: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-26 15:45:35 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3
+LX 2026-11-26 16:13:16 RUN END rc=0 [lx 00:13:15] end: TRAPTEST: done seen; 81647 chars
+[fpga-board] 2
+[fpga-lease] board 2: held, until 1795710095.5938482, purpose 'nv-readback.py pid 271214'
+[fpga-users] board 2 start 2
+[fpga-users] board 2 start 2 max 2 end 2; samples (count@seconds): 2@0s
+[fpga-lease] board 2: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-26 16:13:16 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+LX 2026-11-26 16:13:17 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS B5TL1-538.imagick_r=PASS B5TL1-500.perlbench_r=PASS B5TL1-544.nab_r=PASS done=yes
+UNBOOK 1601: 200
+LX 2026-11-26 16:13:17 UNBOOKED 1601
+LX 2026-11-26 16:13:17 END
+#### grade (v2, binding)
+capture: 80581 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955720 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+INBAND B5TL1-500.perlbench_r: 1 interleaved line(s) removed
+S B5TL1-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 5.55 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5TL1-538.imagick_r PASS: QSTEP rc=0; read rc=0
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 8, in-band 4, specdiff 1/1 PASS
+    run0: rc 0 11.22 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5TL1-500.perlbench_r PASS: QSTEP rc=0; read rc=0
+    READ 500.perlbench_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 557, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 278.29 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5TL1-544.nab_r PASS: QSTEP rc=0; read rc=0
+    READ 544.nab_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 727.52 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-502.gcc_r begin
+  TRAPTEST: stage B5TL1-502.gcc_r bound 3600s
+  TRAPTEST: stage B5TL1-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197183] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.143960] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.886742] sublet: .dom loader registered
+  TRAPTEST: dmesg [   55.050943] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x828af000
+  TRAPTEST: dmesg [   62.954525] sublet: cpugcc_r_base.n[60] enters 0x3ff7000000, table 0x82992000
+  TRAPTEST: stage B5TL1-538.imagick_r begin
+  TRAPTEST: stage B5TL1-538.imagick_r bound 3600s
+  TRAPTEST: stage B5TL1-538.imagick_r rc=0
+  TRAPTEST: dmesg [   84.823338] sublet: imagick_r_base.[131] enters 0x3ff7c00000, table 0x828ab000
+  TRAPTEST: stage B5TL1-500.perlbench_r begin
+  TRAPTEST: stage B5TL1-500.perlbench_r bound 3600s
+  TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+  TRAPTEST: dmesg [  142.191460] sublet: perlbench_r_bas[244] enters 0x3ff7c00000, table 0x8297a000
+  TRAPTEST: stage B5TL1-544.nab_r begin
+  TRAPTEST: stage B5TL1-544.nab_r bound 3600s
+  TRAPTEST: stage B5TL1-544.nab_r rc=0
+  TRAPTEST: dmesg [  608.851184] sublet: nab_r_base.nati[867] enters 0x3ff7e00000, table 0x82987000
+
+B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS B5TL1-538.imagick_r=PASS B5TL1-500.perlbench_r=PASS B5TL1-544.nab_r=PASS done=yes
+#### grade v1 (beside): B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS B5TL1-538.imagick_r=PASS B5TL1-500.perlbench_r=PASS B5TL1-544.nab_r=PASS done=yes
+#### capture stage/SPEC lines
+TRAPTEST: stage B5TL1-502.gcc_r begin
+@@QSTEP-BEGIN B5TL1-502.gcc_r
+TRAPTEST: stage B5TL1-502.gcc_r bound 3600s
+@@SPEC-STAGE 502.gcc_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=62.60 up1=68.15 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 502.gcc_r test
+@@QSTEP-END B5TL1-502.gcc_r rc=0
+TRAPTEST: stage B5TL1-502.gcc_r rc=0
+TRAPTEST: stage B5TL1-538.imagick_r begin
+@@QSTEP-BEGIN B5TL1-538.imagick_r
+TRAPTEST: stage B5TL1-538.imagick_r bound 3600s
+@@SPEC-STAGE 538.imagick_r test arms=capstone-lifetimes commands=1 validations=1
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=84.47 up1=95.69 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 val capstone-lifetimes 0
+@@SPEC-END 1 val capstone-lifetimes 0 rc=0 up0=101.66 up1=107.08 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 538.imagick_r test
+@@QSTEP-END B5TL1-538.imagick_r rc=0
+TRAPTEST: stage B5TL1-538.imagick_r rc=0
+TRAPTEST: stage B5TL1-500.perlbench_r begin
+@@QSTEP-BEGIN B5TL1-500.perlbench_r
+TRAPTEST: stage B5TL1-500.perlbench_r bound 3600s
+@@SPEC-STAGE 500.perlbench_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=141.84 up1=420.13 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 500.perlbench_r test
+@@QSTEP-END B5TL1-500.perlbench_r rc=0
+TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+TRAPTEST: stage B5TL1-544.nab_r begin
+@@QSTEP-BEGIN B5TL1-544.nab_r
+TRAPTEST: stage B5TL1-544.nab_r bound 3600s
+@@SPEC-STAGE 544.nab_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=608.51 up1=1336.03 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 544.nab_r test
+@@QSTEP-END B5TL1-544.nab_r rc=0
+TRAPTEST: stage B5TL1-544.nab_r rc=0
+TRAPTEST: done
+
+### boot S-LSRH
+#### chain.log
+LX 2026-11-26 15:17:42 START dry=0 board 2 image 4bc5be53046df016
+LX 2026-11-26 15:17:42 PREFLIGHT exit 1 BLOCKED at 15:17:42Z by C10's 20 MB working budget only: C10 BLOCK at 25856520 B (25.86 MB), proceeded by runtime's ruling; size proven on this seal by the S bracket's first boot (S-LSHOFF, fb1c99ffd26a26c9)
+FREE board 2
+LX 2026-11-26 15:17:43 holder started
+LX 2026-11-26 15:17:43 BOOKED 1600
+[fpga-board] 2
+[fpga-lease] board 2: held, until 1795706762.432714, purpose 'nv-readback.py pid 147648'
+[fpga-users] board 2 start 2
+[fpga-users] board 2 start 2 max 2 end 2; samples (count@seconds): 2@0s
+[fpga-lease] board 2: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-26 15:17:43 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3
+LX 2026-11-26 15:45:28 RUN END rc=0 [lx 23:45:27] end: TRAPTEST: done seen; 81647 chars
+[fpga-board] 2
+[fpga-lease] board 2: held, until 1795708427.0942247, purpose 'nv-readback.py pid 216227'
+[fpga-users] board 2 start 2
+[fpga-users] board 2 start 2 max 2 end 2; samples (count@seconds): 2@0s
+[fpga-lease] board 2: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-26 15:45:28 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+LX 2026-11-26 15:45:28 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS B5TL1-538.imagick_r=PASS B5TL1-500.perlbench_r=PASS B5TL1-544.nab_r=PASS done=yes
+UNBOOK 1600: 200
+LX 2026-11-26 15:45:28 UNBOOKED 1600
+LX 2026-11-26 15:45:28 END
+#### grade (v2, binding)
+capture: 80581 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955720 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+INBAND B5TL1-500.perlbench_r: 1 interleaved line(s) removed
+S B5TL1-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 5.56 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5TL1-538.imagick_r PASS: QSTEP rc=0; read rc=0
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 8, in-band 4, specdiff 1/1 PASS
+    run0: rc 0 11.17 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5TL1-500.perlbench_r PASS: QSTEP rc=0; read rc=0
+    READ 500.perlbench_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 557, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 282.28 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5TL1-544.nab_r PASS: QSTEP rc=0; read rc=0
+    READ 544.nab_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 729.71 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-502.gcc_r begin
+  TRAPTEST: stage B5TL1-502.gcc_r bound 3600s
+  TRAPTEST: stage B5TL1-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197179] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.143985] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.886780] sublet: .dom loader registered
+  TRAPTEST: dmesg [   55.102707] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x828ae000
+  TRAPTEST: dmesg [   63.043337] sublet: cpugcc_r_base.n[60] enters 0x3ff7000000, table 0x82992000
+  TRAPTEST: stage B5TL1-538.imagick_r begin
+  TRAPTEST: stage B5TL1-538.imagick_r bound 3600s
+  TRAPTEST: stage B5TL1-538.imagick_r rc=0
+  TRAPTEST: dmesg [   84.951815] sublet: imagick_r_base.[131] enters 0x3ff7c00000, table 0x8298c000
+  TRAPTEST: stage B5TL1-500.perlbench_r begin
+  TRAPTEST: stage B5TL1-500.perlbench_r bound 3600s
+  TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+  TRAPTEST: dmesg [  142.046678] sublet: perlbench_r_bas[244] enters 0x3ff7c00000, table 0x828b7000
+  TRAPTEST: stage B5TL1-544.nab_r begin
+  TRAPTEST: stage B5TL1-544.nab_r bound 3600s
+  TRAPTEST: stage B5TL1-544.nab_r rc=0
+  TRAPTEST: dmesg [  612.657419] sublet: nab_r_base.nati[867] enters 0x3ff7e00000, table 0x8298d000
+
+B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS B5TL1-538.imagick_r=PASS B5TL1-500.perlbench_r=PASS B5TL1-544.nab_r=PASS done=yes
+#### grade v1 (beside): B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS B5TL1-538.imagick_r=PASS B5TL1-500.perlbench_r=PASS B5TL1-544.nab_r=PASS done=yes
+#### capture stage/SPEC lines
+TRAPTEST: stage B5TL1-502.gcc_r begin
+@@QSTEP-BEGIN B5TL1-502.gcc_r
+TRAPTEST: stage B5TL1-502.gcc_r bound 3600s
+@@SPEC-STAGE 502.gcc_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=62.69 up1=68.25 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 502.gcc_r test
+@@QSTEP-END B5TL1-502.gcc_r rc=0
+TRAPTEST: stage B5TL1-502.gcc_r rc=0
+TRAPTEST: stage B5TL1-538.imagick_r begin
+@@QSTEP-BEGIN B5TL1-538.imagick_r
+TRAPTEST: stage B5TL1-538.imagick_r bound 3600s
+@@SPEC-STAGE 538.imagick_r test arms=capstone-lifetimes commands=1 validations=1
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=84.60 up1=95.77 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 val capstone-lifetimes 0
+@@SPEC-END 1 val capstone-lifetimes 0 rc=0 up0=101.66 up1=107.08 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 538.imagick_r test
+@@QSTEP-END B5TL1-538.imagick_r rc=0
+TRAPTEST: stage B5TL1-538.imagick_r rc=0
+TRAPTEST: stage B5TL1-500.perlbench_r begin
+@@QSTEP-BEGIN B5TL1-500.perlbench_r
+TRAPTEST: stage B5TL1-500.perlbench_r bound 3600s
+@@SPEC-STAGE 500.perlbench_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=141.69 up1=423.97 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 500.perlbench_r test
+@@QSTEP-END B5TL1-500.perlbench_r rc=0
+TRAPTEST: stage B5TL1-500.perlbench_r rc=0
+TRAPTEST: stage B5TL1-544.nab_r begin
+@@QSTEP-BEGIN B5TL1-544.nab_r
+TRAPTEST: stage B5TL1-544.nab_r bound 3600s
+@@SPEC-STAGE 544.nab_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=612.31 up1=1342.02 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 544.nab_r test
+@@QSTEP-END B5TL1-544.nab_r rc=0
+TRAPTEST: stage B5TL1-544.nab_r rc=0
+TRAPTEST: done

@@ -1,0 +1,81 @@
+# board 2, b42c8c644: the runtime lane's b5b2-ticklog boot (Amendment 1)
+# cut at 2026-11-27T20:46:14Z; session tick2-b2-20261127T0342
+
+## orchestrator log
+2026-11-27T03:42:53Z armed dry=0; waits for <path>/b5b2linux/camp8c2-b2-20261127T0229.done
+2026-11-27T04:45:54Z the previous session ended: 'DONE rc=0 at 2026-11-27T04:45:10Z | last: 2026-11-27T04:45:10Z CAMPAIGN SESSION END: board 2, 7 plan steps'
+2026-11-27T04:45:54Z gates PASS: PREREG 340a17e4b463 on origin/runtime/b5b2-linux carries the payload's sha256; payload 181680bd16eec663 17463304 B; resident b42c8c644 (<path>/b5b2linux/camp8c2-b2-20261127T0229-07-CFP-B5TL1-g3v2/chain.log); preflight 6daffca3824c
+2026-11-27T04:45:54Z ticklog: PREFLIGHT exit 0 GO at 04:45:54Z
+2026-11-27T04:45:54Z IDLE: board free after 0 s
+2026-11-27T07:19:43Z ticklog: 54 PREFLIGHT exit 0 GO at 04:45:54Z 42 RUN END rc=0 [lx 15:19:41] end: TRAPTEST: done seen; 11353873 chars 43 READBACK after = caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r 43 GRADE rc=0 TICK-GRADE done=yes tickfw=1 mpath=1 
+2026-11-27T07:19:43Z ticklog: TICKFW mhpmevent3=2 mcountinhibit=0x1f0 trap=0,0 ticklog: firmware M-path counters on (error 0 value 0x544b) TICK-GRADE done=yes tickfw=1 mpath=1 
+2026-11-27T07:19:43Z TICKLOG SESSION END: one boot read
+
+## .done
+DONE rc=0 at 2026-11-27T07:19:43Z | last: 2026-11-27T07:19:43Z TICKLOG SESSION END: one boot read
+
+### boot ticklog
+#### chain.log
+LX 2026-11-27 04:45:54 START dry=0 board 2 image 181680bd16eec663
+LX 2026-11-27 04:45:54 PREFLIGHT exit 0 GO at 04:45:54Z
+FREE board 2
+LX 2026-11-27 04:45:55 holder started
+LX 2026-11-27 04:45:55 BOOKED 1664
+[fpga-board] 2
+[fpga-lease] board 2: held, until 1795755254.013861, purpose 'nv-readback.py pid 3086402'
+[fpga-users] board 2 start 2
+[fpga-users] board 2 start 2 max 2 end 2; samples (count@seconds): 2@0s
+[fpga-lease] board 2: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-27 04:45:55 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3
+LX 2026-11-27 07:19:42 RUN END rc=0 [lx 15:19:41] end: TRAPTEST: done seen; 11353873 chars
+[fpga-board] 2
+[fpga-lease] board 2: held, until 1795764481.1204216, purpose 'nv-readback.py pid 3348688'
+[fpga-users] board 2 start 2
+[fpga-users] board 2 start 2 max 2 end 2; samples (count@seconds): 2@0s
+[fpga-lease] board 2: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-27 07:19:43 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+LX 2026-11-27 07:19:43 GRADE rc=0 TICK-GRADE done=yes tickfw=1 mpath=1
+UNBOOK 1664: 200
+LX 2026-11-27 07:19:43 UNBOOKED 1664
+LX 2026-11-27 07:19:43 END
+#### grade (v2, binding)
+capture: 11208198 chars; OpenSBI banner present; Run /init present
+TICKFW mhpmevent3=2 mcountinhibit=0x1f0 trap=0,0
+ticklog: firmware M-path counters on (error 0 value 0x544b)
+TRAPTEST: stage TICK-ctl begin
+TRAPTEST: stage TICK-ctl bound 300s
+TRAPTEST: stage TICK-ctl rc=0
+TRAPTEST: stage B5TL1-505.mcf_r begin
+TRAPTEST: stage B5TL1-505.mcf_r bound 30000s
+TRAPTEST: stage B5TL1-505.mcf_r rc=0
+TRAPTEST: stage TICK-dump begin
+TRAPTEST: stage TICK-dump bound 3600s
+TRAPTEST: stage TICK-dump rc=0
+TICK-GRADE done=yes tickfw=1 mpath=1
+#### capture stage/SPEC lines
+TICKFW mhpmevent3=2 mcountinhibit=0x1f0 trap=0,0
+[   10.587914] riscv-timer: ticklog: firmware M-path counters on (error 0 value 0x544b)
+[   11.205920] riscv-timer: ticklog: 1048576 records of 44 bytes (version 3)
+TRAPTEST: stage TICK-ctl begin
+@@QSTEP-BEGIN TICK-ctl
+TRAPTEST: stage TICK-ctl bound 300s
+@@QSTEP-END TICK-ctl rc=0
+TRAPTEST: stage TICK-ctl rc=0
+TRAPTEST: stage B5TL1-505.mcf_r begin
+@@QSTEP-BEGIN B5TL1-505.mcf_r
+TRAPTEST: stage B5TL1-505.mcf_r bound 30000s
+@@SPEC-STAGE 505.mcf_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=105.28 up1=6752.71 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 505.mcf_r test
+@@QSTEP-END B5TL1-505.mcf_r rc=0
+TRAPTEST: stage B5TL1-505.mcf_r rc=0
+TRAPTEST: stage TICK-dump begin
+@@QSTEP-BEGIN TICK-dump
+TRAPTEST: stage TICK-dump bound 3600s
+[ 6770.099456] riscv-timer: ticklog: frozen n=675665 lost=0
+@@QSTEP-END TICK-dump rc=0
+TRAPTEST: stage TICK-dump rc=0
+TRAPTEST: done

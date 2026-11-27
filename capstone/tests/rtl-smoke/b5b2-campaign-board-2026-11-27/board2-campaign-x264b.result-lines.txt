@@ -1,0 +1,88 @@
+# board 2, b42c8c644: b5b2-campaign CF-x264b
+# cut at 2026-11-27T20:46:14Z; session camp8x-b2-20261127T0342
+
+## orchestrator log
+2026-11-27T03:42:54Z armed dry=0 board 2 plan <path>/b5b2linux/camp-b2-x.plan; waits for <path>/b5b2linux/tick2-b2-20261127T0342.done
+2026-11-27T07:19:55Z the previous session ended: 'DONE rc=0 at 2026-11-27T07:19:43Z | last: 2026-11-27T07:19:43Z TICKLOG SESSION END: one boot read'
+2026-11-27T07:19:55Z the previous session (pid 1) ended
+2026-11-27T07:19:55Z gates PASS: PREREG fec8d4357796, 12 sums; both seals resolve; preflight 6daffca3824c; v2 b976d288, v1 4fa95eaf; plan sha16 3154c25bd29edcbe
+2026-11-27T07:19:55Z 01 RESIDENT b42c8c644: 2026-11-27 07:19:43 in <path>/b5b2linux/tick2-b2-20261127T0342-ticklog/chain.log; no flash
+2026-11-27T07:19:55Z 02 CF-B5TL1-x264b: PREFLIGHT exit 1 BLOCKED at 07:19:55Z by C10's 20 MB working budget only: C10 BLOCK at 21662216 B (21.66 MB), proceeded by runtime's ruling; this size ran on this seal as CF-B5TL1-g3 (997e2fd6fdbdecdf) and CFP-B5TL1-g3 (6616eecf0c797071)
+2026-11-27T07:19:55Z IDLE: board free after 0 s
+2026-11-27T17:24:29Z 02 CF-B5TL1-x264b: 28 RUN END rc=0 [lx 01:24:27] end: TRAPTEST: done seen; 19574 chars 29 READBACK after = caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl-r76-r 29 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=PASS done=yes  | v1: B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=PASS done=yes
+2026-11-27T17:24:29Z 02 CF-B5TL1-x264b: host clock (continue, done seen): 15:23:59 01:24:07 | c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-27T17:24:29Z CAMPAIGN SESSION END: board 2, 2 plan steps
+
+## .done
+DONE rc=0 at 2026-11-27T17:24:29Z | last: 2026-11-27T17:24:29Z CAMPAIGN SESSION END: board 2, 2 plan steps
+
+### boot 02-CF-B5TL1-x264b
+#### chain.log
+LX 2026-11-27 07:19:56 START dry=0 board 2 image 14acfa3cdfe1c1bc
+LX 2026-11-27 07:19:56 PREFLIGHT exit 1 BLOCKED at 07:19:55Z by C10's 20 MB working budget only: C10 BLOCK at 21662216 B (21.66 MB), proceeded by runtime's ruling; this size ran on this seal as CF-B5TL1-g3 (997e2fd6fdbdecdf) and CFP-B5TL1-g3 (6616eecf0c797071)
+FREE board 2
+LX 2026-11-27 07:19:57 holder started
+LX 2026-11-27 07:19:57 BOOKED 1666
+[fpga-board] 2
+[fpga-lease] board 2: held, until 1795764495.6396198, purpose 'nv-readback.py pid 3348960'
+[fpga-users] board 2 start 2
+[fpga-users] board 2 start 2 max 2 end 2; samples (count@seconds): 2@0s
+[fpga-lease] board 2: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-27 07:19:57 READBACK before = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3
+LX 2026-11-27 17:24:28 RUN END rc=0 [lx 01:24:27] end: TRAPTEST: done seen; 19574 chars
+[fpga-board] 2
+[fpga-lease] board 2: held, until 1795800766.827031, purpose 'nv-readback.py pid 3823578'
+[fpga-users] board 2 start 2
+[fpga-users] board 2 start 2 max 2 end 2; samples (count@seconds): 2@0s
+[fpga-lease] board 2: released (HTTP 200)
+NVRB name 'caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit' sha256 NOT EXPOSED
+LX 2026-11-27 17:24:29 READBACK after = caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit rc=3 (0: name and sha256 match; 3: name matches, the console exposes no sha256)
+LX 2026-11-27 17:24:29 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=PASS done=yes
+UNBOOK 1666: 200
+LX 2026-11-27 17:24:29 UNBOOKED 1666
+LX 2026-11-27 17:24:29 END
+#### grade (v2, binding)
+capture: 19074 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         954648 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+INBAND B5TL1-525.x264_r: 9 interleaved line(s) removed
+S B5TL1-525.x264_r PASS: QSTEP rc=0; read rc=1; X264 (Amendment 13): gen+run rc 0, 7/7 data outputs EQUAL
+    READ 525.x264_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 15, in-band 2, specdiff 0/3 PASS
+    run0: rc 0 32816.41 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    specdiff NO-OUTPUT ['imagevalidate_frame_100.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_100.out imagevalidate_frame_100.out :: (specdiff tail omitted)
+    specdiff NO-OUTPUT ['imagevalidate_frame_155.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_155.out imagevalidate_frame_155.out :: (specdiff tail omitted)
+    specdiff NO-OUTPUT ['imagevalidate_frame_50.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_50.out imagevalidate_frame_50.out :: (specdiff tail omitted)
+    X264 capstone-lifetimes: data outputs 7/7 equal the reference; specdiff 3x NO-OUTPUT (expected)
+  TRAPTEST: stage B5TL1-525.x264_r begin
+  TRAPTEST: stage B5TL1-525.x264_r bound 43200s
+  TRAPTEST: stage B5TL1-525.x264_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.197084] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.143854] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.886377] sublet: .dom loader registered
+  TRAPTEST: dmesg [   25.761111] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82463000
+  TRAPTEST: dmesg [ 2094.685067] sublet: x264_r_base.nat[112] enters 0x3ff7e00000, table 0x824aa000
+
+B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=PASS done=yes
+#### grade v1 (beside): B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=PASS done=yes
+#### c25
+events: 0 sublet-fault cause-25 event(s), de-duplicated by (timestamp, pid, pc); 0 kernel fault(s) cause 25
+C25LDC NONE: no cause-25 fault in the capture
+#### capture stage/SPEC lines
+TRAPTEST: stage B5TL1-525.x264_r begin
+@@QSTEP-BEGIN B5TL1-525.x264_r
+TRAPTEST: stage B5TL1-525.x264_r bound 43200s
+@@SPEC-STAGE 525.x264_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 gen capstone-lifetimes 0
+@@SPEC-END 0 gen capstone-lifetimes 0 rc=0 up0=31.83 up1=2088.26 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 run capstone-lifetimes 0
+@@SPEC-END 1 run capstone-lifetimes 0 rc=0 up0=2094.33 up1=34910.74 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 525.x264_r test
+@@QSTEP-END B5TL1-525.x264_r rc=0
+TRAPTEST: stage B5TL1-525.x264_r rc=0
+TRAPTEST: done
