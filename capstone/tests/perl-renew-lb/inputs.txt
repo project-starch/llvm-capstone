@@ -1,0 +1,11 @@
+compiler clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 29027126f39b8b19c43e27017c12ccbf7300b36d)
+ecd6d8c49efb4cf13717d45ebe164298ec08422b5fd46a294f1997ec7406581b  <hdd>/capstone/llvm-c9/bin/clang
+6efe2f77052132446a401bfff3ec6a9d5b2d55dbffc0075dbff87bc53b80430d  <hdd>/capstone/perf/cclever/arms/B5TL1/sdk/capstone-cc
+335b499ce80e95825de7372f84b72064ca7293963f1cc7737dfe04f76b7ef6fe  <hdd>/capstone/nested/b5b2/ports/oneop-shim.h
+a502b2a6881ec94668fac19c67cdb03448dceafbc447bc5e00d499cd43ddd639  <hdd>/capstone/nested/b5b2/ports/inc/capstone/capability.h
+a00a47fc11b4b897b8efcbf134c83bcd53711a16957fe91514fa804ca1833c73  <hdd>/capstone/nested/b5b2/ports/inc/capstone/capability-slot.h
+f0616af586bda2fbd39d0d5af66e57c1082f93d5a47b945a0a0beab9d50e2f32  <hdd>/capstone/nested/b5b2/ports/renew/heads-renew.py
+5857aeec6888d41b70a29750a25b5e11e08813189fc840ce1c119d5779d9cf6c  <hdd>/capstone/nested/b5b2/ports/renew/bodies-renew-lb.py
+3bef56740f04d194bf807940a3c75c882270ea3ffd722b20857b26d7663769ba  <hdd>/capstone/nested/b5b2/ports/renew/he-renew-lb.py
+378aa5b445e344675649543db7f0a9e7c0e91a080be6962fa1579a97c604e896  <hdd>/capstone/nested/b5b2/ports/renew/renew-shim.h
+07738b7723e5f239ec6a5b8448d1d2bd83b5f643e4ee7bb4724c93aeba629d60  <hdd>/capstone/nested/b5b2/ports/exes/perl-full.full

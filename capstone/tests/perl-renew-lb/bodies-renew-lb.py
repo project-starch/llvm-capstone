@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""bodies-renew-lb.py DIR (nested lane, 2026-11-26): an EXPERIMENT ARM on a perlbench 5.22 tree that port-sv-bodies.py
+produced, never a port script. It is oneop's bodies-renew.py (fig10/renew, 9945e787) failing closed, for Line B, where
+CRENEW can fail. Under PERL_CAPSTONE_SUBLET_BODIES_RENEW (with PERL_CAPSTONE_SUBLET_BODIES):
+  - S_sv_body_retire renews the body (PERL_CAP_RENEW, renew-shim.h), and the free list keeps the renewed capability in
+    the link word upstream already stores at the body's start. If the renewal fails (an untagged 0: the old lifetime is
+    still live), it revokes and returns the segment's pointer, as the port does;
+  - S_sv_body_issue hands a popped capability out as it is when its bounds are narrower than a segment (a renewed
+    body); a body fresh from an arena, or one whose renewal failed, arrives as the segment's pointer and derives.
+Without the new define the preprocessed source is the bodies port's. Every edit is asserted to match once."""
+import sys
+from pathlib import Path
+D = Path(sys.argv[1])
+
+
+def edit(name, old, new):
+    p = D / name; s = p.read_text()
+    assert s.count(old) == 1, (name, old[:70], s.count(old))
+    p.write_text(s.replace(old, new))
+
+
+edit('sv.c', """    const UV a = __builtin_capstone_cap_get_cursor(own);
+    struct sv_body_seg *const s = S_sv_body_seg_of(a);
+    return s ? capstone_cap_derive(s->life, a - s->lo, size) : own;
+}""", """    const UV a = __builtin_capstone_cap_get_cursor(own);
+    struct sv_body_seg *const s = S_sv_body_seg_of(a);
+#ifdef PERL_CAPSTONE_SUBLET_BODIES_RENEW
+    if (s && __builtin_capstone_cap_get_end(own) - __builtin_capstone_cap_get_base(own) < SV_BODY_SEG)
+\treturn own;		/* renewed when it was freed: already its own lifetime */
+#endif
+    return s ? capstone_cap_derive(s->life, a - s->lo, size) : own;
+}""")
+
+edit('sv.c', """#ifndef PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE	/* the fixture's control build */
+    capstone_cap_revoke_child(s->life, body);
+#endif
+    return s->life + (a - s->lo);""", """#ifdef PERL_CAPSTONE_SUBLET_BODIES_RENEW
+    {
+\tvoid *const renewed = PERL_CAP_RENEW(body);
+\tif (renewed)
+\t    return renewed;
+\t/* the renewal failed and the old lifetime is still live: end it as the port does */
+    }
+#endif
+#ifndef PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE	/* the fixture's control build */
+    capstone_cap_revoke_child(s->life, body);
+#endif
+    return s->life + (a - s->lo);""")
+print('bodies-renew-lb: applied to', D)
