@@ -524,3 +524,22 @@ booted on the twin: K-twin plain, the fw-crvc twin build, the board's bootargs, 
 - N's predicate is unchanged.
 - **The window**, for both: from "TRAPTEST: stage K-crvcmis begin" to "TRAPTEST: done". The kernel's lines reach the
   board console only through the init's dmesg dump after the stage's rc line.
+
+## Amendment 7 (2026-11-27, before any K board boot): the seal control's spread takes the measured boot spread
+
+The placement session (tests/stage2-placement-b42 RESULTS, c89f177d0403) read B_s, the spread between two boots of
+one image on one bitstream:
+- perlbench 1.58 s, nab 0.45 s, imagick 0.02 s, gcc 0.00 s.
+- That is larger than the ZCB pair's range(OFF) on perlbench (0.56 s) and nab (0.08 s).
+
+The seal control compares one K0 boot with N's three OFF boots. With range(OFF) alone as its spread, one boot's
+excursion of B_s's size would read as "the seal costs time". So, as the go/no-go already does with P_s:
+- "the seal costs time on s" now needs seal_s > 0.0005 × t(K0) + max(range(OFF_s), B_s) + 0.02 s.
+- Everything else in the seal control and in K0's own reading (Amendment 5) is unchanged.
+
+**The thresholds this fixes,** from the same RESULTS, for the record:
+- P_s is perlbench 11.38 s, nab 2.21 s, imagick 0.05 s and gcc 0.00 s.
+- A perlbench GO needs -Δ ≥ about 14.2 s (r ≥ 0.29).
+- A gcc GO needs about 0.06 s with the separation rule (r ≥ 0.12).
+- **Prediction 6** ("GO, carried by perlbench") stands as written. It is graded as written, and at P_perl = 11.38 s it
+  now needs r near the band's top.
