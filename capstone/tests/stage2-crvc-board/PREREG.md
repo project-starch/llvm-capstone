@@ -411,3 +411,80 @@ the kernel, firmware, initramfs and properties were checked there against Amendm
 
 Board images are built next, and their sha256, the stage's directory name and the "boot:" line go in the next
 amendment.
+
+## Amendment 5 (2026-11-27, before any K board boot): the images, the control stage, the boot list and the K0 reading
+
+**boot: K0, FLASH-N, OFF1, ON1, OFF2, ON2, OFF3, ON3, FLASH-B42**
+
+This is the session's single boot list, on board 2, in its order:
+- **K0:** S-LSHOFFL-K on b42c8c644, the bitstream resident before the session.
+- **FLASH-N:** the reflash to N (Amendment 1's name and sha256), with its readback name recorded.
+- **OFF1 to OFF3:** S-LSHOFFL-K on N.
+- **ON1 to ON3:** S-CRVCBN-K on N.
+- **FLASH-B42:** the reflash back to b42c8c644, with its readback.
+
+**Unchanged:** a reflash or another bitstream's boot between OFF1 and ON3 voids the six.
+- **The slot:** after camp8x-b2-20261127T0229's .done, and not before tests/stage2-placement-b42's RESULTS is
+  pushed.
+
+### The images
+
+Built by c4/spec8/board/make-board-K.sh. That is make-board.sh's S image (the same four campaign stages, init, probes
+and smoke.dom, 3,600 s each), plus a fifth stage, K-crvcmis, relinked by K-fpga's copy of make-payload.sh with
+FW_FAST_RDTIME=y.
+- **The kernel:** K-fpga. Its .config differs from fpga-final's in one line, CONFIG_INITRAMFS_SOURCE, the path of
+  the copy.
+- **The firmware:** the sbi-crvc clone at 514047391ee0, built for fpga/ariane, with the stock DTB caplifive-b5b2.dtb.
+
+| image | natives | fw_payload.bin sha256 | Image sha256 | bytes |
+|---|---|---|---|---|
+| S-LSHOFFL-K (K0, OFF) | LSHOFFL's four | ac582c15dbb9c2087b7102573e2ed76472f15d756238eed3e713c9d5e489aa30 | 689b29f6cf765552f24c4c5c21844b743350f56f4cecd4165f47b2873eb12d89 | 25,856,520 |
+| S-CRVCBN-K (ON) | CRVCB's perlbench_r, cpugcc_r, imagick_r; LSHOFFL's nab_r | a3b08c74c67c1014db77726ebd5abd09bd25a5ffa19b76dbe5e2759d92c35ae8 | 68914a64d926e4e04333bf2af8da94cac2c082bafe3a9bd9c8900f8df7f20b8d | 25,856,520 |
+
+- **Each image's overlay check:** 574 files equal to source, 4 natives equal to the arm, 0 mismatches. keep=y,
+  fast-path-refs=2. Each payload carries the FWCRVC banner string, and each Image the probe string.
+- **The two overlays** (585 files each) differ in exactly the three CRVC natives: perlbench_r f3c8c80d… → fb76f981…,
+  cpugcc_r 87ef79e2… → 805a16a9…, imagick_r a666e331… → f6a8d2f3…. nab_r is da57e5473a33e6fd in both.
+- **Against S-LSHOFFL's overlay,** S-LSHOFFL-K differs only in stages.order and stages.bound, which gain the fifth
+  stage's lines, and in the stage's two new files.
+- **The size** equals the S images' 25,856,520 B, proven on b42c8c644 by the S bracket's first boot. On N it is
+  unproven until N's first boot. C10's ruling for these images is runtime's.
+
+### The control stage: K-crvcmis
+
+- **Directory:** /stages/K-crvcmis. It is last in stages.order, with bound 120 s.
+- **Files:** stage/crvcmis.dom (41088a87663588e1, the KA2 binary) and stage/run.sh (03226be0f2b018a9).
+- **run.sh** runs crvcmis from /tmp/crvcmis, never from /, and prints `@@CRVCMIS rc=<rc>`. It always exits 0, so no
+  grader reads the control's rc as a failed stage.
+- **The predicates on the capture,** within the stage's window, from "TRAPTEST: stage K-crvcmis begin" to its
+  "TRAPTEST: dmesg" lines:
+  - **N (OFF1-3, ON1-3):**
+    - exactly one `FWCRVC redirect=1 emulate-u=M` line;
+    - `@@CRVCMIS rc=135` (SIGBUS, as KA2 read on the twin);
+    - a dmesg line "crvcmis.dom[...] binds in the CRVC mode";
+    - no "no trap" line.
+  - **K0 (b42c8c644):**
+    - the dmesg line "CRVC image refused: this hart has no CRVC mode";
+    - `@@CRVCMIS rc=127`;
+    - no FWCRVC redirect line;
+    - the boot's probe line reads "no CRVC mode".
+  - **Every boot:**
+    - the banner "FWCRVC: stage-2 misaligned redirect" before Linux;
+    - no FWCRVC line inside any of the four timed stages.
+- A boot whose control reads otherwise is reported as that reading. It is not VOID, and it does not stop the session.
+  The four timed stages are graded as before.
+
+### K0's own reading: K and the firmware on b42c8c644
+
+K0 is the seal control's reference, and also the only silicon reading of K and its firmware's time on unflagged
+images. Its reference is every S-LSHOFFL boot on b42c8c644 with stock kernel and firmware:
+- the ZCB pair's OFF1-OFF3 (d0c5af96e033);
+- the placement session's LSHOFFL and LSHOFFL2.
+
+Per stage, the rule:
+- K0 holds if lo - q ≤ t(K0) ≤ hi + q, where lo and hi are the reference boots' min and max and q = 0.0005 × hi +
+  0.02 s.
+- If it fails on a stage, the excess is K's or the firmware's, not N's. The seal control is then UNDECIDED on that
+  stage, and the difference is reported.
+- **Predicted:** K0 holds on all four stages. The probe runs once at boot, and the firmware's tests run only on
+  misaligned traps from U.
