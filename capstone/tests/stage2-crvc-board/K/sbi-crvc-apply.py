@@ -4,8 +4,8 @@ mode's home", Firmware). A misaligned load or store trapped from U while the CRV
 srevroot[63:12] != 0, MPP = U) whose instruction is in a slot the mode reinterprets (Q0 or Q2, funct3 001 or 101:
 c.ldc, c.stc, c.ldcsp, c.stcsp) is redirected to S with its own cause, never emulated as C.FLD/C.FSD/C.FLDSP/C.FSDSP.
 On b42c8c644 and its stage-2 seal a misaligned LDC/STC traps with mtval 0 and mtinst 0 (rtl, cva6.sv:1630-1632), so
-the test reads only the instruction at mepc and srevroot. Two counters, redirects and emulations from U, print a line
-each time either reaches a power of two; a banner line at boot names the change. Every edit asserts one match."""
+the test reads only the instruction at mepc and srevroot. Two counters, redirects and emulations from U: each redirect
+prints one line with both; emulations are only counted. A banner line at boot names the change. Every edit asserts one match."""
 import sys
 T = sys.argv[1].rstrip('/')
 
@@ -28,11 +28,12 @@ HELPER = r'''
  */
 static unsigned long crvc_redirects, crvc_u_emulations;
 
-static void crvc_report(unsigned long n)
+/* One line per redirect, carrying both counts. Emulations are only counted: a line in the middle of
+ * a timed stage could splice into the program's own console lines. A redirect kills its process,
+ * so a redirect line inside a stage marks a stage that failed anyway. */
+static void crvc_report(void)
 {
-	if (n && !(n & (n - 1)))
-		sbi_printf("FWCRVC redirect=%lu emulate-u=%lu\n", crvc_redirects,
-			   crvc_u_emulations);
+	sbi_printf("FWCRVC redirect=%lu emulate-u=%lu\n", crvc_redirects, crvc_u_emulations);
 }
 
 static bool crvc_from_u(struct sbi_trap_regs *regs)
@@ -48,24 +49,28 @@ static bool crvc_decoded(struct sbi_trap_regs *regs, ulong insn, ulong tinst)
 {
 	ulong root, q, f3;
 
+	/* The privilege and the slot first, the CSR last: an ordinary misaligned trap never reads srevroot. */
 	if (!crvc_from_u(regs))
 		return false;
+	if (tinst & 0x1) {	/* transformed: a 16-bit original's slot is unknown, so it is redirected */
+		if (tinst & 0x2)
+			return false;
+	} else {
+		if ((insn & 3) == 3)
+			return false;
+		q  = insn & 3;
+		f3 = (insn >> 13) & 7;
+		if (!(q != 1 && (f3 == 1 || f3 == 5)))
+			return false;
+	}
 	root = csr_read(0x5c1);
-	if (!(root & 1) || !(root >> 12))
-		return false;
-	if (tinst & 0x1)	/* a transformed instruction: a 16-bit one's slot is unknown, so redirect */
-		return !(tinst & 0x2);
-	if ((insn & 3) == 3)
-		return false;
-	q  = insn & 3;
-	f3 = (insn >> 13) & 7;
-	return q != 1 && (f3 == 1 || f3 == 5);
+	return (root & 1) && (root >> 12);
 }
 
 static void crvc_count_emulation(struct sbi_trap_regs *regs)
 {
 	if (crvc_from_u(regs))
-		crvc_report(++crvc_u_emulations);
+		crvc_u_emulations++;
 }
 '''
 
@@ -83,7 +88,7 @@ edit('lib/sbi/sbi_misaligned_ldst.c',
      '\t\tuptrap.epc = regs->mepc;\n\t\tuptrap.cause = CAUSE_MISALIGNED_LOAD;\n'
      '\t\tuptrap.tval = addr;\n\t\tuptrap.tval2 = tval2;\n\t\tuptrap.tinst = tinst;\n'
      '\t\tuptrap.gva   = sbi_regs_gva(regs);\n'
-     '\t\tcrvc_report(++crvc_redirects);\n'
+     '\t\tcrvc_redirects++;\n\t\tcrvc_report();\n'
      '\t\treturn sbi_trap_redirect(regs, &uptrap);\n\t}\n\n'
      '\tif ((insn & INSN_MASK_LW) == INSN_MATCH_LW) {')
 edit('lib/sbi/sbi_misaligned_ldst.c',
@@ -93,7 +98,7 @@ edit('lib/sbi/sbi_misaligned_ldst.c',
      '\t\tuptrap.epc = regs->mepc;\n\t\tuptrap.cause = CAUSE_MISALIGNED_STORE;\n'
      '\t\tuptrap.tval = addr;\n\t\tuptrap.tval2 = tval2;\n\t\tuptrap.tinst = tinst;\n'
      '\t\tuptrap.gva   = sbi_regs_gva(regs);\n'
-     '\t\tcrvc_report(++crvc_redirects);\n'
+     '\t\tcrvc_redirects++;\n\t\tcrvc_report();\n'
      '\t\treturn sbi_trap_redirect(regs, &uptrap);\n\t}\n\n'
      '\tval.data_ulong = GET_RS2(insn, regs);\n')
 edit('lib/sbi/sbi_misaligned_ldst.c',

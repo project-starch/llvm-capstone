@@ -314,3 +314,36 @@ x-capstone-crvc-protected: the mode comes only from the srevroot write.
 - **The session plan gains a last step:** reflash board 2 back to b42c8c644 and read it back.
   - The session is booked only after this amendment's checks pass.
   - The slot is after camp2x2-b2's .done, or one runtime and the board lane find.
+
+## Amendment 2 (2026-11-27, before any K twin boot): the firmware reads srevroot last and prints only at a redirect
+
+Both changes answer runtime's two questions on Amendment 1. The redirect's verdict is unchanged for every trap. The
+clone's head is now 514047391ee0 (09eda70de65b, then e8aa312dbace, then 514047391ee0). K/sbi-crvc-apply.py and
+K/sbi-crvc.diff are updated, and the script re-applied on a fresh 25b14da6 reproduces both files byte for byte.
+
+1. **The CSR is read last.** crvc_decoded now tests MPP = U (with MPV clear), then the 16-bit slot (Q0/Q2, funct3
+   001/101), and reads srevroot only for an instruction that passed both:
+   - `root = csr_read(0x5c1); return (root & 1) && (root >> 12);`
+   - An ordinary misaligned trap, a C.FLD or an LD from U on K0, never executes the read.
+   - The read is legal from M on both revisions anyway. The CSR_SREVROOT read case sits outside both
+     CAPSTONE_SUBLET_FMT blocks: b42c8c644 csr_regfile.sv:1104 `csr_rdata = srevroot_q;`, and 796af23d9 :1109
+     `csr_rdata = srevroot_q | {63'd0, crvc_q};`.
+2. **One line per redirect, and no other runtime line.**
+   - Each redirect prints `FWCRVC redirect=N emulate-u=M` with both exact counts. Emulations from U are only counted.
+   - Amendment 1's power-of-two lines would have printed inside timed stages, where firmware output can splice into a
+     program's console lines.
+   - In a clean boot, the FWCRVC lines are the banner (before Linux) and the crvcmis stage's redirect line, after the
+     four timed stages.
+   - A redirect inside a timed stage kills that stage's process, so its line can only fall in a stage that fails, and
+     that stage is UNDECIDED regardless.
+   - So no reader of a timed stage can meet a FWCRVC line in a stage it reads. This is checked at grading: every
+     FWCRVC line's position against the stage markers.
+   - **The reading:** on N, the crvcmis line's two counts are exact. On K0 no redirect line is predicted, since
+     crvcmis is refused there, so K0's emulation count is not read.
+
+**The twin firmware** (generic platform, FW_CAPSTONE_KEEP_TAGS=y): fw_jump.elf
+6804547d1f518dda69437f9ddffda6c269d079f0500bc16cbdc2e4fe0c57631b. It replaces Amendment 1's 3298bb764c7b6380 for
+every check that names fw-crvc. The fpga/ariane build of the same head compiles clean.
+
+**Prediction KA is restated for the new print:** exactly one `FWCRVC redirect=1 emulate-u=M` line, which falls inside
+the crvcmis window, after "KTEST begin /crvcmis.dom". Every other row is unchanged.

@@ -11,7 +11,7 @@ index 0e2639ff..fc26614c 100644
  		   sbi_platform_name(plat));
  	sbi_platform_get_features_str(plat, str, sizeof(str));
 diff --git a/lib/sbi/sbi_misaligned_ldst.c b/lib/sbi/sbi_misaligned_ldst.c
-index 4b91e072..d3f52a53 100644
+index 4b91e072..7e4bbacc 100644
 --- a/lib/sbi/sbi_misaligned_ldst.c
 +++ b/lib/sbi/sbi_misaligned_ldst.c
 @@ -10,6 +10,7 @@
@@ -22,7 +22,7 @@ index 4b91e072..d3f52a53 100644
  #include <sbi/sbi_error.h>
  #include <sbi/sbi_misaligned_ldst.h>
  #include <sbi/sbi_pmu.h>
-@@ -22,6 +23,56 @@ union reg_data {
+@@ -22,6 +23,61 @@ union reg_data {
  	u64 data_u64;
  };
  
@@ -36,11 +36,12 @@ index 4b91e072..d3f52a53 100644
 + */
 +static unsigned long crvc_redirects, crvc_u_emulations;
 +
-+static void crvc_report(unsigned long n)
++/* One line per redirect, carrying both counts. Emulations are only counted: a line in the middle of
++ * a timed stage could splice into the program's own console lines. A redirect kills its process,
++ * so a redirect line inside a stage marks a stage that failed anyway. */
++static void crvc_report(void)
 +{
-+	if (n && !(n & (n - 1)))
-+		sbi_printf("FWCRVC redirect=%lu emulate-u=%lu\n", crvc_redirects,
-+			   crvc_u_emulations);
++	sbi_printf("FWCRVC redirect=%lu emulate-u=%lu\n", crvc_redirects, crvc_u_emulations);
 +}
 +
 +static bool crvc_from_u(struct sbi_trap_regs *regs)
@@ -56,30 +57,34 @@ index 4b91e072..d3f52a53 100644
 +{
 +	ulong root, q, f3;
 +
++	/* The privilege and the slot first, the CSR last: an ordinary misaligned trap never reads srevroot. */
 +	if (!crvc_from_u(regs))
 +		return false;
++	if (tinst & 0x1) {	/* transformed: a 16-bit original's slot is unknown, so it is redirected */
++		if (tinst & 0x2)
++			return false;
++	} else {
++		if ((insn & 3) == 3)
++			return false;
++		q  = insn & 3;
++		f3 = (insn >> 13) & 7;
++		if (!(q != 1 && (f3 == 1 || f3 == 5)))
++			return false;
++	}
 +	root = csr_read(0x5c1);
-+	if (!(root & 1) || !(root >> 12))
-+		return false;
-+	if (tinst & 0x1)	/* a transformed instruction: a 16-bit one's slot is unknown, so redirect */
-+		return !(tinst & 0x2);
-+	if ((insn & 3) == 3)
-+		return false;
-+	q  = insn & 3;
-+	f3 = (insn >> 13) & 7;
-+	return q != 1 && (f3 == 1 || f3 == 5);
++	return (root & 1) && (root >> 12);
 +}
 +
 +static void crvc_count_emulation(struct sbi_trap_regs *regs)
 +{
 +	if (crvc_from_u(regs))
-+		crvc_report(++crvc_u_emulations);
++		crvc_u_emulations++;
 +}
 +
  static ulong sbi_misaligned_tinst_fixup(ulong orig_tinst, ulong new_tinst,
  					ulong addr_offset)
  {
-@@ -64,6 +115,17 @@ int sbi_misaligned_load_handler(ulong addr, ulong tval2, ulong tinst,
+@@ -64,6 +120,18 @@ int sbi_misaligned_load_handler(ulong addr, ulong tval2, ulong tinst,
  		insn_len = INSN_LEN(insn);
  	}
  
@@ -90,14 +95,15 @@ index 4b91e072..d3f52a53 100644
 +		uptrap.tval2 = tval2;
 +		uptrap.tinst = tinst;
 +		uptrap.gva   = sbi_regs_gva(regs);
-+		crvc_report(++crvc_redirects);
++		crvc_redirects++;
++		crvc_report();
 +		return sbi_trap_redirect(regs, &uptrap);
 +	}
 +
  	if ((insn & INSN_MASK_LW) == INSN_MATCH_LW) {
  		len   = 4;
  		shift = 8 * (sizeof(ulong) - len);
-@@ -155,6 +217,7 @@ int sbi_misaligned_load_handler(ulong addr, ulong tval2, ulong tinst,
+@@ -155,6 +223,7 @@ int sbi_misaligned_load_handler(ulong addr, ulong tval2, ulong tinst,
  #endif
  
  	regs->mepc += insn_len;
@@ -105,7 +111,7 @@ index 4b91e072..d3f52a53 100644
  
  	return 0;
  }
-@@ -189,6 +252,17 @@ int sbi_misaligned_store_handler(ulong addr, ulong tval2, ulong tinst,
+@@ -189,6 +258,18 @@ int sbi_misaligned_store_handler(ulong addr, ulong tval2, ulong tinst,
  		insn_len = INSN_LEN(insn);
  	}
  
@@ -116,14 +122,15 @@ index 4b91e072..d3f52a53 100644
 +		uptrap.tval2 = tval2;
 +		uptrap.tinst = tinst;
 +		uptrap.gva   = sbi_regs_gva(regs);
-+		crvc_report(++crvc_redirects);
++		crvc_redirects++;
++		crvc_report();
 +		return sbi_trap_redirect(regs, &uptrap);
 +	}
 +
  	val.data_ulong = GET_RS2(insn, regs);
  
  	if ((insn & INSN_MASK_SW) == INSN_MATCH_SW) {
-@@ -261,6 +335,7 @@ int sbi_misaligned_store_handler(ulong addr, ulong tval2, ulong tinst,
+@@ -261,6 +342,7 @@ int sbi_misaligned_store_handler(ulong addr, ulong tval2, ulong tinst,
  	}
  
  	regs->mepc += insn_len;
