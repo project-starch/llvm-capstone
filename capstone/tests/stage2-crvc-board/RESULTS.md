@@ -160,3 +160,37 @@ and LSHOFFL2), ± 0.0005 × max + 0.02.
 - **Which of K, the firmware and the K overlay moved K0's perlbench and nab.** A K0-against-stock pair on b42c8c644
   that varies one of the three would read it.
 - x264, mcf, xz and lbm. P1. Train inputs.
+
+## Addendum (2026-11-28): Amendment 8's reading, the seal control from a three-boot K reference
+
+Amendment 8 (bf8c9c6492b4) was pushed after these RESULTS and before either boot. It added two boots of S-LSHOFFL-K on
+b42c8c644, back to back, with no flash: k0b-b2-20261127T2052, run by the board lane.
+- Both boots read on their first attempt, and the readback named b42c8c644 before and after each.
+- v2 and v1 pass all four stages on each. Outputs are equal to the placement LSHOFFL's, with 575 hashes per boot.
+- crvcmis held K0's predicate on both: the refusal, `@@CRVCMIS rc=2`, no redirect line.
+- This lane read each capture after checking its sha256: K0b e1358df999010fed, K0c 570e7d2166eb0151.
+
+| stage | K0, K0b, K0c | mean(K) | mean(OFF on N) | seal_s | allowance | seal control |
+|---|---|---:|---:|---:|---:|---|
+| gcc | 5.56, 5.57, 5.57 | 5.567 | 5.557 | -0.010 | 0.033 | **holds** |
+| imagick | 11.25, 11.26, 11.23 | 11.247 | 11.243 | -0.003 | 0.056 | **holds** |
+| perlbench | 273.57, 276.61, 276.67 | 275.617 | 276.877 | +1.260 | 3.258 | **holds** |
+| nab | 728.65, 728.37, 728.04 | 728.353 | 728.310 | -0.043 | 0.994 | **holds** |
+
+The allowance is 0.0005 × mean(K) + max(range(OFF), range(K), B_s) + 0.02 s.
+
+- **Amendment 8's prediction is REFUTED.** It predicted that the repeats would land near K0's 273.57 s and that the
+  seal would cost perlbench time.
+  - The repeats read 276.61 and 276.67, so K0's perlbench was one boot's excursion, 3 s below its own repeats.
+  - **rtl's prediction holds,** written before the boots: seal_s = 0 on programs that do not set the mode, since with
+    crvc_q = 0 the change adds no stall and no flop on any path.
+- **The seal control now holds on all four stages.** RESULTS' UNDECIDED stands as what one K0 boot could read. This
+  reading adds the cost, and it regrades nothing.
+- **K0's own window against the stock boots stays refuted on perlbench and nab.** That refutation was K0's single
+  reading. K0b and K0c (276.61, 276.67) also lie below the stock window's floor of 277.42. Whether K, its firmware or
+  the overlay moves perlbench on b42c8c644 by about 1 s is not decided here.
+- **The condition for replacing the campaign seal** (GO, the seal control holding, and the lead's agreement) now
+  waits only on the lead.
+  - What is offered: gcc t1.c 1.6 % faster with CRVC. perlbench, imagick and nab do not move. No measured cost to
+    programs without the mode.
+  - Board 2 is on b42c8c644, read back.
