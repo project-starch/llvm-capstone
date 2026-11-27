@@ -154,7 +154,7 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
 | program | trace (nested lane, twin) | LB check misses asis / dedup | cycle denominator (board row) | share at cold 40.4 | share at warm 15.6 | verdict |
 |---|---|---|---|---|---|---|
 | 502.gcc_r test (t1.c) | spec-gcc.2262833, sha256 0cfc265bfa31dbb2..., recomputed here | 8,921 / 8,921 (self_evict 0) | 144.0 M = 5.76 s x 25 MHz | 0.250 % | 0.097 % | **NO BUILD** |
-| 505.mcf_r test (inp.in) | spec-mcf.2201746, sha256 633ca24aabba3062..., recomputed here | 181,127,530 / 181,127,654 (self_evict 124) | 165.03 G = 6,601.15 s x 25 MHz (board 3, B5TL1-g1b 539b2ef41ee4d444) | 4.434 % | 1.712 % | **UNDECIDED**: RC. LB 1024x8 candidate NO BUILD (2026-11-27, below; tick placement open); every smaller LB size NO BUILD |
+| 505.mcf_r test (inp.in) | spec-mcf.2201746, sha256 633ca24aabba3062..., recomputed here | 181,127,530 / 181,127,654 (self_evict 124) | 165.03 G = 6,601.15 s x 25 MHz (board 3, B5TL1-g1b 539b2ef41ee4d444) | 4.434 % | 1.712 % | **UNDECIDED**: RC. LB 1024x8 **NO BUILD** on silicon's tick positions (2026-11-27, below); every smaller LB size NO BUILD |
 | 500.perlbench_r test (makerand.pl, the campaign's g4mk stage) | spec-perl3.2883687, sha256 1af7b0c90ab7cb56..., recomputed here | 277,290 / 277,290 (self_evict 0) | 6.8925 G = 275.70 s x 25 MHz (board 2, CF-B5TL1-g4mk e82d42ebe558cb18) | 0.163 % | 0.063 % | **NO BUILD** |
 
 **505.mcf_r test (inp.in): UNDECIDED on its board row** (2026-11-26, below): two candidates remain, LB 1024x8 and RC.
@@ -244,8 +244,7 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
     | 0x1f | paged-table record access (:149) | the same, its denominator |
     | 0x04 | DTLB misses | PTW traffic, the model's blind spot |
 
-**505.mcf_r, LB 1024x8: candidate NO BUILD on the tick rate; the tick placement is open** (2026-11-27). RC stays
-UNDECIDED.
+**505.mcf_r, LB 1024x8: NO BUILD, decided on silicon's own tick positions** (2026-11-27). RC stays UNDECIDED.
 - **v2's 1024x8 population is a property of the twin's speed, not of mcf.** It is the 54,589,670 above and its
   3,406 s threshold.
   - Each timer tick ends the verdict cache's contents for protected U.
@@ -306,7 +305,8 @@ UNDECIDED.
   - **Placement is first-order.** v3's host-clock placement at 204 k ticks removes about what uniform placement does
     at about 460 k (28.5 M lies between the 408,816 and 467,219 points). So neither the trace order v2 > v3 > ic6 > ic7 nor any count of ticks alone is evidence for the
     verdict.
-- **Verdict: candidate NO BUILD for LB 1024x8, with the tick placement open.**
+- **Verdict: NO BUILD for LB 1024x8, on silicon's tick positions** (the reading at the end of this item; until it
+  landed the verdict was candidate, with the placement open, as follows).
   - Silicon places ticks in cycle time. A BUILD needs that placement to leave the regions where 1024x8 helps with no
     more than about 0.62x the mean tick density (411 k / 660 k), that is, those regions running at 0.62x mean CPI
     or less.
@@ -357,14 +357,48 @@ UNDECIDED.
     - **The no-overlap proxy, from source.** CVA6's write-through D$ has one read MSHR (wt_dcache_missunit.sv:223-224 at
       b42c8c644: "currently we only have one outstanding read TX"), so read misses serialize. That supports the
       proxy for loads; it does not cover other stall classes.
-    - **A bound from silicon's mean CPI alone.** 165.03 G cycles over about 29 G instructions is about 5.7; the
-      instruction count is v3's instructions_all, not a silicon reading.
-      - A BUILD needs X <= 0.6227 x 5.7 = 3.55.
+    - **A bound from silicon's mean CPI alone.** As first written, this assumed 5.7: 165.03 G cycles over about
+      29 G instructions, v3's instructions_all, not a silicon reading. The tick log has since measured 6.229 total
+      cycles per program instruction over 664,520 ticks (the nested lane's reading of the runtime lane's capture;
+      recomputed here as 6,647.43 s x 25 MHz / 26,679,585,857 = 6.229).
+      With that figure:
+      - A BUILD needs X <= 0.6227 x 6.229 = 3.88.
       - The LB term alone gives X >= 3.447 at 40.4 and X >= 1.945 at 15.6.
-      - So the slice's program D$ misses would have to cost <= 0.58 or <= 9.0 cycles each. On silicon a record
-        line's D$ miss costs 40.4 - 15.6 = 24.8 cycles (the measured cold-minus-warm pair below).
-    - **Status.** This is the twin's placement proxy, not silicon's placement. The verdict stays candidate until the
-      runtime lane's tick log, which records mcycle and hpm 0x02 per tick and so reads X and Y directly.
+      - So the slice's program D$ misses would have to cost <= 2.4 or <= 10.9 cycles each. At 5.7 the figures were
+        0.58 and 9.0. On silicon a record line's D$ miss costs 40.4 - 15.6 = 24.8 cycles (the measured
+        cold-minus-warm pair below).
+    - **Status.** This is the twin's placement proxy, not silicon's placement. It was superseded by the reading
+      below.
+  - **The reading: silicon's tick positions, re-placed on ic7. n = 7,493,273, NO BUILD.**
+    - The capture is the runtime lane's tick2-b2-20261127T0342 (board 2, b42c8c644, payload 181680bd16eec663...,
+      first attempt), pre-registered in llvm-capstone capstone/tests/rtl-smoke/b5b2-ticklog-2026-11-27/PREREG.md
+      with Amendment 1, 340a17e4b463, before the boot.
+    - The runtime lane's controls all pass (its RESULTS, runtime/b5b2-linux c6ff7e164c9a; not re-run here): mcycle per tick within +-1 % of 250,000 for >= 99 %; the awk loop
+      within +-3 % for 99.01 %; idle median 0; the synthetic reader test.
+    - The window is mcf's SPEC lines, 6,647.43 s, +0.70 % on the row's 6,601.15 s. N_s = 664,521 (expected
+      664,743).
+    - The program key. The kernel subtracts every S trap from U, and the M path is c_M = 81 measured + 251 fixed
+      per MTI, sd 0. The twin key-match passed at +0.073 %. On silicon (reported) the program sum is
+      26,679,585,857, +0.133 % on the trace's protected 26,644,263,390.
+    - F_k: `<hdd>/capstone/ticklog/board/Fk.txt`, sha256 ff2cf54e411c948c..., 664,521 values, recomputed here.
+    - The run: thin_keep.py (the registered collision rule) on ic7, then rcm-lb-dc --lb 1024x8 unchanged.
+      - Selection: 554,061 kept, 110,460 collisions (16.6 %), 0 ties.
+      - LB0 misses 182,545,346 - LB misses 175,052,073 = **n = 7,493,273**.
+      - At all-cold that is 0.183 % of 165.03 G (0.182 % of this boot's own 166.2 G), 5.45x under the BUILD line
+        of 40,849,010.
+      - The collisions only raise n, so the verdict holds without attributing them.
+      - n is below the uniform-placement 17.9 M. Silicon's ticks crowd its high-CPI stretches, the direction the
+        twin leaned.
+    - The runtime lane's per-tick distribution (reported): bimodal, a slow peak at 0.3-0.6x the mean program
+      delta (CPI 10-15) and a fast one at 2.0-2.4x (CPI about 2.5). 47.6 % of program instructions run in ticks at
+      >= 1.8x the mean delta.
+    - **Sensitivity (reported, not the verdict):** F_k with the unexplained residue of about 53 instructions per
+      tick subtracted (53.2, clamped at 0 per interval, 4,327 intervals). It reads n = 7,381,344
+      (182,527,274 - 175,145,930), with 110,872 collisions: -1.5 % on the binding reading.
+    - **Not read:** the nested lane's slice/rest split on the same capture (pre-registration nested-workloads
+      920444052e26, RESULT 647db7a30f73). It failed its own alignment gate: r 0.2215 against a rotated control of
+      0.0684, needing > 0.3 and a margin of 0.2. Nothing from it enters this verdict.
+    - Result lines, and the tool as run (sha256 33327705cffff83a...): `mcf-tick-thin/results.txt`.
   - The smaller LB sizes were NO BUILD already.
   - The modelled LB is invalidated on every namespace-key change. One that survived a tick would remove v2-like
     populations or more: that is the lever above that this model cannot measure.
