@@ -314,10 +314,27 @@ UNDECIDED.
     toward NO BUILD, but host time is not cycle time.
   - The settling reading: silicon's tick positions in mcf's stage, as the minstret delta of every tick. The runtime
     lane owns that row: a kernel-side tick log on the same kernel config, with its own instrument controls. Its binding test re-places the
-    ic7 trace's ticks at silicon's positions (`mcf-tick-thin/thin_keep.py`: silicon tick k keeps ic7 tick floor(F_k x N),
-    F_k its minstret fraction of the window; ic7's ticks sit at constant instruction spacing under -icount, so rank
-    is instruction fraction; its control, 667,564 evenly spaced F_k on ic7, reproduces the 2-in-3 thinning's
-    n = 17,917,437 exactly, with 0 collisions; a clustered negative, 1,000 F_k in a 0.1 % band, reports 355) and reruns the model: NO BUILD if n < 40,849,010.
+    ic7 trace's ticks at silicon's positions (`mcf-tick-thin/thin_keep.py`) and reruns the model: NO BUILD if n < 40,849,010.
+    - **The key is program instructions on both sides.**
+      - Silicon: the runtime lane's kernel subtracts every S trap from U. On ic7: the protected count per tick,
+        interpolated from the kind-9 markers.
+      - Each silicon tick takes the ic7 tick nearest in protected-instruction fraction. A taken tick pushes the
+        target to the next free one. Where silicon is denser than ic7 (1.52x silicon's mean), the slice is capped at
+        ic7's density, which raises n, toward BUILD.
+    - **The first cut, rank by all-mode instruction fraction, was withdrawn before use** (the nested lane's catch).
+      17.2 % of ic7's instructions_all is non-protected, and silicon's kernel share follows its ticks, so all-mode
+      fractions drift between the two sides. Its control passed (17,917,437 exactly) but used evenly spaced
+      targets, so it could not see a key mismatch.
+    - **Controls of the protected-key tool** (`mcf-tick-thin/results.txt`):
+      - Self-map: the protected positions of the 667,564 ticks the 2-in-3 thinning kept reproduce
+        n = 17,917,437 exactly, with 0 pushes.
+      - A first control MISSED its +-1 % band. Targets evenly spaced in protected position read 17,485,246
+        (-2.41 %) against the index-uniform 2-in-3. That is the sensitivity of n to what "uniform" means, not a
+        selection error (the self-map isolates the selection).
+      - A clustered negative shows over-density as pushes (959 of 1,000, max 47 ticks).
+    - **The key-match gate is the runtime lane's.** On an -icount twin dry run, the kernel's program-instruction sum
+      over mcf's window must equal 26,644,263,390 within 0.1 % beyond the predicted per-entry residue, or the board
+      run does not go.
   - **Where cycle-time placement leans: against BUILD, on the twin** (the nested lane's mcf-tk6, a repeat of ic6
     with an exact per-tick side file; pre-registration nested-workloads 678d571b2cb6, RESULT 57d52b7c0236; result lines
     in capstone/tests/record-trace/dc-v3/results-tk6/, read here).

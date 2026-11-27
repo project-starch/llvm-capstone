@@ -39,15 +39,34 @@ LB probes 140775762 deny_hit_dead 0 dead_record 0 installs 142071596 invalidatio
 v3 check_run_starts 4078323202 bit44 182301573 mismatch_vs_LB0 1058439 LB0_misses 182113584
 v3 pop removed_lb     n       41337822 resident 1325231 1325231 1325231 1325231 cold_fraction 0.967941 0.967941 0.967941 0.967941
 
-== thin_keep.py control on ic7: 667,564 F_k = (k + 0.5) / 667,564 (the 2-in-3 thinning kept 667,564 ticks in the window)
+== thin_keep.py, FIRST CUT (rank by all-mode fraction, withdrawn before use): control 667,564 F_k = (k + 0.5) / 667,564
 ticks 1001357 in_window 1001346 targets 667564 kept 667564 collisions 0 window_instructions 554958708..32179748437
 flush E cleared 1335136
 LB  check    10044639808     9879593359      165046449      165046449              0      1728790            0
 LB probes 165046449 deny_hit_dead 0 dead_record 0 installs 166342283 invalidations 59995 flushes 2677918
 v3 check_run_starts 4078574638 bit44 184032220 mismatch_vs_LB0 2761126 LB0_misses 182963886
 v3 pop removed_lb     n       17917437 resident 1016187 1015956 1015943 1015943 cold_fraction 0.943285 0.943298 0.943299 0.943299
-== thin_keep.py negative (dry): 1,000 F_k uniform in [0.300, 0.301)
+== thin_keep.py, FIRST CUT, negative (dry): 1,000 F_k uniform in [0.300, 0.301)
 ticks 1001357 in_window 1001346 targets 1000 kept 645 collisions 355 window_instructions 554958708..32179748437
+== thin_keep.py (protected key), control 1: 667,564 F_k evenly spaced in protected position, band +-1 % of 17,917,437: MISSED (-2.41 %)
+pushed 3245 pushed_by_over_1_tick 2847 max_push 69 lost 0
+ticks 1001357 in_window 1001346 targets 667564 kept 667564 lost 0 window_instructions 554958708..32179748437
+flush E cleared 1335136
+LB  check    10044639808     9879122067      165517741      165517741              0      1734793            0
+LB probes 165517741 deny_hit_dead 0 dead_record 0 installs 166813575 invalidations 59995 flushes 2677918
+v3 check_run_starts 4078574638 bit44 184032220 mismatch_vs_LB0 2643461 LB0_misses 183002987
+v3 pop removed_lb     n       17485246 resident 1024208 1024563 1024150 1024150 cold_fraction 0.941424 0.941404 0.941428 0.941428
+== thin_keep.py (protected key), control 2 (self-map): F_k = the protected positions of the 667,564 ticks the 2-in-3 thinning kept; must give 17,917,437 exactly
+pushed 0 pushed_by_over_1_tick 0 max_push 0 lost 0
+ticks 1001357 in_window 1001346 targets 667564 kept 667564 lost 0 window_instructions 554958708..32179748437
+flush E cleared 1335136
+LB  check    10044639808     9879593359      165046449      165046449              0      1728790            0
+LB probes 165046449 deny_hit_dead 0 dead_record 0 installs 166342283 invalidations 59995 flushes 2677918
+v3 check_run_starts 4078574638 bit44 184032220 mismatch_vs_LB0 2761126 LB0_misses 182963886
+v3 pop removed_lb     n       17917437 resident 1016187 1015956 1015943 1015943 cold_fraction 0.943285 0.943298 0.943299 0.943299
+== thin_keep.py (protected key), negative (dry): 1,000 F_k uniform in [0.300, 0.301): over-density shows as pushes
+pushed 959 pushed_by_over_1_tick 898 max_push 47 lost 0
+ticks 1001357 in_window 1001346 targets 1000 kept 1000 lost 0 window_instructions 554958708..32179748437
 
 # Per-tick edge tallies (eana.py / eseq.py on escan.py's extraction of v3 spec-mcf.1497224, ic6, ic7; E-by-op equals each rcm output's own line)
 == spec-mcf.1497224
