@@ -9,3 +9,4 @@ ea2b976186e93f44  boot-plugin-ic.py
 da30a84712958358  run-b3-mcf.sh
 b21df69514b22fbd  ovl-ic/init
 83c9b03ac58c6621  diag/diag-boot.sh
+a9206793127dbf67  rcm-lb-dc-thin.c

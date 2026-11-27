@@ -9846,3 +9846,67 @@ which also covers rdtime's traps to M on silicon), are the rtl lane's.
 - The window is ±D (3 bytes) plus the tty drain lag.
 - The twin's kernel ticks at 250 Hz under NO_HZ_IDLE, while fpga-v1's is HZ_PERIODIC at 100 Hz. The shifts match the
   tick rate, not the kernel.
+
+### Correction to the Result: one column label and the reading are withdrawn (written 2026-11-27 08:32 host time)
+
+On 2026-11-27 the rtl lane withdrew two steps of its own reading of these runs, and two statements in this Result
+rest on them. The table's counts stand. What changes is what one column counts and what the four rows can show.
+
+**1. The label "E op 3 (MRET into protected U)" is wrong.** It heads a column of the pre-registration's table, and the
+Result's E op 3 column has the same meaning.
+- The tracer emits an E on every change of the namespace key, which is `root << 1 | (!m_mode && root != 0)`
+  (`cap_rev_trace.c`, `cap_rev_trace_ctx`). Op 3 counts every such MRET, including the MRET back into S after the
+  kernel's `sbi_set_timer` ecall, not only MRETs into protected U.
+- At each timer tick the edges run MTI, MRET, STI, ecall (cause 9), MRET, SRET. That is two MRETs and four flushes, one
+  in and one out of M for each MRET.
+- So E op 3 is about twice the tick count, and the LB flushes are about four times it:
+
+| trace | ticks (MTI edges) | E op 3 / 2 |
+|---|---:|---:|
+| v3 | 203,935 (the rtl lane's count) | 203,935 |
+| shift 6 | 467,219 | 467,216 |
+| shift 7 | 1,001,357 | 1,001,361 |
+
+- The shift 6 and shift 7 tick counts are this lane's (`rcm-lb-dc-thin`'s `thin ... ticks` line), and they equal the
+  rtl lane's.
+- Prediction 2's ratio is a ratio of the same count, so it is unaffected.
+- Where the pre-registration says "M round trips out of protected U", it should read "M round trips". The trips come
+  from S as well as from U.
+
+**2. "What this reads" is withdrawn.**
+- It said that the removed population "is set by the namespace flush rate, and so by the timer's ticks per
+  instruction". It also said that both ends of the shift 6/7 bracket remove fewer than 40,849,010 misses, which put
+  silicon under that threshold.
+- Both claims assume that the population depends on the tick count alone, and the rows cannot show that. v2 and v3
+  place their ticks in wall-clock time and the two shifts place them in instruction time. So the rows differ in
+  placement as well as in rate, and this Result itself says placement was not tested.
+- **Placement is first-order.** The rtl lane thinned the shift 6 trace: it cleared the flushes of every second tick, so
+  ticks were dropped evenly by instruction count.
+  - That leaves 233,609 ticks, more than v3's 203,935.
+  - Yet it removes 85,199,575 misses, three times v3's 28,507,321.
+- **This lane's reproduction, with its own tool** (`rcm-lb-dc-thin`, added to `capstone/tests/record-trace/dc-v3/`):
+
+| run | ticks kept | removed by 1024x8 | its cold fraction | the rtl lane's |
+|---|---:|---:|---|---:|
+| shift 6, all ticks (control) | 467,219 | 26,617,270 | 0.944564 | 26,617,270 (Result) |
+| shift 6, even ticks | 233,609 | 85,197,216 | 0.986169 | 85,199,575 |
+| shift 6, odd ticks | 233,610 | 85,180,582 | 0.986121 | (not run) |
+| shift 7, even ticks | 500,678 | 23,308,489 | 0.955529 | 23,308,489 |
+
+  - The control reproduces the Result's replay exactly.
+  - Shift 7 matches exactly. Shift 6 differs by 2,359 (0.003 %). The likely cause is three windows that my tool counts
+    as reopened, where a new MTI arrived before the cause-9 MRET; the rtl lane's tool reports none unmatched. This is
+    not checked further.
+  - The two phases differ by 0.02 %, so which tick is kept hardly matters.
+- So prediction 3 holds as an order, but the order is not evidence that the tick rate sets the population, and the
+  bracket does not bound silicon. Silicon places its ticks in cycle time, which neither the shifts nor v3 model.
+
+**What stands.**
+- Every count in the four rows, with its residency and cold fractions;
+- prediction 1;
+- prediction 2, with its disclosed denominator.
+
+The grading is the rtl lane's, and it reads candidate NO BUILD with placement open. On its uniform-placement curve,
+from its 3/4 and 7/8 thins of shift 6, the population reaches 40.85 M between 408,816 and 467,219 ticks, near
+411 k. Silicon's tick count is 660,115. That curve is the rtl lane's reading; this lane reproduced the 1/2 points
+only.

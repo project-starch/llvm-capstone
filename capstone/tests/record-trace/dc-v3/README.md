@@ -13,6 +13,10 @@ section "mcf's record-cache population depends on the emulator's speed".
   finds no window or when D > 64.
 - `rcm-lb-dc.c` is the rtl lane's `rcm-lb.c` (dev `6d87efe8d50a`), with an LB0 fixed at 64x4 and residency tallies per
   population. On a v2 trace it reproduces `rcm-lb`'s rows exactly.
+- `rcm-lb-dc-thin.c` (2026-11-27) is `rcm-lb-dc.c` plus `--thin K:PH`: it keeps timer tick t (1-based, counted at each
+  E op 0 with cause 0x80000007) only when t % K == PH, and for a dropped tick clears the flush bit on every E from the
+  MTI through the first MRET after the kernel's cause-9 ecall. Without `--thin` and at `--thin 1:0` it is
+  `rcm-lb-dc`. It checks the rtl lane's thinned readings (the correction to the -icount Result).
 - The drivers:
   - `trace-spec-dc.sh` with `chain-dc.sh` runs the traces without icount;
   - `trace-spec-dc-ic.sh`, `boot-plugin-ic.py`, `ovl-ic/init` and `chain-ic.sh` run them under `-icount`;
