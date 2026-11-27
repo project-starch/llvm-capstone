@@ -347,3 +347,28 @@ every check that names fw-crvc. The fpga/ariane build of the same head compiles 
 
 **Prediction KA is restated for the new print:** exactly one `FWCRVC redirect=1 emulate-u=M` line, which falls inside
 the crvcmis window, after "KTEST begin /crvcmis.dom". Every other row is unchanged.
+
+## Amendment 3 (2026-11-27, after KA's boot, before any rerun): crvcmis did not run in KA, which is VOID for crvcmis; a fixed init reruns KA, KB and KC
+
+**What KA read.**
+- **Usable:** the banner "FWCRVC: stage-2 misaligned redirect"; "sublet: CRVC probe read 0x1 after writing 1: the
+  CRVC mode is present"; crvcleak "standard RVC", exit 0.
+- **crvcmis never ran.** The loader printed "crvcmis.dom[61]: load failed after the point of no return: -13 (line
+  392)", and the child died of signal 11.
+- **The cause:** line 392 is dom_resources_init's error check. That function refuses a program whose working
+  directory is the whole filesystem: `if (!strcmp(d->root_name, "/")) return -EACCES;`, with the comment "A
+  whole-filesystem cwd is not a useful confinement grant".
+- ktinit ran its children from /. The spec init does `cd /tmp/run` first, and stage commands run inside their stage
+  directory, so no stage boot is affected.
+- **So KA's crvcmis prediction is VOID,** neither met nor refuted. The check never reached the instruction. The same
+  holds for the crvcmis halves of KB and KC, which run the same init in the queue now. Their crvcleak halves, and KD
+  and KE, which test only crvcleak, stand as pre-registered.
+
+**The rerun.** K/ktinit2.c is ktinit with `mkdir("/w"); chdir("/w")` before the children, printing "KTEST cwd /w".
+- Its initramfs, ktest2.cpio.gz (10ce44205e17603e), has the same three files plus that init.
+- It is booted by kt-boot2.py, which is kt-boot.py with the initramfs named by KTCPIO.
+- KA2, KB2 and KC2 repeat KA, KB and KC exactly otherwise, with the same kernels, firmware, properties and
+  predictions. They run after the queued KT4, KT1 and KT2.
+
+**For the board images:** the crvcmis stage runs through the spec init's stage runner, inside its stage directory,
+never from /. That is checked when the images are built.
