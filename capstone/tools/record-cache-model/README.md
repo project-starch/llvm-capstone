@@ -318,6 +318,31 @@ UNDECIDED.
     F_k its minstret fraction of the window; ic7's ticks sit at constant instruction spacing under -icount, so rank
     is instruction fraction; its control, 667,564 evenly spaced F_k on ic7, reproduces the 2-in-3 thinning's
     n = 17,917,437 exactly, with 0 collisions; a clustered negative, 1,000 F_k in a 0.1 % band, reports 355) and reruns the model: NO BUILD if n < 40,849,010.
+  - **Where cycle-time placement leans: against BUILD, on the twin** (the nested lane's mcf-tk6, a repeat of ic6
+    with an exact per-tick side file; pre-registration nested-workloads 678d571b2cb6, RESULT 57d52b7c0236; result lines
+    in capstone/tests/record-trace/dc-v3/results-tk6/, read here).
+    - The repeat: 467,258 ticks, removed 26,621,160 (ic6 26,617,270). Every replay row joins the side file.
+    - The slice is the top decile of instructions by LB0 misses per 1000 instructions. It holds 97.4 % of LB0
+      misses and 99.85 % of the removed misses.
+    - The slice makes 60.568 LB0 misses per 1000 instructions against the rest's 0.179. Its program D$ MPKI is
+      178.068 against 55.996 (all sources: 419.106 against 93.657).
+    - **The test.** Take ticks per instruction in proportion to CPI. A BUILD then needs the slice's density at
+      <= 411/660 of the mean, that is, the rest's CPI Y at >= 1.6732 x the slice's X, whatever the mean CPI.
+    - **The proxy.** CPI = 1 + (LB0 x lb_cost + D$ misses x dc_cost) / instructions, with no overlap.
+    - **The reading.** Y/X reads 0.23-0.39 at every listed cost (lb 40.4 or 15.6, dc 20-80, program or all
+      sources). As dc_cost grows, Y/X tends to the rest/slice MPKI ratio, 0.3145 (program) or 0.2235 (all), so no
+      D$ cost reaches 1.6732.
+    - **The no-overlap proxy, from source.** CVA6's write-through D$ has one read MSHR (wt_dcache_missunit.sv:223-224 at
+      b42c8c644: "currently we only have one outstanding read TX"), so read misses serialize. That supports the
+      proxy for loads; it does not cover other stall classes.
+    - **A bound from silicon's mean CPI alone.** 165.03 G cycles over about 29 G instructions is about 5.7; the
+      instruction count is v3's instructions_all, not a silicon reading.
+      - A BUILD needs X <= 0.6227 x 5.7 = 3.55.
+      - The LB term alone gives X >= 3.447 at 40.4 and X >= 1.945 at 15.6.
+      - So the slice's program D$ misses would have to cost <= 0.58 or <= 9.0 cycles each. On silicon a record
+        line's D$ miss costs 40.4 - 15.6 = 24.8 cycles (the measured cold-minus-warm pair below).
+    - **Status.** This is the twin's placement proxy, not silicon's placement. The verdict stays candidate until the
+      runtime lane's tick log, which records mcycle and hpm 0x02 per tick and so reads X and Y directly.
   - The smaller LB sizes were NO BUILD already.
   - The modelled LB is invalidated on every namespace-key change. One that survived a tick would remove v2-like
     populations or more: that is the lever above that this model cannot measure.
