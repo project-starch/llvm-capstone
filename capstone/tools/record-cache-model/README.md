@@ -154,7 +154,7 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
 | program | trace (nested lane, twin) | LB check misses asis / dedup | cycle denominator (board row) | share at cold 40.4 | share at warm 15.6 | verdict |
 |---|---|---|---|---|---|---|
 | 502.gcc_r test (t1.c) | spec-gcc.2262833, sha256 0cfc265bfa31dbb2..., recomputed here | 8,921 / 8,921 (self_evict 0) | 144.0 M = 5.76 s x 25 MHz | 0.250 % | 0.097 % | **NO BUILD** |
-| 505.mcf_r test (inp.in) | spec-mcf.2201746, sha256 633ca24aabba3062..., recomputed here | 181,127,530 / 181,127,654 (self_evict 124) | 165.03 G = 6,601.15 s x 25 MHz (board 3, B5TL1-g1b 539b2ef41ee4d444) | 4.434 % | 1.712 % | **UNDECIDED**: LB 1024x8 and RC; every smaller LB size NO BUILD |
+| 505.mcf_r test (inp.in) | spec-mcf.2201746, sha256 633ca24aabba3062..., recomputed here | 181,127,530 / 181,127,654 (self_evict 124) | 165.03 G = 6,601.15 s x 25 MHz (board 3, B5TL1-g1b 539b2ef41ee4d444) | 4.434 % | 1.712 % | **UNDECIDED**: RC. LB 1024x8 candidate NO BUILD (2026-11-27, below; tick placement open); every smaller LB size NO BUILD |
 | 500.perlbench_r test (makerand.pl, the campaign's g4mk stage) | spec-perl3.2883687, sha256 1af7b0c90ab7cb56..., recomputed here | 277,290 / 277,290 (self_evict 0) | 6.8925 G = 275.70 s x 25 MHz (board 2, CF-B5TL1-g4mk e82d42ebe558cb18) | 0.163 % | 0.063 % | **NO BUILD** |
 
 **505.mcf_r test (inp.in): UNDECIDED on its board row** (2026-11-26, below): two candidates remain, LB 1024x8 and RC.
@@ -174,7 +174,7 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
   - NO BUILD (ceiling, cold 40.4) at 29,270 s or more. g1b's mcf stage bound is 30,000 s, so even a run cut at the
     bound decides.
   - BUILD (removed x warm 15.6) by LB size:
-    - 1024x8 removes 54,589,670 and needs a run of 3,406 s or less;
+    - 1024x8 removes 54,589,670 and needs a run of 3,406 s or less (v2's population, superseded 2026-11-27 below);
     - 256x4 removes 7,807,101 and needs 487 s or less;
     - 128x8 removes 7,148,851 and needs 446 s or less;
     - 128x4 and 64x8 need 137 and 127 s or less.
@@ -211,7 +211,7 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
   the rule decides only part of it.
   - Ceiling: 4.434 % at cold, so not NO BUILD.
   - LB 256x4, 128x8, 128x4, 64x8: candidate NO BUILD, at 0.191 / 0.175 / 0.054 / 0.050 % even at the cold cost.
-  - LB 1024x8: UNDECIDED, 0.516 % at warm and 1.336 % at cold.
+  - LB 1024x8 (v2's population, superseded 2026-11-27 by the tick-rate reading below): UNDECIDED, 0.516 % at warm and 1.336 % at cold.
     - It is a BUILD exactly when its 54,589,670 removed misses cost more than 30.2 cycles on average, that is when
       more than 59.0 % of them are cold.
     - What decides it is the D$-residency of those misses.
@@ -243,6 +243,96 @@ The record-cache decision for B5b-2 is made on EVENTS from this model and a MEAS
     | 0x1d | record-TLB walk started (:147) | the model's record TLB (round-robin in the RTL, ex_stage.sv:2395-2398) |
     | 0x1f | paged-table record access (:149) | the same, its denominator |
     | 0x04 | DTLB misses | PTW traffic, the model's blind spot |
+
+**505.mcf_r, LB 1024x8: candidate NO BUILD on the tick rate; the tick placement is open** (2026-11-27). RC stays
+UNDECIDED.
+- **v2's 1024x8 population is a property of the twin's speed, not of mcf.** It is the 54,589,670 above and its
+  3,406 s threshold.
+  - Each timer tick ends the verdict cache's contents for protected U.
+  - Without `-icount` the twin's guest clock follows the host. v2 placed about 131 k ticks (262,027 MRETs / 2, inferred by the same identity on an older tracer build) in mcf's run, and v3
+    (tracer c3f93ba340) placed 203,935.
+  - Silicon's run is 660,115 ticks, and fewer ticks remove more misses:
+    - g1b's kernel (trapk/fpga, payload 539b2ef41ee4d444...; its .config equals trapk/fpga-v1's except the initramfs
+      path) is CONFIG_HZ=100 HZ_PERIODIC, over 6,601.15 s;
+    - the trace kernel, Image.twin 749fed26 = trapk/linux-6.1, is CONFIG_HZ=250 NO_HZ_IDLE;
+    - neither side has Sstc, so every tick is an M-mode timer interrupt.
+- **The traces.** The nested lane's v3 trace carries the D$ model. The two icount traces run under QEMU
+  `-icount shift=6` and `shift=7`: the guest clock advances 64 or 128 ns per instruction, so ticks land at fixed
+  instruction counts. Sources:
+  - pre-registration nested-workloads 7650843941fe, Amendment 1 bb10424b43e8, RESULT 4fa28baf40c1;
+  - instruments in capstone/tests/record-trace/dc-v3;
+  - each graded B5TL1-505.mcf_r PASS, WINDOW-OK, mismatch_vs_LB0 0;
+  - identical protected instruction counts (26,644,263,390 / 394 / 390).
+  The rtl lane read every count below from the rcm-lb-dc 1024x8 outputs under
+  `<hdd>/capstone/nested/rectrace-dc/runs/spec-mcf{,-ic6,-ic7}`.
+- **A tick is one flush window.** This is measured by `mcf-tick-thin/` (eana.py and eseq.py on escan.py's extraction
+  of each trace; result lines in `mcf-tick-thin/results.txt`).
+  - The tracer emits an edge on every namespace-key change. The key is `root<<1 | (!m_mode && root != 0)`, so a tick
+    is four flushing edges: MTI to M, MRET to U, the kernel's sbi_set_timer ecall to M, and MRET to S. The
+    sequence is MTI → MRET → STI → ecall 9 → MRET → SRET in 453,726 of ic6's 467,219 ticks.
+  - No record event lies between the MTI's MRET and the next edge: 467,207 of 467,219 on ic6, 203,932 of 203,935 on
+    v3, 1,001,347 of 1,001,357 on ic7.
+  - So E op 3 counts two MRETs per tick, and LB flushes = 2 x E op 3 + 2 x tables exactly (816,018; 1,870,662;
+    4,013,054). Ticks, not MRETs, are the unit to compare.
+- **The uniform-placement curve.** The tick flush bits are cleared in the ic6 and ic7 traces, every K-th tick kept
+  (`thin.py`), and the unchanged rcm-lb-dc binary rerun on the copy. Only n is valid in a thinned run.
+
+| ticks in mcf's run | trace | removed_lb n (LB0 misses - 1024x8 misses) | share at all-cold 40.4 |
+|---:|---|---:|---:|
+| 116,804 | ic6, 1 tick in 4 | 129,066,128 | 3.160 % |
+| 233,609 | ic6, 1 in 2 | 85,199,575 | 2.086 % |
+| 350,414 | ic6, 3 in 4 | 55,952,193 | 1.370 % |
+| 408,816 | ic6, 7 in 8 | 41,337,822 | 1.012 % |
+| 467,219 | ic6 | 26,617,270 | 0.652 % |
+| 500,678 | ic7, 1 in 2 | 23,308,489 | 0.571 % |
+| **667,571** | **ic7, 2 in 3 (silicon: 660,115)** | **17,917,437** | **0.439 %** |
+| 1,001,357 | ic7 | 7,130,356 | 0.175 % |
+
+- Not on the curve: v3, host clock, 203,935 ticks, n = 28,507,321 (0.698 %). That is the placement effect, below.
+- **Reproduced independently** by the nested lane's own tool (rectrace-dc/rcm-lb-dc-thin, `--thin K:PH`; outputs in
+  `<hdd>/capstone/nested/rectrace-dc/thin/`):
+  - control 1:0 on ic6 = 26,617,270 exactly;
+  - ic6 2:0 = 85,197,216 against 85,199,575 here (0.003 %; its tick windows close by its own rule, 3 reopened);
+  - the other phase, 2:1, = 85,180,582;
+  - ic7 2:0 = 23,308,489, exactly as here.
+
+- **Reading the curve.**
+  - It is monotone in the ticks placed at fixed instruction spacing. The ic7 half lands next to ic6, so the two runs
+    differ only in tick density.
+  - It crosses the BUILD line (n = 1.6503 G / 40.4 = 40,849,010) between 408,816 ticks (41.34 M) and 467,219
+    (26.62 M), near 411 k by linear interpolation between those two measured points.
+  - At silicon's count it reads 17.9 M, 0.439 % even if every removed miss is cold. NO BUILD on this row needs a run
+    of 2,895 s or more; the run is 6,601 s.
+  - **Placement is first-order.** v3's host-clock placement at 204 k ticks removes about what uniform placement does
+    at about 460 k (28.5 M lies between the 408,816 and 467,219 points). So neither the trace order v2 > v3 > ic6 > ic7 nor any count of ticks alone is evidence for the
+    verdict.
+- **Verdict: candidate NO BUILD for LB 1024x8, with the tick placement open.**
+  - Silicon places ticks in cycle time. A BUILD needs that placement to leave the regions where 1024x8 helps with no
+    more than about 0.62x the mean tick density (411 k / 660 k), that is, those regions running at 0.62x mean CPI
+    or less.
+  - Nothing measured excludes that. The only non-uniform placement measured, the twin's host clock, went about 2.2x
+    toward NO BUILD, but host time is not cycle time.
+  - The settling reading: silicon's tick positions in mcf's stage, as the minstret delta of every tick. The runtime
+    lane owns that row: a kernel-side tick log on the same kernel config, with its own instrument controls. Its binding test re-places the
+    ic7 trace's ticks at silicon's positions (`mcf-tick-thin/thin_keep.py`: silicon tick k keeps ic7 tick floor(F_k x N),
+    F_k its minstret fraction of the window; ic7's ticks sit at constant instruction spacing under -icount, so rank
+    is instruction fraction; its control, 667,564 evenly spaced F_k on ic7, reproduces the 2-in-3 thinning's
+    n = 17,917,437 exactly, with 0 collisions; a clustered negative, 1,000 F_k in a 0.1 % band, reports 355) and reruns the model: NO BUILD if n < 40,849,010.
+  - The smaller LB sizes were NO BUILD already.
+  - The modelled LB is invalidated on every namespace-key change. One that survived a tick would remove v2-like
+    populations or more: that is the lever above that this model cannot measure.
+  - The verdict is scoped to this row (the qualification kernel, 165.03 G). A campaign kernel with another HZ or fast
+    rdtime changes both the tick count and the denominator.
+- **RC stays UNDECIDED.**
+  - Its removed misses hardly move with the tick rate: 136,588,885 / 137,469,116 / 139,194,783 on v3 / ic6 / ic7.
+  - The model's cold fraction for them is 0.988 / 0.986 / 0.980. At that residency RC is a BUILD iff c < 85.4 / 86.0
+    / 87.0 cycles, against c < 10.6 at the warm cost.
+  - Using the residency needs the silicon check above (0x02 against the model's window misses), and c still needs a
+    proven upper bound.
+- **Withdrawn before landing** (sent to the nested lane only, never committed):
+  - "E op 3 = MRET into protected U": half are MRETs into S, as above.
+  - "every trace at or above v3's MRET rate gives n <= 28.5 M": refuted by the ic6 half, 233,609 ticks and n = 85.2 M.
+  - Found by the claim-auditor before this row landed.
 
 **500.perlbench_r test (makerand.pl): NO BUILD** (decided 2026-11-26 on its board row, below).
 - The trace is the nested lane's spec-perl3.2883687: 10,130,629,600 B, sha256 1af7b0c90ab7cb56..., recomputed here. It
