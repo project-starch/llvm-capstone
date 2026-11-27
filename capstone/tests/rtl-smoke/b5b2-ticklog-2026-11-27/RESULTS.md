@@ -64,3 +64,19 @@ rtl's, from the F_k file below by the rule in Amendment 1; it is recorded here w
 - The kernel and firmware differ from the row's by the tick log only (PREREG, "The instrument"; Amendment 1).
 - Two earlier payloads were built and withdrawn before any boot (247d7ea4, armed and withdrawn at 02:29:05Z; and
   39f07012, superseded after its twin key-match read +0.786 %).
+
+## The LB verdict (rtl, read at its source)
+
+- **NO BUILD by the registered rule:** n = 7,493,273 removed misses (LB0 182,545,346 − LB 175,052,073), 5.45x under
+  40,849,010; all-cold 0.183 % of 165.03 G, 0.182 % of this boot's own cycles. Collisions bias n up, so the verdict
+  stands without attributing them. dev a7038b49974f.
+- **Selection** on ic7 (spec-mcf-ic7.1876342): 664,521 targets, 554,061 kept, C = 110,460 (16.6 %), 0 ties; flush E
+  cleared 1,789,140. Tool thin_keep.py sha256 33327705cffff83a…, as committed at dev d96c9eeb5e0b (rcm-lb-dc
+  --lb 1024x8 unchanged). The self-map control (Amendment 1, 0 collisions) is unchanged under it.
+- **A deviation caught before any n:** rtl's first dry run on this F_k used a forward-push assignment that the rule
+  never registered (280,146 pushes, max 53,653 ticks, 49,285 lost). It was stopped before the model replay, and the
+  tool and its README claim were retracted on dev at d96c9eeb5e0b.
+- **Sensitivity, not the verdict:** with the unexplained 53.2 instructions per tick subtracted from each interval,
+  n = 7,381,344 (−1.5 %).
+- nested's CPI split is not read: its own registered alignment gate failed (nested-workloads 647db7a30f73). It
+  contributes nothing here.
