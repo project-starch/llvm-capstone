@@ -543,3 +543,34 @@ excursion of B_s's size would read as "the seal costs time". So, as the go/no-go
 - A gcc GO needs about 0.06 s with the separation rule (r ≥ 0.12).
 - **Prediction 6** ("GO, carried by perlbench") stands as written. It is graded as written, and at P_perl = 11.38 s it
   now needs r near the band's top.
+
+## Amendment 8 (2026-11-28, after RESULTS 30a2f27261b8, before any follow-up boot): a three-boot K reference on b42c8c644 for the seal control's cost reading
+
+**Why.** RESULTS left the seal control UNDECIDED on perlbench and nab, because one K0 boot fell outside the stock
+S-LSHOFFL window. If K0 is representative, seal_perl is +3.31 s against an allowance of 1.74 s, which would mean the
+seal costs perlbench about 1.2 %. Two more boots of the same image on the same bitstream read whether K0 is
+representative.
+
+**boot: K0b, K0c**
+
+Both boots are S-LSHOFFL-K (fw_payload.bin ac582c15dbb9c2087b7102573e2ed76472f15d756238eed3e713c9d5e489aa30) on
+b42c8c644, on board 2, back to back.
+- There is no flash. The size is proven on b42c8c644 by K0.
+- A reflash or another bitstream's boot between them voids the pair.
+- crvcmis's predicate is K0's (Amendment 6).
+
+**What it decides, and only this:** the seal control's cost reading on all four stages.
+- **The reference:** K = {K0, K0b, K0c}.
+- **The cost:** seal_s = mean(OFF on N) - mean(K). The OFF boots are RESULTS' three.
+- **The test:** "the seal costs time on s" if seal_s > 0.0005 × mean(K) + max(range(OFF_s), range(K_s), B_s) + 0.02 s.
+  Otherwise the seal control holds on s.
+- **Not reopened:**
+  - RESULTS' verdict (GO) and its UNDECIDED stand as read;
+  - K0's own window against the stock boots, which is refuted, stands;
+  - this amendment adds a reading, it does not regrade.
+- **Not decided:** which of K, its firmware or the K overlay moved K0's perlbench. That is a later, separate pair of
+  single-variable images.
+
+**Predicted:** K0b and K0c read within B_perl (1.58 s) of K0's 273.57 s on perlbench, as an image-determined layout
+effect would. Then seal_perl ≈ +3.3 s exceeds its allowance (about 1.8 s), and **the seal costs time on perlbench**.
+nab is predicted to hold, since mean(OFF) - K0 = -0.34 s. gcc and imagick are predicted to hold.
