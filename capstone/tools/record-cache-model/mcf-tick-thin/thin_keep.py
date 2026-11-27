@@ -10,9 +10,12 @@
 # median tick gap of 27.5 k). Ticks in a non-protected stretch share a position and are interchangeable for the model.
 # (First cut, withdrawn before use: rank by all-mode fraction.)
 #
-# Ticks outside the window are kept. Inside, the targets are assigned in order: F_k takes the tick nearest in position,
-# or the next unused one after the previous target's (a PUSH, reported with its size in ticks). A target past the last
-# tick is LOST (one silicon tick lost, which only raises n). Every in-window tick not kept has its flush window
+# Ticks outside the window are kept. Inside, F_k takes the tick nearest in position. If that tick is taken, an unused
+# tick at the SAME position (a tie: ticks taken while no protected code ran) is used. Otherwise it is a COLLISION and
+# that silicon tick's flush is lost, which only raises n (toward BUILD): the kit's registered rule (b5b2-ticklog PREREG,
+# Collisions; Amendment 1, ties). A forward-push variant, which displaced ticks by up to 53,653 positions on silicon's
+# log and so could move flushes INTO the slice, was withdrawn before its n was read. Every in-window tick not kept
+# has its flush window
 # cleared, as in thin.py: the MTI edge through the MRET after the next cause-9 edge, inclusive. --dry prints the selection
 # and writes nothing.
 import sys, os, numpy as np
@@ -59,16 +62,23 @@ def main():
     F = np.sort(F)
     near = np.clip(np.searchsorted(g, F), 1, len(g) - 1)
     near = np.where(np.abs(g[near - 1] - F) <= np.abs(g[near] - F), near - 1, near)
-    j = np.empty(len(F), np.int64); prev = -1
+    # tie groups: runs of equal position; a taken tick may hand over to an unused member of its own group only
+    gstart = np.searchsorted(g, g, side='left'); gend = np.searchsorted(g, g, side='right')
+    nxt = gstart.copy()  # next candidate inside each group, indexed by the group's first tick
+    kept = np.zeros(len(w), bool); coll = 0; ties = 0
     for k in range(len(F)):
-        prev = j[k] = max(int(near[k]), prev + 1)
-    push = j - near
-    lost = int((j >= len(w)).sum()); j = j[j < len(w)]
-    kept = np.zeros(len(w), bool)
-    kept[j] = True
-    coll = lost
-    print('pushed', int((push > 0).sum()), 'pushed_by_over_1_tick', int((push > 1).sum()), 'max_push', int(push.max()), 'lost', lost, flush=True)
-    print('ticks', len(mti), 'in_window', len(w), 'targets', len(F), 'kept', int(kept.sum()), 'lost', coll,
+        m = int(near[k])
+        if not kept[m]:
+            kept[m] = True; continue
+        s = gstart[m]
+        while nxt[s] < gend[m] and kept[nxt[s]]:
+            nxt[s] += 1
+        if nxt[s] < gend[m]:
+            kept[nxt[s]] = True; ties += 1
+        else:
+            coll += 1
+    print('tie_resolved', ties, 'collisions', coll, flush=True)
+    print('ticks', len(mti), 'in_window', len(w), 'targets', len(F), 'kept', int(kept.sum()), 'collisions', coll,
           'window_instructions %.0f..%.0f' % (lo, hi), flush=True)
     clear = np.zeros(len(Ei), bool)
     for t in w[~kept]:

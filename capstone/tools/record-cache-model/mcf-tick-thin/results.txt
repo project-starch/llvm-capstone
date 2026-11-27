@@ -68,6 +68,12 @@ v3 pop removed_lb     n       17917437 resident 1016187 1015956 1015943 1015943 
 pushed 959 pushed_by_over_1_tick 898 max_push 47 lost 0
 ticks 1001357 in_window 1001346 targets 1000 kept 1000 lost 0 window_instructions 554958708..32179748437
 
+== thin_keep.py, registered collision rule (sha256 33327705cffff83a...), dry selections
+self-map:  tie_resolved 0 collisions 0      | targets 667564 kept 667564 (the same selection as the push variant, so n = 17,917,437)
+even-prot: tie_resolved 0 collisions 1372   | targets 667564 kept 666192
+negative:  tie_resolved 0 collisions 358    | targets 1000 kept 642
+== RETRACTED forward-push variant on silicon F_k (dry; run stopped before its replay, no n): pushed 280146 pushed_by_over_1_tick 227287 max_push 53653 lost 49285
+
 # Per-tick edge tallies (eana.py / eseq.py on escan.py's extraction of v3 spec-mcf.1497224, ic6, ic7; E-by-op equals each rcm output's own line)
 == spec-mcf.1497224
 E 1490197 by op [744777, 644, 336906, 407870] flush by op [407871, 138, 0, 407870]

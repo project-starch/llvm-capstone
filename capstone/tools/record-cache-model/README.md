@@ -318,16 +318,21 @@ UNDECIDED.
     - **The key is program instructions on both sides.**
       - Silicon: the runtime lane's kernel subtracts every S trap from U. On ic7: the protected count per tick,
         interpolated from the kind-9 markers.
-      - Each silicon tick takes the ic7 tick nearest in protected-instruction fraction. A taken tick pushes the
-        target to the next free one. Where silicon is denser than ic7 (1.52x silicon's mean), the slice is capped at
-        ic7's density, which raises n, toward BUILD.
+      - Each silicon tick takes the ic7 tick nearest in protected-instruction fraction. If that tick is taken, an
+        unused tick at the same position (a tie) is used. Otherwise it is a COLLISION and the flush is lost, which
+        raises n, toward BUILD. This is the kit's registered rule (b5b2-ticklog PREREG, Collisions; Amendment 1, ties).
+      - **RETRACTED: the forward-push assignment** (7c28b37d7724), and this README's claim that it "caps the slice
+        at ic7's density, which raises n". That is wrong for a push. On silicon's log it cascaded: 280,146 pushes,
+        the largest 53,653 ticks, and 49,285 lost. It carried flushes far from silicon's positions, possibly INTO the
+        slice, which lowers n. The push was never the registered rule. The run was stopped before its model replay,
+        so no n was produced with it.
     - **The first cut, rank by all-mode instruction fraction, was withdrawn before use** (the nested lane's catch).
       17.2 % of ic7's instructions_all is non-protected, and silicon's kernel share follows its ticks, so all-mode
       fractions drift between the two sides. Its control passed (17,917,437 exactly) but used evenly spaced
       targets, so it could not see a key mismatch.
     - **Controls of the protected-key tool** (`mcf-tick-thin/results.txt`):
       - Self-map: the protected positions of the 667,564 ticks the 2-in-3 thinning kept reproduce
-        n = 17,917,437 exactly, with 0 pushes.
+        n = 17,917,437 exactly, with 0 pushes (and 0 collisions under the registered rule, the same selection).
       - A first control MISSED its +-1 % band. Targets evenly spaced in protected position read 17,485,246
         (-2.41 %) against the index-uniform 2-in-3. That is the sensitivity of n to what "uniform" means, not a
         selection error (the self-map isolates the selection).
