@@ -9999,3 +9999,71 @@ instruction counts here come from the I marks, which are placed every 1024 runs.
 - The calibrated row's 5.7 rests on about 29 G silicon instructions, which is unmeasured.
 - The slice is defined on the twin's instruction counts, kernel included, at 250 Hz with NO_HZ_IDLE.
 - N=1.
+
+### Result: mcf-tk6. The slice that holds the removed misses misses the D$ 3.2 times as often as the rest, so the twin leans against BUILD at every listed cost (trap-route twin, 2026-11-27 10:00-10:22 host time, read against 678d571b2cb6)
+
+**Prediction 1 (gate) holds:**
+- B5TL1-505.mcf_r PASS and WINDOW-OK (D 3);
+- mismatch_vs_LB0 0, and bit44 equal to the 64x4 misses (182,307,651);
+- the ticks file has 477,219 rows;
+- both replays give removed_lb 26,621,160.
+
+**Prediction 2 (the run repeats mcf-ic6) holds:**
+
+| | mcf-tk6 | mcf-ic6 | band |
+|---|---:|---:|---|
+| instructions_protected | 26,644,263,390 | 26,644,263,394 | within 10 |
+| MTI edges | 467,258 | 467,219 | within 1 % |
+| removed by 1024x8 | 26,621,160 | 26,617,270 | within 2 % |
+
+**Prediction 3 (the join) holds.**
+- All 467,258 replay rows join. 9,961 QEMU rows were not put: they are the MTIs taken while no protected root was
+  set.
+- Intervals now carry exact instruction counts, most of them exactly 62,500 instructions.
+- The top LB0 decile has 46,854 intervals and 2,931,881,229 instructions.
+  - It holds 177,579,011 LB0 misses (60.57 per 1000 instructions, 97.4 %).
+  - It holds 26,580,514 of the 26,621,160 removed (99.85 %).
+
+**Prediction 4 holds: the slice misses the D$ more than the rest.**
+
+| side | instructions | LB0 misses per 1000 instructions | removed | program D$ misses per 1000 instructions | all-source D$ misses per 1000 instructions |
+|---|---:|---:|---:|---:|---:|
+| slice (top LB0 decile) | 2,931,881,229 | 60.568 | 26,580,514 | 178.068 | 419.106 |
+| rest | 26,386,851,659 | 0.179 | 40,646 | 55.996 | 93.657 |
+
+- The deciles by D$ misses per 1000 instructions point the same way. The most-missing decile (435 per 1000, all
+  sources) holds 93.7 % of removed and 90.2 % of LB0 misses.
+
+**The complement table** (`tick-bins.py`; proxy CPI = 1 + (LB0 misses × LB cost + D$ misses × D$ cost) / instructions):
+- Every row reads "against". At an LB cost of 40.4 cycles, Y/X is 0.304-0.310 with program D$ misses and 0.230-0.244
+  with all sources. At 15.6 cycles it is 0.339-0.386 and 0.239-0.278.
+- The calibrated rows (a D$ cost that brings the whole program's proxy to 5.7) read 0.236-0.342.
+- **dc\* (report-only, `dcstar.py`, added after the pre-registration at the rtl lane's request).**
+  - The MPKI ratio, rest over slice, is 0.3145 for program misses and 0.2235 for all sources.
+  - Both are below 1.6732, so Y/X never reaches the threshold at any D$ cost. Under the no-overlap proxy the twin reads
+    against BUILD for every D$ cost.
+- **A bound that needs only the mean CPI** (derived here, not pre-registered).
+  - BUILD needs the slice's CPI X ≤ 0.6227 × 5.7 = 3.55.
+  - The slice's LB term alone sets X ≥ 3.447 at 40.4 cycles and ≥ 1.945 at 15.6.
+  - So BUILD needs the slice's program D$ misses (178 per 1000 instructions) to cost at most 0.58 cycles each at an LB
+    cost of 40.4, or at most 9.0 cycles at 15.6.
+  - This rests on the unmeasured 29 G silicon instructions behind 5.7, and on the no-overlap proxy.
+
+**What this reads.**
+- In the twin, the code where 1024x8 removes misses is mcf's most memory-bound code by the D$ model: 3.2 times the
+  rest's program miss rate, on top of nearly all the LB misses.
+- If silicon places ticks in proportion to CPI, that slice gets more ticks than uniform placement gives it, not
+  fewer. That is the direction against BUILD on the rtl lane's curve.
+- This is the lean. The verdict stays the rtl lane's, on silicon's tick positions.
+- Silicon's own per-tick mcycle and D$-miss counts (hpm 0x02) would replace the proxy. dc\* and the bound above then
+  become cross-checks.
+
+**Limits.**
+- No overlap between stalls. No branches, I$, TLB or PTW (the PTW is invisible to the D$ model).
+- The D$ model stands in for silicon's.
+- The all-source misses include the tracer's record walks, which the LB cost already covers, so the program-only rows
+  are the primary ones.
+- The slice is defined on the twin's instruction counts at 250 Hz.
+- N=1.
+
+The instruments are in `capstone/tests/record-trace/dc-v3/`; `results-tk6/` holds `bins.out` and `dcstar.out`.

@@ -24,6 +24,9 @@ section "mcf's record-cache population depends on the emulator's speed".
   - `tick-bins.py` joins the two on the event index and bins the inter-tick intervals. It also computes the
     complement test: the slice is the top LB0-miss decile and the rest is everything else.
   - `trace-spec-dc-tk.sh` and `chain-tk.sh` run mcf at shift 6 with the side file.
+  - `dcstar.py` (report-only, added after the mcf-tk6 pre-registration) reads `tick-bins.py`'s complement lines and
+    prints dc\*, the D$ cost at which Y/X crosses the threshold, with the MPKI ratio rest/slice. `results-tk6/` holds
+    the run's `bins.out` and `dcstar.out`.
 - The drivers:
   - `trace-spec-dc.sh` with `chain-dc.sh` runs the traces without icount;
   - `trace-spec-dc-ic.sh`, `boot-plugin-ic.py`, `ovl-ic/init` and `chain-ic.sh` run them under `-icount`;

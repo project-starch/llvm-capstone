@@ -1,0 +1,6 @@
+dcstar need Y/X >= 1.6732
+dcstar lb_cost 40.4 src prog: never (Y/X -> 0.3145 < 1.6732); MPKI ratio rest/slice 0.3145
+dcstar lb_cost 40.4 src all: never (Y/X -> 0.2235 < 1.6732); MPKI ratio rest/slice 0.2235
+dcstar lb_cost 15.6 src prog: never (Y/X -> 0.3145 < 1.6732); MPKI ratio rest/slice 0.3145
+dcstar lb_cost 15.6 src all: never (Y/X -> 0.2235 < 1.6732); MPKI ratio rest/slice 0.2235
+END
