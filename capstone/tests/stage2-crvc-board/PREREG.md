@@ -488,3 +488,39 @@ Per stage, the rule:
   stage, and the difference is reported.
 - **Predicted:** K0 holds on all four stages. The probe runs once at boot, and the firmware's tests run only on
   misaligned traps from U.
+
+## Amendment 6 (2026-11-27, before any K board boot): K0's crvcmis predicate is rc 2, not 127, as both images' board-form twin boots read
+
+**The boots.** Each K image's own initramfs (out/initramfs.cpio: base rootfs, the board init and all five stages) was
+booted on the twin: K-twin plain, the fw-crvc twin build, the board's bootargs, under the QEMU lock, with no profiler.
+- These are harness tests of the board form, not measurements. They are the captures the board lane's grader is
+  tested on.
+- **BT-ON:** S-CRVCBN-K with x-capstone-crvc=true, log sha256 19f2ddc9ea8fbebd.
+- **BT-K0:** S-LSHOFFL-K without the property, so the probe reads 0, as on b42c8c644. Log sha256 d639a7f0b6bdf255.
+- Both ran all five stages to "TRAPTEST: done". Each timed stage returned rc=0.
+
+**BT-ON meets Amendment 5's N predicate.** Inside the K-crvcmis window it read:
+- "crvcmis.dom[954] binds in the CRVC mode";
+- "crvcmis: loading a capability at offset 8 ...";
+- exactly one `FWCRVC redirect=1 emulate-u=0`;
+- `@@CRVCMIS rc=135`;
+- and the binds line again as "TRAPTEST: dmesg".
+- The timed stages' CRVC natives bind in the mode, and nab does not. No FWCRVC line falls inside a timed stage.
+
+**BT-K0 refutes Amendment 5's K0 rc.** It read:
+- "sh[954] CRVC image refused: this hart has no CRVC mode";
+- `./crvcmis.dom: line 1: syntax error: unexpected ")"`;
+- `@@CRVCMIS rc=2`;
+- no FWCRVC line other than the banner.
+- **Why the prediction was wrong:** 127 came from KC2, where ktinit calls execl and exits 127 when it returns. run.sh
+  runs the file from busybox sh instead. When execve fails with ENOEXEC, sh runs the file as a shell script, as
+  POSIX specifies, and the script fails to parse.
+
+**K0's predicate becomes, within the window:**
+- the line "CRVC image refused: this hart has no CRVC mode", on the console or as "TRAPTEST: dmesg";
+- the syntax-error line;
+- `@@CRVCMIS rc=2`;
+- no FWCRVC redirect line.
+- N's predicate is unchanged.
+- **The window**, for both: from "TRAPTEST: stage K-crvcmis begin" to "TRAPTEST: done". The kernel's lines reach the
+  board console only through the init's dmesg dump after the stage's rc line.
