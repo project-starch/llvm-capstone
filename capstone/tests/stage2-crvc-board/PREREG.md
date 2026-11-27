@@ -372,3 +372,42 @@ the crvcmis window, after "KTEST begin /crvcmis.dom". Every other row is unchang
 
 **For the board images:** the crvcmis stage runs through the spec init's stage runner, inside its stage directory,
 never from /. That is checked when the images are built.
+
+## Amendment 4 (2026-11-27, before any board image is built): K's twin checks, read; every prediction holds
+
+All boots ran on capstone-qemu c42ff84d0799 under the QEMU lock. Each boot log's first line is its QEMU command, and
+the kernel, firmware, initramfs and properties were checked there against Amendments 1-3.
+
+| check | read | verdict |
+|---|---|---|
+| KA2 (rerun of KA) | probe "the CRVC mode is present". crvcleak "standard RVC", exit 0. crvcmis "binds in the CRVC mode", printed its first line, then exactly one `FWCRVC redirect=1 emulate-u=0`, inside its window, and died of **signal 7 (SIGBUS)**. No "no trap" line | **HOLDS** |
+| KB2 (rerun of KB) | stock fw-y, no FWCRVC banner. crvcmis "binds in the CRVC mode", then "no trap, the load returned (null)", exit 0: the misaligned c.ldc was emulated as C.FLD | **HOLDS** (the defect, read) |
+| KC2 (rerun of KC) | probe "read 0x0 ... no CRVC mode". crvcmis "CRVC image refused: this hart has no CRVC mode", Exec format error, exit 127. crvcleak exit 0 | **HOLDS** |
+| KC (first run) | the same refusal and exit 127. The refusal precedes the loader's cwd check, so this half read even under the old init | holds (KC2 repeats it) |
+| KD | "mutant CRVC_LEAK wrote 1 for crvcleak[60]", then "guard: srevroot 0x1 does not match crvcleak[60], killed", and crvcleak ended with signal 9 | **HOLDS** |
+| KE | "mutant CRVC_LEAK wrote 1 for crvcleak[60]" with no guard line. crvcleak "standard RVC", exit 0 | **HOLDS** |
+| KT4 | on unpatched 749fed26 with x-capstone-crvc=true, gcc and imagick run rc=132 (SIGILL). No probe line: that kernel has none | **HOLDS** |
+| KT1 | against S4-LSHOFFL: nab 0, gcc 0, imagick -88, perlbench 0. Outputs EQUAL. 0 "binds in the CRVC mode" lines. Probe and banner present. The one known test.pl fault | **HOLDS** (identity) |
+| KT2 | against S4-CRVCB: perlbench 0, gcc 0, imagick +267. nab against S4-LSHOFFL: +4. Outputs EQUAL against both. "binds in the CRVC mode" for cpugcc_r, imagick_r, perlbench_r and 317 .perl-native processes, none for nab_r. No SIGILL | **HOLDS** |
+
+- **Every imagick difference** (-88, +267) lies inside the ±0.001 % band of 945 instructions. imagick's count has moved
+  by up to 178 instructions between boots of one binary all night (Amendment 3 of stage2-placement-b42).
+- **What this shows on the twin:**
+  - K, the patched firmware and x-capstone-crvc together change nothing for unflagged images: instructions and
+    outputs are unchanged (KT1).
+  - The ON image's natives decode in the mode from K's bind alone, without the twin-only property (KT2, with KT4 as
+    the control).
+  - The refusal works (KC2).
+  - The guard catches a leaked mode bit, and a leaked bit without a table does not decode in the mode (KD, KE).
+  - The firmware redirects the one misaligned CRVC access that the stock firmware silently emulates (KA2 against
+    KB2).
+- **Not shown on the twin:** the board's misaligned trap carries mtval 0 where QEMU's carries the address. So KB2's
+  silent emulation would on silicon be an emulated access at address 0. The redirect's verdict does not read mtval.
+
+**The crvcmis predicates for the board,** stated so that the board lane can check them mechanically:
+- **N (OFF and ON):** exactly one `FWCRVC redirect=1 emulate-u=M` line inside the crvcmis stage, then the program
+  killed by SIGBUS, rc 135 in the stage's shell, with no "no trap" line.
+- **K0 (b42c8c644):** "CRVC image refused" and exit 127, with no FWCRVC redirect line.
+
+Board images are built next, and their sha256, the stage's directory name and the "boot:" line go in the next
+amendment.
