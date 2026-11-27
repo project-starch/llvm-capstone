@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """twin-dry.py OUTDIR: boot this kit's Image on the qemu-crv twin exactly as the campaign twins boot (camp-twin.sh,
 perlcount/count.py: 962M, fw-y fw_jump, the same cpu properties), the overlay's initramfs as -initrd, and capture the
-console to OUTDIR/boot.log. A dry run of the instrument, decode and reader: the twin's cycle CSR does not run at
+console to OUTDIR/boot.log. QEMU_EXTRA adds arguments (Amendment 1: -icount shift=7, as ic7); TWIN_BIOS replaces
+fw-y (Amendment 1: sbi-tick built for generic, ticklog/fw-twin). A dry run of the instrument, decode and reader: the twin's cycle CSR does not run at
 25 MHz and its hpmcounter3 counts nothing, so the clock and mcycle controls are expected to FAIL here. Holds the
 shared QEMU lock for the boot only; bounded at 5,400 s."""
 import os, subprocess, sys, time, select
@@ -18,9 +19,10 @@ def main():
     cpu = 'rv64,sstc=false,x-capstone-trap-route=true,x-capstone-supervisor-refs=true,x-capstone-raw-moves=true'
     cmd = [H + '/qemu-crv/build/qemu-system-riscv64', '-M', 'virt', '-m', '962M', '-smp', '1',
            '-nographic', '-cpu', cpu,
-           '-bios', H + '/sbi-keep-run/fw-y/platform/generic/firmware/fw_jump.elf',
+           '-bios', os.environ.get('TWIN_BIOS', H + '/sbi-keep-run/fw-y/platform/generic/firmware/fw_jump.elf'),
            '-kernel', f'{T}/out/Image', '-initrd', f'{T}/out/initramfs.cpio.gz',
            '-append', 'console=ttyS0 earlycon=sbi rdinit=/init panic=-1 sublet.dom_binfmt=1 ']
+    cmd[1:1] = os.environ.get('QEMU_EXTRA', '').split()  # e.g. '-icount shift=7' for the key-match control
     print(time.strftime('%T'), 'waiting for the lock', flush=True)
     with qemu_lock():
         t0 = time.time()
