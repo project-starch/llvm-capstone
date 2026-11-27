@@ -1,0 +1,73 @@
+# mcf tick thinning, result lines (rtl lane, 2026-11-27). Each block: rcm-lb-dc --lb 1024x8 on a thinned copy of a nested-lane
+# icount trace (<hdd>/capstone/nested/rectrace-dc/traces/spec-mcf-ic{6,7}.*), thin.py KEEP_NUM/KEEP_DEN. Only n is valid in a
+# thinned run: the resident / cold_fraction columns read the tracer's own bit44 and mean nothing there.
+== ic6-k1of4
+ticks 467219 kept 116804 flush E cleared 1401668 unmatched 0
+LB  check    10044639810     9992587739       52052071       52052071              0       394388            0
+LB probes 52052071 deny_hit_dead 0 dead_record 0 installs 53347905 invalidations 59995 flushes 468994
+v3 check_run_starts 4078323202 bit44 182301573 mismatch_vs_LB0 3507732 LB0_misses 181118199
+v3 pop removed_lb     n      129066128 resident 1152081 1152081 1152081 1152081 cold_fraction 0.991074 0.991074 0.991074 0.991074
+== ic6-k1of2
+ticks 467219 kept 233609 flush E cleared 934452 unmatched 0
+LB  check    10044639810     9948298714       96341096       96341096              0       757470            0
+LB probes 96341096 deny_hit_dead 0 dead_record 0 installs 97636930 invalidations 59995 flushes 936210
+v3 check_run_starts 4078323202 bit44 182301573 mismatch_vs_LB0 2708586 LB0_misses 181540671
+v3 pop removed_lb     n       85199575 resident 1178385 1178385 1178385 1178385 cold_fraction 0.986169 0.986169 0.986169 0.986169
+== ic7-k1of2
+ticks 1001357 kept 500678 flush E cleared 2002720 unmatched 0
+LB  check    10044639808     9885513277      159126531      159126531              0      1430782            0
+LB probes 159126531 deny_hit_dead 0 dead_record 0 installs 160422365 invalidations 59995 flushes 2010334
+v3 check_run_starts 4078574638 bit44 184032220 mismatch_vs_LB0 3522620 LB0_misses 182435020
+v3 pop removed_lb     n       23308489 resident 1036561 1036519 1036578 1036578 cold_fraction 0.955529 0.955530 0.955528 0.955528
+== ic7-k2of3
+ticks 1001357 kept 667571 flush E cleared 1335152 unmatched 0
+LB  check    10044639808     9879593365      165046443      165046443              0      1728788            0
+LB probes 165046443 deny_hit_dead 0 dead_record 0 installs 166342277 invalidations 59995 flushes 2677902
+v3 check_run_starts 4078574638 bit44 184032220 mismatch_vs_LB0 2761132 LB0_misses 182963880
+v3 pop removed_lb     n       17917437 resident 1016187 1015956 1015943 1015943 cold_fraction 0.943285 0.943298 0.943299 0.943299
+
+== ic6-k3of4
+ticks 467219 kept 350414 flush E cleared 467224 unmatched 0
+LB  check    10044639810     9918668470      125971340      125971340              0      1059838            0
+LB probes 125971340 deny_hit_dead 0 dead_record 0 installs 127267174 invalidations 59995 flushes 1403438
+v3 check_run_starts 4078323202 bit44 182301573 mismatch_vs_LB0 1758568 LB0_misses 181923533
+v3 pop removed_lb     n       55952193 resident 1246231 1246231 1246231 1246231 cold_fraction 0.977727 0.977727 0.977727 0.977727
+== ic6-k7of8
+ticks 467219 kept 408816 flush E cleared 233616 unmatched 0
+LB  check    10044639810     9903864048      140775762      140775762              0      1211025            0
+LB probes 140775762 deny_hit_dead 0 dead_record 0 installs 142071596 invalidations 59995 flushes 1637046
+v3 check_run_starts 4078323202 bit44 182301573 mismatch_vs_LB0 1058439 LB0_misses 182113584
+v3 pop removed_lb     n       41337822 resident 1325231 1325231 1325231 1325231 cold_fraction 0.967941 0.967941 0.967941 0.967941
+
+== thin_keep.py control on ic7: 667,564 F_k = (k + 0.5) / 667,564 (the 2-in-3 thinning kept 667,564 ticks in the window)
+ticks 1001357 in_window 1001346 targets 667564 kept 667564 collisions 0 window_instructions 554958708..32179748437
+flush E cleared 1335136
+LB  check    10044639808     9879593359      165046449      165046449              0      1728790            0
+LB probes 165046449 deny_hit_dead 0 dead_record 0 installs 166342283 invalidations 59995 flushes 2677918
+v3 check_run_starts 4078574638 bit44 184032220 mismatch_vs_LB0 2761126 LB0_misses 182963886
+v3 pop removed_lb     n       17917437 resident 1016187 1015956 1015943 1015943 cold_fraction 0.943285 0.943298 0.943299 0.943299
+== thin_keep.py negative (dry): 1,000 F_k uniform in [0.300, 0.301)
+ticks 1001357 in_window 1001346 targets 1000 kept 645 collisions 355 window_instructions 554958708..32179748437
+
+# Per-tick edge tallies (eana.py / eseq.py on escan.py's extraction of v3 spec-mcf.1497224, ic6, ic7; E-by-op equals each rcm output's own line)
+== spec-mcf.1497224
+E 1490197 by op [744777, 644, 336906, 407870] flush by op [407871, 138, 0, 407870]
+MRET preceded by trap cause 0x80000007 code=7 trapflush=1 n=203935
+MRET preceded by trap cause 0x9 code=9 trapflush=1 n=203935
+200157 trap0x80000007 -> MRET -> trap0x80000005 -> trap0x9 -> MRET -> SRET
+2525 trap0x80000007 -> MRET -> trap0x9 -> MRET -> SRET -> trap0xf
+events between MRET(after MTI) and the next edge: zero 203932 of 203935 median 0 p99 0
+== spec-mcf-ic6.2017382
+E 3053193 by op [1525658, 1878, 591225, 934432] flush by op [934433, 898, 0, 934432]
+MRET preceded by trap cause 0x80000007 code=7 trapflush=1 n=467219
+MRET preceded by trap cause 0x9 code=9 trapflush=1 n=467213
+453726 trap0x80000007 -> MRET -> trap0x80000005 -> trap0x9 -> MRET -> SRET
+8156 trap0x80000007 -> MRET -> trap0x9 -> MRET -> SRET -> trap0xf
+events between MRET(after MTI) and the next edge: zero 467207 of 467219 median 0 p99 0
+== spec-mcf-ic7.1876342
+E 6231440 by op [3112989, 5463, 1110266, 2002722] flush by op [2002723, 3804, 0, 2002722]
+MRET preceded by trap cause 0x9 code=9 trapflush=1 n=1001365
+MRET preceded by trap cause 0x80000007 code=7 trapflush=1 n=1001357
+969765 trap0x80000007 -> MRET -> trap0x80000005 -> trap0x9 -> MRET -> SRET
+16206 trap0x80000007 -> MRET -> trap0x9 -> MRET -> SRET -> trap0xf
+events between MRET(after MTI) and the next edge: zero 1001347 of 1001357 median 0 p99 0
