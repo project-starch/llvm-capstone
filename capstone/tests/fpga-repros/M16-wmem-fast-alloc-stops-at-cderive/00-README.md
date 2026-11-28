@@ -1,0 +1,381 @@
+# M-16: a protected wmem BLOCK_FAST allocation loop stops the core at its CDERIVE (silicon only, P1)
+
+**What it is.** M-16 (`docs/ref/ISSUES.md`) is the Sublet-protected tshark not returning on silicon. It is
+intermittent on bitstreams F and P1, and returns on the QEMU twin. This folder holds a 74-line program,
+`src/tsapp-stress.c`, that runs only tshark's wmem allocation path. It stops the core in the same way, at the same
+instruction, after about 2·10^7 allocations: about 11 minutes on P1, against 40-68 minutes per sample with tshark.
+On bitstream B5b-2 (`…-r75d-b5b2n_904cd9c6b`), with tshark's one-operand allocator revision, it ran 1.17·10^8
+allocations in one boot on 2026-11-25 without stopping ("On B5b-2" below).
+On P1 it stopped a second time, in the reduction boot of 2026-11-25/26 (the stop near 01:35 on 11-26, +0800). The stop
+fell between the same two heartbeats, and the revocation unit's serving index read the same value, which differed on
+every other M-16 stop. In the same boot, BLOCK_FAST alone ran 1.9·10^8 allocations without stopping ("On P1 again" below). The
+hypothesis this leaves, at N = 2, is that on P1 the stop is tied to a point in the full form's allocation sequence
+rather than to a constant per-allocation rate.
+Two more P1 boots on 2026-11-26 (loc1, loc2) printed a heartbeat every 100 or 1,000 packets instead of every 10,000.
+Both stopped far earlier, at 34,000-36,300 packets, each cut mid-line on the UART's 16-byte boundary. One of them
+(loc2, seed 2) has M-16's signature. The other (loc1, seed 1) names the BLOCK allocator's derive as its slot-0 site
+and is reported as itself ("On P1, the localisation boots" below).
+
+**Wrong symptom? Siblings, so a reader with a neighbouring symptom is redirected:**
+- `../R27-revnode-orphan-response/`: a silent deadlock after a pipeline flush during the DYN unit's revocation-node
+  query, fixed in RTL at `66c4e7517`. M-16 shares the shape: silent, no trap, a CAPSTONE_DYN op valid at the LSU
+  head. It was observed on P1, which descends from that fix, so it is not that instance unless the fix is incomplete.
+  Nothing here shows which.
+- `../S13-o1-dyn-rev-node-hang/`: a hang in the DYN/rev-node path at `-O1` with no exception. It is not reproducible
+  from its folder, so it cannot be compared with this one.
+- A domain that faults with a cause, or prints a wrong answer, is not this issue. Here nothing is printed after the
+  stop, and the twin's run of the same image returns.
+
+## The program
+
+`src/tsapp-stress.c` (sha256 `42b7ad10…`). It is not a port file and it is not tshark. It uses tshark's two wmem scope
+kinds with wmem patch 0001 (Sublet lifetimes for `block_fast`):
+- a packet scope (`WMEM_ALLOCATOR_BLOCK_FAST`) with K allocations per packet, then `wmem_free_all`;
+- a file scope (`WMEM_ALLOCATOR_BLOCK`). One allocation in 12 goes there, half of those are freed again with
+  `wmem_free`, and the scope is reset every 1,000 packets.
+
+Sizes come from a fixed LCG: 70 % 8-64 B, 25 % 65-512 B, 5 % 513-4096 B. Each allocation's first and last bytes are
+written and read back into a checksum. The output is a function of argv only, so the twin's lines are the reference
+for the board's. The arguments are `packets K report seed`. A `STRESS pkt=…` heartbeat every `report` packets places a
+stop to within `report` packets.
+
+**Build (native route, P1).** The program is compiled with the protected tshark tree's own `tshark.c.o` compile line.
+It is linked exactly as `tshark_m5.dom` is linked, with `tsapp_stress.o` in `tshark.c.o`'s place: the same wmem 0001
+objects (dev's Q-15-repaired revision), glib, `tsapp-heap.o`, the SDK's libc and `-Wl,--no-relax`.
+- Control: the same link of the tree's own `tshark_m5.o` reproduces `tshark_m5.dom` byte for byte, in both the
+  protected and the unprotected tree.
+- Recipe: `<hdd>/capstone/nested/tshark/stress/build-stress.sh` (`ad719e29…`).
+- Image `tsapp_stress.dom` `c93cc972…`; the board runs its strip, `84d347d8…` (20,208,504 B).
+  - Both stay outside the repo for their size, under `<hdd>/capstone/nested/tshark/stress/sublet/`.
+- Against the unprotected build: +36 CDERIVE and +5 CREVOKE.
+
+**The site.** `wmem_block_fast_sublet_alloc` holds the same word at the same offset as in tshark.
+- tshark's stop pc `0x3ff6780f04` is offset 0x45c into it, word `0xa283955b`: the CDERIVE of the inlined
+  `capstone_cap_derive`.
+- In this image that word is at vaddr `0x77c9ee`, which loads at `0x3ff676c9ee`.
+
+## How it was run on P1
+
+- Bitstream P1 `caplifive_ids55-…-tagoverlap6c-pagedtbl_d83d3a633`, read back by name before and after. Board 1,
+  2026-11-25 11:41-14:49 (+0800).
+- Kit `t3-smoke/bkit91-k2n-native-p1-tree-cscfix` (2^18 records), M-16's own.
+- One stage, two commands, both protected: s0 = `100 212 10 1`, s1 = `400000 212 10000 1`.
+- Budget 10,800 s, then the runner read the apertures (`BAKED_WEDGE_APERTURES=1`).
+- **The unprotected image did not ride along.** Two images put the firmware at 30,051,848 B, over the kit's 26,000,000 B
+  cap. The unprotected control is the twin, where both commands return, together with M-16's board record, where the
+  unprotected tshark returned in every boot.
+- Pre-registration: nested-workloads `6659e74b24ca`. Result: `832faa980e3b` (`docs/ref/nested-allocator-workloads.md`,
+  "M-16: a stress form of the allocation path").
+
+## What it read
+
+Result lines are in `results/p1-board1-stress1.txt` and the twin's reference in `results/twin-native-stress1.txt`. The
+reader is `src/read-stress.py` (`0384cfba…`); usage `read-stress.py <board.txt> <twin serial.log>`.
+
+- **s0 returned.** All 12 STRESS lines equal the twin's.
+- **s1 stopped.** All 11 of its STRESS lines equal the twin's. The last is `pkt=100000 fast=19432859`, and the twin's
+  next is `pkt=110000 fast=21375862`.
+  - So the stop lies between 1.943·10^7 and 2.138·10^7 fast allocations, 10.2-11.2 tshark runs' worth.
+  - The heartbeats had arrived 60-75 s apart. After the last one the console was silent for the remaining ~10,000 s
+    of the budget.
+- **Apertures** after the budget, verbatim in the results file:
+
+| aperture | stress (P1) | tshark tsu-r1 (P1) | tshark tsu-p1 / tsu-r2 (P1) |
+|---|---|---|---|
+| commit pc (slot 0) | `0x3ff676c9ee` (this image's CDERIVE) | `0x3ff6780f04` (tshark's CDERIVE) | `0x3ff6780f04` |
+| trap log (sw=255) | `0x89` | `0x89` | `0x89` |
+| sw=220 `{lsu_ctrl.valid,lsu_ready_o,0,0,fu}` | `0x8c` (a valid CAPSTONE_DYN op at the LSU head, `lsu_ready_o` = 0) | `0x8c` | `0x8c` |
+| sw=225 `{tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}` | `0x92` | `0x92` | `0x96` (`stall` set) |
+| sw=227 | `0x03` | `0x07` | `0x07` |
+| sw=228 `{1,dom_switch_idx}` | `0xb8` | `0x9f` | `0x9f` |
+| sw=224, 226, 229, 192-195, 219, 221, 222 | `0x05`, `0x00`, `0x00`, all `0x00`, `0xd7`, `0x02`, `0x00` | same | same |
+| mepc / rev-node head | `0xffffffff80007376` / `0x0071` | same | same |
+| serving index | `0x1381` | `0x14b9` | `0x11de` / `0x19fb` |
+
+- **sw=220's bit 6 is `lsu_ready_o`, not "bypass empty".** The runner's label and the port comment say bypass empty;
+  the driver is `assign lsu_head_debug_o = {lsu_ctrl.valid, lsu_ready_o, 2'b00, 4'(lsu_ctrl.fu)}`
+  (`core/load_store_unit.sv:341` at `715bdd1fe`; `:412` at `904cd9c6b`, per the RTL lane). So `0x8c` is a valid op of
+  unit 12 (CAPSTONE_DYN) at the LSU head with the LSU not ready. sw=219 `0xd7` = 215 is that op's `fu_op`; the RTL
+  lane decodes it as LDC from P1's own commit `d83d3a633`'s `ariane_pkg` fu_op enum, which has no conditional members
+  there (not re-derived here).
+- The other apertures are driven at `715bdd1fe`: 193 `store_buffer.sv:101`, 194 `store_unit.sv:118`, 221
+  `store_unit.sv:414`, 219 `load_store_unit.sv:342`, 222 the WT adapter's `tag_debug_o` (`cva6.sv:2378`).
+- **Not traced to a driver:** sw=224-228, the trap log (255), and the multi-byte rows (commit pc, mepc, tval). The
+  rev-node words are traced at `d83d3a633`, under "On P1 again". At `715bdd1fe` each of their signals is connected to a submodule output port in `core/cva6.sv`, but they
+  are not traced to an assignment inside that module. sw=195's net was connected the same way and is dead, so read
+  these rows' labels as unverified until they are. sw=227's bit 2 is `dom_switch_data_req.write_en`, the domain
+  switcher's request, not the LSU's (`core/cva6.sv` 224-bank case `5'b00011`).
+- **sw=195 and sw=229 carry no information.** Both show `load_state`, which comes from `load_unit.sv`'s `state_o`.
+  That output is declared (`core/load_unit.sv:102` at `715bdd1fe`, `:109` at `904cd9c6b`) and never assigned, so
+  both apertures read 0 on every boot, wedged or not. Found by the RTL lane on 2026-11-25 and checked here with
+  `git show <rev>:core/load_unit.sv` and the `load_state` mux lines in `core/cva6.sv` (`5'b00011` in the 192 bank, `5'b00101` in the 224 bank).
+  Read nothing into their 0x00.
+- sw=227's differing bit is bit 2, `dom_switch_data_req.write_en` (see above).
+- sw=228 is the domain-switch index; the stress boot's domain set is not tshark's.
+- The serving index differed between every pair of tshark non-returns. The two stress-form non-returns on P1 (s1 and
+  red1's r3, on 2026-11-25 and 2026-11-26) read the same one, `0x1381` (see "On P1 again").
+- **Caution on the pc:** it is scoreboard slot 0, which is exact only shortly after a flush. A hot allocator would also
+  leave residue there. The pc names the site the allocation loop occupies; it does not prove the stop is that
+  instruction.
+
+## On B5b-2: no stop in 1.17·10^8 allocations (board 2, 2026-11-25)
+
+**What differs from P1.** The bitstream is B5b-2, `…-r75d-b5b2n_904cd9c6b`. Its trap route makes the two-operand CREVOKE
+illegal, so the program links tshark's one-operand wmem 0001 (Fig. 10's revision), not the revision P1 ran. A
+difference between the two boots therefore cannot be assigned to the hardware alone.
+
+**Build.** `tsapp-stress.c` is unchanged. It is compiled with the B5b-2 protected tshark tree's own `tshark.c.o`
+compile line, and linked with that tree's recorded image link, with `tsapp_stress.o` in `tshark.c.o`'s place.
+- Controls: the recorded compile line reproduces `tshark.c.o` byte for byte, and the recorded link reproduces the
+  tree's `tshark.dom` byte for byte.
+- Recipe: `<hdd>/capstone/nested/b5b2/build-stress-trap.sh` (`f928ae1c…`).
+- Image `118ac0e7…`; the board runs its strip, `12c63983…` (20,982,240 B). No illegal encoding (`scan_illegal.py`).
+- The CDERIVE word `0xa283955b` of `wmem_block_fast_sublet_alloc` sits at offset 0x4f0 here, so it runs at
+  `0x3ff67bc234`.
+
+**Run.** One boot, firmware `2b19fc2a…` (21,657,608 B), read back by name before and after.
+- /init (the trap route's) runs two stages, each under a 3,600 s watchdog, and prints a tick every 120 s:
+  - p0 = `100 212 10 1`, then p1 = `300000 212 10000 1`;
+  - p2 = `300000 212 10000 1`.
+- The overlay is `<hdd>/capstone/nested/b5b2/make-boardS.py` (`dc44c9f2…`).
+- The unprotected image did not fit under the 26,000,000 B firmware cap, so it ran only on the twin.
+- Pre-registration: nested-workloads `9b7c370ba5c7`. At P1's point estimate it predicted p1 would not return, with
+  probability 1 − 0.0033.
+
+**What it read.** Board lines: `results/b5b2-board2-stressS.txt`. Twin lines: `results/twin-trap-stressS.txt`. Reader:
+`src/read-boardS.py` (`d22d1262…`), run as `read-boardS.py <board.txt> <twin.txt>`.
+- Control `smoke.dom rc=7`.
+- **p0, p1 and p2 all returned with rc 0**, and every STRESS line equals the twin's (12, 32, 32). 116,616,408 fast
+  allocations were completed.
+- There was no watchdog line, and 27 ticks. p1 took 1,432.4 s, 47.7 s per 10,000 packets; P1's native route took
+  about 65 s.
+- No apertures were read, since nothing stopped.
+
+**What it says.** The two bullets below assume a constant per-allocation rate. That model is withdrawn for the full form
+on P1 (2026-11-26, "On P1 again"). Read the other way: in that boot the same allocation sequence passed P1's stop
+point twice (p1 and p2, which run the same commands) without stopping. It ran on B5b-2, with the one-operand allocator
+revision.
+- The hazard on B5b-2 with this allocator revision is **below 2.6·10^-8 per allocation (95 %)**. That is about half
+  P1's point estimate, and inside P1's single-draw interval. It is a bound, not an absence.
+- **The two boots do not show different rates.** If P1's boot (one stop in about 2.0·10^7) and this one (none in
+  1.17·10^8) shared one rate, the single stop would land in P1's boot with probability 0.15. This test was computed
+  after the boot.
+- So the reductions below need a bitstream on which the stop has been seen. As of 2026-11-25 that is P1.
+
+## On P1 again: reduction boot red1, the full form stops in the same window (board 1, 2026-11-25/26)
+
+**Run.** Pre-registration: nested-workloads `71eb7ac97286`.
+- One boot on P1 (`…-tagoverlap6c-pagedtbl_d83d3a633`, read back by name), board 1. The chain started at 22:34 with
+  the bake; the board lease opened at 00:30 on 11-26 and the run ended at 03:39 (+0800).
+- **The boot is UNGATED:** its driver.log opens with `PREFLIGHT SKIPPED (PREFLIGHT=0)`. So did s1's boot on
+  2026-11-25. Neither boot's verdict passed the board preflight's C-gates.
+- The image is `src/tsapp-stress-red.c`, protected (Sublet). Four commands run in order, each a new process, with K 212
+  and seed 1:
+  - r0 = mode s, 100 packets;
+  - r1 = s, 600,000 packets;
+  - r2 = f, 300,000 packets;
+  - r3 = a, 300,000 packets.
+- Mode a is the full form, and its lines equal `tsapp-stress.c`'s. f is BLOCK_FAST alone; s is BLOCK_FAST alone at 32 B.
+- The idle limit was 10,800 s, and the apertures were read once, after it.
+
+**What it read.** Board lines: `results/p1-board1-red1.txt`. Twin lines: `results/twin-red1.txt`. Reader:
+`src/read-red.py`. Its output is the same on these two files and on the full transcripts.
+- The smoke passed (all 9 steps).
+- **r0, r1 and r2 returned with rc 0**, and every STRESS line equals the twin's (12, 62 and 32 lines):
+  - r1 ran 127,200,000 fast allocations in 1,583 s;
+  - r2 ran 63,600,000 in 918 s.
+- **r3 did not return.** Its 11 STRESS lines equal the twin's. The last is
+  `pkt=100000 fast=19432859 block=1767141 free=884810 sum=8b64d9b857f7aee5`. The twin's next is `pkt=110000
+  fast=21375862`.
+- After that line the console stayed silent until the limit. The last UART line came about 3,781 s on the
+  watchdog's clock, which starts at the upload (00:32:18). That puts it near 01:35 on 2026-11-26 (+0800), about 360 s
+  after r3 started.
+- The protected fast allocations completed in this boot number 210,254,059.
+
+**The stop falls in P1's first stop's window again.** On 2026-11-25, `tsapp-stress.c`'s s1
+(`results/p1-board1-stress1.txt`) stopped after the same last line, checksum included: the same 10,000-packet window,
+about 1.94·10^6 fast allocations wide.
+
+Of the 21 aperture rows, 20 read the same in both boots. **Most of that equality carries no information.** A census of
+the rows over the seven M-16 stops that have a block (red1, s1, tsu-r1, tsu-r2, tsu-p1, t-p1, t-p2) gives:
+- 15 rows read the same on all seven: sw=255, 224, 226, 229, 192-195, 219, 220, 221, 222, mepc, tval and rev_node_head.
+  So M-16's signature is in them, but no stop's position is.
+- sw=227 and sw=228 follow the stage's domain set: `0x07`/`0x9f` on every tshark stop, `0x03`/`0xb8` on both stress
+  stops.
+- sw=225 takes one of two values.
+- rev_node_debug_ex repeats across unrelated boots: tsu-r1 and t-p1 both read `0x0000067f40001131`, on different
+  bitstreams nine days apart.
+- **The serving index `0x1381` is the one row that singles out the stress stops.** It differed on every other M-16
+  stop.
+
+So the evidence that this is the same state is the heartbeat window plus that one value.
+
+**The rev-node rows, traced at P1's own commit `d83d3a633`** (by the RTL lane, citations re-checked here with
+`git show d83d3a633:core/anvil_build/capstone_rev_node.anvil`):
+- rev_node_debug_ex is `debug_out = {node_in.next, 1'b0, node_in.valid, revoke_index}`. It is set only at :19, the first
+  step of the walk (REVOKE_NODE), for every node the walk reads.
+  - Decoded, it is revoke_index `0x7fa`, valid, next `0x1346`: the last node read by the last revoke, kill or retire
+    walk.
+  - It cannot say whether that step ended the walk.
+- rev_node_head is the physical bump pointer: reset to 3 at :840, moved only at :398. Allocations made inside a context
+  go to the virtual table instead. So `0x71` is boot-time setup, the same on every boot, and it says nothing about the
+  loop.
+- serving_idx has three kinds of writer:
+  - a revoke request, which writes its own index (:798);
+  - a kill, which writes the killed node's chain predecessor (:624, :653, :665, :676);
+  - a retire, which writes the node's predecessor (:773).
+  - So `0x1381` is either the start node of the last revoke or the predecessor of the last killed or retired node. The
+    aperture cannot tell which op wrote it.
+  - The two flag bits above the index are cut off before the aperture (the RTL lane: `ex_stage.sv:121`).
+- Not visible in any row: the unit's stage register (idle or mid-walk), kill_mode, and the virtual free list.
+
+The commit pc differs, and in each boot it is that image's own CDERIVE in `wmem_block_fast_sublet_alloc`: `0x3ff676c9ee`
+in `tsapp-stress.c`'s image and `0x3ff676ca68` here (the reader's check: True).
+
+The two boots differ in their history before the command. Here r0-r2 ran 1.9·10^8 allocations first; in the first
+boot only s0 ran. Every command is a new process: the stage's `run.sh` unpacks the image afresh and launches it once per
+command.
+
+**What it says.**
+- **H1 is refuted.** H1 was a per-allocation hazard at P1's 4.9·10^-8, the same in every mode. Modes s and f run the
+  same CDERIVE word at +0x45c of `wmem_block_fast_sublet_alloc` once per allocation, on the common tail. Under H1:
+  - r1 returns with probability 0.0020, and r2 with 0.044;
+  - a stop of r3 falls in the same window as P1's first stop with probability 0.035. That is also the maximum over
+    every rate.
+  - Post hoc, "two stops land in the same 10,000-packet window, any window" has probability about 0.047 at 4.9·10^-8,
+    and 0.097 at 1·10^-7.
+  - All of these were computed after the boot.
+  - So what is refuted is a hazard **the same in every mode** (r1 and r2). For the full form alone, a constant rate is
+    **disfavoured, not refuted** (0.035; post hoc 0.05-0.1). The published 4.9·10^-8 is withdrawn as a reading.
+- **The stop looks tied to a point in the full form's sequence.** Two runs of the same sequence on P1 both stopped
+  between packets 100,000 and 110,000, with the same serving index.
+  - **Position and time are confounded.** By the watchdog's clock both runs stopped about 360 s after their process
+    started. r1 and r2 ran longer without stopping, so a pure time trigger is ruled out for those modes only.
+  - This is a hypothesis at N = 2 (H2), not a finding. It predicts that a third run with seed 1 stops in the same
+    window, and that a change to the sequence moves the stop or removes it.
+- **BLOCK_FAST alone does not reach that point, at a fixed size or with the size mix.** r1 and r2 do not exercise the
+  BLOCK allocator or the free path: block = free = 0 in their lines. r3 had made 1,767,141 BLOCK allocations and
+  884,810 frees by its last heartbeat.
+  - So r1's and r2's returns say that BLOCK_FAST alone does not reach the state the full form reaches. They give no
+    rate.
+- On B5b-2, with the one-operand allocator revision, the same full-form sequence passed this point twice without
+  stopping (boot S, p1 and p2).
+- **Not shown:**
+  - which allocation in the window stops;
+  - which piece of state the stop depends on;
+  - whether the unprotected image stops: it did not run on the board.
+
+## On P1, the localisation boots loc1 and loc2: the finer-heartbeat runs stop early (board 1, 2026-11-26)
+
+**Run.** Pre-registration: nested-workloads `553f00e2239f`, Amendment 1, and the twin addendum `4b606bdca102`. The full
+result is in the lane doc (`docs/ref/nested-allocator-workloads.md`, "Result: loc1 and loc2").
+- Two boots on P1 (`…-tagoverlap6c-pagedtbl_d83d3a633`), board 1, 07:10-13:26 (+0800). Both are UNGATED
+  (`PREFLIGHT=0`).
+- Each boot is `src/tsapp-stress-red.c`'s protected image, mode a (the full form), K 212, run twice:
+  - c0: seed 1, cut at 99,000 packets, heartbeat every 1,000, as the control;
+  - then loc1's l1 (seed 1, heartbeat every 100, 300,000 packets), or loc2's s2 (seed 2, every 1,000).
+- Board lines: `results/p1-board1-loc1.txt`, `results/p1-board1-loc2.txt`.
+
+**What it read.**
+- **c0 returned in both boots**, every line equal to the twin's, in 369.3 s.
+- **l1 and s2 did not return.**
+  - Every complete STRESS line equals the twin's.
+  - The last line is cut mid-line: l1 at `pkt=36300 fast=7053623 bl`, s2 at
+    `pkt=34000 fast=6608300 block=599700 free=`.
+  - In both, the console's last chunks are whole 16-byte UART loads.
+  - By the watchdog's clock, l1 stopped 135-165 s after it started and s2 120-150 s after.
+  - The registered reader (`src/read-red.py`) calls both OTHER, because it has no case for a partial last line. The
+    NO RETURN reading is by hand.
+- **s2 has M-16's signature:** commit pc `0x3ff676ca68`, the registered CDERIVE in `wmem_block_fast_sublet_alloc`, and
+  sw=220 `0x8c`.
+- **l1 does not, and is reported as itself.**
+  - Its commit pc `0x3ff676acfe` is `wmem_block_sublet_alloc`+0x452, the same inlined derive in the BLOCK allocator.
+    The slot-0 pc names a site only.
+  - Its trap-log row (mepc `0xffffffff802100a2`, tval `0x09093783`) differs from every other stop's.
+  - sw=220 reads `0x8c`.
+- The serving index reads `0x10e6` (l1) and `0x1147` (s2), not the stress stops' `0x1381`.
+
+**What it says.**
+- Every full-form run on P1 with a heartbeat every 10,000 packets stopped between packets 100,000 and 110,000 (s1,
+  red1). Both runs with a finer heartbeat stopped at 34,000-36,300 packets, mid-line.
+- A fixed time from process start near 364-400 s (T) is against s2.
+- A count trigger set by seed 1's counts is against s2 too: 6.6·10^6 fast allocations, against seed 1's window at
+  1.9·10^7.
+- **H2 is not tested at seed 1.** l1 stopped before the window, at another site.
+- s2 changed both the seed and the heartbeat, so a seed-dependent point is not shown either. A stop that depends on
+  the print pattern, or on console or interrupt activity, is open.
+
+## What it shows, and what it does not
+
+- **The stop needs nothing of tshark beyond this allocation path.** There is no dissection, no capture input, a far
+  smaller live heap, and no I/O beyond the heartbeat. It holds the same function, the same pc offset and M-16's
+  aperture signature.
+- ~~**Hazard.** One stop after about 2.0·10^7 allocations gives about 4.9·10^-8 per allocation. The 95 % interval from
+  this single draw is 1.2·10^-9 to 1.9·10^-7.~~ **Withdrawn 2026-11-26.** A hazard the same in every mode is refuted
+  by red1's r1 and r2 (0.0020, 0.044). A constant per-allocation rate for the full form alone is disfavoured, not
+  refuted: p ≈ 0.035 for P1's first-stop window, about 0.05-0.1 post hoc, N = 2. Its second
+  run stopped in the same 10,000-packet window, with the same serving index ("On P1 again"). The two tshark-band figures (4.7·10^-8 to 7.4·10^-7) are M-16's tshark samples, and they
+  are not affected.
+- **Not shown:**
+  - which instruction stops: see the caution on the pc;
+  - whether this is a deadlock or a livelock: the console was silent, and the apertures were read once;
+  - which bitstream change introduced it, and whether the unprotected image can stop: the unprotected image did not
+    run on the board.
+
+## Next reductions
+
+Reductions 1 (BLOCK_FAST alone) and 2 (at a fixed size) are modes `f` and `s` of `src/tsapp-stress-red.c`. Both
+returned on P1 (red1). Mode `a` is the full form, with `tsapp-stress.c`'s lines. Its reader is `src/read-red.py`.
+
+If the stop sits at a point in the sequence (H2), the next steps locate that point rather than shrink the loop:
+1. **On the twin, which costs no board time.** Run 2026-11-26 (`nst-red-locate`; lines from 99,000 to 110,000 in
+   `results/twin-locate.txt`): mode a, seed 1, a heartbeat every 100 packets, 110,000 packets, rc 0. Its line at
+   100,000 equals red1's last board line, and its 10,000-packet lines equal the earlier twin's (`nst-red-board2`).
+   - **Nothing in the heartbeat counters singles out the window.** Each 100-packet increment of fast, block and free
+     between 100,000 and 110,000 lies inside the range the same increment takes before 100,000.
+   - block − free rises monotonically, so every window is the first to reach its value. A count or capacity trigger
+     cannot be told from a position trigger this way.
+   - **Not done:** the BLOCK chunk turnover, the free-list lengths and the revocation-node state (head `0x0071`, serving
+     index `0x1381`). The native twin has no revocation-node table, and the program prints none of these.
+2. **On P1, ordered so that every command expected to return runs before the one expected to stop.** A stop silences
+   the console for the rest of the budget, so nothing after it runs. Pre-registered in the lane doc as boots loc1 and
+   loc2:
+   - first, as the control, mode a, seed 1, cut at packet 99,000, which must return;
+   - then mode a, seed 1, heartbeat every 100 packets, last in its boot. H2 predicts a stop in the same window, which
+     narrows it to 100 packets. This cannot separate position from elapsed time.
+   - Mode a with another seed may also stop under H2, so it goes in a boot of its own. H2 predicts that the stop moves
+     or goes away.
+   - **Run 2026-11-26** ("On P1, the localisation boots" above). Both finer-heartbeat runs stopped early, at
+     34,000-36,300 packets, so the window was not reached. The next boot that follows from it changes only the
+     heartbeat, seed 1 every 10,000 packets against seed 1 every 100. It is not pre-registered.
+   - **Mode a runs about 3.6 ms a packet on P1**, from r2's 918 s for 300,000 packets and the twin's f/a ratio of
+     0.84. So 100,000 packets take about 364 s, which matches both stops. red1's pre-registration said 60-75 s per
+     10,000 packets, and that figure was wrong. The control's 99,000 packets end at about 360 s, at the edge of
+     that window.
+3. **Separating position from time** needs a boot that changes the wall time per packet and leaves the sequence alone:
+   the same command with a CPU-bound process beside it on the single hart.
+   - A stop near half the packets would say the trigger is not the sequence position. It would be cycle or timer time,
+     or an interrupt count: the spinner dilates wall time and interleaving, not the process's own CPU time.
+   - A stop between 100,000 and 110,000 is consistent with position, a count, or per-process CPU time.
+   - It is not built yet. It needs its own stage, kit and twin reference, and a third P1 boot from runtime.
+4. Then a directed `.S` for simulation, built from the allocations in that window, which is CLAUDE.md's rule 8. It
+   needs the trigger to lie in the allocation sequence, which step 3 tests.
+
+## Files
+
+- `src/tsapp-stress.c`: the program.
+- `src/read-stress.py`: the P1 boot's reader.
+- `results/p1-board1-stress1.txt`: the P1 boot's result lines and aperture block.
+- `results/twin-native-stress1.txt`: the twin's reference lines.
+- `src/read-boardS.py`: the B5b-2 boot's reader.
+- `src/tsapp-stress-red.c`: the program with reductions 1 and 2 (modes `f`, `s`) and the full form (mode `a`).
+- `src/read-red.py`: the reader of a P1 boot of that program.
+- `results/b5b2-board2-stressS.txt`: the B5b-2 boot's result lines.
+- `results/twin-trap-stressS.txt`: its trap-route twin's lines.
+- `results/p1-board1-red1.txt`: the P1 reduction boot's result lines and aperture block.
+- `results/twin-red1.txt`: its twin's lines.
+- `results/twin-locate.txt`: the twin's 100-packet lines from 99,000 to 110,000 (mode a, seed 1).
+- `results/p1-board1-loc1.txt`, `results/p1-board1-loc2.txt`: the localisation boots' result lines (the verdicts,
+  c0's and the stopping command's begin and end lines, every 10,000th heartbeat, the last three and the cut line) and
+  aperture blocks.
+- `SHA256SUMS`: these files.

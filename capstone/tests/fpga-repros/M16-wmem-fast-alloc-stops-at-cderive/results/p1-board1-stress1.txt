@@ -1,0 +1,52 @@
+# M-16 stress boot, P1 (…-tagoverlap6c-pagedtbl_d83d3a633), board 1, 2026-11-25 11:41-14:49 (+0800).
+# Result lines only, taken from the driver transcript board.txt (sha256 6141714cd032cfe3…): the stage's
+# @@SPEC-BEGIN/@@SPEC-END lines (accounting tail dropped), every STRESS line, and the runner's aperture block
+# read after the 10,800 s budget, verbatim.
+@@SPEC-BEGIN 0 run s0 0
+STRESS begin packets=100 K=212 report=10 seed=1
+STRESS pkt=10 fast=1950 block=170 free=80 sum=e82afe8bc6e12542
+STRESS pkt=20 fast=3890 block=350 free=181 sum=912365869cedfe6b
+STRESS pkt=30 fast=5808 block=552 free=291 sum=9fc5e7057300f108
+STRESS pkt=40 fast=7752 block=728 free=387 sum=9889ad0e8caadcf8
+STRESS pkt=50 fast=9678 block=922 free=476 sum=a0a901b2b5e4699a
+STRESS pkt=60 fast=11615 block=1105 free=580 sum=046ed9a8bf7984a4
+STRESS pkt=70 fast=13554 block=1286 free=683 sum=9308d9a2d2fb9185
+STRESS pkt=80 fast=15496 block=1464 free=774 sum=933cb699f7199845
+STRESS pkt=90 fast=17418 block=1662 free=867 sum=0ffd86e8c84a0366
+STRESS pkt=100 fast=19360 block=1840 free=954 sum=1fe6df7c8e2b0e1f
+STRESS done packets=100 fast=19360 block=1840 free=954 sum=1fe6df7c8e2b0e1f
+@@SPEC-END 0 run s0 0 rc=0 up0=257.73 up1=262.40
+@@SPEC-BEGIN 1 run s1 0
+STRESS begin packets=400000 K=212 report=10000 seed=1
+STRESS pkt=10000 fast=1942742 block=177258 free=88880 sum=65fe918b54f2e945
+STRESS pkt=20000 fast=3885859 block=354141 free=177305 sum=1122483cf78b4012
+STRESS pkt=30000 fast=5829517 block=530483 free=265649 sum=08cefb5ff25f74c6
+STRESS pkt=40000 fast=7772792 block=707208 free=353936 sum=a7362c908700a398
+STRESS pkt=50000 fast=9715530 block=884470 free=442530 sum=d2919ed037b15c0b
+STRESS pkt=60000 fast=11658576 block=1061424 free=531166 sum=1ca1b1b942a3435b
+STRESS pkt=70000 fast=13602418 block=1237582 free=619404 sum=0588659bf710acc4
+STRESS pkt=80000 fast=15545750 block=1414250 free=708214 sum=773647bd44e1138b
+STRESS pkt=90000 fast=17488746 block=1591254 free=796858 sum=de7213ec671e2772
+STRESS pkt=100000 fast=19432859 block=1767141 free=884810 sum=8b64d9b857f7aee5
+===== vbatch wedge apertures =====
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x89 10001001
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x05 00000101
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x92 10010010
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x00 00000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x03 00000011
+sw=228 {1,dom_switch_idx[6:0]} 0xb8 10111000
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x00 00000000
+sw=194 {000000,store_state} 0x00 00000000
+sw=195 {0000,load_state} 0x00 00000000
+sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0xd7 11010111
+sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x8c 10001100
+sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0x02 00000010
+sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+commit pc (scoreboard slot 0; stale after a flush) 0x0000003ff676c9ee
+trap-log mepc 0xffffffff80007376
+trap-log tval 0x0000000000000073
+rev_node_debug_ex 0x00001346400007fa
+rev_node_head_ex 0x0071
+rev_node_serving_idx_ex 0x00001381

@@ -1,0 +1,50 @@
+@@NS-VERDICT plain-control PASS 10
+@@NS-VERDICT io-exchange PASS 20
+@@NS-VERDICT pipe-exchange PASS 21
+@@NS-VERDICT io-direct PASS 30
+@@NS-VERDICT pipe-direct PASS 31
+@@NS-VERDICT probe PASS 40
+@@NS-VERDICT gcc-coverage PASS 50
+@@NS-VERDICT entry PASS 60
+@@NS-VERDICT task FAIL 70
+@@SPEC-BEGIN 0 run c0 0
+STRESS pkt=10000 fast=1942742 block=177258 free=88880 sum=65fe918b54f2e945
+STRESS pkt=20000 fast=3885859 block=354141 free=177305 sum=1122483cf78b4012
+STRESS pkt=30000 fast=5829517 block=530483 free=265649 sum=08cefb5ff25f74c6
+STRESS pkt=40000 fast=7772792 block=707208 free=353936 sum=a7362c908700a398
+STRESS pkt=50000 fast=9715530 block=884470 free=442530 sum=d2919ed037b15c0b
+STRESS pkt=60000 fast=11658576 block=1061424 free=531166 sum=1ca1b1b942a3435b
+STRESS pkt=70000 fast=13602418 block=1237582 free=619404 sum=0588659bf710acc4
+STRESS pkt=80000 fast=15545750 block=1414250 free=708214 sum=773647bd44e1138b
+STRESS pkt=90000 fast=17488746 block=1591254 free=796858 sum=de7213ec671e2772
+STRESS done packets=99000 fast=19238362 block=1749638 free=876156 sum=c7bcb25f7f6a9209
+@@SPEC-END 0 run c0 0 rc=0 up0=258.70 up1=627.99 sys=0,0,0 nbench=0 :: 
+@@SPEC-BEGIN 1 run s2 0
+STRESS pkt=10000 fast=1943765 block=176235 free=88313 sum=c14b6c9844166c45
+STRESS pkt=20000 fast=3887570 block=352430 free=176530 sum=7ecb730cc4bd4310
+STRESS pkt=30000 fast=5830935 block=529065 free=264660 sum=9a4788dfbbc13b86
+STRESS pkt=32000 fast=6219627 block=564373 free=282291 sum=aa7b773c98261861
+STRESS pkt=33000 fast=6414056 block=581944 free=291055 sum=844b7543084fe766
+STRESS pkt=34000 fast=6608300 block=599700 free=
+===== vbatch wedge apertures =====
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x89 10001001
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x05 00000101
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x96 10010110
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x00 00000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x03 00000011
+sw=228 {1,dom_switch_idx[6:0]} 0xb8 10111000
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x00 00000000
+sw=194 {000000,store_state} 0x00 00000000
+sw=195 {0000,load_state} 0x00 00000000
+sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0xd7 11010111
+sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x8c 10001100
+sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0x02 00000010
+sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+commit pc (scoreboard slot 0; stale after a flush) 0x0000003ff676ca68
+trap-log mepc 0xffffffff80007376
+trap-log tval 0x0000000000000073
+rev_node_debug_ex 0x00000ed140001081
+rev_node_head_ex 0x0071
+rev_node_serving_idx_ex 0x00001147
