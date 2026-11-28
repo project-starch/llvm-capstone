@@ -1,0 +1,5 @@
+compiler clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git 29027126f39b8b19c43e27017c12ccbf7300b36d)
+ecd6d8c49efb4cf13717d45ebe164298ec08422b5fd46a294f1997ec7406581b  <hdd>/capstone/llvm-c9/bin/clang
+6efe2f77052132446a401bfff3ec6a9d5b2d55dbffc0075dbff87bc53b80430d  <hdd>/capstone/perf/cclever/arms/B5TL1/sdk/capstone-cc
+31ca7f89e2e4ec7748398bb47de8c76e80f91945342e413ff109e2444eadaa70  <hdd>/capstone/nested/b5b2/ports/gcc-v2/sublet-port.h
+127e37e92b2b2bb3435ca28ea30c2aa20e3f591f7154306e69b4385fba856f5a  <hdd>/capstone/nested/oneop/gcc-arms/all-abc-bm-ls-tfl-phi/sublet-port.h
