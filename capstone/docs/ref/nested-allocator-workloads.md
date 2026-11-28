@@ -3216,6 +3216,37 @@ Both commands together (the unit of the SPEC table's perlbench bar): in-context 
 - This replaces suns.pl (+16.05 %) as the Perl cost with the widest coverage: suns.pl is one script on Perl 5.36,
   test.pl is SPEC's own test workload on SPEC's Perl 5.22.
 
+### Record-access traces for the record-cache model (QEMU twin, 2026-11-20)
+
+**Purpose.** The post-submission programme (spec-silicon `7b0e8cd4b52b`, brief 7.4 item 1) decides whether a record
+cache goes to RTL by replaying traces of record accesses through cache models (the rtl lane). This lane provides the
+traces. Instrument: `capstone/tests/record-trace/` (a patch to the twin QEMU a0501ebc39, a reader, the format).
+
+**Traces**, all on slot 28 of the twin with the 2^20-record table unless stated, each named by the sha256 of the image
+its stage holds (`nested/rectrace/traces/INDEX.md` on the capstone work volume, with a `.meta` and `.stats` per trace):
+
+| trace | image | input | words | protected instructions | validation |
+|---|---|---|---:|---:|---|
+| full-gcc-train01 | 58124bcc… (the paper's Full) | train01 | 1,072,847,462 | 12,221,817,514 | specdiff 1/1 |
+| full-mcf-test | fa650b98… (the paper's Full) | test | 3,161,718,784 | >= 26,637,508,524 | specdiff 2/2; tail cut, see below |
+| full-perl-test | c1744e87… (the paper's Full) | makerand.pl, test.pl | 9,432,356,686 | 84,333,526,628 | test.out: the twin's 3 known scripts |
+| pool-gcc-train01 | 54291a9f… (pool protected, two-operand) | train01 | 1,229,181,700 | 12,321,961,369 | specdiff 1/1 |
+| three-gcc-train01 | 5920b9f9… (pools, GC heap, obstacks; 2^22 records) | train01 | 1,383,034,105 | 12,409,649,724 | specdiff 1/1 |
+| heads-perl-test | f5449ace… (scalar heads protected) | makerand.pl, test.pl | 10,052,744,671 | 87,962,584,323 | as full-perl-test |
+
+- The mcf file ends at the writer's last full buffer: the runner killed QEMU before its exit handler ran, so at most
+  131,071 runs at the end are missing and its `.stats` is a snapshot 1,179,648 words short. The writer now also
+  flushes every 2 s (control: the gcc test trace repeated with the new writer equals the old one word for word except
+  the all-instruction markers, which include the kernel's wall-clock timer).
+- Corrections made on the way, all before any replay used them: a first gcc trace was taken on the nat-fair stage,
+  whose binary (a73396ab…) is not the paper's (kept, labelled for sizing only); two queued Full traces were refused by
+  the wrapper's own no-overwrite guard and were not running when reported so; the gcc test control runs two images
+  (U P P U), not one.
+- The rtl lane reports that its reader reproduces every code's events and runs of the `.stats` on the control, perl and gcc traces.
+  It reports that its model calibrates on mcf against B5a's silicon and did not on gcc (78.6 % against 62.26 % read hits); the board ran
+  FRCDKMS images, not FRCDKMSa3, so two more traces on those images (gcc 3ed5c0be…, mcf 3d7e6211…) are being taken,
+  with context-edge markers, which B5a needs to flush its caches.
+
 ## Item 5: the SQLite and PHP bug corpora for the board (2026-11-23)
 
 The programme's item 5: prepare the images and the pre-registration, and the runtime lane queues them on a P1 board.
