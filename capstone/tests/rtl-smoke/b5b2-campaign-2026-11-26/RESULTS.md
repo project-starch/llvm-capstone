@@ -13,6 +13,12 @@ section and P3/P4 on the long stages are filled in when those rows land.
 
 ## P1: every stage PASS, hashes equal to the twin, no cause-25 fault at an LDC
 
+**RETRACTED 2026-11-28 for x264 (dev 59f229e2579d):** x264's "PASS" is not a correct-output verdict. Every Capstone
+x264 writes a malformed H.264 stream (x264's WORD_SIZE = sizeof(void*) = 16 on capstone64; the JM decoder rejects a
+1-frame encode from B5TL1, while Plain's decodes), and the twin reference it equals was produced by the same defect.
+The reconstructed frames, rc 0 and the encoder's decisions hold; the encoded stream does not. What follows from it
+for the x264 rows is the lead's decision.
+
 Holds on every row read so far: 42 boots of the campaign's images (board 1: 21, board 2: 20, board 3: 1; counted by
 script over the session directories): v2 and v1 PASS, every hash equal to
 its twin reference (CFP: equal between its boots and to CF's twin), no `cause=` substring in any capture, and mcf
