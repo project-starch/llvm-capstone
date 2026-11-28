@@ -1,5 +1,6 @@
 ; RUN: opt -mtriple=capstone64 -passes=loop-reduce -verify-each -S %s | FileCheck %s --check-prefix=OFF
 ; RUN: opt -mtriple=capstone64 -passes=loop-reduce -lsr-capability-exit-runtime-end -verify-each -S %s | FileCheck %s --check-prefix=ON
+; RUN: opt -mtriple=capstone64 -passes=loop-reduce -lsr-capability-exit-runtime-end -lsr-capability-exit-end-hoist -verify-each -S %s | FileCheck %s --check-prefix=HOIST
 ;
 ; -lsr-capability-exit-runtime-end moves a loop's exit test onto its capability IV even when the max backedge count
 ; is not below the cursor period, 2^(64 - ctz(byte step)). The endpoint is chosen in the preheader:
@@ -200,4 +201,72 @@ loop:
   br i1 %done, label %exit, label %loop
 exit:
   ret i64 %s.next
+}
+
+; -lsr-capability-exit-end-hoist: the count, the base and the start are invariant in the outer loop, so the endpoint,
+; the test and the select move from the inner preheader (%outer, run once per row) to the entry block. Without it
+; (ON) they stay in %outer.
+; ON-LABEL:     @nested_invariant(
+; ON:           outer:
+; ON:           lsr.cap.fits
+; ON:           lsr.cap.end.sel
+; ON:           loop:
+; HOIST-LABEL:  @nested_invariant(
+; HOIST:        entry:
+; HOIST:        lsr.cap.end =
+; HOIST:        lsr.cap.fits =
+; HOIST:        lsr.cap.never =
+; HOIST:        lsr.cap.end.sel =
+; HOIST:        outer:
+; HOIST-NOT:    lsr.cap.
+; HOIST:        loop:
+define void @nested_invariant(ptr addrspace(200) %b, i64 %n, i64 %rows) {
+entry:
+  br label %outer
+outer:
+  %r = phi i64 [0, %entry], [%r.next, %outer.latch]
+  br label %loop
+loop:
+  %i = phi i64 [0, %outer], [%next, %loop]
+  %p = getelementptr inbounds i64, ptr addrspace(200) %b, i64 %i
+  %v = load volatile i64, ptr addrspace(200) %p
+  %next = add i64 %i, 1
+  %done = icmp eq i64 %next, %n
+  br i1 %done, label %outer.latch, label %loop
+outer.latch:
+  %r.next = add i64 %r, 1
+  %odone = icmp eq i64 %r.next, %rows
+  br i1 %odone, label %exit, label %outer
+exit:
+  ret void
+}
+
+; Negative control: the count varies with the outer loop, so nothing moves.
+; HOIST-LABEL:  @nested_varying(
+; HOIST:        entry:
+; HOIST-NOT:    lsr.cap.end
+; HOIST:        outer:
+; HOIST:        lsr.cap.end =
+; HOIST:        lsr.cap.end.sel =
+; HOIST:        loop:
+define void @nested_varying(ptr addrspace(200) %b, i64 %n, i64 %rows) {
+entry:
+  br label %outer
+outer:
+  %r = phi i64 [0, %entry], [%r.next, %outer.latch]
+  %m = add i64 %n, %r
+  br label %loop
+loop:
+  %i = phi i64 [0, %outer], [%next, %loop]
+  %p = getelementptr inbounds i64, ptr addrspace(200) %b, i64 %i
+  %v = load volatile i64, ptr addrspace(200) %p
+  %next = add i64 %i, 1
+  %done = icmp eq i64 %next, %m
+  br i1 %done, label %outer.latch, label %loop
+outer.latch:
+  %r.next = add i64 %r, 1
+  %odone = icmp eq i64 %r.next, %rows
+  br i1 %odone, label %exit, label %outer
+exit:
+  ret void
 }
