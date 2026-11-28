@@ -126,3 +126,15 @@ CF twin on every stage except x264's encoded stream and stderr.
   origin/spec-silicon results/2026-11-08-train PREREG:5354, :5846). Its seal is a manual one (finish.verdict
   COLLECT-FAILED 127: no collector in the riscv-base tree; SEAL.txt with the .bit sha256 efc3ab8a…, 0 routing
   errors, WNS +0.177). This kit's Plain kernel has not booted on it before.
+
+## Amendment 2 (2026-11-28, before any boot it adds): the long rows to N = 3 on a second board
+
+The session on board 2 gives Plain's long groups N = 2 (g1b) and N = 1 (x264b). The final campaign wants three runs
+per arm. Of boards 1 and 3, the one the stage-2 x264 bracket does not take goes idle when its Phase B ends.
+- **Added session, on that board:** FLASH-RVB (8db8f9cda, by the same procedure and gates as board 2's session),
+  PLM-g2i as the control and that board's Tier 1 on rvbase (short, expected PASS), PLM-x264b, PLM-g1b, PLM-x264b, then
+  the flash back to the board's own seal.
+- **The images, grader, C10 rule, bounds and predictions are this file's**, unchanged: the same five payloads by
+  sha256, the Plain grader, P1-P3.
+- **Reading:** Plain's g1b (N = 3) and x264b (N = 3) come from two boards. The cross-board offset on the same CF image
+  is within 0.06 % (b5b2-campaign RESULTS); it is reported beside each mean and not corrected.
