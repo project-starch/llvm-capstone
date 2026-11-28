@@ -1,5 +1,34 @@
 # Current Capstone state
 
+## 2026-11-28: Line B's final seals measured; the SPEC test campaign two-thirds read; Plain not yet booted
+
+**The arms** (the hardware Section 5 specifies): Full **b42c8c644** (WNS +0.605 ns, 150,303 LUT; kits b5b2n 21/21,
+crevoke4b 16/16, wapflu on two boards), +Spatial **14f2ef81a**, Plain rvbase **8db8f9cda**. 904cd9c6b, 88db40027 and
+28fcbb646 are superseded. Stage 2's seal N **796af23d9** is a separate experiment.
+
+**What is read** (details and commits: `docs/ref/fpga-silicon-measurements-for-paper.md`, the Line B entries of 28 Nov):
+- **SPEC test, final kernels** (kit b5b2-campaign-2026-11-26, interim): every stage PASS on 42 boots, outputs equal
+  to the twin, no cause-25 at an LDC, mcf completes. Full against +Spatial on one board: imagick +0.15 %, gcc +1.03 %,
+  perlbench −0.65 % (inside the noise), mcf +5.5 %. The qualification perl gap (11 s) is not reproduced. Boards agree
+  within 0.06 %.
+- **Qualification rows** on the bring-up kernel (kit b5b2-spectest-2026-11-25, on dev): all PASS, x264 by its seven
+  data outputs.
+- **Code placement alone** moves perlbench 4.1 % and nab 2.21 s (compiler stage2-placement-b42).
+- **Stage 2:** GO on gcc alone (−1.62 %), flat elsewhere; it does not replace b42c8c644 in this campaign.
+- **Record cache:** NO BUILD on gcc, perlbench and mcf (mcf from silicon's own tick positions, kit
+  b5b2-ticklog-2026-11-27); Line B has no record-cache hardware.
+- **Hardware cost:** Full 2.655x, +Spatial 2.457x CVA6's core LUTs (docs/plans/2026-11-26-hw-cost-lineb.md).
+- **Linux on Line B:** the final Full and +Spatial kernels (NO_HZ_IDLE at HZ=100), the msghdr loader, memcached served.
+
+**Not yet read, and what the paper needs from Line B:** every number against Plain (the Plain arm is pre-registered,
+runtime/b5b2-linux 932491ce4360, and is queued on board 2); perlbench on its full test input (a test.pl child faults with
+cause 28, to be attributed first); Table 3's application rows; the embedded suites; the security corpus beyond SQLite
+and PHP; revocation cost on silicon; and SPEC train, which runs last. Plan:
+[Line B to completion](../plans/2026-11-28-line-b-completion.md).
+
+**Superseded below:** the 25 Nov section's x264/imagick cause-24 faults (x264b and imagick pass on b42c8c644) and its
+open mcf wedge (mcf completes on b42c8c644, consistent with R-80's fix; S-35 still owes the 28fcbb646 control).
+
 ## 2026-11-25: Line B on silicon (B5b-2, the trap route) runs Linux, SPEC and the one-operand applications
 
 The submitted paper measured P1 (d83d3a633). Line B, Section 5 as written, is now on silicon:
