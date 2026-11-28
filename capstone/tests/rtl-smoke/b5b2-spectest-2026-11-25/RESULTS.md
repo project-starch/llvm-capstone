@@ -119,6 +119,27 @@ not the wedge gone.
 
 ## x264b rows (Amendments 11-14)
 
+**RETRACTED 2026-11-28: "x264 PASS 7/7" is not a correct-output verdict on any Capstone arm.** The encoded stream
+`BuckBunny_New.264` that every Capstone x264 writes is a malformed H.264 bitstream, and the grader's reference hash for
+it (X264_REF, grade-spec-chain-v2.py b976d288) was itself produced by that defect, so every row matched a broken
+reference.
+- **The defect** (compiler lane, read at source by the runtime lane): x264's `common/osdep.h:231` defines
+  `WORD_SIZE sizeof(void*)`, which is 16 on capstone64, while the bit writer's accumulator `intptr_t cur_bits` is 8
+  bytes. `bs_init` then sets up to 128 bits in a 64-bit accumulator, `bs_write` takes the `WORD_SIZE != 8` path
+  (`common/bs.h:84`, `:115`), and bits are lost from the first header on.
+- **The evidence:** a 1-frame `--qp` encode on the twin. B5TL1's SPS reads `67 00 00 40 …` (profile_idc 0, not a
+  profile) where Plain's reads `67 64 00 1f …` (High, level 3.1), and SPEC's own JM decoder (ldecod) rejects B5TL1's
+  stream with exit status 244 while it decodes Plain's (compiler c4/kernels/ktest/QPDEC1.log). That the full
+  156-frame test stream also fails to decode is predicted by the same mechanism and **not yet shown**.
+- **What still holds:** gen and run rc 0, and x264's reconstructed frames (frame_0/50/100/150/155.yuv and BuckBunny.yuv)
+  equal to the reference: SPEC's own validation compares only those. The encoder's decisions are the same; only the
+  bit writer differs.
+- **What it changes:** Capstone x264 runs a different bit-writer path from Plain's, so x264's times are not the same
+  work in that writer, and its output is invalid. Whether to patch the port (WORD_SIZE = sizeof(intptr_t)), report the
+  stream as invalid, or drop the row is the lead's decision. The paper's x264 rows (P1, capstone64 too) are exposed to
+  the same defect; that is for the lead.
+
+
 Graded under v2 with v1 beside it (Amendment 14), by x264's seven data outputs (Amendment 13); times are up1 − up0 of
 each command, read from the capture by this lane.
 
