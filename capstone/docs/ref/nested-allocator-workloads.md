@@ -8357,3 +8357,401 @@ fault line:
 
 **Files** (`<hdd>/capstone/nested/b5b2/perlfault/`): `run-native.sh`, `children.log` (the 317 invocations),
 `sr/test.out`, and the twin overlay `ovl/`.
+
+## B5b-2's bug corpora, memcached and CPython on the trap-route twin, and the cause-24 rule (2026-11-25)
+
+These are the twin readings that become the board's predictions for runtime's B5b-2 items 1-3, plus a judging rule
+for the corpus boots. That rule is pre-registered here, written 21:42, before any board run of the corpus. No board
+has run any of this.
+
+**The run.** `twin-all`, one boot on the trap-route QEMU twin:
+- QEMU: qemu-crv `ea5c05f3…`, `-m 512M`, one hart, no exact bounds, the silicon's setting.
+- Firmware: fw_jump `67115ce6…`.
+- Kernel: trapk Image `4fc06dde…` with `sublet.dom_wide_grants=1`, which is what `caplifive-b5b2-wide.dtb`
+  (`3d223e80…`) gives the board.
+- Root filesystem: base-rootfs `dd2dd8ff…`, with compiler's /init.
+- Lock: granted 20:29, done 21:19. Console log sha256 `08c735e24a4907bc…`.
+- Stages: C30/C31 CPython, M20/M21 memcached, N1/N2 SQLite engine-repros, P10-P17 PHP engine-repros. Every stage
+  reached `@@QSTEP-END rc=0`.
+
+**CPython** (stock `e47ab197…`, prot `a269a6b5…`; `pyperformance-subset.py`, `PYTHONHASHSEED=0`):
+- both arms rc 0 and `PYPERFORMANCE-OK 8`;
+- both answers are `58211793…`, which equals the native reference.
+
+**SQLite engine-repros** (`read-sqlite.py`, trap/eval's observe and judge; image manifests: malloc `fc4624193c28ccf5…`,
+pools `0222760f5d5779a6…`, 33 images each):
+- malloc: MISSED 29, NO-READING 4. All 33 cells equal case.json's virtual-malloc verdict.
+- pools: CAUGHT 27, MISSED 6. 31 of 33 cells equal the record. The other two are 29 (`sqlite3Get4byte`) and
+  31 (`statDecodePage`): cause 28 CAUGHT in the record, cause 24 here in the same function, MISSED under the
+  arm's `[25, 28]`.
+- Prior art: this is the pair recorded above on 2026-11-23 (capstone-qemu 0542c5556c): with exact bounds, 29 and 31
+  are cause 28 at the same pc and address; without, cause 24. It is the moved-capability rule R-60 (qemu-crv
+  `op_helper.c` `capstone_set_moved_cap`): a CINCOFFSET to a cursor the compressed form cannot represent writes an
+  untagged integer, and the load through it traps 24. kit-p1v, the P1 twin, read the same 6 pools MISSED.
+
+**PHP engine-repros** (`read-php.py` and trap/eval's run-realphp.py `--from-record`; image `a26d572f…`, probes
+putenv `fd2e1555…` and nested `36cfcece…`):
+
+| arm | asan-blind CAUGHT / MISSED | temporal-asan-visible CAUGHT / MISSED |
+|---|---|---|
+| stock | 5 / 30 | 1 / 5 |
+| block | 12 / 22 | 6 / 0 |
+| object | 25 / 11 | 6 / 0 |
+| exact | 29 / 5 | 6 / 0 |
+
+Against kit-p1v's committed bundles (`results/2026-11-23-p1v-twin`), 271 of 280 cells are the same. The 9 others are
+four cases:
+- **25 (crash-084)**: out-of-denominator on kit-p1v, MISSED on four arms here.
+  - The putenv probe printed the ABSENT pattern exactly.
+  - But the judge counts a probe reading only from a transcript that names its image's digest
+    (`transcript_image`).
+  - trap-vexec.sh printed no `capstone-exec: exit image=… sha256=…` line; the log has none.
+  - This is a gap in the trap route's tooling (fix below).
+- **03 (crash-008), exact arm**: unattributed here, CAUGHT by chain on kit-p1v. The trap route's fault line has no
+  frame chain (`chain: []`), so the climb from `__stpcpy` to `php_date` cannot be made. Recorded as
+  "unattributed: the trap route's fault line has no chain".
+- **21 (crash-075)**: CAUGHT on pools and exact here; kit-p1v read infra (cause-30 node-table exhaustion). Recorded
+  as infra/timing.
+- **30 (crash-092)**: infra on the nested arms (the per-run watchdog), as in run18. A timing case.
+
+**memcached: not qualified, a route gap.**
+- 0 of 6 repetitions qualify, stock and protected alike.
+- The server accepts, reads `shutdown` and exits 0, but every response reads `<EOF>`.
+- Its responses go through `tcp_sendmsg` → `sendmsg` (memcached.c:137). trapk's `sublet_load_embedded` (loader.c)
+  admitted only the iovec calls, execve and pselect6, and gave sendmsg -ENOSYS ("msghdr … get ENOSYS until their
+  loaders exist").
+- Ruling (runtime): no change to the workload. The fix is a msghdr loader in the kernel, which runtime has written
+  (Image `749fed26…`). Unpatched memcached is requalified on that Image once runtime's directed test reads.
+- A build with sendmsg rewritten as writev (`out-w`, stock `c165e169…`, protected `5fd5093c…`) is a twin diagnostic
+  only: a patched workload, not a measured arm.
+- That diagnostic's twin reading (`ovl-w`, Image `749fed26…`, lock 22:47:06, done 00:17:33): 6 of 6 repetitions
+  qualify, stock and protected. Each transcript equals the native reference (1,931,207 B), each server stops on
+  `shutdown` with exit 0, and identity reads `STAT pointer_size 128`. So once responses leave by writev, nothing else
+  on the route stands between memcached and its oracle. It does not measure the unpatched server and does not
+  exercise the msghdr loader. The overlay predates the exit-line adapter (it carries the earlier trap-vexec).
+
+**trap-vexec.sh's exit line** (for case 25):
+- The C launcher's line is `capstone-exec: exit image=<path> sha256=<hex>` (runtime/virtual/exec.c:1307). trap-vexec.sh
+  now prints it on a run that ends, under the same gate (stderr a terminal or `CAPSTONE_EXEC_DIAGNOSTICS`).
+- tests/trap-platform/test-vexec.sh: 8 of 8 PASS. The new checks are the exact line with the image's own digest, no
+  line without diagnostics, and no exit line on a fault. The previous script fails the two new positive checks.
+- The diff is handed to runtime (`trap-vexec-exitline.diff`, `c6a2bb88…`; script `41fb8b58…`).
+- The probe's positive control on the twin is queued (`ovl-r60off` stage N3). Its pass condition: run-realphp's
+  probe_reading reads ABSENT (False) from that transcript.
+
+### Pre-registration: cause 24 under compressed bounds (runtime's rule, as registered)
+
+Silicon has no exact bounds, so the board reads cause 24 where the exact-bounds record reads 28. For this corpus run
+and its board boots, a cause-24 cell scores CAUGHT only if all three hold:
+- (a) its faulting pc is in the same function as the exact-bounds reference catch;
+- (b) the exact-bounds twin run of the same case and image catches it with cause 28 there;
+- (c) the faulting operand is the result of a CINCOFFSET or CINCOFFSETIMM in that function.
+Otherwise the cell keeps the judge's verdict.
+
+The rule applies to every cell. On the twin, exact bounds off, the cause-24 cells are 7, all SQLite. PHP has none:
+the same search finds 134 cause-25 and 52 cause-28 cells there. (c), read from each image's disassembly at the
+faulting pc:
+
+| cell | function | faulting operand | (c) |
+|---|---|---|---|
+| pools 31 | `statDecodePage` | `cincoffset a0, a0, a1` right before `lbu a1, 0(a0)` | met |
+| pools 29 | `sqlite3Get4byte` | its argument, spilled and reloaded with `ldc`; the cincoffset is in the caller | not met |
+| malloc 22 | `editDist3FindLang` | `cincoffset a0, a0, a1` right before `lw a0, 0(a0)` | met |
+| malloc 02 | `sqlite3PagerSetPagesize` | loaded with `ldc` from memory | not met |
+| malloc 05 | `sqlite3DropTriggerPtr` | loaded with `ldc` | not met |
+| malloc 19, 20 | `nodeRelease` | loaded with `ldc` | not met |
+
+- 29 stays MISSED, recorded as "24 at an operand formed by a cincoffset in the caller: excluded by rule (c) as
+  registered". If the call-chain form is the better rule, it is pre-registered for the next corpus run, with 29 as
+  the case that motivates it.
+- (b) is one exact-bounds twin of the 7 cells plus pools 30, which is a control because it reads cause 28 either way
+  (`ovl-r60b`, `x-capstone-exact-bounds=true`).
+- Its off half is the same 8 cases on the same kernel (`ovl-r60off`). Both run on the twin's current Image
+  `749fed26…`: the twin's Image path was rebuilt in place, and `4fc06dde…` is not kept. The diff between the two
+  Images is the msghdr loader, which none of these cases calls.
+- The two halves' `capstone-vexec` differ by the exit line above, which prints only on a normal exit, never on a fault.
+- **Prediction:** pools 31 moves, and it is the only cell that does. 22 meets (c), but it cannot meet (a): the
+  malloc arm has no reference catch, and its record is MISSED on virtual-malloc at both bounds settings (the
+  2026-11-23 readings above). So the rule moves one cell, pools 27 → 28 CAUGHT, if (b) reads 28 for 31.
+
+### (b) read, and the rule applied (twin, Image `749fed26…`, 2026-11-25, both halves done by 22:47)
+
+The same 8 cases, the same images, the same kernel: `ovl-r60b` with `x-capstone-exact-bounds=true` and `ovl-r60off`
+without it. Fault lines, cause at pc:
+
+| cell | exact bounds on | off | off in twin-all (`4fc06dde…`) |
+|---|---|---|---|
+| pools 29 `sqlite3Get4byte` | 28 at +0x57c88, address …1fafa | 24, same pc and address | 24, same |
+| pools 30 (control) `vdbeRecordCompareInt` | 28 at +0xcc340 | 28 | 28 |
+| pools 31 `statDecodePage` | 28 at +0x1f7df4, address …1dde0 | 24, same pc and address | 24, same |
+| malloc 02, 05, 19, 20, 22 | 24 | 24, same pcs and addresses | 24 |
+
+- In both halves the control reads 28, so the property alone moves 29 and 31 from 28 to 24, at the same instruction
+  and address. This reproduces the 2026-11-23 pair on the trap route.
+- The five malloc cells read 24 with exact bounds too, so the compressed-bounds window does not explain them. Their
+  addresses (0x0, 0x17, …392b, an ASCII word) are untagged values loaded from memory.
+- The kernel change from twin-all's Image to this one does not move any of the 8 cells.
+
+**The rule (pre-registered above), applied to the 7 cause-24 cells:**
+- pools 31: (a), (b) and (c) all met, so **CAUGHT**;
+- pools 29: (a) and (b) met, (c) not, so it stays MISSED, recorded as "24 at an operand formed by a cincoffset in
+  the caller: excluded by rule (c) as registered";
+- malloc 22: (c) met, but not (b) (24 with exact bounds) and not (a);
+- malloc 02, 05, 19 and 20: none of the three is met.
+
+So the rule moves one cell, pools 31, and pools reads **CAUGHT 28, MISSED 5**, as predicted.
+
+**The putenv probe's positive control** (`ovl-r60off` stage N3, the new `capstone-vexec`):
+- The probe printed the ABSENT pattern and `capstone-exec: exit image=/tmp/nt/img/probe-putenv.dom sha256=fd2e1555…`.
+  That is the probe's own digest.
+- run-realphp's `transcript_image` reads the digest from this transcript and `putenv_probe_outcome` reads False
+  (ABSENT).
+- On twin-all's transcript of the same probe, the identity reads None. That is why case 25 was MISSED there.
+- The control fires both ways. It shows the identity can now be read; case 25's judgement is taken from the
+  board-overlay twin run below.
+
+**The board kit's own twin run.** `ovl-board` is the corpus overlay of the board payload `b8882143…`:
+- SQLite and PHP stages only;
+- it differs from twin-all's corpus stages only in `capstone-vexec`, which is 081c21bd's;
+- it is queued on the twin with wide grants, as twin-all was.
+
+Its readings are the board's predictions.
+
+### twin-board read, and a correction to the board kit (2026-11-26)
+
+`twin-board` ran `ovl-board` on Image `749fed26…` with wide grants. The lock was asked 22:48:10 and released 00:37:06.
+Every stage ended rc 0, and the log holds 70 `@@CASE-END` lines.
+
+- **SQLite**: both pools match twin-all case for case in verdict, cause, pc and function. malloc reads 29 MISSED and
+  4 NO-READING; pools reads 27 CAUGHT and 6 MISSED before the cause-24 rule. The rule moves 31 as registered, so
+  pools reads 28 CAUGHT and 5 MISSED. The one difference is case 11 (malloc): it is NO-READING both times, with the
+  reason now "infra" where twin-all gave "inconclusive".
+- **PHP temporal**: the table is identical to twin-all's.
+- **PHP asan-blind**: three rows differ, in all four arms.
+  - **25 (crash-084)**: was MISSED, now out-of-denominator. This is the expected change. The exit line lets the putenv
+    probe read ABSENT, so the case's declared platform precondition is not met.
+  - **30 (crash-092)**: was infra, now not-reached. Both are NO-READING, and this is the timing case (§ above).
+  - **32 (crash-097)**: was MISSED, now **setup-fault**. The stock arm faults with cause 28 in memchr, before the case's
+    marker, after `stream_socket_server(): unable to connect to udp://127.0.0.1:0 (Address not available)`.
+    - Cause: the loopback interface. /init never brings `lo` up. In twin-all, the memcached stages (M20/M21, whose
+      run.sh starts `ifconfig lo 127.0.0.1 up`) ran before the PHP stages in stage order, and the board kit has no
+      memcached stage.
+    - So the earlier statement that ovl-board "differs from twin-all's corpus stages only in capstone-vexec" holds for
+      the files and not for the boot. The boot's history differs.
+    - With lo up, twin-all and the reference run18 read 32 MISSED on all four arms.
+  - Tallies (CAUGHT/MISSED), stock, block, object, exact: 5/28, 12/20, 25/9, 29/3. twin-all read 5/30, 12/22, 25/11,
+    29/5. The moved rows are 25 and 32, which leave the denominator, and 30, which was already outside it.
+- The kernel change (the msghdr loader, which adds only sendmsg and recvmsg to the calls the route admits) is not
+  needed to explain these rows. For 32 the loopback explanation is a hypothesis until `twin-board2` reads: same
+  Image, lo up. Its prediction is 32 MISSED on all four arms.
+
+**Correction to the board kit.**
+- make-php-ovl.py now starts each PHP stage with `ifconfig lo 127.0.0.1 up`, as the memcached stage does.
+- `ovl-board2` is `ovl-board` with that line added to the eight PHP run.sh files and no other difference
+  (diff -r: 8 files, one added line each).
+- Its payload `payload-board2` (DTB caplifive-b5b2-wide.dtb):
+  - fw_payload.bin `cf97af22f3713f5c…`, 21,657,608 B;
+  - Image `029712a8c62d1a69…`, relinked from the same tree with only `init/version-timestamp.o` recompiled;
+  - overlay `8ca92ec3…`, initramfs `5f2c872d…`;
+  - the initramfs carries the ifconfig line 8 times, and the withdrawn one carries it 0 times.
+- Payload `b8882143…` is withdrawn before any board use (attic `payload-board-lo-down`).
+- The board's predictions come from `twin-board2`, which is queued.
+
+### memcached requalified, unpatched, on the msghdr-loader Image (2026-11-26)
+
+- Requested: runtime's ruling (above). Runtime's msgt directed test read on twin Image `749fed26…` (msgt.dom
+  `2c6c30f7…`, msgt.native `cba6b00a…`). Native and protected printed identical lines: sendmsg, recvmsg with the iov
+  split, an SCM_RIGHTS fd, MSG_TRUNC, fails=0. Runtime's own caveat: no negative control on a loader-free kernel.
+- `ovl-req`, the unpatched build of `out/`: stock `53538940…`, protected `4108e588…`, with trap-vexec `41fb8b58…`
+  (= runtime/trap-route-tools 081c21bd1f0e). The images are byte-identical to twin-all's M20/M21.
+- Run `twin-req`, Image `749fed2606e3ebca`, hashed before and after; lock 00:24:01, done 00:48:27.
+- **6 of 6 repetitions qualify** (read-mc.py against the native reference):
+  - every transcript equals native's 1,931,207 B;
+  - every server stops on `shutdown` with exit 0;
+  - identity reads `STAT pointer_size 128`;
+  - each run's exit line names its image (`53538940…` stock, `4108e588…` protected).
+- The pair: twin-all, on Image `4fc06dde…` without the loader, read 0 of 6 with the same images: 4,905 B transcripts and
+  every response `<EOF>`. The two runs also differ in the adapter, whose only change is a line printed at exit. So
+  the kernel change, which runtime describes as the msghdr loader, is what moves memcached from 0/6 to 6/6 on the twin. This is the negative control runtime's
+  msgt lacked, taken at the workload.
+- The board kernel carries the same loader (`trapk/fpga/linux-6.1`), unvalidated on silicon. A memcached board boot is
+  not pre-registered here.
+
+### CPython on the trimmed stdlib tree (2026-11-26)
+
+- The board stage was too big with the whole stdlib. `trim-tree.py` keeps `bench/` whole and, for each module and
+  parent package in a `-X importtime` run's list, the module's source and `.pyc`, byte-identical:
+  - the list comes from `twin-imp`, stock rc 0, answer `58211793…`;
+  - the result is 150 modules, 190 files;
+  - `ovl-trim` is 7,461,893 B, of which tree.tar.xz is 1,325,852 B.
+- The images are unchanged: the overlay's app.xz files decompress to stock `e47ab197…` and prot `a269a6b5…`.
+- Run `twin-trim`, Image `749fed26…`, lock 22:54:25, done 00:47:54:
+  - both arms rc 0 and `PYPERFORMANCE-OK 8`;
+  - both answers are `58211793977f706c…`, the native reference;
+  - no Error or Traceback line;
+  - twin wall time, from uptime: stock 263.4 s, prot 354.4 s.
+- Board payload `payload-trim` (DTB caplifive-b5b2-wide.dtb, `sublet.dom_wide_grants=1` present in the bytes):
+  - fw_payload.bin `ddee6d29e26b4d73…`, 23,754,760 B, under the 26,000,000 B cap;
+  - Image `33ce8624…`, the same tree relinked, with only `version-timestamp.o` recompiled;
+  - overlay `180aacaf…`, initramfs `bc3b311b…`.
+
+### twin-board2: the loopback explanation holds (2026-11-26)
+
+- `twin-board2` ran `ovl-board2` on Image `749fed26…`. Lock asked 00:40:19, done 01:28:30. Graded with grade-corpus.py
+  against twin-all's 346 cells.
+- 341 cells equal twin-all's. **32 (crash-097) is MISSED on all four arms**, as in twin-all and run18, so the loopback
+  was the cause. 30 is back to infra, as in twin-all.
+- Five cells differ:
+  - 25 on the four asan-blind arms reads out-of-denominator, the exit line's expected effect;
+  - SQLite malloc 11 is NO-READING both times, with the reason "infra" here and "inconclusive" there.
+
+### Pre-registration: B5b-2 board boot "nested-cpymem", CPython then memcached (written 2026-11-26 02:40 host time (+08), 18:40Z on Nov 25, before the boot)
+
+**What it is.** It covers runtime's B5b-2 items 2 and 3 on silicon in one boot:
+- CPython's pyperformance subset on the trap route;
+- then memcached as a server, which is also the msghdr loader's first silicon reading.
+
+Both fit one payload under the 26,000,000 B cap, so runtime's rule puts them in one boot, CPython first and memcached
+last (the newest kernel path). The board lane runs it.
+
+**Platform.**
+- Board 2's b42c8c644 session, right after misscost, as runtime allocated it; board 3's offer after ldcexc2 is the
+  fallback. The boot runs on exactly one board, and its readings carry the board ID. The seal is the **full** B5b-2
+  seal **b42c8c644**, never its spatial-only variant (runtime: on that variant every cause-25
+  catch becomes MISSED by design).
+- Runner: the board lane's run-one-e.sh (runner 5: incremental capture, the silence stop with the wedge snapshot, the
+  STOP file), with the board's own booking and readbacks before and after.
+- Image `<hdd>/nested/b5b2/cm/payload-cm3/fw_payload.bin`, sha256
+  `ccecad78bfcb78b0634fd229859845eb81b0ab418326cbef4dbe2b4f715ce655`, 25,851,912 B:
+  - firmware: sbi-keep trap-route-keep-tags;
+  - DTB: caplifive-b5b2-wide.dtb `3d223e80…` (`sublet.dom_wide_grants=1`, present in the bytes);
+  - **board kernel** = series at 6d4504f8b073 + the runtime lane's msghdr loader (unvalidated at registration),
+    Image `f97b98f1…`, relinked from trapk/fpga/linux-6.1 with only the initramfs changed;
+  - initramfs `acf4a766…` = base-rootfs `dd2dd8ff…` + overlay `ovl-cm3` (`093e5b6c…`).
+- `ovl-cm3` is the twin-qualified overlays with only time limits changed, plus one instrument change:
+  - CPython: `ovl-trim`'s stages C30/C31, with images stock `e47ab197…` and prot `a269a6b5…` and the 150-module stdlib
+    tree;
+  - memcached: `ovl-req`'s stages M20/M21, unpatched, with images stock `53538940…` and protected `4108e588…`;
+  - trap-vexec `41fb8b58…` = runtime/trap-route-tools 081c21bd1f0e.
+- `make-board-kit.py` (`ce218337…`) with `cm2.spec` (`985f1cab…`) changes:
+  - /init → trapk/fpga/init-ordered-bound (`6462764b…`): per-stage bounds from /stages.bound;
+  - CPython's per-run watchdog: 3300 → 9600 s;
+  - an `@@UP <uptime>` line after each run's end line.
+- Stage bounds: C30 and C31 10,800 s each, M20 and M21 3,600 s each. Each is at least 15× the stage's twin time
+  (CPython 263 s stock and 354 s prot per run, prot stage 631 s by uptime; memcached 3.5-11 s per repetition on twin-cm3, about 30 s per stage).
+- The instrument change: mc-harness is rebuilt from ports/memcached/app/host/mc-harness/mc-harness.c with its two
+  wall-clock limits raised, the same on all arms. The rebuild without the change reproduces the shipped binary
+  `90b558d8…`, so only the change differs: listen 120 → 600 s; no byte 60 → 300 s; binary `fde5d3c7…`, source
+  `d016390a…`. Both limits stay under the 900 s per-repetition watchdog, so a hung server is still caught. Twin
+  check: on twin-cm3 a whole repetition takes 3.5-5.0 s (the first of each stage, which includes the stage's unpacking, 11 s stock and 6.5 s protected). Listen time and the longest gap are each at most that, so at 15× they are 53-165 s: within the new limits, and over the old 60 s one.
+- **Boot bound: 30,000 s.** That is the sum of the stage bounds (28,800 s), plus 1,200 s for upload, boot and the smoke
+  control.
+
+**Predictions** (the twin, `twin-cm3`, this exact overlay on Image `749fed26…`; lock granted after a 5,203.5 s wait, done 02:40:07; console log sha256 `1badfd76be9deb68…`):
+- **CPython, both arms PASS:**
+  - rc 0, answer `58211793977f706c…` = native's, `PYPERFORMANCE-OK 8`;
+  - each exit line names its image (`e47ab197…`, `a269a6b5…`);
+  - twin wall time: stock 253.4 s, prot 329.0 s.
+- **memcached, 6 of 6 repetitions qualify:** every transcript equals native's 1,931,207 B, each server stops on
+  `shutdown` with exit 0, identity reads `STAT pointer_size 128`, and each exit line names its image.
+- **grade-cm.py on the twin log: exit 0, BOTH PASS.** The prediction is the same exit on the board's capture.
+- The board is predicted slower, but by an unknown factor. That factor is a reading, below.
+
+**Grader.** `python3 <hdd>/nested/b5b2/cm/grade-cm.py <UART capture> <new out dir>` (`90c39ded…`). It runs
+cpython/read-cpy.py (`dc685836…`) and memcached/read-mc.py (`15d33f37…`), the latter against memcached/out, the native
+reference.
+- Exit 0 means both pass: CPython's both arms rc 0, answer = native's `58211793…`, `PYPERFORMANCE-OK 8`, no timeout
+  or fault, and an exit line naming the arm's image; memcached 6 of 6 repetitions qualify.
+- Exit 1: something was read and failed.
+- Exit 2: no reading, meaning a stage or run is missing.
+- Controls on recorded logs: twin logs pass (0). A changed answer, a dropped OK line and a wrong image each fail
+  (read-cpy 1). memcached at 0/6 fails (1). A log without a stage gives 2. And the twin-cm3 log itself passes (0).
+
+**How each outcome reads.**
+- **CPython PASS:** the protected and stock images both run Fig. 10's workload correctly on silicon's trap route. The
+  @@UP and PYPERF-TIME lines give wall times, which are a cost reading and not a verdict.
+- **CPython FAIL:**
+  - a wrong answer or a fault is a correctness finding, reported with the arm and the fault line;
+  - a `@@CPY-TIMEOUT` at 9600 s is a budget reading, not a verdict.
+- **memcached 6/6:** the msghdr loader serves sendmsg on silicon, on both arms.
+- **memcached all `<EOF>`** (4,905 B transcripts, twin-all's shape): the loader does not serve sendmsg on silicon. That
+  is a kernel finding, routed to runtime.
+- **memcached `<TIMEOUT>` in a transcript:** a harness timeout at 300 s idle, not a protection verdict.
+- **A stage cut at its bound, or a silence stop:** no reading for that stage. The wedge snapshot goes to runtime.
+- **The board/twin ratio** is a reading of this boot: per run, from the @@UP lines and CPython's up0/up1, against the
+  twin's. It is not a prediction.
+
+### Result: nested-cpymem, CPython PASS on both arms; memcached 0 of 6 by the registered criterion, every transcript the same and off native's only in the two answers that read the wall clock (board 2, 2026-11-26 05:18-06:52 host time, read against 506d11206c40)
+
+**Platform, as read back.**
+- Board 2, booked by the board lane's runner and released (UNBOOK 200).
+- Read back as b42c8c644 by name before and after the boot, `…-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit`: the full B5b-2 seal, as registered. Both readbacks give rc 3, which means the name matched and the console exposes no sha256.
+- Image `ccecad78bfcb78b0…`, as registered.
+- **UNGATED** by preflight-board-run.sh (runner 5 does not invoke it). The board lane's own prechecks ran: the image sha256 against the arming file, the seal's sha256, and the readback by name before and after.
+- Capture: uart.txt sha256 `b1043a2b6bcb3ebe…`, 78,673 B. The grader's boot.txt (CR dropped) is sha256 `ffb832f8715f1a63…`.
+
+**Grader, as registered** (`grade-cm.py`, `90c39ded…`): **exit 1.**
+- cpython: rc 0, "both arms pass".
+- memcached: rc 1. read-mc.py stopped with a base64 error after printing stock reps 1-3 as FAILS.
+  - The error's cause: a console heartbeat line, `TRAPTEST: tick 5212.96`, landed inside protected rep 1's `server.out` block.
+  - The reader takes the block whole, so it cannot decode it. The twin's log has 5 tick lines and none inside a block; the board's has 43.
+  - The registered exit is 1 either way: stock reps 1-3 had already failed on their transcripts.
+
+**CPython: PASS on both arms**, which is the prediction.
+- Both arms: rc 0, answer `58211793977f706c…` (397 B) = native's, `PYPERFORMANCE-OK 8`, no timeout or fault.
+- Each exit line names its arm's image: stock `e47ab197…`, prot `a269a6b5…`.
+
+| arm | board wall (s) | twin wall (s) | board / twin |
+|---|---|---|---|
+| stock | 2,246.3 | 253.4 | 8.9× |
+| prot | 2,398.0 | 329.0 | 7.3× |
+
+- On the board, prot is +6.8 % over stock in wall time; on the twin it is +29.8 %. The twin's emulation cost is not silicon's, so only the board's figure is a silicon reading.
+- Per benchmark, prot over stock on the board (PYPERF-TIME, ns):
+
+| benchmark | change |
+|---|---|
+| json_dumps | +8.6 % |
+| json_loads | +11.6 % |
+| richards | +2.6 % |
+| deltablue | +2.4 % |
+| chaos | +3.8 % |
+| go | +5.5 % |
+| nbody | +8.1 % |
+| gc_collect | +16.4 % |
+
+- This is one run per arm (N = 1): a reading, not an estimate with a spread.
+
+**memcached: 0 of 6 repetitions qualify**, against a prediction of 6 of 6.
+- Every repetition on both arms:
+  - harness rc 0;
+  - `stop=shutdown exit=0`;
+  - identity `STAT pointer_size 128`;
+  - an exit line naming its image (stock `53538940…`, protected `4108e588…`);
+  - a transcript of 1,931,245 B.
+- All six transcripts are byte-identical to each other (sha256 `028c99b24131e5b7…`), and each differs from native's (1,931,207 B, `ee1522c8e0eceec9…`) in exactly two places:
+  - `get gone` after `touch gone -1`, and `get past` after `set past 0 -1 1`, return the value. Native's do not. These are mc-harness.c:207-208, "expired at once" and "stored expired".
+  - As a result, `STAT get_hits` reads 337 against 335 and `get_misses` 5 against 7.
+- The twin of this exact overlay (twin-cm3) gives native's transcript in all six repetitions.
+- None of the failure shapes the pre-registration named appears: no `<EOF>` transcript, no `<TIMEOUT>`, no cut stage. The msghdr loader delivered every transcript whole on both arms.
+
+**Why the two answers differ: the board has no RTC.**
+- In memcached 1.6.45, a negative exptime becomes `REALTIME_MAXDELTA + 1` = 2,592,001 (memcached.h:1064, `EXPTIME_TO_POSITIVE_TIME`).
+- realtime() (memcached.c:174) reads a value above the 30-day delta as absolute Unix time. It gives 1, "expired at once", only when `2,592,001 <= process_started`, where `process_started = time(0) − 62` (memcached.c:203).
+- So the item expires at once only if the wall clock is more than 30 days past the epoch.
+  - The twin's kernel sets its clock from goldfish_rtc: `setting system clock to 2026-11-25T18:29:26 UTC`.
+  - The board's log has no RTC line, so the board's wall clock counts from the epoch. At these commands the uptime was ~5,000 s. realtime() then returns `2,592,001 − process_started`, an expiry about 30 days ahead.
+- Both arms read the same, because the cause is in time(0), not in protection.
+- **Checked on the twin, one variable changed** (2026-11-26 08:59-09:00, `<hdd>/nested/b5b2/cm/epoch/run-epoch.sh`):
+  - The setup: ovl-cm3's memcached stages only, Image `749fed26…`, and one initramfs (`5f351a47…`) for both arms. The arms differ only in QEMU's `-rtc base`.
+  - **epoch** (`-rtc base=1970-01-01T00:00:00`): the kernel reads `setting system clock to 1970-01-01T00:00:02 UTC`, and all six transcripts are sha256 `028c99b2…`, the board's exactly.
+  - **real** (no `-rtc`): the kernel reads `2026-11-26T01:00:25 UTC`, and all six are `ee1522c8…`, native's.
+  - So the board's whole memcached difference is reproduced by the clock alone.
+
+**Reading.**
+- CPython: the stock and protected images both run Fig. 10's workload correctly on silicon's trap route, at +6.8 % wall time for prot (N = 1).
+- memcached: protection does not change the server's behaviour on silicon. Both arms give the same 1,931,245 B transcript, and its two differences from native are the board's wall clock.
+- It does not qualify by the registered criterion, and that verdict stands as registered.
+  - A requalification needs native's reference taken at the board's clock, or the board's clock set before the server starts. Either is a new pre-registration.
+  - The two `-1` fixtures cannot pass on a board without an RTC.
+- The cpymem board/twin ratio for corpus case 21: CPython reads 8.9× stock and 7.3× prot. memcached's repetitions read ~10× in uptime per repetition (board 49-50 s, twin 3.5-6.5 s).
