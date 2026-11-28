@@ -8,7 +8,7 @@ Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = 
 software). An S-n is promoted to R-n/C-n only when the origin is demonstrated, never on suspicion.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-10-16 (audit pass over the headings against caplifive_sublet_d93a8d66b; see docs/history/16-10-2026_07-00-00_rtl-audit-sublet.md). The registry was split on 2026-09-09: this file was meant to list only what is still OPEN, and now also carries FIXED entries whose evidence is recent; resolved and retracted entries are in [`ISSUES-ARCHIVE.md`](ISSUES-ARCHIVE.md), verbatim and by ID. R-26 and R-27 archived 2026-09-09 (fixed in RTL, in the flashed bitstream 66c4e7517).
+Last updated 2026-10-16 (audit pass over the headings against caplifive_sublet_d93a8d66b; see docs/history/16-10-2026_07-00-00_rtl-audit-sublet.md). I-17 added 2026-11-28; the headings have not been re-audited against the Line B seals (b42c8c644, 14f2ef81a) since. The registry was split on 2026-09-09: this file was meant to list only what is still OPEN, and now also carries FIXED entries whose evidence is recent; resolved and retracted entries are in [`ISSUES-ARCHIVE.md`](ISSUES-ARCHIVE.md), verbatim and by ID. R-26 and R-27 archived 2026-09-09 (fixed in RTL, in the flashed bitstream 66c4e7517).
 
 ---
 
@@ -13546,6 +13546,29 @@ change should re-check it.
 **Fix (sim-only, not written).** Record a store's data from its OWN `lsu_ctrl.data` in its `lsu_ctrl` cycle, gated
 on `lsu_ctrl.valid`. Gating on the write-back port's trans_id instead would record the junk above for every plain
 store.
+
+### I-17 — the JTAG load of a board image times out in GDB with the debug module busy (abstractcs 0x8001102), on two seals and two boards; one rerun has recovered every instance so far `OPEN — infra, filed 2026-11-28 at its third instance; cause unknown, not attributed`
+
+**What is seen.** The console's power cycle and the image upload complete, then the JTAG load stops in GDB:
+`Timed out after 120s waiting for busy to go low (abstractcs=0x8001102)`, ActionTimeout waiting for the `(gdb)`
+prompt, no console byte, no capture ("stopped before the continue"). The seal reads back unchanged before and after.
+
+**The three instances:**
+1. 2026-11-24, board 1, d0afdb40f (B5b-1), booking 1463: the first load after a flash; the CSMINT kit's attempt is
+   VOID by its own rule (R-79's entry, "Owed").
+2. 2026-11-27 02:08Z, board 2, b42c8c644: placement PL3 (stage2-placement-b42). Not after a flash.
+3. 2026-11-27 07:25 local, board 1, 14f2ef81a: the campaign's CS-B5TL1-x264b, its first attempt. Not after a flash.
+
+**What recovered it.** In instances 2 and 3 the wrapper's single rerun (run-one-i-rt, with the rerun-order fix:
+the failed holder stops before the idle wait) reached the console and read; both rows are graded and their first
+attempts kept beside them (`*.failed-start-1`). Instance 1 predates that wrapper.
+
+**What it is not.** It is not the console-socket fault of 26 Nov (engineio's write loop ending during a long upload,
+fixed on board/console-reconnect 76bfcbb876ea): the power cycle succeeded in every instance.
+
+**What to do with a new instance.** Report it; a rerun that also fails stops the session, and the board is checked
+before any other boot. No mechanism is proposed: the debug module, the probe, the cable and OpenOCD's adapter
+timing are all open, and N = 3 over two seals and two boards does not separate them.
 
 ## Compiler / toolchain (ours)
 
