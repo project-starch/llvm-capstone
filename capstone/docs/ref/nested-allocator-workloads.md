@@ -4035,6 +4035,423 @@ Limits: one run per image, and R0's margin is about 7 MB in a 921,488 kB guest. 
 board. The paper's Full row does not change. Bounding the cache, or giving its mappings back under memory pressure, is
 a runtime change and goes to the runtime side on its own.
 
+## speedtest1 `--size 100` on the twin (2026-11-22)
+
+The programme's item 4 asks for speedtest1 at `--size 100`, which the SPEC lane deferred on 14 Nov at about 6.5 h per
+command on silicon. The twin comes first: it gives the answers, the lifetime counts and the instructions.
+
+**The heap.** At `--size 100` the `--size 1` configuration's 8 MiB memsys5 heap is too small. A host build of the same
+sources (`7fc92e19…` sqlite3.c, `16750ede…` speedtest1.c, gcc 13.3.0, the oracle build) stops at phase 150 with
+`SQL error: out of memory` after 7 phases. It exits 0 with 32 phases at 16, 32, 64, 128 and 256 MiB, and the phase
+lines are identical at all five sizes. Capstone's pointers are twice the host's, so the run uses 32 MiB, twice the
+smallest heap that completed on the host.
+- Reference: `capstone/ports/sqlite/app/results/2026-11-22-size100-host/phases.json`, the 32 phases of the host run at
+  `--heap 33554432 64 --size 100`.
+- Control: the same host build at `--heap 8388608 64 --size 1` reproduces the native phases of
+  `2026-10-11-same-answers/phases.json`, 32/32.
+
+### Pre-registration: QEMU twin, speedtest1 `--size 100` (written 2026-11-22 06:05, before the run; the time first read 06:30, which was wrong)
+
+- **Run.** One twin boot on slot 28 (`nested/st1/stages/s100`, made by `make-stage.py`), the file-database commands u,
+  p, p, u, each `--heap 33554432 64 --size 100 st.db`. It is run under `capmixn` (PROF=1), on the kernel and module flags of
+  `nst1-q2`, the `--size 1` pair. The stage's `run.sh` differs from `nst1-q2`'s only in the arguments.
+- **Images.** The `--size 1` images, unchanged: not protected `817b1652…`, protected `945fb69f…`.
+- **Readings.** Per command:
+  - rc and the 32 oracle lines against the reference;
+  - CDERIVE and CREVOKE in the program window;
+  - program instructions (capmix3-read.py's rule, as at `--size 1`);
+  - kernel instructions in the window.
+
+Predictions:
+- **Answers.** 32/32 equal to the reference in all four commands.
+- **Lifetimes.** At `--size 1` the protected arm minus the unprotected one was 28,216 CREVOKEs. The work scales with
+  the size, so I predict 1 M to 6 M at `--size 100`, with the unprotected arm below 100.
+- **Program instructions, protected vs not.** +0.3 % to +3 % (`--size 1`: +0.63 %). Repeats of an arm agree within
+  0.01 %.
+- **Control.** The protected arm must show at least 1,000 times the unprotected arm's CREVOKEs, or the patch did not take
+  effect and the run says nothing about protection.
+
+Failure branches:
+- Both arms out of memory: the heap is too small for Capstone at 32 MiB. That is a configuration result, and the next
+  run doubles it.
+- Only the protected arm fails:
+  - with QEMU cause 30, the flat table's 262,144 records per context are exhausted. That is a table-size result: the
+    next run raises `node_flat_records`, and the live-record peak becomes the reading;
+  - any other fault in the protected arm alone is a finding, to localise before anything else.
+- No line from a command for the whole run: a stall, classified from the serial log.
+
+### Result: every command stops at phase 142 with a disk I/O error, unprotected ones too (`nested/out/nst1-s100`, 06:11-06:40)
+
+Not one of the pre-registered branches.
+- All four commands (u1, p1, p2, u2) print the five phases 100-140 and stop at phase 142 ("10 SELECTS w/ORDER BY,
+  unindexed") with `step error: disk I/O error`, rc 1. The five phases equal the reference in every command: rows and
+  hash, 5/5.
+- No fault and no OOM in the serial log. Each command ran about 6.5 s.
+- The unprotected arms fail identically, so this is the environment, not the protection. No answer, lifetime count or
+  instruction count of this run is read against the predictions.
+- **Cause, inferred.** In the reference, phase 142 returns 153,747 rows, enough for SQLite's sorter to spill to a
+  temporary file. The images search `SQLITE_TMPDIR`, `TMPDIR`, `/var/tmp`, `/usr/tmp`, `/tmp` and `.` for one. Without
+  `capstone_vm.dom_local_tmp` the native exec's grants refuse `/tmp` (`runtime/virtual/module/resource-dom.h`: the
+  flag aliases `/tmp` to the cwd's `.capstone-tmp`, which the stage's `run.sh` already creates with mode 0700).
+  `nst1-q2`'s flags, which this run copied, have no `dom_local_tmp`; at `--size 1` phase 142 returns 1,050 rows, and
+  that run completed (that its sort stayed in memory is inferred from its completion). The boards'
+  module flags have it, and so did the twin's mcf train runs. Which call returns the I/O error was not read.
+
+### Amendment 1 (written 2026-11-22 07:27, before the rerun; committed 07:27:45, and the time first read 07:30, which was wrong)
+
+- **One change.** The rerun `nst1-s100b` adds `capstone_vm.dom_local_tmp=1` to the module flags. Everything else
+  stays as pre-registered above: the stage `nested/st1/stages/s100` unchanged, the same images, kernel, records
+  (262,144), slot and plugin. The predictions and failure branches above apply unchanged.
+- **What it tests.** If phase 142 now completes in both arms, the temporary file was the cause. If both arms stop at
+  phase 142 again, the cause is something else, and the next step reads the failing call before any further run.
+
+### Result of the rerun: every command stops at phase 142 again; the inferred cause is withdrawn (`nested/out/nst1-s100b`, 07:28-10:20)
+
+- The flag reached the module: the guest's command line carries `capstone_vm.dom_local_tmp=1`, and the stage
+  creates `.capstone-tmp` with mode 0700 before each command, as the module requires.
+- All four commands print phases 100-140 equal to the reference, 5/5, and stop at phase 142 with
+  `step error: disk I/O error`, rc 1, as in `nst1-s100`. There is no fault, OOM or module line in the serial log.
+- **Withdrawn: "the temporary file was refused /tmp" as the cause** (the Result section above, "Cause, inferred").
+  Amendment 1's second branch holds: the cause is something else. The inference was weak on its own terms. SQLite
+  (`unixTempFileDir`, sqlite3.c `7fc92e19…`) falls back to `.`, the grant root, so a refused `/tmp` alone would
+  not have stopped it.
+- **Candidate, from source, not shown on the twin.** SQLite accepts a temporary directory only if `access(dir, 3)`
+  succeeds. musl on riscv64 makes that `faccessat` (48), and the native boundary's `native_supported`
+  (`runtime/virtual/module/native-syscall-dom.h` in the natio tree) does not list it. A refused call returns
+  -ENOSYS (`native_refused`). Every directory, `.` included, would then be rejected. The sorter's first temporary
+  file then fails with `SQLITE_IOERR_GETTEMPPATH`, which reads "disk I/O error".
+- **The candidate does not predict the phase.** A host build of the same sources with `access` and `faccessat` made
+  to fail with ENOSYS (an LD_PRELOAD shim) also stops with "disk I/O error", but at phase 150 (`CREATE INDEX`),
+  after passing 142. This holds at the 32, 16 and 12 MiB heaps; without the shim the host completes 32/32, and at
+  `--size 1` with the shim it completes too. On the host, phase 142's sort needs no temporary file. Why the twin's
+  does, or whether its error has another source, is not known.
+- **Next, before any further measured run:** one diagnostic twin boot (`nested/out/nst1-s100diag`, the flags of
+  `nst1-s100b`) running command u1 alone. Stage `nested/st1/stages/s100diag` is the s100 stage cut after u1. It
+  turns `native_route_trace` on through sysfs for the command only, since the kernel command line has no room for a
+  further flag, and at the end prints `native_refused_calls`, the routes by call and result, and the last failing
+  routes. No reading of it enters the predictions.
+
+### Result of the diagnostic boot: the last failing calls before the error are the temporary-directory probe (`nested/out/nst1-s100diag`, 10:26-14:31)
+
+- u1 prints phases 100-140 and stops at phase 142 with `step error: disk I/O error`, rc 1, as in every earlier
+  boot. The route trace was on for the command (`@@DIAG route_trace=Y`). `native_refused_calls` reads 3.
+- The last four routed calls that fail, which are the last lines of the trace, are: `newfstatat` (79) returning -2
+  twice, then `faccessat` (48) returning -38 (ENOSYS) twice. The successful routes include `newfstatat` returning 0
+  twice. That is what `unixTempFileDir` does on this guest: stat `/var/tmp` and `/usr/tmp` (absent, -2), then stat
+  `/tmp` and `.` (present), and `access(dir, 3)` on each, which the boundary refuses. The order within each pair is
+  not shown, because the summary lines are sorted and the failing tail holds only failures.
+- This is read from the trace, not shown by a matched pair. The command made 53,499 register routes, and the kernel
+  log ring cannot hold a line for each. The summary also stops at its 60th line (871 `read` (63) routes of 4,096
+  bytes, then `lseek` (62) offsets). Only these four failing routes are in the ring, so the third refused call is not
+  identified.
+  The phase is still unexplained: on the host, phase 142 needs no temporary file.
+- **Next: a matched pair in one boot** (`nested/out/nst1-s100acc`, the same flags). Arm uacc is the unprot source
+  with one change: SQLite's `access` system-call entry is replaced by a function that returns `stat`'s result
+  (`nested/st1/build-acc.sh`; image `1bc95737…`). The same recipe rebuilds unprot to its staged `817b1652…`. uacc
+  runs first and unprot second, each at `--size 100` with a fresh database. If the refused `faccessat` is the cause,
+  uacc passes phase 142 and unprot stops there. If uacc also stops at 142, the cause is elsewhere.
+
+### Result of the matched pair: the refused `faccessat` is the cause (`nested/out/nst1-s100acc`, 14:50-17:38)
+
+- **uacc** (`1bc95737…`) returns rc 0 after all 32 phases, in 657.8 s of guest time. Each phase's rows and hash equal
+  the host reference (`2026-11-22-size100-host/phases.json`): 32 of 32. Its st.err is empty.
+- **unprot** (`817b1652…`), in the same boot, prints phases 100-140, all five equal to the reference, then stops at
+  phase 142 with `step error: disk I/O error`, rc 1, as in every earlier boot.
+  `native_refused_calls` reads 4 at the end of the boot.
+- The two arms differ only in SQLite's `access` entry. So the error comes from `unixTempFileDir` finding no usable
+  temporary directory, because the native boundary answers `faccessat` (48) with ENOSYS.
+- The comparator was run against a reference with one hash changed: it reports 31 of 32 and names phase 170.
+- Still not explained: why phase 142 needs a temporary file on the twin, when the host run needs none there. A sort
+  that spills to a temporary file is the likely reader, and that was not checked.
+- What follows:
+  - **Measured run.** Either the boundary routes `faccessat`, which is the runtime lane's module (`native_supported`
+    in the natio tree; not this lane's), or every arm carries the same `access` shim. The shim changes the program, so
+    it needs its own pre-registration and a protected arm built the same way.
+  - **Until then,** an `--size 100` result on this boundary is uacc's, a diagnostic arm, and it is not a result arm.
+
+### Pre-registration: unprot on a kernel that routes `faccessat` (written 2026-11-22 17:49, before the runs)
+
+The runtime lane routes `faccessat` (48) on the native path: llvm-capstone `native-faccessat` 80bfe800dfc9, off
+table-tree 722416c35e77. Its twin kernel is `perf/facc/images-facc`, Image `bf95cde78f45c0a6…`, with
+images-tree's rootfs. It is images-tree's kernel (`perf/tree/images-tree`, Image `8bc7dc8d722fe906…`) with three
+files replaced, as that lane states. This lane has not read that change.
+- **Runs.** Two twin boots on slot 28, in this order, both with stage `nested/st1/stages/s100diag`: unprot
+  (`817b1652…`, no shim), command u1 alone, the route trace on, `--heap 33554432 64 --size 100`. Both use the module
+  flags of `nst1-s100acc` (`dom_local_tmp=1`) and 262,144 records.
+  - `nst1-s100facc` on images-facc;
+  - `nst1-s100tree` on images-tree.
+  The two boots differ only in the kernel image.
+- **Predictions:**
+  - facc: rc 0, all 32 phases equal to the host reference (`2026-11-22-size100-host/phases.json`, by
+    `cmp-s100`'s rule: rows and hash per phase), and no `faccessat` line with result -38 among the failing routes.
+  - tree: phase 142 with `step error: disk I/O error` and rc 1, as on `perf/natio/images`, with `faccessat` -38
+    among the failing routes. That arm is the control: it shows that this check of the failing routes can name
+    `faccessat`.
+- **Readings:** rc, the phase lines against the reference, `native_refused_calls`, and the failing-route tail
+  (`@@DIAGT`).
+- **Branches:**
+  - facc passes and tree stops at 142: the routed `faccessat` is enough for `--size 100` on the twin. The runtime
+    lane then builds the board kernel and kit with it, and the measured run is pre-registered separately.
+  - facc stops at 142: the routed call does not satisfy `unixTempFileDir`, or something else follows. The failing
+    routes are read before anything else.
+  - tree passes: the earlier failures belong to `perf/natio/images`, not to images-tree's kernel. Then the pair
+    says nothing about `faccessat`, and this is written down as such.
+  - Either boot ends without a phase line or rc: that boot is void and is rerun once.
+
+### Result of the pair: the routed `faccessat` is enough for `--size 100` on the twin (17:49-00:09)
+
+Every prediction held, so the first branch applies.
+- **facc** (`nst1-s100facc`, images-facc): rc 0 after 790.3 s of guest time. All 32 phases equal the host
+  reference by `cmp-s100` (none differ, none missing, none extra), and the route trace is on (`@@DIAG
+  route_trace=Y`). Its 14 `faccessat` (48) routes return 0 (7) and -2 (7), and none returns -38.
+  `native_refused_calls` reads 1. The only route returning -38 is an exchange query, `nr=3235774468`
+  (0xc0de0004, count 16), at 0.33 s; it is the first failing route of the boot and is not attributed here.
+- **tree** (`nst1-s100tree`, images-tree): phases 100-140 are equal to the reference (5 of 5). The boot then stops
+  at phase 142 with `step error: disk I/O error`, rc 1. Both of its `faccessat` routes return -38, at 8.96 s.
+  `native_refused_calls` reads 3: those two plus the same exchange query. So the control fires. The check of the
+  failing routes names `faccessat` when the kernel refuses it, and the -38 count in facc is a reading, not a blind
+  zero.
+- The two boots differ only in the kernel image. Read, not taken from the runtime lane: the two image directories
+  hold `Image` (`bf95cde78f45c0a6…` against `8bc7dc8d722fe906…`) and the same `rootfs.ext2` symlink
+  (`9903242c37a72425…`). The runtime lane's `faccessat` route is therefore what
+  `--size 100` needs on the twin. As the branch says, the runtime lane builds the board kernel and kit with it, and
+  the measured run is pre-registered separately.
+- Not settled by this pair: why phase 142 is the first to need a temporary directory on the twin. The earlier note
+  (a sort that spills) still stands unchecked. This lane has not read the route's change (80bfe800dfc9).
+
+### Amendment 2: the measured twin run on the `faccessat` kernel (written 2026-11-23 00:16, before the run)
+
+- **Run.** `nst1-s100c`: the pre-registration of 06:05 (`nst1-s100`) with two changes. The kernel is images-facc
+  (`bf95cde78f45c0a6…`, the same rootfs), and the module flags carry `capstone_vm.dom_local_tmp=1` (Amendment 1).
+  Everything else is unchanged: stage `nested/st1/stages/s100` (u1, p1, p2, u2, each `--heap 33554432 64 --size 100
+  st.db`), images `817b1652…` and `945fb69f…`, slot 28, 262,144 records, PROF=1 with `nested/prof/capmixn.so` at
+  shift 24, as `nst1-s100b` ran.
+- **Predictions and failure branches:** those of 06:05, unchanged. In particular:
+  - 32/32 in every command;
+  - 1 M to 6 M CREVOKEs in each protected command, against fewer than 100 in each unprotected one;
+  - program instructions +0.3 % to +3 %, with repeats within 0.01 %;
+  - QEMU cause 30 in a protected command means the 262,144 records are too few.
+- **Why before the board.** The runtime lane's board kit with this route (`t3-smoke/bkit107-k2n-native-p1-tree-facc`,
+  a lane build, not on dev) runs 262,144 records too. So the board pre-registration waits for this run's answers,
+  lifetime counts and the table branch.
+
+### Result of amendment 2: every prediction held (`nested/out/nst1-s100c`, 00:17-04:47)
+
+- **Answers:** all four commands rc 0, and 32/32 phases equal the host reference in each by `cmp-s100` (none differ,
+  none missing, none extra). Guest seconds per command: 658.3, 660.1, 660.1, 658.3.
+- **Lifetimes** (`capmixn-read.py`):
+  - each protected command executes 2,112,363 CDERIVE and 2,112,353 CREVOKE, inside the band of 1 M to 6 M;
+  - each unprotected command executes 9 and 2, under 100.
+- **No cause 30:** no command faulted. A refused derive would have stopped the program, and every command ran all
+  32 phases to rc 0. So 262,144 records are enough for `--size 100`. The runtime lane asked to hear before the board
+  pre-registration only if cause 30 appeared, so the 2^20 cut is not needed.
+- **Program instructions:**
+  - unprotected: 32,294,252,503;
+  - protected: 32,441,745,777;
+  - **+0.457 %** (+147,493,274), inside the band of +0.3 % to +3 %. That is 69.8 program instructions per CREVOKE.
+  - Repeats are equal to the instruction (u1 = u2, p1 = p2).
+- **Kernel instructions:** +0.265 % (+1,658,030,557, about 785 per CREVOKE). Repeats agree within 0.0002 %. Not
+  priced here; the band was written for the program only.
+- **Branch:** the board pre-registration, u1 + p1 on bkit107, with the known-good control first.
+
+### Pre-registration: speedtest1 `--size 100` on P1, u1 + p1 on bkit107 (written 2026-11-23, before the boot)
+
+- **Kit:** `t3-smoke/bkit107-k2n-native-p1-tree-facc`. It is bkit91 with the native kernel tree changed alone, to
+  `perf/k2n/linux-board-k2n-native-hpm2tree-facc`: hpm2tree plus the three files of the runtime lane's
+  `native-faccessat` 80bfe800dfc9.
+  - **The kernel is a lane build.** That route is on the runtime lane's branch, not on dev.
+  - It has not booted on a board before, so this boot is also its Tier 1.
+  - Bitstream P1 `…-tagoverlap6c-pagedtbl_d83d3a633` (sha256 `dc411e36…`).
+  - The module flags include `node_flat_records=262144`, `dom_local_tmp=1`, `dom_grant_root=/tmp/nt/sr` and
+    `dom_null=1`. That is the record table, and the flags, the twin ran with in `nst1-s100c`.
+- **Stage:** `nested/p1s100/s100` (`s100.SHA256SUMS` `358cf568…`). It is bkit107's `make-train-stage.sh` around
+  `make-stage.py`'s stage, with three commands in this order:
+  1. **c0, the known-good control:** unprotected, `--heap 8388608 64 --size 1 st.db`, the command whose 32/32
+     answers P1 gave on bkit91 (board 2, 2026-11-17);
+  2. **u1:** unprotected, `--heap 33554432 64 --size 100 st.db`;
+  3. **p1:** protected, the same arguments.
+  - Images: the `--size 1` ones, unchanged: `817b1652…` and `945fb69f…`.
+  - The kit's own controls come first, as in every boot: `b0-stats`, `b0-hello` and the native smoke.
+- **Before the boot:**
+  - the rule-8 recheck: a real bake, BOARD_STUB=2 on a transcript cut that does not return, and the firmware under
+    the 26 MB cap;
+  - a dry run of the chain that prints the effective idle limit and the runner's timeout.
+  - Each command is silent for hours: the SPEC lane put `--size 100` at about 6.5 h per command on silicon. So the
+    idle limit must exceed 8 h, and the stage timeout must exceed 16 h.
+- **Predictions:**
+  - **VOID** if `b0-stats` or `b0-hello` fails, the smoke fails, or c0 is not 32/32. A c0 failure is a finding about
+    the kernel, not about protection.
+  - u1 and p1: 32/32 answers equal to the host reference (`2026-11-22-size100-host/phases.json`). Any command that
+    does not return, or that differs, gives no cost.
+  - Protected vs not, in-context: +0.3 % to +5 %. The twin read +0.457 % in program instructions. On P1 at
+    `--size 1`, the in-context cost was +2.21 %.
+  - Record-TLB misses (hpm3): more in p1 than in u1.
+  - QEMU's cause 30 did not appear on the twin. A refused derive on the board, in p1 alone, is read as a table
+    result: the record limit, or the paged table's grow (event 33, hpm6).
+- **ABBA, conditional, from the runtime lane's design:** a second boot of p1 then u1 follows only if p1 − u1 lies
+  within three times the noise band. The noise band is the repeat rule on F (1 % `run_cycles`). Otherwise the pair
+  is the reading.
+- **Board time:** about 13 h for u1 + p1, plus about 10 min for c0 and the controls. The board slot is asked of the
+  runtime lane. Nothing runs before this text is pushed.
+
+### Result: c0 passes; u1 was cut by this lane's idle limit before it could have finished, so no `--size 100` reading (board 3, 2026-11-23 13:38 - 11-24 06:25)
+
+Transcript `spec/board/out-nat-p1s100-b3r2/s100/board.txt` (`bfc1dc01c6b6be48…`).
+
+- **Controls pass.**
+  - `b0-stats` and `b0-hello` return 0, and the native smoke passes all 9 steps.
+  - c0 (`--size 1`) returns rc 0 in 229.06 s (uptime 125.04 to 354.10). All 32 phases equal the host's native
+    `--size 1` reference (`ports/sqlite/app/results/2026-10-11-same-answers/phases.json`).
+  - The comparison fires: against the `--size 100` reference the same output equals only 18 of 32 phases.
+  - So the new kernel (bkit107's facc tree) boots and runs speedtest1 on P1. This boot is its Tier 1.
+- **u1 did not return.** It began at 354 s. The driver ended the rung after its idle limit of 60,000 s without
+  console output (`idle limit 60000 s`, SEQ), at 06:25:20. p1 never started, and the board was unbooked.
+- **That is not a hang. u1 could not have finished inside the limit.**
+  - On the twin, `--size 1` takes 2.26 guest seconds (`nst1-q5`, command u). The `--size 100` commands of
+    `nst1-s100c` take 658.27, a ratio of 291.
+  - At that ratio, c0's 229.06 s on P1 gives about 66,700 s, or 18.5 h, for u1, above the 60,000 s limit.
+  - The apertures read after the cut changed between two reads (`UNSTABLE`, 5 switches), so the core was still
+    running.
+  - The pre-registration sized its limits from the SPEC lane's "about 6.5 h per command". This lane had a measured
+    P1 `--size 1` time (bkit91, 2026-11-17) and the twin's size ratio, and did not compute from them.
+  - The estimate assumes board time scales with the twin's guest time. The twin's commands are dominated by kernel
+    instructions (+0.265 % being 1.66 G means about 625 G), so this is an estimate, not a reading.
+- **No cost or answer for `--size 100` on silicon.** About 16.8 h of board 3 were spent on this.
+- **What a measured run would take:**
+  - about 18.5 h for u1 and about the same for p1, so about 37 h, or two boots of about 19 h, one command each;
+  - an idle limit above the command, or a heartbeat line with the bytes written;
+  - before that, the board-time cost is put to the runtime lane, which owns the queue.
+
+### Pre-registration: speedtest1 `--size 100` on P1, one command a boot, stock first (written 2026-11-24 06:34, before the boots)
+
+The runtime lane agreed to the pair on 2026-11-24, after the first boot's result.
+
+**Why the first boot's limit was too short.**
+- `bkit107`'s `board-run.sh` sets a SPEC stage's idle limit to its batch budget: the list's timeout × 4. The first
+  list gave 15,000, so 60,000 s.
+- That figure came from the SPEC lane's "about 6.5 h per command", not from a measurement.
+- Two measurements were available: P1's `--size 1` time (c0, 229 s in the first boot) and the twin's ratio between
+  the two sizes for the same arguments, 658.27 / 2.26 = 291. Together they give about 66,700 s.
+- The first boot also gives a lower bound: u1 ran for at least about 59,900 s without returning.
+
+**Boots.** Two stages, each derived from the first boot's stage `nested/p1s100/s100` (`s100.SHA256SUMS` 358cf568…).
+- `s100u` (`s100u.SHA256SUMS`, sha256 of the list `5ba7714d…`) runs c0, then u1.
+- `s100p` (`fb65fa93…`) runs c0, then p1.
+- Changes to `train/run.sh`, and nothing else:
+  - the other `--size 100` command is removed, with `commands=2` and p1's index renumbered;
+  - a heartbeat runs during the `--size 100` command, every 900 s:
+    `@@BEAT <uptime> st.db=<bytes> <native counters>`. It starts before `mark1` and is killed after the command
+    returns, so the same shape runs in both arms.
+- Images: unchanged, `817b1652…` (unprot) and `945fb69f…` (prot). Kit: unchanged, `bkit107-k2n-native-p1-tree-facc`
+  on P1.
+- c0 stays in each boot as that boot's known-good control.
+- **Budgets each boot gets** (from the kit's code and the dry run):
+  - the list timeout is 25,000, so the batch budget and the idle limit are both 100,000 s (`BAKED_TIMEOUT=100000` in
+    the dry run; `board-run.sh:155` gives a SPEC stage IDLE = TO and no entry-stall abort);
+  - the driver gets 101,800 s;
+  - the booking is 1,740 min;
+  - the guest stage has no timeout of its own.
+- Chain: `nested/p1s100/nat-run3p.sh <board> <wait pid> p1s100pair.conf`, list `p1s100pair.list` (s100u, then
+  s100p), with `NR_PREREG` set to this commit.
+  - It is `nat-run3n.sh` with the wait made optional. `NR_WAITLOG` is checked only when set. `NR_WAITMARK=<file>`
+    waits for a marker newer than the chain's start. A wait pid of 1 means no pid to wait for.
+  - The runtime lane arms it behind its board-3 queue, or on whichever board frees first. The chain flashes P1 if
+    another bitstream is resident.
+
+**Dry runs** (`nested/p1s100/pair-dry/`, `s100{u,p}-recheck/`):
+- Rule-8 recheck of each stage:
+  - real bake;
+  - `BOARD_STUB=2` on a returning and a non-returning transcript, both rc 0;
+  - real firmware, 19,566,088 B, under the 26 MB cap.
+- The chain with `NR_DRY=1` reaches DONE through both stages, each with `BAKED_TIMEOUT=100000`.
+- The wait block, run alone:
+  - pid only: proceeds;
+  - pid plus a marker written later: waits for it;
+  - a marker older than the start: ignored until rewritten;
+  - `NR_WAITLOG` without an END line: STOP, rc 2.
+- The heartbeat under busybox sh: it beats during the command and stops after it.
+- The reader `read-s100pair.py`:
+  - on the first boot it reads c0 32/32 and "u1 NO END", rc 1;
+  - on a transcript with the twin's u1 output and three beats, c0 and u1 are 32/32, rc 0;
+  - with c0's output put in u1's place, it reads 18/32 with 14 phases named, rc 1;
+  - an empty file gives NO DATA, rc 2.
+  - The kit's `spec-classify.py` reads every native transcript as NO RESULT (the known classifier gap), so this
+    reader gives the answer.
+
+**Predictions.**
+- **VOID** if `b0-stats`, `b0-hello` or the smoke fails, or if c0 is not 32/32.
+- **Answers:** u1 and p1 are each 32/32 against `2026-11-22-size100-host/phases.json`.
+- **Time:** u1 takes 60,000 to 93,000 s. The low end is the first boot's lower bound. The high end is 1.4 times
+  c0 × 291, because the twin's guest time is dominated by kernel instructions and may scale differently on silicon.
+  p1 is in the same band.
+- **Heartbeats:** about one every 900 s, so 66 to 103 per command, with `st.db` not shrinking.
+- **Cost, p1 against u1, in-context** (`sys=` of `@@SPEC-END`): +0.3 % to +5 %, the first pre-registration's band.
+  The twin read +0.457 % in program instructions; P1 at `--size 1` read +2.21 %. This is one boot per arm with no
+  repeat, so the noise is not measured. The F repeat rule (1 % `run_cycles`) is the only noise figure, and a
+  difference inside 3 % is reported as not resolved.
+- **Cause 30 or a refused derive in p1** is read as a table result (the 262,144-record limit or the paged table's
+  grow), as before.
+
+**Branches.**
+- A command that does not return within 100,000 s gives no cost. Its beats tell three cases apart:
+  - beats continue and `st.db` grows: slow;
+  - beats continue and `st.db` is frozen: stopped in the program or kernel;
+  - beats stop: the core or kernel stopped.
+- u1 failing does not stop the chain, because p1's boot is separate. The pair is read only if both return.
+
+### Amendment during the run, before any reading (written 2026-11-24 23:35): the heartbeat's `st.db` field reads nothing
+
+s100 (u1) has been running on board 2 since 15:31 (booking 1478). It was at uptime 28,322 s at the last beat, inside the
+registered band of 60,000-93,000 s. The runtime lane asked whether the run had overrun. It has not.
+- **Effective limits, read from the live runner:** `timeout 101800` around the driver, with `BAKED_TIMEOUT=100000`,
+  `BAKED_IDLE_S=100000` and `BOARD_TIMEOUT_MULT=4`. The beats print every 900 s, so the idle limit cannot fire, and
+  the 100,000 s batch budget is the cap, as registered.
+
+**The `st.db` field is void.**
+- Every beat so far reads `st.db=0`, from the first one at uptime 1,267 s. (Corrected 2026-11-25: the first version said
+  3,071 s, which is the first beat my parser read whole from the split UART chunks.) The cause is in the heartbeat's command:
+  `stat -c %s st.db 2>/dev/null || echo 0`.
+- The board's busybox has no `stat` applet, so the command fails and prints 0. The rootfs is this boot's
+  `image/rootfs.cpio`. Its applet table runs `sort`, `start-stop-daemon`, `strings` with no `stat`, while `sleep`,
+  `ls` and `wc` are present. The cpio has no other `stat` binary.
+- The dry run's heartbeat test checked that the beat runs during the command and stops after it. The reader was tested
+  on synthetic beats. Neither checked the size field against the board's busybox, so the field was never shown to
+  fire.
+- So a zero says nothing about whether speedtest1 writes its database. The registered branches "`st.db` grows"
+  against "`st.db` frozen" cannot be read.
+
+**What the beats still read.**
+- The native counters in each beat do grow, so the process is still being served by the module:
+  - `register` 241,347 at 3,071 s, 1,478,309 at 12,992 s, 1,842,154 at 28,322 s;
+  - since 15,697 s, a steady 15,735-15,741 per 900 s beat;
+  - `exchange` constant at 382 since 15,697 s.
+- **If u1 does not return within 100,000 s**, the three branches become two:
+  - **beats continue** with `register` growing: the program is still running and being served. This cannot tell
+    slow work from a loop;
+  - **beats stop:** the core or kernel stopped.
+- **If u1 returns,** the field never enters the reading. The answers, the time and the cost are read as registered.
+- The running stage is not changed. s100p carries the same heartbeat, so the same applies to it.
+
+### Stopped by the project lead's ruling, before u1 returned (2026-11-25 00:22): no reading
+
+- **The ruling.** The runtime lane relayed it on 2026-11-25. SPEC train runs only in the final campaign, and
+  speedtest1 `--size 100` moves there with it (spec-silicon `bbcc54172beb`, PREREG Addendum 236, for the train half).
+  That is a deviation from 84b7a23c5935 and its amendment a8cfc596bd86, by the lead's instruction.
+- **The stop, at 00:22.**
+  - Before it, every process of the chain was listed: chain `nat-run3p.sh` pid 1617419, its two `board-run.sh`
+    shells, the `timeout 101800` runner group, and the watchdog. One other process waited on the chain pid: this
+    lane's own log watcher.
+  - The chain was stopped first, so it could not start s100p. Then the runner's process group was stopped (driver
+    rc 130). `board-run.sh` released the lease, and the watchdog ended with it.
+  - Booking 1478 was unbooked (HTTP 200), and board 2 reads FREE. There was no flash.
+- **State at the stop.** u1 began at about uptime 365 s (its first beat was at 1,267 s). It had run about 31,100 s of
+  its registered 60,000-93,000 s. The last beat was at uptime 31,028 s, with `register` 1,889,377 (still rising at 15,741 a beat) and `exchange` 382. `st.db` read 0, which is void
+  (amendment above).
+- **No reading.** u1 did not return, and p1 never ran, so there is no answer, time or cost for `--size 100` on silicon.
+  The stage, the reader and these limits stand for the final campaign.
+  - Before that run, the heartbeat's size field needs a command that the board's busybox has, for example `wc -c`.
+    It must also print `NA` instead of 0 when the command fails.
+
 ## Item 5: the SQLite and PHP bug corpora for the board (2026-11-23)
 
 The programme's item 5: prepare the images and the pre-registration, and the runtime lane queues them on a P1 board.
@@ -4635,3 +5052,13 @@ watchdog log has a stall line.
 **So item 5 on the board is complete: 346 of 346 pre-registered cells read, each as predicted.** That is 190 from
 the re-slot and 156 from this run. Like the re-slot, this is P1's flat table, not the paged tree, and it reads verdicts
 only, not memory or cycles.
+
+
+### Note: the s100 heartbeat (2026-11-25, board-free)
+
+The `@@BEAT` field of the s100 stages read `$(stat -c %s st.db 2>/dev/null || echo 0)`. The board's busybox has no `stat`
+applet, so every beat of the board-2 run read 0 and the fallback hid it ("The `st.db` field is void" above). The heartbeat line of `s100u/train/run.sh` and
+`s100p/train/run.sh` now reads the size with `wc -c` (present in the baked rootfs as `usr/bin/wc`), and prints `NA` when
+the file is absent, never a number. The manifests were regenerated (`sha256sum -c` rc 0). `read-s100pair.py` accepts
+`NA` and the padded `wc` output. It was tested on `pair-dry/ret-twin-u1.txt` and on a copy with `NA` beats. The s100
+rechecks predate the change, so rule 8 is re-run on them before the final campaign.

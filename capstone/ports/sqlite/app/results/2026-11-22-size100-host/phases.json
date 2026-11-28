@@ -1,0 +1,173 @@
+{
+ "program": "SQLite 3.22.0 speedtest1 main --size 100, oracle build (-DSQLITE_STUDY_ORACLE)",
+ "built": "host x86-64, gcc 13.3.0 -O2 -DHAVE_MALLOC_H=1 -DHAVE_MALLOC_USABLE_SIZE=1 -DSQLITE_ENABLE_MEMSYS5 -DSQLITE_STUDY_ORACLE, speedtest1.c + sqlite3.c, -lpthread -ldl -lm",
+ "sources_sha256_prefix": {
+  "sqlite3.c": "7fc92e19a3af61f3",
+  "speedtest1.c": "16750ede41d01935"
+ },
+ "args": "--heap 33554432 64 --size 100 st.db",
+ "heap_check": "exit 0 with these 32 phases at --heap 16, 32, 64, 128 and 256 MiB (identical phase lines); --heap 8388608 (8 MiB, the --size 1 configuration) stops at phase 150 with 'SQL error: out of memory' after 7 phases",
+ "control": "the same host build at --heap 8388608 64 --size 1 reproduces the native phases of 2026-10-11-same-answers/phases.json, 32/32",
+ "phases": [
+  {
+   "phase": 100,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 110,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 120,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 130,
+   "rows": 25,
+   "hash": "30d408bd95b33fbf"
+  },
+  {
+   "phase": 140,
+   "rows": 10,
+   "hash": "813e861c0fee273a"
+  },
+  {
+   "phase": 142,
+   "rows": 153747,
+   "hash": "351e2ae771517fcb"
+  },
+  {
+   "phase": 145,
+   "rows": 100,
+   "hash": "6dbbec31e7e012f0"
+  },
+  {
+   "phase": 150,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 160,
+   "rows": 10000,
+   "hash": "32d72c81336edf31"
+  },
+  {
+   "phase": 161,
+   "rows": 10000,
+   "hash": "a7918d83ec54d79b"
+  },
+  {
+   "phase": 170,
+   "rows": 10000,
+   "hash": "d22ec8b4c3da44c9"
+  },
+  {
+   "phase": 180,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 190,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 200,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 210,
+   "rows": 1,
+   "hash": "616b2edaf7f783c0"
+  },
+  {
+   "phase": 230,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 240,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 250,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 260,
+   "rows": 1,
+   "hash": "364c83f8043cd5a0"
+  },
+  {
+   "phase": 270,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 280,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 290,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 300,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 310,
+   "rows": 72394,
+   "hash": "e6042f9f959a522c"
+  },
+  {
+   "phase": 320,
+   "rows": 1,
+   "hash": "c8195ca2a6d8760f"
+  },
+  {
+   "phase": 400,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 410,
+   "rows": 70000,
+   "hash": "1aa16760a47eb77c"
+  },
+  {
+   "phase": 500,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  },
+  {
+   "phase": 510,
+   "rows": 70000,
+   "hash": "080ef580e533bd47"
+  },
+  {
+   "phase": 520,
+   "rows": 65536,
+   "hash": "351381a7b771f843"
+  },
+  {
+   "phase": 980,
+   "rows": 1,
+   "hash": "b8835f20872ee7fa"
+  },
+  {
+   "phase": 990,
+   "rows": 0,
+   "hash": "cbf29ce484222325"
+  }
+ ]
+}
