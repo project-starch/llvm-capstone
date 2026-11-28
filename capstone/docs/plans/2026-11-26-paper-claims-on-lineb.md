@@ -122,3 +122,89 @@ The full vectors are in the test header. N = 1 race instance per arm, at one tim
   - The decoder's output feeds `id_stage_i.genblk2[0].decoder_i.instruction_o`, on the standing UNOPTFLAT list. So the
     **synthesis-only gate comes first**.
   - pc + 4 sites re-read: frontend.sv:449; commit_stage.sv:953's flush_commit list has none of the stage-2 shapes.
+
+## Six more claims of sections 1, 5 and 6, checked against Line B (2026-11-28)
+
+*RTL lane, item 2.8 of docs/plans/2026-11-28-line-b-completion.md. Every reading below is a source line at b42c8c644
+(capstone-ariane), or in the kernel that the campaign rows booted. That kernel is `<hdd>/capstone/trapk/fpga/linux-6.1`,
+the source of the 165.03 G row's payload 539b2ef41ee4d444..., whose .config equals trapk/fpga-v1's except the initramfs
+path. Kernel files are cited by path and the first 16 hex digits of their sha256. The paper is the submitted ebc1700a.
+It is not touched here; the wording is the lead's.*
+
+| Paper (ebc1700a) | Claim | On Line B | Evidence |
+|---|---|---|---|
+| 5, Lifetime record (:47-55) | 16-byte record: generation 32 bits, the other three fields 31 each, 3 bits reserved | **holds** | capstone_sublet_life.sv :9-10, :130-147 |
+| 5, Allocate (:107-113) | a batch is 16 record pages (4,096 records) by default, and T starts with one batch | **holds** (P1 started with four pages) | kernel sublet-table.c :54, :578 |
+| 5, Release (:124-128) | CREVOKE ends the object and its descendants "in one pass over their records" | **does not hold as worded:** a forward scan, then a backward check and release in chunks of 64 records, interruptible | capstone_sublet_life.sv :34-51, :126 |
+| 5, Release (:130-133) | it fails on a stale capability, "checked before it changes any record" | **holds** for the stale case; across chunks, see below | capstone_sublet_life.sv :478-481 against the kill path's writes |
+| 6, Address Space Layouts (:44-55) | a CDERIVE below R per region (code, data, stack, each mmap); munmap checks the reference live, CREVOKEs it, and only then removes the pages | **holds**, with munmap's revoke only when the unmap removes the block's last pages | kernel sublet-table.c :504-545, :730-737, :813-826; sublet-blocks.c :35-75, :96-123, :244; mm/mmap.c :2406, :2782-2783 |
+| 1 (:96-97) | "Programs that use capabilities run in a dedicated mode with user-space privileges" | **a configuration of U, not a separate mode:** protected U is U with srevroot != 0, chosen per process by the kernel | csr_regfile.sv :3012-3015 (cap_data_ctx_o[0]); capmode tied to 0 (:348-349) |
+
+**The record layout.**
+- capstone_sublet_life.sv :9-10 states the packing: word 0 = {next[29:0] at 63:34, depth[30:0] at 33:3, zero[2:0]};
+  word 1 = {generation[31:0] at 63:32, previous[30:0] at 31:1, next[30] at 0}.
+- The accessors at :130-147 (r_next, r_depth, r_prev, r_gen; mk_w0, mk_w1) read and write exactly that.
+- So: a 32-bit generation, three 31-bit fields (previous, next, depth) and 3 zero bits, 128 in all, as the paper
+  says. The reserved bits sit at word 0's low end, and next straddles the two words.
+
+**The initial table size.**
+- The kernel creates each context's table with node_initial_pages record pages (sublet-table.c :578,
+  `sublet_table_grow(c->table, 1, node_initial_pages, node_initial_pages, &pages)`).
+- node_initial_pages defaults to CV_TABLE_BATCH_PAGES (:54) = CAP_REV_SUBLET_BATCH_PAGES = 16 (cap_rev_table_abi.h
+  :116, f952b49103024d65). A page holds 256 records (sublet-format.h :80, e37613d6d4c06a58), so one batch is 4,096
+  records.
+- Growth adds node_batch_pages, also 16 (sublet-table.c :54, :110).
+- Both are module parameters. Neither the board's bootargs (caplifive-b5b2.dts :10: "earlycon console=ttyS0,57600
+  rdinit=/init sublet.dom_binfmt=1") nor CONFIG_CMDLINE sets them, so the booted kernel uses the defaults.
+- sublet-table.c is e94037ad98b917db.
+
+**CREVOKE is not one pass on Line B** (capstone_sublet_life.sv :34-51, the interruptible CREVOKE of B5b-2 4(b)).
+- A forward scan finds the run's last record t.
+- The run is then released from its end backward, in chunks of at most KCHUNK = 64 records (:126). Each chunk is
+  checked walking back from t (live, deeper than the operand, a prev that names it as next) before any of it is
+  released, then walked again to release it (states S_KB_* check, S_KR_* release, S_KS_* splice).
+- After a chunk, a pending interrupt ends the instruction with status PARTIAL, and the CREVOKE re-executes from its
+  checks on the shorter run. A saved position may let the re-execution skip the forward scan (:44-51).
+- So every record of the run is read at least twice (the scan and the chunk's check), and its release is a third
+  visit. A long CREVOKE may span several executions.
+- The paper's "in one pass over their records" describes the reference's model (cap_rev_tree.c walk_run's check and
+  commit passes are two as well), not this hardware.
+- CRENEW keeps the forward commit pass in list order in one execution (:43).
+
+**The stale check precedes every write.**
+- The kill path resolves the operand first (S_RS_R, S_RS_W, :473-489). A slot outside [min, next), an unreachable
+  record, a generation other than the id's, or the retired generation answers status 1 (cause 25) and ends the
+  operation.
+- Every write of a CREVOKE comes later, from states reached only after S_RS_W: S_K_M_WR, S_KR_WR, the S_KS_* splice,
+  S_K_SP_*, S_K_NODE*, and the header write-back S_H_Q* (the t_write sites at :628-810). The header states S_O_H* before
+  S_RS only read.
+- So a stale operand changes no record, as the paper says.
+- What the sentence does not cover: a check that fails in a LATER chunk (a corrupted descendant) finds earlier
+  chunks already released. "Every check of an operation precedes its first write" (:34) holds per chunk, not per
+  instruction, since 4(b).
+
+**Regions and munmap** (kernel).
+- Each region's block is derived from R by root_derive, a CDERIVE (CV_DERIVE, funct7 0x51; sublet-table.c :174,
+  :504-545). The loader grants the program's regions (sublet_grant_slot, :724-741), and mmap makes a block per mapping
+  (sublet-blocks.c :244).
+- munmap of a protected mapping goes through sublet_munmap (mm/mmap.c :2782-2783, ef8ee180f4fa0d69):
+  - it resolves the handle to its block and inspects the reference's record (block_request, sublet-blocks.c :35-75,
+    b3822f1594e23abc);
+  - sublet_unmap_commit runs "immediately before detaching the VMAs" (:96-123; mm/mmap.c :2406);
+  - it calls sublet_ref_revoke, which is an LDC of the kernel's slot followed by CREVOKE (CV_KILL, funct7 0x52;
+    sublet-table.c :813-826), when the unmap removes the block's LAST pages (pages_last, :65-69).
+- So the revoke precedes the pages' removal, as the paper says. An unmap of part of a region does not end the
+  region's lifetime; the block stays live with fewer pages. The paper's "to free a whole region" is the case that
+  revokes.
+- The revoked block is dropped afterwards, so its address can never be reached through it again (request_finish,
+  :124-133).
+
+**"A dedicated mode".**
+- On Line B, a protected program runs in ordinary U mode. The processor treats U as protected exactly when srevroot
+  != 0 (csr_regfile.sv :3014, cap_data_ctx_o[0]; :161-162 names it "protected U (U, srevroot != 0)"), and the kernel
+  sets srevroot per process.
+- The capability mode of the earlier lines (CAPENTER, capmode) is gone under the Sublet format: capmode is tied to 0
+  (:348-349) and CAPENTER is illegal at decode.
+- So "a dedicated mode with user-space privileges" reads, on Line B, as "user mode with the process's lifetime table
+  installed". Unprotected programs run in the same U mode with srevroot = 0. Whether to keep the word "mode" is the
+  lead's call.
