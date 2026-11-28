@@ -209,6 +209,36 @@ Each row was re-read at its source this morning.
    after their sessions end.
 4. **The JTAG busy timeout** becomes an ISSUES entry at a third instance, or now if one fails its rerun.
 
+## Corrections and dispositions, 28 Nov (from the audit of every plan against git)
+
+**Corrections to statements above, each read at its source:**
+- I-1. The arms table says perlbench's bodies port "does not build on the one-operand SDK yet". It builds and ran on
+  board 2 as perl-full (heads, bodies, HE, op slabs): nested-workloads c4732c42a52b, a162a8aefb60.
+- I-2. Item 10's mode home is not the `scapmode` CSR 0x5C3: the seal N (796af23d9) loads the mode into a flop from
+  bit 0 of the srevroot write (`crvc_q`, read back in srevroot's bit 0), per docs/plans/2026-11-27-stage2-crvc-gate.md.
+- I-3. "ISSUES R-77 and R-80 now read ON SILICON" overstates it: R-77's fix is in b42c8c644 and is not measured on
+  silicon; R-80's fixed arm reads as predicted but no reading discriminates it (S-35 still owes the 28fcbb646 control).
+- I-4. LSRH is no longer conditional: it failed its board gate (perlbench +1.27 %, nab +0.31 %; compiler e09ecb0844a4).
+  The Zcb pair failed too (perlbench +0.41 %, nab +0.14 %; d0c5af96e033). Neither enters.
+- I-5. Item 12's tests are done, not "being written": dev 74cd5392a34e (record TLB 16 entries, b5b2-genlim,
+  b5b2-relrace; R-84 closed).
+- I-6. The JTAG busy timeout had three instances by 27 Nov, not two (24 Nov on d0afdb40f, ISSUES R-79's entry): filed
+  as ISSUES I-17 (dev 2fe83451f41b).
+- I-7. The approved post-submission programme is on origin/spec-silicon (9228d775aac9), not on dev.
+- I-8. The Line A levers deferred to "the Line B model" have no model for record-TLB LRU or pcc_hold (disposed below).
+
+**Dispositions, for this paper** (rtl agreed on 28 Nov for the RTL items):
+- **Record cache (RC) hardware: dropped.** LB 1024x8 is NO BUILD on gcc, perlbench and mcf (dev a7038b49974f), and no
+  lane owns a proven upper bound on RC's miss cost c. The paper's record-cache claims rest on the model.
+- **Record-TLB LRU and pcc_hold: dropped.** Neither has a model or any reading that says it moves a result.
+- **CSMINT at N=2 on d0afdb40f: closed.** That seal is superseded. CSMINT gets N=1 on b42c8c644 instead, folded into
+  rtl's revocation-cost boot.
+- **auipcgp (PC-relative capability derive): out of this paper.** It is QEMU-only with the compiler side default off
+  (dev da383aea4ad7) and no RTL.
+- **C-63 (C++ exceptions on the trap route): parked.** No Line B workload needs it.
+- **The I-cache 64-byte variant:** only if board time remains after the final campaign.
+- **The assertion side-build on b42c8c644:** rtl does it (simulation only; result into R-78).
+
 ## Questions that are the lead's (none of them blocks the order above)
 
 - Landing the measured runtime and the measured codegen default on dev. The runtime lane recommends both.
