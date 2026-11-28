@@ -1,0 +1,3 @@
+452af6fcbc849576286f6c7d97e6bc402fe9afe58c0f722eed37ae0ef916cc32  spec/B5T-g1r/out/fw_payload.bin  19560456  order: /stages/B5T-519.lbm_r /stages/B5T-544.nab_r /stages/B5T-557.xz_r /stages/B5T-505.mcf_r 
+687ade85b2fa52959cc85074fc26467b36ac6098f74b6f2b2f234273c1e89757  spec/B5TL0-g1/out/fw_payload.bin  19560456  order: /stages/B5TL0-519.lbm_r /stages/B5TL0-544.nab_r /stages/B5TL0-557.xz_r /stages/B5TL0-505.mcf_r 
+1c9b916d97cfc9c9a35c9da7c29343fbe00a91b5cd97c524e16462d31da0176c  spec/B5TL1-g1/out/fw_payload.bin  19560456  order: /stages/B5TL1-519.lbm_r /stages/B5TL1-544.nab_r /stages/B5TL1-557.xz_r /stages/B5TL1-505.mcf_r 

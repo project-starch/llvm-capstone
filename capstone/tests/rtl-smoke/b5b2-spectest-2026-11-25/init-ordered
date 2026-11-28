@@ -1,0 +1,38 @@
+#!/bin/sh
+# /init: run each SPEC test stage's run.sh (the board's, unchanged) on the trap route, where the kernel's
+# sublet.dom_binfmt loader starts each .dom image; a heartbeat keeps boot.py's 300 s line timeout from firing.
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+mkdir -p /tmp && mount -t tmpfs tmpfs /tmp
+export SPEC_INBAND_MAX=67108864
+echo "TRAPTEST: id $(id)"
+# this busybox has no timeout applet: run a command in its own session and kill the whole group after T seconds
+bounded() { t=$1; shift; setsid "$@" & p=$!; ( sleep $t; kill -9 -$p 2>/dev/null; echo "TRAPTEST: watchdog killed $* after ${t}s" ) & w=$!; wait $p; rc=$?; kill $w 2>/dev/null; return $rc; }
+echo "TRAPTEST: up, kernel $(uname -r), mem $(grep MemTotal /proc/meminfo)"
+( while :; do sleep 120; echo "TRAPTEST: tick $(cut -d' ' -f1 /proc/uptime)"; done ) &
+tick=$!
+mkdir -p /tmp/run && cd /tmp/run && cp /smoke.dom . && ./smoke.dom; echo "TRAPTEST: control smoke.dom rc=$?"; cd /
+while read img args; do  # (no probes in this boot)
+  [ -z "$img" ] && continue
+  echo "TRAPTEST: probe $img $args"
+  echo "@@PROBE-BEGIN $img $args"
+  rm -rf /tmp/run && mkdir -p /tmp/run && cd /tmp/run && cp /probes/$img.dom . && bounded 900 ./$img.dom $args < /dev/null
+  rc=$?; cd /
+  echo "@@PROBE-END $img $args rc=$rc"
+  busybox dmesg -c | grep -E "sublet|captag|Out of memory|oom" | sed 's/^/@@PROBE-DMESG /'
+done < /probes.list
+# the stage order comes from /stages.order when present (a possible wedge runs last), else the glob
+for s in $(cat /stages.order 2>/dev/null || ls -d /stages/*); do
+  n=$(basename $s)
+  echo "TRAPTEST: stage $n begin"
+  echo "@@QSTEP-BEGIN $n"
+  bounded 3600 sh $s/stage/run.sh
+  rc=$?
+  echo "@@QSTEP-END $n rc=$rc"
+  echo "TRAPTEST: stage $n rc=$rc"
+  busybox dmesg -c | grep -E "sublet|captag|Out of memory|oom" | sed 's/^/TRAPTEST: dmesg /'
+done
+kill $tick 2>/dev/null
+echo "TRAPTEST: done"
+busybox poweroff -f; echo "TRAPTEST: poweroff failed"; sleep 999999
