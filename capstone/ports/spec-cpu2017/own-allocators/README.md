@@ -25,8 +25,8 @@ Measured 2026-11-18 on silicon (bitstream P1). The record, with pre-registration
 - **The lookup repair is required for a usable cost.** The 0001 patch finds a head's arena by walking the list of
   arenas, one load through each. On Perl 5.36 `suns.pl` that walk made the protected interpreter cost +208 %; with the
   arenas in an address-sorted array searched by bisection it costs +16.05 %. For 5.36.3 the same repair is
-  `ports/perl/sublet/pending/5.36.3/0002-sv-arena-lookup-by-index.patch`, applied after 0001; no build in this tree
-  applies it yet (`ports/perl/sublet/pending/README.md`).
+  `ports/perl/sublet/patches/5.36.3/0002-sv-arena-lookup-by-index.patch`, applied after 0001 by every build of the
+  port since it landed (`bug-corpora/perl/release-differential/results/2026-11-22-virtual-0002`).
 - **An O(1) arena lookup** (`500.perlbench_r/fix-lookup-pages.py`, run after `fix-lookup.py`): arenas keep upstream's
   layout; a table indexed by the 4 KiB page of an address holds two verified arena pointers per slot (an arena's heads
   span at most two pages, and a page meets at most two arenas' heads), misses fall back to the binary search. On

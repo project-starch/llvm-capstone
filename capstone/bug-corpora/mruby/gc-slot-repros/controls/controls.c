@@ -3,9 +3,10 @@
  * Pre-registration: capstone/docs/plans/2026-10-11-nested-lifetime-controls.md. The nested
  * allocator is mruby's GC: mrb_obj_alloc hands out an object slot of a heap page and the sweep
  * releases it. Under patch 0008 (MRB_CAPSTONE_SUBLET) each slot goes out as a CDERIVE child of
- * the page's lifetime (page->life) and the sweep revokes it (CREVOKE) once obj_free has run.
- * This driver embeds mruby and drives that allocator through its own API: mrb_str_new allocates
- * the object (one slot: a 32-byte string is embedded in its RVALUE), mrb_full_gc runs the sweep.
+ * its page, derived from the page pointer, and the sweep revokes it (CREVOKE) once obj_free has
+ * run. This driver embeds mruby and drives that allocator through its own API: mrb_str_new
+ * allocates the object (one slot: a 32-byte string is embedded in its RVALUE), mrb_full_gc runs
+ * the sweep.
  *
  *   controls parent     A freed by the sweep, then its slot read and written through the page
  *   controls sibling    A and B on one page, A freed, B read and written through B
@@ -23,11 +24,13 @@
  *
  * The page reference. The GC reaches a slot as page->objects[i], from the page pointers it keeps
  * in mrb->gc.heaps (what the sweep, gc_page_of and free_heap use). This driver walks the same
- * list. The heap page and RVALUE layouts are private to gc.c, so they are mirrored below,
- * verbatim from the pin; the mirror is checked at run time against the object mrb_obj_alloc
- * returned (same address at page->objects[i], same type, and under 0008 issued[i] equal to it),
- * and the run stops with exit 75 if it does not match. Built with -DMRB_CAPSTONE_SUBLET exactly
- * when libmruby was (controls/build.sh).
+ * list. Under patch 0008 gc_issue derives every slot's child from that page pointer, so the
+ * parent control reads and writes through the direct parent of A's revoked child. The heap page
+ * and RVALUE layouts are private to gc.c, so they are mirrored below, verbatim from the pin; the
+ * mirror is checked at run time against the object mrb_obj_alloc returned (same address at
+ * page->objects[i], same type, and under 0008 issued[i] equal to it), and the run stops with
+ * exit 75 if it does not match. Built with -DMRB_CAPSTONE_SUBLET exactly when libmruby was
+ * (controls/build.sh).
  *
  * Probes. Every access the controls make is one line in a ctl_probe_* function (noinline), and
  * that line prints "PROBE <name> <file>:<line>" right before the access, so a run records the
@@ -56,7 +59,7 @@
 #include <mruby/gc.h>
 #include <mruby/error.h>
 
-/* ---- mirror of gc.c's private layout at 4.0.0-rc2 (gc.c:114-186 with patch 0008) ---------- */
+/* ---- mirror of gc.c's private layout at 4.0.0-rc2 (gc.c:114-184 with patch 0008) ---------- */
 typedef struct RVALUE RVALUE;
 struct free_obj {
   MRB_OBJECT_HEADER;
@@ -106,7 +109,6 @@ struct mrb_heap_page {
   mrb_bool old:1;
   mrb_bool region:1;
 #ifdef MRB_CAPSTONE_SUBLET
-  void *life;
   struct RBasic *issued[MRB_HEAP_PAGE_SIZE];
 #endif
   RVALUE objects[MRB_HEAP_PAGE_SIZE];
@@ -165,12 +167,6 @@ __attribute__((noinline)) uint64_t ctl_probe_page_read_tail(volatile uint64_t *w
 #ifdef MRB_CAPSTONE_SUBLET
 __attribute__((noinline)) unsigned long ctl_probe_page_read_issued(page_t *page, size_t i) {
   NOTE("page-read-issued"); return page->issued[i] ? ADDR(page->issued[i]) : 0; }
-__attribute__((noinline)) unsigned ctl_probe_life_read_tt(volatile RVALUE *slot) {
-  NOTE("life-read-tt"); return slot->as.free.tt; }
-__attribute__((noinline)) void ctl_probe_life_write_tail(volatile uint64_t *w, uint64_t v) {
-  NOTE("life-write-tail"); *w = v; }
-__attribute__((noinline)) uint64_t ctl_probe_life_read_tail(volatile uint64_t *w) {
-  NOTE("life-read-tail"); return *w; }
 #endif
 __attribute__((noinline)) void ctl_probe_obj_read(struct RString *s, char *out, unsigned *tt) {
   NOTE("obj-read"); *tt = s->tt; for (int k = 0; k < PAYLOAD_LEN; k++) out[k] = ((volatile char *)RSTR_EMBED_PTR(s))[k]; }
@@ -290,20 +286,6 @@ static int control_parent(mrb_state *mrb) {
   say("WRITE page: wrote 0x%llx at slot+%d, read back 0x%llx\n", (unsigned long long)TAIL_PATTERN,
          TAIL_OFF, (unsigned long long)back);
   if (back != TAIL_PATTERN) return fail("parent", 1, "page-readback");
-#ifdef MRB_CAPSTONE_SUBLET
-  /* The same slot through page->life, the CDERIVE parent the slot's child was derived from. */
-  RVALUE *lslot = (RVALUE *)((char *)page->life + i * sizeof(RVALUE));
-  say("ADDR life=0x%lx base=0x%lx slot-through-life=0x%lx\n", ADDR(page->life), BASE(page->life), ADDR(lslot));
-  unsigned ltt = ctl_probe_life_read_tt(lslot);
-  volatile uint64_t *ltail = (volatile uint64_t *)((char *)lslot + TAIL_OFF);
-  uint64_t lold = ctl_probe_life_read_tail(ltail);
-  ctl_probe_life_write_tail(ltail, TAIL_PATTERN);
-  uint64_t lback = ctl_probe_life_read_tail(ltail);
-  ctl_probe_life_write_tail(ltail, lold);
-  say("READ life: tt=%u (MRB_TT_FREE=%d); WRITE life: read back 0x%llx\n", ltt, MRB_TT_FREE,
-         (unsigned long long)lback);
-  if (ltt != MRB_TT_FREE || lback != TAIL_PATTERN) return fail("parent", 1, "life-readback");
-#endif
   say("CTL parent completed\n");
   return 0;
 }

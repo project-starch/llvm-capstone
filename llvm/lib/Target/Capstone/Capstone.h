@@ -29,12 +29,18 @@ class CapstoneTargetMachine;
 FunctionPass *createCapstoneCodeGenPreparePass();
 void initializeCapstoneCodeGenPreparePass(PassRegistry &);
 
+FunctionPass *createCapstoneMemcpyAlignDispatchPass();
+void initializeCapstoneMemcpyAlignDispatchPass(PassRegistry &);
 FunctionPass *createCapstoneMisalignedCapAccessPass();
 void initializeCapstoneMisalignedCapAccessPass(PassRegistry &);
 
 // Synthesizes a per-module `__capstone_cap_init` that materializes capability
 // globals in place at runtime (constructor-codegen). See CapstoneCapGlobalInit.cpp.
 ModulePass *createCapstoneCapGlobalInitPass();
+// C-74: pad and align globals targeted by a sub-word atomic. See
+// CapstonePadSubwordAtomicGlobals.cpp.
+ModulePass *createCapstonePadSubwordAtomicGlobalsPass();
+void initializeCapstonePadSubwordAtomicGlobalsPass(PassRegistry &);
 /// Global attribute set by CapstoneCapGlobalInit on a holder that was constant
 /// in the source; the pass clears the flag because it writes the holder.
 inline constexpr char CapstoneCapInitConstHolder[] = "capstone-cap-init-const";
@@ -49,6 +55,12 @@ FunctionPass *createCapstoneDeadRegisterDefinitionsPass();
 
 FunctionPass *createCapstoneCursorReadFoldPass();
 void initializeCapstoneCursorReadFoldPass(PassRegistry &);
+
+FunctionPass *createCapstoneSinkLoopIncrementPass();
+void initializeCapstoneSinkLoopIncrementPass(PassRegistry &);
+
+FunctionPass *createCapstoneRedundantShrinkPass();
+void initializeCapstoneRedundantShrinkPass(PassRegistry &);
 
 void initializeCapstoneDeadRegisterDefinitionsPass(PassRegistry &);
 

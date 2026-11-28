@@ -1796,7 +1796,7 @@ bool CapstoneInstrInfo::isBranchOffsetInRange(unsigned BranchOp,
 // If the operation has a predicated pseudo instruction, return the pseudo
 // instruction opcode. Otherwise, return Capstone::INSTRUCTION_LIST_END.
 // TODO: Support more operations.
-unsigned getPredicatedOpcode(unsigned Opcode) {
+static unsigned getPredicatedOpcode(unsigned Opcode) {
   switch (Opcode) {
   case Capstone::ADD:   return Capstone::PseudoCCADD;   break;
   case Capstone::SUB:   return Capstone::PseudoCCSUB;   break;
@@ -3054,6 +3054,12 @@ bool CapstoneInstrInfo::verifyInstruction(const MachineInstr &MI,
           break;
         case CapstoneOp::OPERAND_UIMM9_LSB000:
           Ok = isShiftedUInt<6, 3>(Imm);
+          break;
+        case CapstoneOp::OPERAND_UIMM9_LSB0000:
+          Ok = isShiftedUInt<5, 4>(Imm);
+          break;
+        case CapstoneOp::OPERAND_UIMM10_LSB0000:
+          Ok = isShiftedUInt<6, 4>(Imm);
           break;
         case CapstoneOp::OPERAND_SIMM10_LSB0000_NONZERO:
           Ok = isShiftedInt<6, 4>(Imm) && (Imm != 0);

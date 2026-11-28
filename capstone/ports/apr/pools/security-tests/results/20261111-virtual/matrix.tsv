@@ -1,0 +1,10 @@
+program	build	expected	passed	exit	line
+bucket-geometry, APR_HAS_MMAP=1	sdk	complete	True	0	sizeof(union) 112, APR_BUCKET_ALLOC_SIZE 224
+bucket-geometry, APR_HAS_MMAP=0	sdk	complete	True	0	sizeof(union) 112, APR_BUCKET_ALLOC_SIZE 224
+two-levels	sdk	complete	True	0	level1_freelist_same_address=1 level2_allocator_same_address=1 freed_to_malloc=0 VERDICT TWO-LEVEL-RECYCLING
+allocator-example	APRP_SUBLET=OFF	complete	True	0	APRP example same_node=1 nodes=2 reuses=1 releases=3 discards=2; ALLOCATOR_EXAMPLE apr PASS pointer_bytes=16
+bucket-example	APRP_SUBLET=OFF	complete	True	0	lifo_reissue=1 pieces=3 files=2 reissues=2 node_releases=1
+allocator-example	APRP_SUBLET=ON	status:506	True	1	example failed=506
+bucket-example	APRP_SUBLET=ON	status:506	True	1	APRP failed=506
+allocator-example, mode 1	APRP_SUBLET=ON	complete	True	0	APRP example same_node=1 nodes=2 reuses=1 releases=3 discards=2; ALLOCATOR_EXAMPLE apr PASS pointer_bytes=16
+bucket-example, mode 1	APRP_SUBLET=ON	complete	True	0	lifo_reissue=1 pieces=3 files=2 reissues=2 node_releases=1

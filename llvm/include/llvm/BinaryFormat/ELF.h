@@ -726,6 +726,8 @@ enum : unsigned {
   EF_CAPSTONE_FLOAT_ABI_QUAD = 0x0006,
   EF_CAPSTONE_RVE = 0x0008,
   EF_CAPSTONE_TSO = 0x0010,
+  // Decoded in the compressed-capability (CRVC) mode, stage 2 option B.
+  EF_CAPSTONE_CRVC = 0x0100,
 };
 
 // ELF Relocation types for RISC-V

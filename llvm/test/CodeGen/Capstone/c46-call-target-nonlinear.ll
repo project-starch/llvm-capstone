@@ -14,6 +14,11 @@
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O2 -verify-machineinstrs < %s | FileCheck %s
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O0 -verify-machineinstrs < %s | FileCheck %s --check-prefix=O0
+; The application SDK's ABI (-capstone-gp-free -capstone-image-gp) mints no
+; capability for a direct call at all: the target is an integer and the call
+; a plain jalr, so there is no LINEAR value for the allocator to copy.
+; RUN: llc -mtriple=capstone64 -mattr=+m -O2 -capstone-gp-free -capstone-image-gp -verify-machineinstrs < %s \
+; RUN:   | FileCheck %s --check-prefix=IG --implicit-check-not=delin --implicit-check-not=cjalr
 
 @total = internal addrspace(200) global i32 0, align 4
 
@@ -37,6 +42,11 @@ define internal void @f(i32 %x) addrspace(200) noinline {
 ; O0:          cincoffset [[T:[a-z0-9]+]], gp, {{[a-z0-9]+}}
 ; O0-NEXT:     delin [[T]]
 ; O0:          cjalr ra, 0([[T]])
+; IG-LABEL:    g:
+; IG:          auipc [[A:[a-z0-9]+]], %pcrel_hi(f)
+; IG:          {{[[:space:]]}}jalr [[R:[a-z0-9]+]]
+; IG-NEXT:     li a0, 2
+; IG-NEXT:     {{[[:space:]]}}jalr [[R]]
 define i32 @g(i32 %n) addrspace(200) {
 entry:
   call addrspace(200) void @f(i32 1)

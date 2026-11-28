@@ -1,0 +1,9 @@
+MOVED default     php-real-stock         41_9a98904ddd0e_crash-139: MISSED -> NO-READING:not-reached
+MOVED default     virtual-malloc         41_9a98904ddd0e_crash-139: MISSED -> NO-READING:not-reached
+MOVED default     virtual-nested-pools   41_9a98904ddd0e_crash-139: MISSED -> NO-READING:not-reached
+MOVED default     virtual-nested-exact   41_9a98904ddd0e_crash-139: MISSED -> NO-READING:not-reached
+MOVED sensitivity php-real-stock         41_9a98904ddd0e_crash-139: MISSED -> NO-READING:not-reached
+MOVED sensitivity virtual-malloc         41_9a98904ddd0e_crash-139: MISSED -> NO-READING:not-reached
+MOVED sensitivity virtual-nested-pools   41_9a98904ddd0e_crash-139: MISSED -> NO-READING:not-reached
+MOVED sensitivity virtual-nested-exact   41_9a98904ddd0e_crash-139: MISSED -> NO-READING:not-reached
+cells: 560; row byte-identical: 552; verdict or reason moved: 8; same verdict but another field differs: 0

@@ -7983,3 +7983,154 @@ under vivado-guard with a 40 GB cap, and the checkpoint probes under 12 GB.
   - Synth 8-7128 (×22, "2 input Mux optimized to 1 input Mux") and 8-7156 (×18, "Variable shifter node is
     optimized using Range optimization") are real. They sit inside elaboration on both runs, at scoreboard.sv,
     capstone_rev_node.anvil.sv and ariane_pkg.sv, none of which the change touches, and P1 has none.
+
+## The spatial-only core on silicon: step C against +Spatial on P1, seven SPEC rows (caplifive_…-pagedtbl-spatialonly-c_321af31a3, board 1, 2026-11-22)
+
+The paper prints an estimate for a core without the lifetime hardware. This is the measurement.
+
+- **The core:** step C (capstone-ariane spatial-only-c 321af31a3) is P1 with the lifetime table, walker and verdict
+  cache removed. REVOKE and MREV become stubs and DROP is illegal.
+  - Sealed by the board lane: sha256 7faf2a5fa513e783b64cd8448e924e7b7bbcabc84e81c30ac92e3b7ee79248e3, WNS +0.160 ns,
+    routed clean, 179,707 LUT.
+- **The images:** the paper's +Spatial images (FRCDKMSspa3). The monitor is 37ebb55 (CSC_SPATIAL_ONLY).
+- **The kit:** bkit105. Its smoke waives probe 40's three revocation checks, which a core without lifetimes cannot
+  pass by design (spec-silicon Addenda 211, 216-218).
+- **Outcome:** spec-silicon ea546343f549, Addendum 223.
+- **The boots:** each is clean, with smoke 9/9 and specdiff PASS.
+
+| Row | Step C | +Spatial on P1 (3-run mean) | Δ | Step C against matched Plain |
+|---|---|---|---|---|
+| perlbench | 12,785.31 s | 12,834.43 | -0.38 % | +18.31 % |
+| gcc train01 | 1,750.19 | 1,752.23 | -0.12 % | +18.75 % |
+| mcf | 5,656.84 | 5,658.92 | -0.04 % | +16.07 % |
+| lbm | 989.07 | 989.32 | -0.03 % | -1.48 % |
+| nab | 691.68 | 691.72 | -0.01 % | +4.92 % |
+| xz | 4,955.04 | 4,956.80 | -0.04 % | +5.81 % |
+| imagick (convert) | 11.34 | 11.39 | -0.44 % | +6.88 % |
+
+- Seven-row geometric mean against Plain: step C +9.66 %, against +Spatial on P1's +9.82 % on the same rows.
+- x264 was not run, so there is no eight-row figure comparable to the paper's.
+- Unused, the lifetime hardware costs at most 0.44 % on any of these rows, and 0.15 % in their geometric mean.
+- N = 1 per row. The chain does not separate the hardware term from the no-op lifetime operations or from the
+  monitor's CSCHECK emulation without its liveness walk.
+
+## Line B on silicon: the arms, and what the 26-28 Nov readings establish (runtime lane, 2026-11-28)
+
+Line B is the hardware Section 5 specifies. Its final seals, all sealed and graded by the board and rtl lanes:
+- **Full** b42c8c644 (`caplifive_ids55-…-r80-r77_b42c8c644.bit`, sha256 6a09f34d50842e01…, clk_out1 WNS +0.605 ns,
+  150,303 LUT), qualified by the silicon kits b5b2n 21/21, crevoke4b 16/16 and wapflu on two boards;
+- **+Spatial** 14f2ef81a (b42c8c644 + CAPSTONE_SPATIAL_ONLY);
+- **Plain** rvbase 8db8f9cda (`caplifive_rvbase-matched-ic32k-dtlb64_8db8f9cda.bit`, sha256 efc3ab8abd5aa194…, the
+  same 32 KiB 8-way L1D as Line B). **The Line B Plain arm has not booted yet** (pre-registered at runtime/b5b2-linux
+  932491ce4360), so **no number below is "against Plain"**, and none replaces a Fig. 8 bar or a geomean.
+- **Stage 2** N 796af23d9 (b42c8c644 + the CRVC decoder, WNS +1.796 ns, 149,891 LUT), a separate experiment, not an arm
+  of the campaign.
+
+Every Line B SPEC row below uses the **test** input, and perlbench is **makerand only** (spectest Amendment 5): the
+paper's perlbench is makerand + test.pl and its gcc is train01, so no row here is on the paper's footing for those two.
+
+## SPEC test campaign on Line B: Full against +Spatial on one board, the ports, and board constancy (b42c8c644 and 14f2ef81a, boards 1-3, 2026-11-26/28; INTERIM)
+
+Pre-registration and results: runtime/b5b2-linux, kit b5b2-campaign-2026-11-26 (PREREG fec8d4357796 with Amendments
+1-3; RESULTS cf82e5bc09b5, interim). Images on the final kernels (NO_HZ_IDLE at HZ=100) with the fast-rdtime firmware;
+userland B5TL1. Times are the sum of up1 − up0 over each stage's SPEC-END lines; every row was graded from its
+capture by the runtime lane (v2 grader PASS, every hash equal to the twin's; x264's log.dec carries timing).
+
+**Full / +Spatial on board 1** (Phase A, order S F F S S F, three runs per seal; mean, range):
+
+| stage | +Spatial 14f2ef81a | Full b42c8c644 | Full against +Spatial |
+|---|---|---|---|
+| imagick | 11.197 s (0.03) | 11.213 (0.01) | +0.15 % |
+| gcc (t1.c) | 5.490 (0.00) | 5.547 (0.01) | +1.03 % |
+| perlbench (makerand) | 279.420 (1.21) | 277.610 (2.42) | −0.65 %, inside the larger range |
+| mcf | 6,033.17, 6,034.72 | 6,368.63 (N=1) | +5.5 % |
+| lbm / nab / xz | 1,014.74, 1,014.66 / 723.93, 723.88 / 4,690.35, 4,691.05 | 1,015.96 / 727.45 / 4,692.99 (N=1) | +0.12 % / +0.49 % / +0.05 % |
+
+- The long-stage rows are N = 2 (+Spatial) and N = 1 (Full) so far; Phase B is still running.
+- **The qualification perl gap is not reproduced:** the qualification rows read +Spatial 293.96 s against Full
+  282.94 s (11.02 s); on one board at N = 3 the difference is 1.81 s, inside the noise.
+- rtl's prediction "+Spatial no slower than Full on every stage" (P3) holds on imagick, gcc and the long stages read
+  so far, and is neither shown nor refuted on perlbench.
+
+**The ports pairs on board 2** (Full, three runs each):
+
+| image | runs | against stock |
+|---|---|---|
+| gcc t1.c, port v1 (all-abc-bm-ls-tfl-phi) | 5.83, 5.83, 5.83 against 5.56, 5.55, 5.54 | +5.05 % |
+| gcc t1.c, port v2 (fail-stop CRENEW) | 5.84, 5.82, 5.82 against 5.56, 5.55, 5.55 | +4.92 % |
+| perlbench makerand, perl-full (heads, bodies, HE, op slabs) | 278.61, 278.55, 280.42 against 277.87, 276.92, 277.10 | +0.68 % |
+
+These are not the paper's dashed bars: different ports and different inputs (t1.c, makerand), and no Plain.
+
+**Board constancy** (the same CF image on three boards): lbm 0.058 %, nab 0.007 %, xz 0.060 %, mcf 0.040 % (max −
+min), gcc and perlbench within 0.11 % between boards 1 and 2.
+
+**x264 (test)**, run phase, Full b42c8c644: 32,816.41 s (board 2), 32,838.90 s (board 3); +Spatial 32,732.00 s
+(board 1). The qualification rows on the bring-up kernel (spectest 9ce3a72c6e76) read 33,839.95-33,881.05 s.
+
+**What this does not establish:** any overhead against Plain; anything on perlbench's full test or gcc's train01;
+intervals beyond the range at N = 3. The paper's "two runs differ by at most 0.1 %" does not hold for perlbench on
+Line B (Full's three runs span 0.87 %; code placement alone moves it 4.1 %, next entry).
+
+## Code placement alone moves perlbench 11.38 s on b42c8c644 (compiler lane, board 2, 2026-11-27)
+
+stage2-placement-b42 (compiler/stage2-trap-spec, RESULTS c89f177d0403; read from the seven captures by the runtime
+lane): LSHOFFL's own objects relinked five ways, every relink equal to LSHOFFL in twin instructions (±0.001 %) on the
+stages read, outputs equal on all seven boots.
+- perlbench makerand: 269.79-281.17 s over the arms that pass the twin rule, **11.38 s (4.1 %)**; the same image
+  twice reads 279.16 and 277.58 s. Over LSHOFFL and the three pure pad arms alone the spread is 3.47 s.
+- nab 2.21 s; gcc 0.00 s; imagick 0.05 s.
+- **Consequence:** a perlbench or nab difference smaller than this between two different links is not attributable to
+  the change under test. It is why LSRH (+1.27 % perlbench) and Zcb (+0.41 %) were found indistinguishable from
+  placement, and why stage 2's perlbench threshold sits at about 5 %.
+
+## Stage 2 (compressed capability instructions, CRVC) on silicon: GO on gcc alone (seal N 796af23d9, board 2, 2026-11-27/28)
+
+stage2-crvc-board (compiler/stage2-trap-spec, RESULTS 30a2f27261b8, addenda 249d7eeb8d65 and 85423e54ba4a; times
+re-read from the captures by the runtime lane). On N, three OFF (stock natives) and three ON (CRVC natives) boots,
+alternating, under kernel K and the sbi-crvc firmware:
+
+| stage | OFF | ON | Δ |
+|---|---|---|---|
+| gcc t1.c | 5.56, 5.56, 5.55 | 5.47, 5.46, 5.47 | −0.090 s (−1.62 %), every ON boot at least 8 ticks below every OFF boot |
+| perlbench makerand | 276.18, 277.35, 277.10 | 277.03, 277.31, 277.15 | +0.29 s (+0.10 %) |
+| nab | 728.39, 728.23, 728.31 | 728.19, 728.21, 728.08 | −0.15 s, flat |
+| imagick | 11.24-11.25 | 11.22-11.25 | flat |
+
+- The twin's fetch-byte saving was 9.07 % on gcc and 17.3 % on perlbench, so silicon realises about 18 % of it on gcc
+  and none on perlbench.
+- **The seal's own cost on perlbench is not detected:** +1.26 s (+0.46 %) against an allowance of 3.26 s that is the
+  K reference's own range (one K boot read 273.57 s, two more 276.61 and 276.67); +0.24 s without that boot.
+- Outputs equal on every boot (checked by the runtime lane with a positive control); the firmware's misaligned
+  redirect fired as designed on every N boot.
+- **Not established:** lbm, mcf, xz and x264 were never built for the mode (an x264 bracket on N is planned); N has
+  not run the silicon kits that qualified b42c8c644. **Decision (Line B plan, 8880ecd564ea): stage 2 does not
+  replace b42c8c644 in this campaign.**
+
+## The record cache's last open lever, LB 1024x8 on mcf: NO BUILD on silicon's own tick positions (b42c8c644, board 2, 2026-11-27)
+
+Runtime lane kit b5b2-ticklog-2026-11-27 (runtime/b5b2-linux: PREREG 28cdc156a874, Amendment 1 340a17e4b463,
+RESULTS b341d69fcca6); rtl's verdict at dev a7038b49974f.
+- A per-tick log in the kernel and the firmware (cycles, instructions and L1D misses per timer interrupt, the kernel's
+  and the M-mode path's share subtracted) recorded where silicon's ticks fall in mcf's test run: 664,521 ticks in
+  6,647.43 s, every control PASS.
+- Silicon's ticks are far from uniform in instructions: 47.6 % of the program's instructions run in ticks at ≥ 1.8x
+  the mean, with a slow peak at CPI 10-15.
+- Re-placing the twin trace's flushes at silicon's positions: **n = 7,493,273 removed misses, 5.45x under the build
+  line**, 0.183 % of 165.03 G even if every one is cold. With all three record-cache levers on gcc, perlbench and mcf
+  now NO BUILD, **Line B has no record-cache hardware**, and the paper's record-cache claims rest on the model only.
+- L1D misses of mcf's program in that window: 3,892,614,646 (all D$ ports, PTW and the lifetime unit's included).
+
+## Hardware cost on Line B, from the sealed builds' routed reports (rtl and board lanes, 2026-11-26)
+
+docs/plans/2026-11-26-hw-cost-lineb.md (dev 26801c60085d), by the paper's per-module assignment rule:
+
+| | Plain 8db8f9cda | Full b42c8c644 | +Spatial 14f2ef81a |
+|---|---|---|---|
+| core LUT | 46,968 | 124,710 (**2.655x**) | 115,401 (**2.457x**) |
+| core FF | 20,684 | 46,047 (2.226x) | 41,461 (2.004x) |
+| RAMB36 / RAMB18 | 50 / 0 | 100 / 2 | 100 / 2 |
+
+- Supersedes Table 4's P1 ratios (3.44x core LUT) for Line B. The spatial-only bound the paper estimated is now a
+  measurement. The switcher row is gone (no instance on Line B) and the CSR file is no longer a mixed cost.
+- There is no record-cache column on Line B (previous entry).

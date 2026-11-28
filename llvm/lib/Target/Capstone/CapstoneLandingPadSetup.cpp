@@ -22,7 +22,7 @@ using namespace llvm;
 #define DEBUG_TYPE "capstone-lpad-setup"
 #define PASS_NAME "Capstone Landing Pad Setup"
 
-extern cl::opt<uint32_t> PreferredLandingPadLabel;
+extern cl::opt<uint32_t> CapstonePreferredLandingPadLabel;
 
 namespace {
 
@@ -52,11 +52,11 @@ bool CapstoneLandingPadSetup::runOnMachineFunction(MachineFunction &MF) {
     return false;
 
   uint32_t Label = 0;
-  if (PreferredLandingPadLabel.getNumOccurrences() > 0) {
-    if (!isUInt<20>(PreferredLandingPadLabel))
+  if (CapstonePreferredLandingPadLabel.getNumOccurrences() > 0) {
+    if (!isUInt<20>(CapstonePreferredLandingPadLabel))
       report_fatal_error("capstone-landing-pad-label=<val>, <val> needs to fit in "
                          "unsigned 20-bits");
-    Label = PreferredLandingPadLabel;
+    Label = CapstonePreferredLandingPadLabel;
   }
 
   // Zicfilp does not check X7 if landing pad label is zero.

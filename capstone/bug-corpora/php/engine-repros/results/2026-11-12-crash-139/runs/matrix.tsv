@@ -1,0 +1,161 @@
+boot	image	image_sha256	platform	arm	script	run	exit	php_output	issues	retires	refcount_printed_by_script	witness_getters	witness_member_refcount	witness_foreign_frees	foreign_free_cursor_minus_code_base	fault	fail_line
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	case	r1	0	v | end	410	0							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	case	r2	0	v | end	410	0							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	case	r3	0	v | end	410	0							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	case	r1	0	v | end	410	0							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	case	r2	0	v | end	410	0							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	case	r3	0	v | end	410	0							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	case	r1	0	v | end	410	408							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	case	r2	0	v | end	410	408							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	case	r3	0	v | end	410	408							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	case	r1	0	v | end	410	408							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	case	r2	0	v | end	410	408							
+measured-boot1	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	case	r3	0	v | end	410	408							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	case	r1	0	v | end	410	408							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	419	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	case	r2	0	v | end	410	408							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	419	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	case	r3	0	v | end	410	408							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	exact	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	419	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	case	r1	0	v | end	410	408							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	419	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	case	r2	0	v | end	410	408							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	419	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	case	r3	0	v | end	410	408							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	object	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	419	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	case	r1	0	v | end	410	0							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	0	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	case	r2	0	v | end	410	0							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	0	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	case	r3	0	v | end	410	0							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	block	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	0	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	case	r1	0	v | end	410	0							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	0	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	case	r2	0	v | end	410	0							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	0	51						
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	case	r3	0	v | end	410	0							
+measured-boot2	the measured image (run19's)	a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949	the branch's QEMU	stock	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	0	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	stock	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	stock	case	r1	0	v | end	410	0							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	stock	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	0	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	stock	case	r2	0	v | end	410	0							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	stock	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	0	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	stock	case	r3	0	v | end	410	0							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	stock	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	0	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	block	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	block	case	r1	0	v | end	410	0							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	block	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	0	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	block	case	r2	0	v | end	410	0							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	block	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	0	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	block	case	r3	0	v | end	410	0							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	block	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	0	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	object	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	object	case	r1	0	v | end	410	408							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	object	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	419	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	object	case	r2	0	v | end	410	408							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	object	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	419	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	object	case	r3	0	v | end	410	408							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	object	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	419	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	exact	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	exact	case	r1	0	v | end	410	408							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	exact	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	419	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	exact	case	r2	0	v | end	410	408							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	exact	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	419	51						
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	exact	case	r3	0	v | end	410	408							
+dev-control-boot1	the image built from unmodified dev (run19's control-dev)	9e4d529f8d3765faec07b81a648dcdf40dc9f8e2d38b4a27482add1a8b34898b	dev's QEMU	exact	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	419	51						
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	stock	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0		0		0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	stock	case	r1	0	v | end	410	0		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	stock	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	0	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	stock	case	r2	0	v | end	410	0		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	stock	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	0	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	stock	case	r3	0	v | end	410	0		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	stock	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	0	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	block	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0		0		0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	block	case	r1	0	v | end	410	0		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	block	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	0	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	block	case	r2	0	v | end	410	0		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	block	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	0	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	block	case	r3	0	v | end	410	0		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	block	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	0	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	object	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375		0		0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	object	case	r1	0	v | end	410	408		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	object	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	419	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	object	case	r2	0	v | end	410	408		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	object	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	419	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	object	case	r3	0	v | end	410	408		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	object	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	419	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	exact	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375		0		0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	exact	case	r1	0	v | end	410	408		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	exact	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	419	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	exact	case	r2	0	v | end	410	408		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	exact	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	419	51	1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	exact	case	r3	0	v | end	410	408		1	48	0			
+witness-boot1	probe image: witness	f5a8de294e83a01af8134ef0b4d544e356e37b37404d44a57d2ecafa22729a7f	the branch's QEMU	exact	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	419	51	1	48	0			
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	stock	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0		0		0			
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	stock	case	r1	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	stock	case	r2	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	stock	case	r3	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	block	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0		0		0			
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	block	case	r1	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	block	case	r2	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	block	case	r3	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	object	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375		0		0			
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	object	case	r1	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	object	case	r2	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	object	case	r3	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	exact	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375		0		0			
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	exact	case	r1	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	exact	case	r2	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+forced-boot1	probe image: forced	9c88ec191a4de6888fc707c1968f1dac3e837201565fc8776339196035516d5d	the branch's QEMU	exact	case	r3	139	Segmentation fault				1	0	1	0x236405	cause=2 pc-code_base=0x1f1408	
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	stock	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	stock	case	r1	0	v | end	410	0							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	stock	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	0	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	stock	case	r2	0	v | end	410	0							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	stock	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	0	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	stock	case	r3	0	v | end	410	0							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	stock	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	0	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	block	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	block	case	r1	0	v | end	410	0							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	block	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	0	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	block	case	r2	0	v | end	410	0							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	block	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	0	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	block	case	r3	0	v | end	410	0							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	block	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	0	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	object	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	object	case	r1	0	v | end	410	408							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	object	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	419	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	object	case	r2	0	v | end	410	408							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	object	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	419	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	object	case	r3	0	v | end	410	408							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	object	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	419	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	exact	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	exact	case	r1	0	v | end	410	408							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	exact	refcount	r1	0	string(7) "message" refcount(51) | v | end	421	419	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	exact	case	r2	0	v | end	410	408							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	exact	refcount	r2	0	string(7) "message" refcount(51) | v | end	421	419	51						
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	exact	case	r3	0	v | end	410	408							
+proposed-boot1	probe image: proposed	5ad90d86eb3be88efd93a37fe9bb6f1f20eac9a1464fd67ae8e3e8110f3751fb	the branch's QEMU	exact	refcount	r3	0	string(7) "message" refcount(51) | v | end	421	419	51						
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	stock	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0							
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	stock	case	r1	134	Aborted	407	0							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	stock	case	r2	134	Aborted	407	0							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	stock	case	r3	134	Aborted	407	0							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	block	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	0							
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	block	case	r1	134	Aborted	407	0							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	block	case	r2	134	Aborted	407	0							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	block	case	r3	134	Aborted	407	0							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	object	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375							
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	object	case	r1	134	Aborted	407	130							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	object	case	r2	134	Aborted	407	130							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	object	case	r3	134	Aborted	407	130							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	exact	sanity		0	sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9	6375	6375							
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	exact	case	r1	134	Aborted	407	130							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	exact	case	r2	134	Aborted	407	130							ZEND_CAP_FAIL code=3 (free)
+proposed-forced-boot1	probe image: proposed, forced	6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e	the branch's QEMU	exact	case	r3	134	Aborted	407	130							ZEND_CAP_FAIL code=3 (free)

@@ -12,17 +12,16 @@ lookaside, the per-connection pool of small slots, does the same: every
 slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
 
 # Two instructions do the work. CDERIVE makes a child capability of a
-# non-linear parent, bounded to a sub-range and carrying MANAGE over its own
-# children; CREVOKE(parent, child) ends a direct child and everything below
-# it, and faults when the child is not a live direct child.
+# non-linear parent, bounded to a sub-range; CREVOKE(object) ends the object
+# and everything derived inside it, and faults when the object is not live.
+# CREVOKE takes the object alone: it names no parent and needs no right.
 #
-# memsys5Init derives the heap's lifetime from the configured heap and the
-# pool below it; the heap pointer itself carries no MANAGE, so the pool
-# needs a parent that does. memsys5MallocUnsafe returns a child of the pool
-# bounded to the request, memsys5FreeUnsafe revokes it before the buddy
-# code runs, and memsys5Shutdown revokes the pool. Split and merge are
-# unchanged: they only move indices, and memsys5 reaches every block, the
-# in-band free-list links included, through the pool.
+# memsys5Init derives the pool from the configured heap, as its child.
+# memsys5MallocUnsafe returns a child of the pool bounded to the request,
+# memsys5FreeUnsafe revokes it before the buddy code runs, and
+# memsys5Shutdown revokes the pool. Split and merge are unchanged: they only
+# move indices, and memsys5 reaches every block, the in-band free-list links
+# included, through the pool.
 #
 # The request bounds the caller. SQLite treats sqlite3MallocSize() as the
 # usable size, so memsys5 reports the request instead of the power-of-two
@@ -49,8 +48,8 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
 # case). An overrun into the pad is not caught: a CAUGHT case that becomes
 # MISSED that way is a true MISSED, pad-masked, and counted.
 #
-# setupLookaside derives the buffer's lifetime and a generation below it,
-# from a memsys5 block or a buffer the application supplied alike.
+# setupLookaside derives the lookaside's generation from the buffer, a
+# memsys5 block or a buffer the application supplied alike.
 # sqlite3DbMallocRawNN returns a child of the generation bounded to the slot
 # (lookasideIssue); sqlite3DbFreeNN revokes it before pushing the slot on the
 # free list through pStart (lookasideRelease). A new setup and the close of
@@ -70,16 +69,15 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  #ifndef SQLITE_PRIVATE
  # define SQLITE_PRIVATE static
  #endif
-@@ -15141,6 +15143,8 @@
+@@ -15141,6 +15143,7 @@
    LookasideSlot *pFree;   /* List of available buffers */
    void *pStart;           /* First byte of available memory space */
    void *pEnd;             /* First byte past end of available space */
-+  void *pBlock;           /* Sublet: the buffer's lifetime, parent of pLife */
 +  void *pLife;            /* Sublet: parent of every slot handed out */
  };
  struct LookasideSlot {
    LookasideSlot *pNext;    /* Next buffer in the list of free buffers */
-@@ -22955,6 +22959,16 @@
+@@ -22955,6 +22958,16 @@
  #ifdef SQLITE_ENABLE_MEMSYS5
  
  /*
@@ -87,24 +85,16 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
 +** (CDERIVE), and every block goes out as a child of the pool, bounded to
 +** the block.  A free revokes the caller's block (CREVOKE) before memsys5
 +** touches it: every copy of the caller's pointer dies, and a pointer that
-+** is not a live block of this pool faults.  memsys5 keeps reaching the
-+** block through the pool, so the free-list links stay in the freed block.
-+** Shutdown revokes the pool and every block below it.
++** is not live faults.  memsys5 keeps reaching the block through the pool,
++** so the free-list links stay in the freed block.  Shutdown revokes the
++** pool and every block below it.
 +*/
 +
 +/*
  ** A minimum allocation is an instance of the following structure.
  ** Larger allocations are an array of these structures where the
  ** size of the array is a power of 2.
-@@ -22994,6 +23008,7 @@
-   int szAtom;      /* Smallest possible allocation in bytes */
-   int nBlock;      /* Number of szAtom sized blocks in zPool */
-   u8 *zPool;       /* Memory available to be allocated */
-+  void *pHeap;     /* The heap's lifetime, parent of zPool */
-   
-   /*
-   ** Mutex to control access to the memory allocation subsystem.
-@@ -23027,8 +23042,48 @@
+@@ -23027,8 +23040,48 @@
    */
    u8 *aCtrl;
  
@@ -153,7 +143,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  /*
  ** Access the static variable through a macro for SQLITE_OMIT_WSD.
  */
-@@ -23101,7 +23156,7 @@
+@@ -23101,7 +23154,7 @@
    assert( p!=0 );
    i = (int)(((u8 *)p-mem5.zPool)/mem5.szAtom);
    assert( i>=0 && i<mem5.nBlock );
@@ -162,7 +152,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    return iSize;
  }
  
-@@ -23178,8 +23233,13 @@
+@@ -23178,8 +23231,13 @@
    memset(&mem5.zPool[i*mem5.szAtom], 0xAA, iFullSz);
  #endif
  
@@ -178,17 +168,17 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  }
  
  /*
-@@ -23189,6 +23249,9 @@
+@@ -23189,6 +23247,9 @@
    u32 size, iLogsize;
    int iBlock;
  
 +  /* End the caller's block (CREVOKE); faults on a pointer that is not live. */
-+  capstone_cap_revoke_child(mem5.zPool, pOld);
++  capstone_cap_release(pOld);
 +
    /* Set iBlock to the index of the block pointed to by pOld in 
    ** the array of mem5.szAtom byte blocks pointed to by mem5.zPool.
    */
-@@ -23290,7 +23353,7 @@
+@@ -23290,7 +23351,7 @@
    int nOld;
    void *p;
    assert( pPrior!=0 );
@@ -197,7 +187,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    assert( nBytes>=0 );
    if( nBytes==0 ){
      return 0;
-@@ -23315,12 +23378,14 @@
+@@ -23315,12 +23376,14 @@
  ** All allocations must be a power of two and must be expressed by a
  ** 32-bit signed integer.  Hence the largest allocation is 0x40000000
  ** or 1073741824 bytes.
@@ -215,33 +205,32 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  }
  
  /*
-@@ -23373,9 +23438,12 @@
+@@ -23373,9 +23436,11 @@
      mem5.szAtom = mem5.szAtom << 1;
    }
  
 -  mem5.nBlock = (nByte / (mem5.szAtom+sizeof(u8)));
 -  mem5.zPool = zByte;
 +  mem5.nBlock = ((nByte-8) / (mem5.szAtom+sizeof(u8)+sizeof(u32)));
-+  mem5.pHeap = capstone_cap_derive(zByte,
++  mem5.zPool = capstone_cap_derive(zByte,
 +      (uptr)zByte - __builtin_capstone_cap_get_base(zByte), nByte);
-+  mem5.zPool = capstone_cap_derive(mem5.pHeap, 0, nByte);
    mem5.aCtrl = (u8 *)&mem5.zPool[mem5.nBlock*mem5.szAtom];
 +  mem5.aReq = (u32 *)&mem5.aCtrl[(mem5.nBlock+3)&~3];
  
    for(ii=0; ii<=LOGMAX; ii++){
      mem5.aiFreelist[ii] = -1;
-@@ -23406,6 +23474,10 @@
+@@ -23406,6 +23471,10 @@
  static void memsys5Shutdown(void *NotUsed){
    UNUSED_PARAMETER(NotUsed);
    mem5.mutex = 0;
 +  if( mem5.zPool ){
-+    capstone_cap_revoke_child(mem5.pHeap, mem5.zPool);
++    capstone_cap_release(mem5.zPool);
 +    mem5.zPool = 0;
 +  }
    return;
  }
  
-@@ -25412,6 +25484,20 @@
+@@ -25412,6 +25481,20 @@
  static int isLookaside(sqlite3 *db, void *p){
    return SQLITE_WITHIN(p, db->lookaside.pStart, db->lookaside.pEnd);
  }
@@ -256,13 +245,13 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
 +      (unsigned long)((u8*)pBuf - (u8*)db->lookaside.pStart), db->lookaside.sz);
 +}
 +static LookasideSlot *lookasideRelease(sqlite3 *db, void *p){
-+  capstone_cap_revoke_child(db->lookaside.pLife, p);
++  capstone_cap_release(p);
 +  return (LookasideSlot*)&((u8*)db->lookaside.pStart)[(u8*)p-(u8*)db->lookaside.pStart];
 +}
  #else
  #define isLookaside(A,B) 0
  #endif
-@@ -25488,7 +25574,7 @@
+@@ -25488,7 +25571,7 @@
        return;
      }
      if( isLookaside(db, p) ){
@@ -271,7 +260,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  #ifdef SQLITE_DEBUG
        /* Trash all content in the buffer being freed */
        memset(p, 0xaa, db->lookaside.sz);
-@@ -25658,11 +25744,11 @@
+@@ -25658,11 +25741,11 @@
      }else if( (pBuf = db->lookaside.pFree)!=0 ){
        db->lookaside.pFree = pBuf->pNext;
        db->lookaside.anStat[0]++;
@@ -285,21 +274,21 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
      }else{
        db->lookaside.anStat[2]++;
      }
-@@ -144023,6 +144109,13 @@
+@@ -144023,6 +144106,13 @@
  ** If pStart is not NULL then it is sz*cnt bytes of memory to use for
  ** the lookaside memory.
  */
 +/* End every slot this connection's lookaside has handed out. */
 +SQLITE_PRIVATE void sqlite3LookasideEnd(sqlite3 *db){
 +  if( db->lookaside.pLife ){
-+    capstone_cap_revoke_child(db->lookaside.pBlock, db->lookaside.pLife);
++    capstone_cap_release(db->lookaside.pLife);
 +    db->lookaside.pLife = 0;
 +  }
 +}
  static int setupLookaside(sqlite3 *db, void *pBuf, int sz, int cnt){
  #ifndef SQLITE_OMIT_LOOKASIDE
    void *pStart;
-@@ -144030,6 +144123,7 @@
+@@ -144030,6 +144120,7 @@
    if( sqlite3LookasideUsed(db,0)>0 ){
      return SQLITE_BUSY;
    }
@@ -307,22 +296,20 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    /* Free any existing lookaside buffer for this handle before
    ** allocating a new one so we don't have to have space for 
    ** both at the same time.
-@@ -144072,6 +144166,14 @@
+@@ -144072,6 +144163,12 @@
      db->lookaside.pEnd = p;
      db->lookaside.bDisable = 0;
      db->lookaside.bMalloced = pBuf==0 ?1:0;
 +    /* Q-15: sz*cnt rounded up to its granule (tail pad only), inside pStart,
 +    ** whose memsys5 block was rounded the same way. */
-+    db->lookaside.pBlock = capstone_cap_derive(pStart,
++    db->lookaside.pLife = capstone_cap_derive(pStart,
 +        (uptr)pStart - __builtin_capstone_cap_get_base(pStart),
-+        capstone_repr_round((u64)sz*cnt));
-+    db->lookaside.pLife = capstone_cap_derive(db->lookaside.pBlock, 0,
 +        capstone_repr_round((u64)sz*cnt));
 +    capstoneQ15Note(capstone_repr_round((u64)sz*cnt) - (u64)sz*cnt);
    }else{
      db->lookaside.pStart = db;
      db->lookaside.pEnd = db;
-@@ -144599,6 +144701,7 @@
+@@ -144599,6 +144696,7 @@
    db->magic = SQLITE_MAGIC_CLOSED;
    sqlite3_mutex_free(db->mutex);
    assert( sqlite3LookasideUsed(db,0)==0 );

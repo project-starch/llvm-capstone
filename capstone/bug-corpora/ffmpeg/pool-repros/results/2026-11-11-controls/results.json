@@ -1,0 +1,838 @@
+{
+  "pre_registration": "capstone/docs/plans/2026-10-11-nested-lifetime-controls.md",
+  "application": "FFmpeg 9.0.1",
+  "nested_allocator": "AVBufferPool entries: av_buffer_pool_get; released by av_buffer_unref, which returns the entry to its pool (pool_release_buffer)",
+  "protected_configuration": "buffer-pool port patch 0003 on 0001 (FFPOOL_SUBLET=ON)",
+  "release_configuration": "the same source without 0003 (FFPOOL_SUBLET=OFF)",
+  "revision": {
+    "revision": "one-operand-crevoke-crenew 59201bdf2, QEMU ea57497908",
+    "patch_0003_sha256": "92803845f626df3b1651e910b45830d2a83bf97dbbed05592a0c485fedaad23f",
+    "control_files_sha256": {
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/91_ctl_parent_entry_reference/case.c": "8d195e8fd5133a49af70ab0d8132675343841113c1d106498795fb30579e55d9",
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/91_ctl_parent_entry_reference/case.json": "fee3d7c0c36ca7dcc589eb961c0cae38a7d4cb0af5b2221ab9e027a0e883a01e",
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/92_ctl_sibling_entry/case.c": "0c32dfe7958089d9dde9d3fea010baec38d33d0803fb58f527f4eeeacd5cf0ce",
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/92_ctl_sibling_entry/case.json": "75a97015a0082aa7c4c7f9dd755a448696a26bf283ef2969d1ee7a1a5854c49a",
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c": "14338f52d884cb4c48dbaa8be3bc65f6e0811d02471f6748bce8128bf84749c7",
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.json": "db65f19a4863abfa1bf6a297b9217d1ab3cd04e1925c7f180b786c6550a35cfc",
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/README.md": "4a9e6c9d5e8a441200586ffcee7a2b5e67d2095375e1f2ffa6f167fcd32d40f8",
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/shared/build-controls.sh": "3c1c10948ea8290fb147958ddfa555b7e3a22bcb963e3bc2cc7c625cf08614e5",
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/shared/ctl.h": "c56f27f51d798d36c179d2cdc9a3c04673976a30c625871fadaf7518a920378e",
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/shared/driver.c": "e11ef21614dfbbe40e133eb495bc5289db7977ac325077aa97f639892cf0ecc1",
+      "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/shared/run-controls.py": "325074f2fd0d48ebc637c1de5f3bc073d9d9738c35c2b93d3bb755c96ede9df4"
+    },
+    "platform_options": "CAPSTONE_QEMU_CPU_EXTRA=x-capstone-test-csrs=true,x-capstone-exact-bounds=true; module loaded without parameters (unpinned=0, supervisor_slots=1)",
+    "repetitions": "2 boot(s): ['boot-protected-f1', 'boot-release-f1']; the 2026-10-11 record ran three per arm"
+  },
+  "boots": [
+    {
+      "arm": "protected",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "boot_wall_s": 20.5,
+      "boot_completed": true,
+      "configuration": {
+        "FFPOOL_SUBLET": "ON",
+        "CTL_PROTECTED": 1,
+        "CMAKE_BUILD_TYPE": "Debug",
+        "control_cflags": "-std=gnu11 -O1 -g -DFF2_SYSTEM_MEMORY",
+        "pool": "av_buffer_pool_init(64, NULL): entries from av_buffer_alloc"
+      },
+      "images": {
+        "ctl-91": "b46ef27add305aac0dce2d35bbcefe3627a99063171c0ff92f6c4d2b1afc211b",
+        "ctl-92": "e31dc291f47aaf60c5b853410c7b3b32d1ea7feebef0b6271ac1a7f499faf1c5",
+        "ctl-93": "8d2d458cbd875e903fca2b48184b3c8bc88a47e19669962285d2350afa8c8ad2"
+      },
+      "library_sha256": "1c527d40d1c19c301522c9df0a6414290df4b42223beedf791bde71aaeb970aa",
+      "platform_controls_sha256": "0b90cbad4daca6aa2ac704295c5654563670d29770cbd40c7a4591eb97958d17",
+      "platform": {
+        "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+        "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+        "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+        "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+        "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+        "runner": "325074f2fd0d48ebc637c1de5f3bc073d9d9738c35c2b93d3bb755c96ede9df4",
+        "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+        "profile": "virtual"
+      },
+      "sdk": {
+        "capstone-cc": "d98c252e5d8acb6998173462e77513f34115fd20e8b7ac1f1683ea0266fa0c52",
+        "libapplication-runtime.a": "e681d37071b5a86a07d1a4ddbb4f1914df7918c55da7cbdcb543878d58e0f7b2",
+        "libcapstone-application-builtins.a": "a11a1cb02262f3ba62aa3d000bea608cad50cba040cc16c641d920952bbe6ed9",
+        "libc": "f4c80123c8aef4d84cdb5f513c89465c1e2010b63fb407054293a38a0645747d"
+      },
+      "platform_controls": {
+        "bounds-malloc": {
+          "observed": "fault",
+          "evidence": "capstone-exec: domain fault cause=28 pc=0x3f82e0dd34 address=0x3f82e8f050 ra=0x3f82e0dfb0 fp=0x3f82cfff60 entry=0x3f82e007d4 code=0x3f82e00000-0x3f82e80000 last"
+        },
+        "uaf-malloc": {
+          "observed": "fault",
+          "evidence": "capstone-exec: domain fault cause=25 pc=0x3fba58dd68 address=0x3fba573040 ra=0x3fba58e100 fp=0x3fba4fff60 entry=0x3fba5807d4 code=0x3fba580000-0x3fba600000 last"
+        }
+      },
+      "runs": {
+        "91-run": {
+          "header": "case=91 control=parent arm=protected mode=run",
+          "pointers": {
+            "A.data": {
+              "cursor": "0x3f9ae3f440",
+              "base": "0x3f9ae3f440",
+              "end": "0x3f9ae3f480"
+            },
+            "entry.data": {
+              "cursor": "0x3f9ae3f440",
+              "base": "0x3f9ae3f440",
+              "end": "0x3f9ae3f480"
+            },
+            "entry.data-after-release": {
+              "cursor": "0x3f9ae3f440",
+              "base": "0x3f9ae3f440",
+              "end": "0x3f9ae3f480"
+            },
+            "C.data": {
+              "cursor": "0x3f9ae3f440",
+              "base": "0x3f9ae3f440",
+              "end": "0x3f9ae3f480"
+            }
+          },
+          "accesses": [
+            {
+              "id": "parent-read",
+              "op": "read",
+              "ref": "entry->data",
+              "call_site": "91_ctl_parent_entry_reference/case.c:56",
+              "done": "mismatches=0 expect=0x5a",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/91_ctl_parent_entry_reference/case.c:27"
+            },
+            {
+              "id": "parent-write",
+              "op": "write",
+              "ref": "entry->data",
+              "call_site": "91_ctl_parent_entry_reference/case.c:61",
+              "done": "value=0xc3",
+              "probe": "write_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/91_ctl_parent_entry_reference/case.c:34"
+            },
+            {
+              "id": "parent-readback",
+              "op": "read",
+              "ref": "entry->data",
+              "call_site": "91_ctl_parent_entry_reference/case.c:65",
+              "done": "mismatches=0 expect=0xc3",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/91_ctl_parent_entry_reference/case.c:27"
+            },
+            {
+              "id": "successor-read",
+              "op": "read",
+              "ref": "C->data",
+              "call_site": "91_ctl_parent_entry_reference/case.c:77",
+              "done": "mismatches=0 expect=0xc3",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/91_ctl_parent_entry_reference/case.c:27"
+            }
+          ],
+          "checks": [
+            "CTL-CHECK parent ok"
+          ],
+          "exit": {
+            "kind": "exit",
+            "value": 0
+          },
+          "fault": null,
+          "lines": [
+            "case=91 control=parent arm=protected mode=run",
+            "CTL-PTR A.data cursor=0x3f9ae3f440 base=0x3f9ae3f440 end=0x3f9ae3f480",
+            "CTL-PTR entry.data cursor=0x3f9ae3f440 base=0x3f9ae3f440 end=0x3f9ae3f480",
+            "CTL-PTR entry.data-after-release cursor=0x3f9ae3f440 base=0x3f9ae3f440 end=0x3f9ae3f480",
+            "CTL-STEP released A to the pool",
+            "CTL-ACCESS id=parent-read op=read ref=entry->data site=91_ctl_parent_entry_reference/case.c:56",
+            "CTL-ACCESS-DONE id=parent-read mismatches=0 expect=0x5a",
+            "CTL-ACCESS id=parent-write op=write ref=entry->data site=91_ctl_parent_entry_reference/case.c:61",
+            "CTL-ACCESS-DONE id=parent-write value=0xc3",
+            "CTL-ACCESS id=parent-readback op=read ref=entry->data site=91_ctl_parent_entry_reference/case.c:65",
+            "CTL-ACCESS-DONE id=parent-readback mismatches=0 expect=0xc3",
+            "CTL-PTR C.data cursor=0x3f9ae3f440 base=0x3f9ae3f440 end=0x3f9ae3f480",
+            "CTL-ACCESS id=successor-read op=read ref=C->data site=91_ctl_parent_entry_reference/case.c:77",
+            "CTL-ACCESS-DONE id=successor-read mismatches=0 expect=0xc3",
+            "CTL-CHECK parent ok",
+            "CTL-RESULT completed",
+            "capstone-exec: exit image=./images/ctl-91 sha256=b46ef27add305aac0dce2d35bbcefe3627a99063171c0ff92f6c4d2b1afc211b"
+          ],
+          "outcome": "completed",
+          "argv": [
+            "run",
+            "91"
+          ],
+          "image": "ctl-91"
+        },
+        "92-run": {
+          "header": "case=92 control=sibling arm=protected mode=run",
+          "pointers": {
+            "A.data": {
+              "cursor": "0x3f9694b440",
+              "base": "0x3f9694b440",
+              "end": "0x3f9694b480"
+            },
+            "B.data": {
+              "cursor": "0x3f9694b4c0",
+              "base": "0x3f9694b4c0",
+              "end": "0x3f9694b500"
+            }
+          },
+          "accesses": [
+            {
+              "id": "sibling-read",
+              "op": "read",
+              "ref": "B->data",
+              "call_site": "92_ctl_sibling_entry/case.c:41",
+              "done": "mismatches=0 expect=0xb2",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/92_ctl_sibling_entry/case.c:14"
+            },
+            {
+              "id": "sibling-write",
+              "op": "write",
+              "ref": "B->data",
+              "call_site": "92_ctl_sibling_entry/case.c:46",
+              "done": "value=0xb7",
+              "probe": "write_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/92_ctl_sibling_entry/case.c:21"
+            },
+            {
+              "id": "sibling-readback",
+              "op": "read",
+              "ref": "B->data",
+              "call_site": "92_ctl_sibling_entry/case.c:50",
+              "done": "mismatches=0 expect=0xb7",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/92_ctl_sibling_entry/case.c:14"
+            }
+          ],
+          "checks": [
+            "CTL-CHECK sibling ok, B intact"
+          ],
+          "exit": {
+            "kind": "exit",
+            "value": 0
+          },
+          "fault": null,
+          "lines": [
+            "case=92 control=sibling arm=protected mode=run",
+            "CTL-PTR A.data cursor=0x3f9694b440 base=0x3f9694b440 end=0x3f9694b480",
+            "CTL-PTR B.data cursor=0x3f9694b4c0 base=0x3f9694b4c0 end=0x3f9694b500",
+            "CTL-STEP released A to the pool",
+            "CTL-ACCESS id=sibling-read op=read ref=B->data site=92_ctl_sibling_entry/case.c:41",
+            "CTL-ACCESS-DONE id=sibling-read mismatches=0 expect=0xb2",
+            "CTL-ACCESS id=sibling-write op=write ref=B->data site=92_ctl_sibling_entry/case.c:46",
+            "CTL-ACCESS-DONE id=sibling-write value=0xb7",
+            "CTL-ACCESS id=sibling-readback op=read ref=B->data site=92_ctl_sibling_entry/case.c:50",
+            "CTL-ACCESS-DONE id=sibling-readback mismatches=0 expect=0xb7",
+            "CTL-CHECK sibling ok, B intact",
+            "CTL-RESULT completed",
+            "capstone-exec: exit image=./images/ctl-92 sha256=e31dc291f47aaf60c5b853410c7b3b32d1ea7feebef0b6271ac1a7f499faf1c5"
+          ],
+          "outcome": "completed",
+          "argv": [
+            "run",
+            "92"
+          ],
+          "image": "ctl-92"
+        },
+        "93-run": {
+          "header": "case=93 control=successor arm=protected mode=run",
+          "pointers": {
+            "A.data": {
+              "cursor": "0x3fbf053440",
+              "base": "0x3fbf053440",
+              "end": "0x3fbf053480"
+            },
+            "C.data": {
+              "cursor": "0x3fbf053440",
+              "base": "0x3fbf053440",
+              "end": "0x3fbf053480"
+            }
+          },
+          "accesses": [
+            {
+              "id": "successor-write",
+              "op": "write",
+              "ref": "C->data",
+              "call_site": "93_ctl_successor_entry/case.c:70",
+              "done": "value=0x77",
+              "probe": "write_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:27"
+            },
+            {
+              "id": "successor-read",
+              "op": "read",
+              "ref": "C->data",
+              "call_site": "93_ctl_successor_entry/case.c:74",
+              "done": "mismatches=0 expect=0x77",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:20"
+            }
+          ],
+          "checks": [
+            "CTL-CHECK successor-address A=0x3fbf053440 C=0x3fbf053440 gets=1 equal",
+            "CTL-CHECK successor ok"
+          ],
+          "exit": {
+            "kind": "exit",
+            "value": 0
+          },
+          "fault": null,
+          "lines": [
+            "case=93 control=successor arm=protected mode=run",
+            "CTL-PTR A.data cursor=0x3fbf053440 base=0x3fbf053440 end=0x3fbf053480",
+            "CTL-STEP released A to the pool",
+            "CTL-PTR C.data cursor=0x3fbf053440 base=0x3fbf053440 end=0x3fbf053480",
+            "CTL-CHECK successor-address A=0x3fbf053440 C=0x3fbf053440 gets=1 equal",
+            "CTL-ACCESS id=successor-write op=write ref=C->data site=93_ctl_successor_entry/case.c:70",
+            "CTL-ACCESS-DONE id=successor-write value=0x77",
+            "CTL-ACCESS id=successor-read op=read ref=C->data site=93_ctl_successor_entry/case.c:74",
+            "CTL-ACCESS-DONE id=successor-read mismatches=0 expect=0x77",
+            "CTL-CHECK successor ok",
+            "CTL-RESULT completed",
+            "capstone-exec: exit image=./images/ctl-93 sha256=8d2d458cbd875e903fca2b48184b3c8bc88a47e19669962285d2350afa8c8ad2"
+          ],
+          "outcome": "completed",
+          "argv": [
+            "run",
+            "93"
+          ],
+          "image": "ctl-93"
+        },
+        "93-stale": {
+          "header": "case=93 control=successor arm=protected mode=stale",
+          "pointers": {
+            "A.data": {
+              "cursor": "0x3f80827440",
+              "base": "0x3f80827440",
+              "end": "0x3f80827480"
+            },
+            "C.data": {
+              "cursor": "0x3f80827440",
+              "base": "0x3f80827440",
+              "end": "0x3f80827480"
+            }
+          },
+          "accesses": [
+            {
+              "id": "successor-write",
+              "op": "write",
+              "ref": "C->data",
+              "call_site": "93_ctl_successor_entry/case.c:70",
+              "done": "value=0x77",
+              "probe": "write_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:27"
+            },
+            {
+              "id": "successor-read",
+              "op": "read",
+              "ref": "C->data",
+              "call_site": "93_ctl_successor_entry/case.c:74",
+              "done": "mismatches=0 expect=0x77",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:20"
+            },
+            {
+              "id": "stale-read",
+              "op": "read",
+              "ref": "A_data (A's pointer, held across the return)",
+              "call_site": "93_ctl_successor_entry/case.c:80",
+              "done": null,
+              "probe": "stale_read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:33"
+            }
+          ],
+          "checks": [
+            "CTL-CHECK successor-address A=0x3f80827440 C=0x3f80827440 gets=1 equal"
+          ],
+          "exit": {
+            "kind": "signal",
+            "value": 11,
+            "fault": "capstone-exec: domain fault cause=25 pc=0x3f8070dea4 address=0x3f80827440 ra=0x3f8070e478 fp=0x3f805ffee0 entry=0x3f807007d4 code=0x3f80700000-0x3f80800000 last=0x42 preparing=0x42 sha256=8d2d458cbd875e903fca2b48184b3c8bc88a47e19669962285d2350afa8c8ad2 image=./images/ctl-93 chain=0x3f8070eb60,0x3f80700a38,0x3f807000a8"
+          },
+          "fault": {
+            "cause": 25,
+            "pc": "0x3f8070dea4",
+            "address": "0x3f80827440",
+            "link_pc": "0x1dea4",
+            "symbol": "stale_read_probe",
+            "offset": 32,
+            "source": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:36",
+            "line": "capstone-exec: domain fault cause=25 pc=0x3f8070dea4 address=0x3f80827440 ra=0x3f8070e478 fp=0x3f805ffee0 entry=0x3f807007d4 code=0x3f80700000-0x3f80800000 last=0x42 preparing=0x42 sha256=8d2d458cbd87",
+            "in_flight_access": "stale-read"
+          },
+          "lines": [
+            "case=93 control=successor arm=protected mode=stale",
+            "CTL-PTR A.data cursor=0x3f80827440 base=0x3f80827440 end=0x3f80827480",
+            "CTL-STEP released A to the pool",
+            "CTL-PTR C.data cursor=0x3f80827440 base=0x3f80827440 end=0x3f80827480",
+            "CTL-CHECK successor-address A=0x3f80827440 C=0x3f80827440 gets=1 equal",
+            "CTL-ACCESS id=successor-write op=write ref=C->data site=93_ctl_successor_entry/case.c:70",
+            "CTL-ACCESS-DONE id=successor-write value=0x77",
+            "CTL-ACCESS id=successor-read op=read ref=C->data site=93_ctl_successor_entry/case.c:74",
+            "CTL-ACCESS-DONE id=successor-read mismatches=0 expect=0x77",
+            "CTL-ACCESS id=stale-read op=read ref=A_data (A's pointer, held across the return) site=93_ctl_successor_entry/case.c:80",
+            "capstone-exec: domain fault cause=25 pc=0x3f8070dea4 address=0x3f80827440 ra=0x3f8070e478 fp=0x3f805ffee0 entry=0x3f807007d4 code=0x3f80700000-0x3f80800000 last=0x42 preparing=0x42 sha256=8d2d458cbd875e903fca2b48184b3c8bc88a47e19669962285d2350afa8c8ad2 image=./images/ctl-93 chain=0x3f8070eb60,0x3f80700a38,0x3f807000a8"
+          ],
+          "outcome": "fault",
+          "argv": [
+            "stale",
+            "93"
+          ],
+          "image": "ctl-93"
+        }
+      }
+    },
+    {
+      "arm": "release",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "boot_wall_s": 17.3,
+      "boot_completed": true,
+      "configuration": {
+        "FFPOOL_SUBLET": "OFF",
+        "CTL_PROTECTED": 0,
+        "CMAKE_BUILD_TYPE": "Debug",
+        "control_cflags": "-std=gnu11 -O1 -g -DFF2_SYSTEM_MEMORY",
+        "pool": "av_buffer_pool_init(64, NULL): entries from av_buffer_alloc"
+      },
+      "images": {
+        "ctl-91": "6368203ff2e9794770b5f6c228b02301166252bf0f9e9f5de9266dd9415303b0",
+        "ctl-92": "b695df809aaef2acb91e77d40697ec0d753fb1ff7ff365571e630945cfa9fdfe",
+        "ctl-93": "9fbff68380dabd2ad28fef49bd0f4a9c9f9e5044747c3b49169ed408faebc8a6"
+      },
+      "library_sha256": "3256ae59e73983bfae3a5d322eaf52c0303a8ed61947d638fbb38aa97a91ee9f",
+      "platform_controls_sha256": "0b90cbad4daca6aa2ac704295c5654563670d29770cbd40c7a4591eb97958d17",
+      "platform": {
+        "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+        "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+        "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+        "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+        "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+        "runner": "325074f2fd0d48ebc637c1de5f3bc073d9d9738c35c2b93d3bb755c96ede9df4",
+        "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+        "profile": "virtual"
+      },
+      "sdk": {
+        "capstone-cc": "d98c252e5d8acb6998173462e77513f34115fd20e8b7ac1f1683ea0266fa0c52",
+        "libapplication-runtime.a": "e681d37071b5a86a07d1a4ddbb4f1914df7918c55da7cbdcb543878d58e0f7b2",
+        "libcapstone-application-builtins.a": "a11a1cb02262f3ba62aa3d000bea608cad50cba040cc16c641d920952bbe6ed9",
+        "libc": "f4c80123c8aef4d84cdb5f513c89465c1e2010b63fb407054293a38a0645747d"
+      },
+      "platform_controls": {
+        "bounds-malloc": {
+          "observed": "fault",
+          "evidence": "capstone-exec: domain fault cause=28 pc=0x3f8670dd34 address=0x3f867b3050 ra=0x3f8670dfb0 fp=0x3f865fff60 entry=0x3f867007d4 code=0x3f86700000-0x3f86780000 last"
+        },
+        "uaf-malloc": {
+          "observed": "fault",
+          "evidence": "capstone-exec: domain fault cause=25 pc=0x3f9ea8dd68 address=0x3f9eb1f040 ra=0x3f9ea8e100 fp=0x3f9e9fff60 entry=0x3f9ea807d4 code=0x3f9ea80000-0x3f9eb00000 last"
+        }
+      },
+      "runs": {
+        "91-run": {
+          "header": "case=91 control=parent arm=release mode=run",
+          "pointers": {
+            "A.data": {
+              "cursor": "0x3fb5d2f440",
+              "base": "0x3fb5d2f440",
+              "end": "0x3fb5d2f480"
+            },
+            "entry.data": {
+              "cursor": "0x3fb5d2f440",
+              "base": "0x3fb5d2f440",
+              "end": "0x3fb5d2f480"
+            },
+            "entry.data-after-release": {
+              "cursor": "0x3fb5d2f440",
+              "base": "0x3fb5d2f440",
+              "end": "0x3fb5d2f480"
+            },
+            "C.data": {
+              "cursor": "0x3fb5d2f440",
+              "base": "0x3fb5d2f440",
+              "end": "0x3fb5d2f480"
+            }
+          },
+          "accesses": [
+            {
+              "id": "parent-read",
+              "op": "read",
+              "ref": "entry->data",
+              "call_site": "91_ctl_parent_entry_reference/case.c:56",
+              "done": "mismatches=0 expect=0x5a",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/91_ctl_parent_entry_reference/case.c:27"
+            },
+            {
+              "id": "parent-write",
+              "op": "write",
+              "ref": "entry->data",
+              "call_site": "91_ctl_parent_entry_reference/case.c:61",
+              "done": "value=0xc3",
+              "probe": "write_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/91_ctl_parent_entry_reference/case.c:34"
+            },
+            {
+              "id": "parent-readback",
+              "op": "read",
+              "ref": "entry->data",
+              "call_site": "91_ctl_parent_entry_reference/case.c:65",
+              "done": "mismatches=0 expect=0xc3",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/91_ctl_parent_entry_reference/case.c:27"
+            },
+            {
+              "id": "successor-read",
+              "op": "read",
+              "ref": "C->data",
+              "call_site": "91_ctl_parent_entry_reference/case.c:77",
+              "done": "mismatches=0 expect=0xc3",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/91_ctl_parent_entry_reference/case.c:27"
+            }
+          ],
+          "checks": [
+            "CTL-CHECK parent ok"
+          ],
+          "exit": {
+            "kind": "exit",
+            "value": 0
+          },
+          "fault": null,
+          "lines": [
+            "case=91 control=parent arm=release mode=run",
+            "CTL-PTR A.data cursor=0x3fb5d2f440 base=0x3fb5d2f440 end=0x3fb5d2f480",
+            "CTL-PTR entry.data cursor=0x3fb5d2f440 base=0x3fb5d2f440 end=0x3fb5d2f480",
+            "CTL-PTR entry.data-after-release cursor=0x3fb5d2f440 base=0x3fb5d2f440 end=0x3fb5d2f480",
+            "CTL-STEP released A to the pool",
+            "CTL-ACCESS id=parent-read op=read ref=entry->data site=91_ctl_parent_entry_reference/case.c:56",
+            "CTL-ACCESS-DONE id=parent-read mismatches=0 expect=0x5a",
+            "CTL-ACCESS id=parent-write op=write ref=entry->data site=91_ctl_parent_entry_reference/case.c:61",
+            "CTL-ACCESS-DONE id=parent-write value=0xc3",
+            "CTL-ACCESS id=parent-readback op=read ref=entry->data site=91_ctl_parent_entry_reference/case.c:65",
+            "CTL-ACCESS-DONE id=parent-readback mismatches=0 expect=0xc3",
+            "CTL-PTR C.data cursor=0x3fb5d2f440 base=0x3fb5d2f440 end=0x3fb5d2f480",
+            "CTL-ACCESS id=successor-read op=read ref=C->data site=91_ctl_parent_entry_reference/case.c:77",
+            "CTL-ACCESS-DONE id=successor-read mismatches=0 expect=0xc3",
+            "CTL-CHECK parent ok",
+            "CTL-RESULT completed",
+            "capstone-exec: exit image=./images/ctl-91 sha256=6368203ff2e9794770b5f6c228b02301166252bf0f9e9f5de9266dd9415303b0"
+          ],
+          "outcome": "completed",
+          "argv": [
+            "run",
+            "91"
+          ],
+          "image": "ctl-91"
+        },
+        "92-run": {
+          "header": "case=92 control=sibling arm=release mode=run",
+          "pointers": {
+            "A.data": {
+              "cursor": "0x3f8fef3440",
+              "base": "0x3f8fef3440",
+              "end": "0x3f8fef3480"
+            },
+            "B.data": {
+              "cursor": "0x3f8fef34c0",
+              "base": "0x3f8fef34c0",
+              "end": "0x3f8fef3500"
+            }
+          },
+          "accesses": [
+            {
+              "id": "sibling-read",
+              "op": "read",
+              "ref": "B->data",
+              "call_site": "92_ctl_sibling_entry/case.c:41",
+              "done": "mismatches=0 expect=0xb2",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/92_ctl_sibling_entry/case.c:14"
+            },
+            {
+              "id": "sibling-write",
+              "op": "write",
+              "ref": "B->data",
+              "call_site": "92_ctl_sibling_entry/case.c:46",
+              "done": "value=0xb7",
+              "probe": "write_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/92_ctl_sibling_entry/case.c:21"
+            },
+            {
+              "id": "sibling-readback",
+              "op": "read",
+              "ref": "B->data",
+              "call_site": "92_ctl_sibling_entry/case.c:50",
+              "done": "mismatches=0 expect=0xb7",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/92_ctl_sibling_entry/case.c:14"
+            }
+          ],
+          "checks": [
+            "CTL-CHECK sibling ok, B intact"
+          ],
+          "exit": {
+            "kind": "exit",
+            "value": 0
+          },
+          "fault": null,
+          "lines": [
+            "case=92 control=sibling arm=release mode=run",
+            "CTL-PTR A.data cursor=0x3f8fef3440 base=0x3f8fef3440 end=0x3f8fef3480",
+            "CTL-PTR B.data cursor=0x3f8fef34c0 base=0x3f8fef34c0 end=0x3f8fef3500",
+            "CTL-STEP released A to the pool",
+            "CTL-ACCESS id=sibling-read op=read ref=B->data site=92_ctl_sibling_entry/case.c:41",
+            "CTL-ACCESS-DONE id=sibling-read mismatches=0 expect=0xb2",
+            "CTL-ACCESS id=sibling-write op=write ref=B->data site=92_ctl_sibling_entry/case.c:46",
+            "CTL-ACCESS-DONE id=sibling-write value=0xb7",
+            "CTL-ACCESS id=sibling-readback op=read ref=B->data site=92_ctl_sibling_entry/case.c:50",
+            "CTL-ACCESS-DONE id=sibling-readback mismatches=0 expect=0xb7",
+            "CTL-CHECK sibling ok, B intact",
+            "CTL-RESULT completed",
+            "capstone-exec: exit image=./images/ctl-92 sha256=b695df809aaef2acb91e77d40697ec0d753fb1ff7ff365571e630945cfa9fdfe"
+          ],
+          "outcome": "completed",
+          "argv": [
+            "run",
+            "92"
+          ],
+          "image": "ctl-92"
+        },
+        "93-run": {
+          "header": "case=93 control=successor arm=release mode=run",
+          "pointers": {
+            "A.data": {
+              "cursor": "0x3f7f747440",
+              "base": "0x3f7f747440",
+              "end": "0x3f7f747480"
+            },
+            "C.data": {
+              "cursor": "0x3f7f747440",
+              "base": "0x3f7f747440",
+              "end": "0x3f7f747480"
+            }
+          },
+          "accesses": [
+            {
+              "id": "successor-write",
+              "op": "write",
+              "ref": "C->data",
+              "call_site": "93_ctl_successor_entry/case.c:70",
+              "done": "value=0x77",
+              "probe": "write_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:27"
+            },
+            {
+              "id": "successor-read",
+              "op": "read",
+              "ref": "C->data",
+              "call_site": "93_ctl_successor_entry/case.c:74",
+              "done": "mismatches=0 expect=0x77",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:20"
+            }
+          ],
+          "checks": [
+            "CTL-CHECK successor-address A=0x3f7f747440 C=0x3f7f747440 gets=1 equal",
+            "CTL-CHECK successor ok"
+          ],
+          "exit": {
+            "kind": "exit",
+            "value": 0
+          },
+          "fault": null,
+          "lines": [
+            "case=93 control=successor arm=release mode=run",
+            "CTL-PTR A.data cursor=0x3f7f747440 base=0x3f7f747440 end=0x3f7f747480",
+            "CTL-STEP released A to the pool",
+            "CTL-PTR C.data cursor=0x3f7f747440 base=0x3f7f747440 end=0x3f7f747480",
+            "CTL-CHECK successor-address A=0x3f7f747440 C=0x3f7f747440 gets=1 equal",
+            "CTL-ACCESS id=successor-write op=write ref=C->data site=93_ctl_successor_entry/case.c:70",
+            "CTL-ACCESS-DONE id=successor-write value=0x77",
+            "CTL-ACCESS id=successor-read op=read ref=C->data site=93_ctl_successor_entry/case.c:74",
+            "CTL-ACCESS-DONE id=successor-read mismatches=0 expect=0x77",
+            "CTL-CHECK successor ok",
+            "CTL-RESULT completed",
+            "capstone-exec: exit image=./images/ctl-93 sha256=9fbff68380dabd2ad28fef49bd0f4a9c9f9e5044747c3b49169ed408faebc8a6"
+          ],
+          "outcome": "completed",
+          "argv": [
+            "run",
+            "93"
+          ],
+          "image": "ctl-93"
+        },
+        "93-stale": {
+          "header": "case=93 control=successor arm=release mode=stale",
+          "pointers": {
+            "A.data": {
+              "cursor": "0x3f98a93440",
+              "base": "0x3f98a93440",
+              "end": "0x3f98a93480"
+            },
+            "C.data": {
+              "cursor": "0x3f98a93440",
+              "base": "0x3f98a93440",
+              "end": "0x3f98a93480"
+            }
+          },
+          "accesses": [
+            {
+              "id": "successor-write",
+              "op": "write",
+              "ref": "C->data",
+              "call_site": "93_ctl_successor_entry/case.c:70",
+              "done": "value=0x77",
+              "probe": "write_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:27"
+            },
+            {
+              "id": "successor-read",
+              "op": "read",
+              "ref": "C->data",
+              "call_site": "93_ctl_successor_entry/case.c:74",
+              "done": "mismatches=0 expect=0x77",
+              "probe": "read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:20"
+            },
+            {
+              "id": "stale-read",
+              "op": "read",
+              "ref": "A_data (A's pointer, held across the return)",
+              "call_site": "93_ctl_successor_entry/case.c:80",
+              "done": "mismatches=0 expect=0x77 (C's data)",
+              "probe": "stale_read_probe",
+              "probe_function_at": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:33"
+            }
+          ],
+          "checks": [
+            "CTL-CHECK successor-address A=0x3f98a93440 C=0x3f98a93440 gets=1 equal",
+            "CTL-CHECK successor ok"
+          ],
+          "exit": {
+            "kind": "exit",
+            "value": 0
+          },
+          "fault": null,
+          "lines": [
+            "case=93 control=successor arm=release mode=stale",
+            "CTL-PTR A.data cursor=0x3f98a93440 base=0x3f98a93440 end=0x3f98a93480",
+            "CTL-STEP released A to the pool",
+            "CTL-PTR C.data cursor=0x3f98a93440 base=0x3f98a93440 end=0x3f98a93480",
+            "CTL-CHECK successor-address A=0x3f98a93440 C=0x3f98a93440 gets=1 equal",
+            "CTL-ACCESS id=successor-write op=write ref=C->data site=93_ctl_successor_entry/case.c:70",
+            "CTL-ACCESS-DONE id=successor-write value=0x77",
+            "CTL-ACCESS id=successor-read op=read ref=C->data site=93_ctl_successor_entry/case.c:74",
+            "CTL-ACCESS-DONE id=successor-read mismatches=0 expect=0x77",
+            "CTL-ACCESS id=stale-read op=read ref=A_data (A's pointer, held across the return) site=93_ctl_successor_entry/case.c:80",
+            "CTL-ACCESS-DONE id=stale-read mismatches=0 expect=0x77 (C's data)",
+            "CTL-CHECK successor ok",
+            "CTL-RESULT completed",
+            "capstone-exec: exit image=./images/ctl-93 sha256=9fbff68380dabd2ad28fef49bd0f4a9c9f9e5044747c3b49169ed408faebc8a6"
+          ],
+          "outcome": "completed",
+          "argv": [
+            "stale",
+            "93"
+          ],
+          "image": "ctl-93"
+        }
+      }
+    }
+  ],
+  "predictions": [
+    {
+      "arm": "protected",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "platform control bounds-malloc faults (the instrument is live)",
+      "held": true,
+      "evidence": "capstone-exec: domain fault cause=28 pc=0x3f82e0dd34 address=0x3f82e8f050 ra=0x3f82e0dfb0 fp=0x3f82cfff60 entry=0x3f82e007d4 code=0x3f82e00000-0x3f82e80000 last"
+    },
+    {
+      "arm": "protected",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "platform control uaf-malloc faults (the instrument is live)",
+      "held": true,
+      "evidence": "capstone-exec: domain fault cause=25 pc=0x3fba58dd68 address=0x3fba573040 ra=0x3fba58e100 fp=0x3fba4fff60 entry=0x3fba5807d4 code=0x3fba580000-0x3fba600000 last"
+    },
+    {
+      "arm": "protected",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "control 1 (parent) completes; the read returns what the pool left there (A's 0x5A)",
+      "held": true,
+      "evidence": "completed; parent-read mismatches=0 expect=0x5a"
+    },
+    {
+      "arm": "protected",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "control 2 (sibling) completes, B intact",
+      "held": true,
+      "evidence": "completed; sibling-read mismatches=0 expect=0xb2"
+    },
+    {
+      "arm": "protected",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "control 3: C's start address equals A's; access through C completes",
+      "held": true,
+      "evidence": "completed; ['CTL-CHECK successor-address A=0x3fbf053440 C=0x3fbf053440 gets=1 equal']"
+    },
+    {
+      "arm": "protected",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "stale read through A: rejected with cause 25 at the labelled probe",
+      "held": true,
+      "evidence": "fault cause=25 pc=0x3f8070dea4 in stale_read_probe at capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime/93_ctl_successor_entry/case.c:36"
+    },
+    {
+      "arm": "release",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "platform control bounds-malloc faults (the instrument is live)",
+      "held": true,
+      "evidence": "capstone-exec: domain fault cause=28 pc=0x3f8670dd34 address=0x3f867b3050 ra=0x3f8670dfb0 fp=0x3f865fff60 entry=0x3f867007d4 code=0x3f86700000-0x3f86780000 last"
+    },
+    {
+      "arm": "release",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "platform control uaf-malloc faults (the instrument is live)",
+      "held": true,
+      "evidence": "capstone-exec: domain fault cause=25 pc=0x3f9ea8dd68 address=0x3f9eb1f040 ra=0x3f9ea8e100 fp=0x3f9e9fff60 entry=0x3f9ea807d4 code=0x3f9ea80000-0x3f9eb00000 last"
+    },
+    {
+      "arm": "release",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "control 1 (parent) completes; the read returns what the pool left there (A's 0x5A)",
+      "held": true,
+      "evidence": "completed; parent-read mismatches=0 expect=0x5a"
+    },
+    {
+      "arm": "release",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "control 2 (sibling) completes, B intact",
+      "held": true,
+      "evidence": "completed; sibling-read mismatches=0 expect=0xb2"
+    },
+    {
+      "arm": "release",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "control 3: C's start address equals A's; access through C completes",
+      "held": true,
+      "evidence": "completed; ['CTL-CHECK successor-address A=0x3f7f747440 C=0x3f7f747440 gets=1 equal']"
+    },
+    {
+      "arm": "release",
+      "boot_started_utc": "2026-11-11T19:52:38Z",
+      "claim": "stale read through A: completes and reads C's data (0x77)",
+      "held": true,
+      "evidence": "completed; stale-read mismatches=0 expect=0x77 (C's data)"
+    }
+  ],
+  "all_predictions_held": true
+}

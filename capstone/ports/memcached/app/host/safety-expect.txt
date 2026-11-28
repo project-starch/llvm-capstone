@@ -372,3 +372,23 @@ sublet      24  RETURN *
 sublet      25  RETURN *
 lifetimes   24  FAULT  temporal
 lifetimes   25  RETURN *
+
+# ---------------------------------------------------------------------------------------------
+# FIXTURE 26, registered 2026-11-25 before it was booted, and pushed before the run. (Corrected the same day: it
+# was first written "before it was built or booted", but the build that checked it compiles finished at 18:30:32,
+# before the registering commit at 18:30:56.)
+# Fixture 18's watcher write-after-free (e779381) with fixture 17's bounded reissue search. Since the
+# 2026-11-11 record (results/2026-11-11-sublet-crenew), fixture 18's single calloc after the free no
+# longer takes the freed storage, and 18 stops with its no-op mark. Fixture 18 and its predictions
+# are unchanged; 26 creates the reissue by searching (up to 4096 calloc/free, allocator policy
+# unchanged) and then runs 18's poke through the dead pointer at +32.
+# Rows only for the two virtual arms run-virtual.py runs, as for 22-25. The physical heap arms carry
+# fixtures 1-21 and are not run.
+# WHAT EACH PREDICTION RESTS ON: the same as 18 on these arms. The watcher is a plain mallocng
+# allocation, and free ends its lifetime on both virtual arms, so the stale write faults temporal at
+# w_addr + 32, the printed target, after the touch line.
+# - A 0xE001A mark means no reissue in 4096 attempts: the triggering condition was not created, a
+#   finding about the fixture, never a pass.
+
+sublet      26  FAULT  temporal
+lifetimes   26  FAULT  temporal

@@ -79,6 +79,10 @@
  *                     target. The plain arm has no per-chunk revocation, so the head still names
  *                     live (reused) storage and the read does not fault; its mark is not fixed.
  *  25 mover_chunk_ok  the same as shipped: the full chunked free runs, no orphan, the page moves.
+ *  26 watcher_reissue fixture 18's watcher write-after-free with fixture 17's bounded reissue search:
+ *                     fixture 18 takes one calloc after the free and stops with its no-op mark when the
+ *                     storage does not come back (as since the 2026-11-11 record), so 26 searches for the
+ *                     reissue instead, without changing allocator policy. Fixture 18 is unchanged.
  */
 #include <unistd.h>
 #include <stdio.h>
@@ -1005,6 +1009,41 @@ static int mcapp_fixture(int n)
         /* On the lifetimes arm the mover faulted at hdr_flags_addr and never got here. Reaching this
            line means no fault: the plain arm, or the shipped arm (25) with no orphan. */
         return MCAPP_MARK(n, (chk_moved ? 0x20 : 0x10) | (mcapp_reverse_c0e5a99 ? 1 : 0));
+    }
+    case 26: {
+        /* Fixture 18 (above, unchanged) with the reissue SEARCHED for, as fixture 17 does: mallocng
+           cycles slot offsets, so the first calloc after the free need not take the freed storage,
+           and since the 2026-11-11 record it does not for this class. The bound and the no-op mark
+           follow 17. Everything after the reissue is 18's: poke through the dead pointer at
+           failed_flush (+32), read back through the live one. */
+        unsigned char *w = calloc(1, 64);
+        if (!w) return MCAPP_MARK(n, 0xE0012);
+        mcapp_fill(w, 0xA0, 64);
+        mcapp_show(n, "watcher", w);
+        unsigned long w_addr = mcapp_cur(w);
+        free(w);
+        unsigned char *nu = NULL;
+        unsigned same = 0, attempts = 0;
+        for (unsigned attempt = 0; attempt < 4096; ++attempt) {
+            nu = calloc(1, 64);
+            if (!nu) return MCAPP_MARK(n, 0xE0012);
+            attempts = attempt + 1;
+            same = mcapp_cur(nu) == w_addr;
+            if (same) break;
+            free(nu);
+            nu = NULL;
+        }
+        if (!same) {
+            printf("MCAPP-FIX 26 storage NOT reissued in 4096 attempts: triggering condition not created\n");
+            return MCAPP_MARK(n, 0xE001A);
+        }
+        mcapp_fill(nu, 0x5B, 64);
+        printf("MCAPP-FIX 26 same-address=%u attempts=%u\n", same, attempts);
+        mcapp_touching(n, w_addr + 32);           /* exact address of the stale byte store */
+        mcapp_fix_poke(w, 32, 0xEE);              /* w->failed_flush = true, into freed storage */
+        v = mcapp_fix_touch(nu, 32);              /* read back through the NEW owner's pointer */
+        printf("MCAPP-FIX 26 returned new[32]=%02x (0xee = the write landed in the new owner)\n", v);
+        return MCAPP_MARK(n, (same << 8) | v);
     }
     default:
         printf("MCAPP-FIX %d unknown\n", n);

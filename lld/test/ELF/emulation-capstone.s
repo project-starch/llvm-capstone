@@ -18,7 +18,7 @@
 # HDR-NEXT:     Unused: (00 00 00 00 00 00 00)
 # HDR-NEXT:   }
 # HDR-NEXT:   Type: Executable (0x2)
-# HDR-NEXT:   Machine: 0x103
+# HDR-NEXT:   Machine: EM_CAPSTONE (0x103)
 # HDR-NEXT:   Version: 1
 # HDR-NEXT:   Entry:
 

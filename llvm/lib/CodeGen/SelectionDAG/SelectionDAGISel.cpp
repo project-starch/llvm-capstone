@@ -1448,9 +1448,20 @@ bool SelectionDAGISel::PrepareEHLandingPad() {
   } else {
     // Assign the call site to the landing pad's begin label.
     MF->setCallSiteLandingPad(Label, SDB->LPadToCallSiteMap[MBB]);
-    // Mark exception register as live in.
+    // Mark exception register as live in. On a capability target the
+    // landingpad's exception pointer can be a capability (Capstone, C-63):
+    // its register then takes that type's class, not the integer pointer's.
+    const TargetRegisterClass *ExnRC = PtrRC;
+    if (const LandingPadInst *LP = LLVMBB->getLandingPadInst())
+      if (auto *STy = dyn_cast<StructType>(LP->getType()))
+        if (STy->getNumElements() > 0) {
+          EVT ExnVT = TLI->getValueType(CurDAG->getDataLayout(),
+                                        STy->getElementType(0));
+          if (ExnVT.isCheriCapability())
+            ExnRC = TLI->getRegClassFor(ExnVT.getSimpleVT());
+        }
     if (MCRegister Reg = TLI->getExceptionPointerRegister(PersonalityFn))
-      FuncInfo->ExceptionPointerVirtReg = MBB->addLiveIn(Reg, PtrRC);
+      FuncInfo->ExceptionPointerVirtReg = MBB->addLiveIn(Reg, ExnRC);
     // Mark exception selector register as live in.
     if (MCRegister Reg = TLI->getExceptionSelectorRegister(PersonalityFn))
       FuncInfo->ExceptionSelectorVirtReg = MBB->addLiveIn(Reg, PtrRC);

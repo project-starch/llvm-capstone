@@ -23,13 +23,13 @@
       "oracle": "virtual profile, pymalloc stock in an arena from virtual mallocng (tools/arms.json virtual-pymalloc): a fault at the labelled read probe, or the case completes and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (PYM completed=1, after the case's read_probe) and completed with no fault",
-      "verdict_from": "results/2026-10-10-patch0003/virtual-malloc"
+      "verdict_from": "results/2026-11-11-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (the port's patch 0003, CDERIVE/CREVOKE; tools/arms.json virtual-pymalloc-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3fb4118138 in read_probe; by probe: the pc lies in read_probe (pyc_defect_read)",
-      "verdict_from": "results/2026-10-10-patch0003/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3f8ee15244 in read_probe; by probe: the pc lies in read_probe (pyc_defect_read)",
+      "verdict_from": "results/2026-11-11-virtual/virtual-nested-pools"
     },
     "silicon-pym-stock": {
       "oracle": "silicon, pymalloc as released over the level0 lifetimes heap (tools/arms.json silicon-pymalloc-stock): a fault at read_probe, the labelled stale load, or the case completes (`PYM completed=1`) and this arm did not see it",
@@ -50,10 +50,10 @@
       "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc"
     },
     "vp2-nested-pools": {
+      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (the port's patch 0003, CDERIVE/CREVOKE; tools/arms.json virtual-pymalloc-pools): as virtual-malloc",
       "verdict": "CAUGHT",
       "verdict_note": "cause=25 pc=0x3f8d8181fc in read_probe; by probe: the pc lies in read_probe (pyc_defect_read)",
-      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-nested-pools",
-      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (the port's patch 0003, CDERIVE/CREVOKE; tools/arms.json virtual-pymalloc-pools): as virtual-malloc"
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-nested-pools"
     }
   },
   "status": "measured on virtual Capstone (virtual-malloc, virtual-nested-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle",

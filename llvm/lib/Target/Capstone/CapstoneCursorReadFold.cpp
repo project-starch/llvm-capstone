@@ -176,8 +176,11 @@ bool CapstoneCursorReadFold::runOnMachineFunction(MachineFunction &MF) {
       Register Src = SrcMO.getReg();
       unsigned SubIdx = SrcMO.getSubReg();
 
+      // Debug uses are not readers: a DBG_VALUE of the address must not decide
+      // the fold, or `-g` changes the code (C-87). They are redirected to Src
+      // below with the real readers.
       bool AllIntegerReaders = true;
-      for (const MachineOperand &Use : MRI.use_operands(Dst)) {
+      for (const MachineOperand &Use : MRI.use_nodbg_operands(Dst)) {
         const MachineInstr &User = *Use.getParent();
         // A reader that is itself a copy (`addi rd, rs, 0` and the other forms
         // isCopyInstr recognises) writes nothing of its own: copy propagation

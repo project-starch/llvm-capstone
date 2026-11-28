@@ -91,3 +91,21 @@ scored by the runner of that day: any fault after the case began counted as dete
 runs the pc of every `spatial` fault is recorded but was never compared with the function the case
 names -- case 0's fault at `0xc02020f0` lies below `pqGetnchar@0xc020f130` -- so they are not
 re-judged here as attributed.
+
+## Measured 2026-11-11, on the one-operand CREVOKE
+
+`results/2026-11-11-virtual/virtual-malloc` is `virtual-malloc` re-measured after the lifetime
+instructions changed: `CREVOKE` takes the object alone, `CRENEW` exists, and mallocng's `free`
+and `realloc` end the allocation through the reference they were given. Built with
+`shared/build-domain.sh` at `-O0` on a corpus SDK from this tree, run with `--virtual-kit` on
+the emulator that implements the new encoding (QEMU sha256 `2d5a7107890e`, module `e47bca62addf`,
+launcher `0f8e0f903725`, pinned mode, `x-capstone-test-csrs=true,x-capstone-exact-bounds=true`).
+
+| arm | result | controls |
+|---|---|---|
+| `virtual-malloc` | CAUGHT 5/5, every fault cause 28 in the case's declared function | `bounds-malloc` fault, `uaf-malloc` fault |
+
+Every verdict, fault cause and fault function is the one `results/2026-10-10-virtual` records;
+only the load addresses differ. `corpus.json` `verdict_bundles` now names this bundle. The
+`build.sdk` path in its `inputs.json` is written with `~` in place of the build account's home
+directory; nothing else in the bundle was edited.

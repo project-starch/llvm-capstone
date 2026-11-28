@@ -17,6 +17,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Target/TargetOptions.h"
 #include <optional>
@@ -26,7 +27,29 @@ using namespace llvm;
 #define Capstone_MERGE_BASE_OFFSET_NAME "Capstone Merge Base Offset"
 bool capstoneImageGpAbiActive(); // CapstoneISelDAGToDAG.cpp
 
+STATISTIC(NumAUIPCGP, "Global bases formed as one auipcgp (cap-auipcgp)");
 STATISTIC(NumPoolBasesMerged, "Pool addresses whose several bases were merged");
+STATISTIC(NumGlobalLoFolded,
+          "gp-derived global bases whose %pcrel_lo was folded into their accesses");
+
+// The global-address fold (foldIntoCapGlobalMemoryOps below). It forms a
+// cursor the program never formed -- the auipc's partial address, up to 2 KiB
+// from the accessed address -- which the cursor-preservation rule
+// (capstone/docs/design/capability-loop-addressing.md) otherwise refuses. The
+// project lead relaxed that rule for this fold alone on 2026-11-13, on two
+// conditions that this pass and the image link script provide between them:
+// the derived capability is only ever the base of loads and stores (no
+// surviving cursor: nothing copies it, stores it, compares it or bounds it),
+// and every such partial cursor lies inside gp's bounds, which the virtual
+// image's link script guarantees with a margin of at least 2 KiB on both
+// sides of every symbol reachable through gp (link.ld: the text segment in
+// front, an explicit pad after .bss). Default off.
+static cl::opt<bool> CapstoneFoldGlobalLo(
+    "capstone-fold-global-lo", cl::Hidden, cl::init(false),
+    cl::desc("Under the image-gp ABI, fold a global's %pcrel_lo into the "
+             "loads and stores through its gp-derived capability (auipc; scc "
+             "gp; ld %pcrel_lo(cap)); needs the image link script's 2 KiB "
+             "gp margins"));
 
 namespace {
 
@@ -48,8 +71,10 @@ public:
                          MachineInstr &TailShXAdd, Register GSReg);
 
   bool foldIntoMemoryOps(MachineInstr &Hi, MachineInstr &Lo);
+  bool foldIntoCapGlobalMemoryOps(MachineInstr &Hi, MachineInstr &Lo);
   bool mergePoolBases(MachineInstr &Hi, MachineInstr &Lo);
   bool mergeGlobalBaseUses(MachineInstr &Lo, Register LoReg);
+  bool formAUIPCGP(MachineInstr &Hi);
 
   // Whether any instruction of the function writes gp (c3 or a part of it):
   // then two PseudoCapGlobalBase of one address may derive from different gp
@@ -589,6 +614,13 @@ bool CapstoneMergeBaseOffsetOpt::foldIntoMemoryOps(MachineInstr &Hi,
 // surviving cursor) leaves no fold: the capability is derived from the entry's
 // address, which the program forms.
 //
+// Exception, behind -capstone-fold-global-lo (2026-11-13): the fold above IS
+// made for a global or pool entry whose base has no use but as the base of
+// loads and stores at one common offset, when the image link script keeps a
+// 2 KiB margin inside gp's bounds around every gp-reachable symbol. The
+// partial cursor is then within gp's bounds, so the address policy cannot
+// refuse it, and it never survives the accesses (foldIntoCapGlobalMemoryOps).
+//
 // Several PseudoCapGlobalBase of one constant-pool address. MachineCSE's PRE
 // hoists the PseudoLLA (auipc + addi, no register operands) to a common
 // dominator of its users but not the PseudoCapGlobalBase (a virtual-register
@@ -673,6 +705,184 @@ bool CapstoneMergeBaseOffsetOpt::mergeGlobalBaseUses(MachineInstr &Lo,
   return true;
 }
 
+// Hi:   1:auipc vreg1, %pcrel_hi(s)          1:auipc vreg1, %pcrel_hi(s+8)
+// Lo:   addi  vreg2, vreg1, %pcrel_lo(1b)  -->  (deleted)
+// Base: vcap = PseudoCapGlobalBase vreg2       vcap = PseudoCapGlobalBase vreg1
+// Tail: ld vreg3, 8(vcap)                      ld vreg3, %pcrel_lo(1b)(vcap)
+//
+// Only under -capstone-fold-global-lo and the image-gp ABI (a plain scc of gp:
+// no delin, no shrink), only when nothing in the function writes gp, and only
+// when vcap's every use is the base (never the value) of a load or store with
+// one common immediate offset. A SHRINK/SHRINKTO, copy, call argument, store of
+// vcap or cincoffset leaves the address whole. The cursor of vcap is the partial
+// address: see CapstoneFoldGlobalLo for the rule this relies on. Debug uses do
+// not decide (C-87: -g must not change the code); since vcap no longer holds
+// the variable's address once folded, its DBG_VALUEs, and those of the erased
+// Lo, become undefined ("optimized out").
+bool CapstoneMergeBaseOffsetOpt::foldIntoCapGlobalMemoryOps(MachineInstr &Hi,
+                                                         MachineInstr &Lo) {
+  if (!CapstoneFoldGlobalLo || !capstoneImageGpAbiActive() || GpModified)
+    return false;
+  if (Hi.getOpcode() != Capstone::AUIPC || &Lo == &Hi ||
+      Lo.getOpcode() != Capstone::ADDI)
+    return false;
+  const MachineOperand &HiOp = Hi.getOperand(1);
+  if (!HiOp.isGlobal() && !HiOp.isCPI())
+    return false;
+  Register LoReg = Lo.getOperand(0).getReg();
+  if (!MRI->hasOneNonDBGUse(LoReg))
+    return false;
+  MachineInstr &Base = *MRI->use_instr_nodbg_begin(LoReg);
+  if (Base.getOpcode() != Capstone::PseudoCapGlobalBase ||
+      Base.getOperand(1).getReg() != LoReg)
+    return false;
+  Register CapReg = Base.getOperand(0).getReg();
+  if (!CapReg.isVirtual() || MRI->use_nodbg_empty(CapReg))
+    return false;
+
+  std::optional<int64_t> CommonOffset;
+  for (const MachineOperand &MO : MRI->use_nodbg_operands(CapReg)) {
+    const MachineInstr &UseMI = *MO.getParent();
+    switch (UseMI.getOpcode()) {
+    default:
+      return false;
+    case Capstone::LB:
+    case Capstone::LH:
+    case Capstone::LW:
+    case Capstone::LBU:
+    case Capstone::LHU:
+    case Capstone::LWU:
+    case Capstone::LD:
+    case Capstone::LDC:
+    case Capstone::FLH:
+    case Capstone::FLW:
+    case Capstone::FLD:
+    case Capstone::SB:
+    case Capstone::SH:
+    case Capstone::SW:
+    case Capstone::SD:
+    case Capstone::STC:
+    case Capstone::FSH:
+    case Capstone::FSW:
+    case Capstone::FSD:
+      break;
+    }
+    // vcap must be the base (operand 1), never the loaded or stored value.
+    if (UseMI.getOperandNo(&MO) != 1 || !UseMI.getOperand(2).isImm() ||
+        (UseMI.getOperand(0).isReg() && UseMI.getOperand(0).getReg() == CapReg))
+      return false;
+    int64_t Offset = UseMI.getOperand(2).getImm();
+    if (CommonOffset && Offset != *CommonOffset)
+      return false;
+    CommonOffset = Offset;
+  }
+
+  int64_t NewOffset = HiOp.getOffset() + *CommonOffset;
+  if (!isInt<32>(NewOffset))
+    return false;
+  Hi.getOperand(1).setOffset(NewOffset);
+  const MachineOperand &ImmOp = Lo.getOperand(2); // %pcrel_lo of Hi's label
+  for (MachineInstr &UseMI :
+       llvm::make_early_inc_range(MRI->use_nodbg_instructions(CapReg))) {
+    UseMI.removeOperand(2);
+    UseMI.addOperand(ImmOp);
+  }
+  for (Register R : {CapReg, LoReg})
+    for (MachineInstr &DbgMI :
+         llvm::make_early_inc_range(MRI->use_instructions(R)))
+      if (DbgMI.isDebugValue())
+        DbgMI.setDebugValueUndef();
+  Register HiReg = Hi.getOperand(0).getReg();
+  Base.getOperand(1).setReg(HiReg);
+  MRI->clearKillFlags(HiReg);
+  LLVM_DEBUG(dbgs() << "folded %pcrel_lo of " << Hi << "  into the accesses of "
+                    << Base);
+  Lo.eraseFromParent();
+  ++NumGlobalLoFolded;
+  return true;
+}
+
+// cap-auipcgp (default off), only under the image-gp ABI, where
+// PseudoCapGlobalBase is a plain `scc rd, gp, rs`:
+//
+// Hi:   1:auipc vreg1, %pcrel_hi(s)            1:auipcgp vcap, %pcrel_hi(s)
+// Base: vcap = PseudoCapGlobalBase vreg1   -->   (deleted)
+//
+// and, when the low part was not folded into the accesses,
+//
+// Hi:   1:auipc vreg1, %pcrel_hi(s)            1:auipcgp vtmp, %pcrel_hi(s)
+// Lo:   addi  vreg2, vreg1, %pcrel_lo(1b)  -->   vcap = cincoffsetimm vtmp, %pcrel_lo(1b)
+// Base: vcap = PseudoCapGlobalBase vreg2
+//
+// auipcgp rd, imm20 is scc rd, gp, (pc + (imm20 << 12)): the same authority
+// (gp's), the same cursor, one instruction fewer. It is placed where the scc
+// was, so it reads the gp the scc would have read; the label moves with it,
+// and every %pcrel_lo of the label resolves against its new address. Only
+// when vreg1 (and vreg2) have no other use. Never for an extern-weak symbol:
+// lld rewrites an undefined weak auipc to lui (C-56), and the C-56 null base
+// is PseudoCapWeakGlobal, which this does not match anyway.
+bool CapstoneMergeBaseOffsetOpt::formAUIPCGP(MachineInstr &Hi) {
+  if (Hi.getOpcode() != Capstone::AUIPC || !Hi.getPreInstrSymbol())
+    return false;
+  const MachineOperand &HiOp = Hi.getOperand(1);
+  if (HiOp.getTargetFlags() != CapstoneII::MO_PCREL_HI ||
+      (!HiOp.isGlobal() && !HiOp.isCPI() && !HiOp.isJTI() &&
+       !HiOp.isBlockAddress() && !HiOp.isSymbol()))
+    return false;
+  if (HiOp.isGlobal() && HiOp.getGlobal()->hasExternalWeakLinkage())
+    return false;
+  Register HiReg = Hi.getOperand(0).getReg();
+  if (!HiReg.isVirtual() || !MRI->hasOneNonDBGUse(HiReg))
+    return false;
+  MachineInstr *Use = &*MRI->use_instr_nodbg_begin(HiReg);
+  MachineInstr *Lo = nullptr;
+  if (Use->getOpcode() == Capstone::ADDI) {
+    const MachineOperand &LoOp = Use->getOperand(2);
+    if (Use->getOperand(1).getReg() != HiReg || !LoOp.isMCSymbol() ||
+        LoOp.getMCSymbol() != Hi.getPreInstrSymbol() ||
+        LoOp.getTargetFlags() != CapstoneII::MO_PCREL_LO)
+      return false;
+    Lo = Use;
+    Register LoReg = Lo->getOperand(0).getReg();
+    if (!LoReg.isVirtual() || !MRI->hasOneNonDBGUse(LoReg))
+      return false;
+    Use = &*MRI->use_instr_nodbg_begin(LoReg);
+  }
+  if (Use->getOpcode() != Capstone::PseudoCapGlobalBase ||
+      Use->getOperand(1).getReg() != (Lo ? Lo->getOperand(0).getReg() : HiReg))
+    return false;
+  MachineInstr &Base = *Use;
+  MachineBasicBlock &MBB = *Base.getParent();
+  MachineFunction &MF = *MBB.getParent();
+  const TargetInstrInfo *TII = ST->getInstrInfo();
+  Register CapReg = Base.getOperand(0).getReg();
+  Register Dst = Lo ? MRI->createVirtualRegister(MRI->getRegClass(CapReg))
+                    : CapReg;
+  MachineInstr *New =
+      BuildMI(MBB, Base, Base.getDebugLoc(), TII->get(Capstone::AUIPCGP), Dst)
+          .add(HiOp);
+  New->setPreInstrSymbol(MF, Hi.getPreInstrSymbol());
+  if (Lo)
+    BuildMI(MBB, Base, Base.getDebugLoc(), TII->get(Capstone::CIncOffsetImm),
+            CapReg)
+        .addReg(Dst)
+        .add(Lo->getOperand(2));
+  // vreg1 and vreg2 are gone: their DBG_VALUEs become undefined.
+  for (MachineInstr *MI : {&Hi, Lo})
+    if (MI)
+      for (MachineInstr &DbgMI : llvm::make_early_inc_range(
+               MRI->use_instructions(MI->getOperand(0).getReg())))
+        if (DbgMI.isDebugValue())
+          DbgMI.setDebugValueUndef();
+  LLVM_DEBUG(dbgs() << "formed " << *New << "  from " << Hi);
+  Base.eraseFromParent();
+  if (Lo)
+    Lo->eraseFromParent();
+  Hi.eraseFromParent();
+  ++NumAUIPCGP;
+  return true;
+}
+
 bool CapstoneMergeBaseOffsetOpt::mergePoolBases(MachineInstr &Hi,
                                                 MachineInstr &Lo) {
   // Only under the image-gp ABI, where PseudoCapGlobalBase is a plain scc of
@@ -730,9 +940,22 @@ bool CapstoneMergeBaseOffsetOpt::runOnMachineFunction(MachineFunction &Fn) {
       MadeChange |= detectAndFoldOffset(Hi, *Lo);
       if (foldIntoMemoryOps(Hi, *Lo))
         MadeChange = true;
+      else if (foldIntoCapGlobalMemoryOps(Hi, *Lo))
+        MadeChange = true;
       else
         MadeChange |= mergePoolBases(Hi, *Lo);
     }
+  }
+
+  // After every fold above has settled the shape of each global's base.
+  if (ST->hasCapAUIPCGP() && capstoneImageGpAbiActive()) {
+    SmallVector<MachineInstr *, 32> His;
+    for (MachineBasicBlock &MBB : Fn)
+      for (MachineInstr &MI : MBB)
+        if (MI.getOpcode() == Capstone::AUIPC)
+          His.push_back(&MI);
+    for (MachineInstr *Hi : His)
+      MadeChange |= formAUIPCGP(*Hi);
   }
 
   return MadeChange;

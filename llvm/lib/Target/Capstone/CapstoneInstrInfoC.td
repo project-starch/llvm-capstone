@@ -598,6 +598,112 @@ let Predicates = [HasStdExtCOrZcd, HasStdExtD] in {
 } // Predicates = [HasStdExtCOrZcd, HasStdExtD] in {
 
 //===----------------------------------------------------------------------===//
+// Capability-base forms (cap-base-rvc)
+//===----------------------------------------------------------------------===//
+
+// The 16-bit loads and stores above with a CAPABILITY base: c8-c15, or the stack
+// capability c2. Their encodings are the standard ones, so they are codegen-only:
+// the assembler and the disassembler keep the forms above, and a compressed
+// access reads back as the ordinary instruction. Only the CompressPats below
+// emit them, under FeatureCapBaseRVC.
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 1 in {
+class CCapLoad_ri<bits<3> funct3, string OpcodeStr,
+                  DAGOperand cls, DAGOperand opnd>
+    : RVInst16CL<funct3, 0b00, (outs cls:$rd), (ins GPCRCMem:$rs1, opnd:$imm),
+                 OpcodeStr, "$rd, ${imm}(${rs1})">;
+class CCapStackLoad<bits<3> funct3, string OpcodeStr,
+                    DAGOperand cls, DAGOperand opnd>
+    : RVInst16CI<funct3, 0b10, (outs cls:$rd), (ins GPCRSPMem:$rs1, opnd:$imm),
+                 OpcodeStr, "$rd, ${imm}(${rs1})"> {
+  bits<0> rs1;
+}
+}
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 1, isCodeGenOnly = 1 in {
+class CCapStore_rri<bits<3> funct3, string OpcodeStr,
+                    DAGOperand cls, DAGOperand opnd>
+    : RVInst16CS<funct3, 0b00, (outs), (ins cls:$rs2, GPCRCMem:$rs1, opnd:$imm),
+                 OpcodeStr, "$rs2, ${imm}(${rs1})">;
+class CCapStackStore<bits<3> funct3, string OpcodeStr,
+                     DAGOperand cls, DAGOperand opnd>
+    : RVInst16CSS<funct3, 0b10, (outs), (ins cls:$rs2, GPCRSPMem:$rs1, opnd:$imm),
+                  OpcodeStr, "$rs2, ${imm}(${rs1})"> {
+  bits<0> rs1;
+}
+}
+
+let Predicates = [HasStdExtZca, HasCapBaseRVC] in {
+def C_LW_CAP : CCapLoad_ri<0b010, "c.lw", GPRC, uimm7_lsb00>,
+               Sched<[WriteLDW, ReadMemBase]> {
+  bits<7> imm;
+  let Inst{12-10} = imm{5-3};
+  let Inst{6} = imm{2};
+  let Inst{5} = imm{6};
+}
+def C_SW_CAP : CCapStore_rri<0b110, "c.sw", GPRC, uimm7_lsb00>,
+               Sched<[WriteSTW, ReadStoreData, ReadMemBase]> {
+  bits<7> imm;
+  let Inst{12-10} = imm{5-3};
+  let Inst{6} = imm{2};
+  let Inst{5} = imm{6};
+}
+def C_LWSP_CAP : CCapStackLoad<0b010, "c.lwsp", GPRNoX0, uimm8_lsb00>,
+                 Sched<[WriteLDW, ReadMemBase]> {
+  let Inst{3-2} = imm{7-6};
+}
+def C_SWSP_CAP : CCapStackStore<0b110, "c.swsp", GPR, uimm8_lsb00>,
+                 Sched<[WriteSTW, ReadStoreData, ReadMemBase]> {
+  let Inst{8-7}  = imm{7-6};
+}
+} // Predicates = [HasStdExtZca, HasCapBaseRVC]
+
+let Predicates = [HasStdExtZca, IsRV64, HasCapBaseRVC] in {
+def C_LD_CAP : CCapLoad_ri<0b011, "c.ld", GPRC, uimm8_lsb000>,
+               Sched<[WriteLDD, ReadMemBase]> {
+  bits<8> imm;
+  let Inst{12-10} = imm{5-3};
+  let Inst{6-5} = imm{7-6};
+}
+def C_SD_CAP : CCapStore_rri<0b111, "c.sd", GPRC, uimm8_lsb000>,
+               Sched<[WriteSTD, ReadStoreData, ReadMemBase]> {
+  bits<8> imm;
+  let Inst{12-10} = imm{5-3};
+  let Inst{6-5} = imm{7-6};
+}
+def C_LDSP_CAP : CCapStackLoad<0b011, "c.ldsp", GPRNoX0, uimm9_lsb000>,
+                 Sched<[WriteLDD, ReadMemBase]> {
+  let Inst{4-2} = imm{8-6};
+}
+def C_SDSP_CAP : CCapStackStore<0b111, "c.sdsp", GPR, uimm9_lsb000>,
+                 Sched<[WriteSTD, ReadStoreData, ReadMemBase]> {
+  let Inst{9-7}   = imm{8-6};
+}
+} // Predicates = [HasStdExtZca, IsRV64, HasCapBaseRVC]
+
+let Predicates = [HasStdExtCOrZcd, HasStdExtD, HasCapBaseRVC] in {
+def C_FLD_CAP : CCapLoad_ri<0b001, "c.fld", FPR64C, uimm8_lsb000>,
+                Sched<[WriteFLD64, ReadFMemBase]> {
+  bits<8> imm;
+  let Inst{12-10} = imm{5-3};
+  let Inst{6-5} = imm{7-6};
+}
+def C_FSD_CAP : CCapStore_rri<0b101, "c.fsd", FPR64C, uimm8_lsb000>,
+                Sched<[WriteFST64, ReadFStoreData, ReadFMemBase]> {
+  bits<8> imm;
+  let Inst{12-10} = imm{5-3};
+  let Inst{6-5} = imm{7-6};
+}
+def C_FLDSP_CAP : CCapStackLoad<0b001, "c.fldsp", FPR64, uimm9_lsb000>,
+                  Sched<[WriteFLD64, ReadFMemBase]> {
+  let Inst{4-2} = imm{8-6};
+}
+def C_FSDSP_CAP : CCapStackStore<0b101, "c.fsdsp", FPR64, uimm9_lsb000>,
+                  Sched<[WriteFST64, ReadFStoreData, ReadFMemBase]> {
+  let Inst{9-7}   = imm{8-6};
+}
+} // Predicates = [HasStdExtCOrZcd, HasStdExtD, HasCapBaseRVC]
+
+//===----------------------------------------------------------------------===//
 // HINT Instructions
 //===----------------------------------------------------------------------===//
 
@@ -951,8 +1057,8 @@ let Predicates = [HasStdExtCOrZcfOrZce, HasStdExtF, IsRV32] in {
                     (C_FSWSP FPR32:$rs2, SPMem:$rs1, uimm8_lsb00:$imm)>;
 } // Predicates = [HasStdExtCOrZcfOrZce, HasStdExtF, IsRV32]
 
-// Zcd Instructions
-let Predicates = [HasStdExtCOrZcd, HasStdExtD] in {
+// Zcd Instructions (none under cap-crvc, whose decode mode reuses their slots)
+let Predicates = [HasStdExtCOrZcd, HasStdExtD, NoCapCRVC] in {
   // Quadrant 0
   def : CompressPat<(FLD FPR64C:$rd, GPRCMem:$rs1, uimm8_lsb000:$imm),
                     (C_FLD FPR64C:$rd, GPRCMem:$rs1, uimm8_lsb000:$imm)>;
@@ -964,5 +1070,183 @@ let Predicates = [HasStdExtCOrZcd, HasStdExtD] in {
                     (C_FLDSP FPR64:$rd, SPMem:$rs1, uimm9_lsb000:$imm)>;
   def : CompressPat<(FSD FPR64:$rs2, SPMem:$rs1, uimm9_lsb000:$imm),
                     (C_FSDSP FPR64:$rs2, SPMem:$rs1, uimm9_lsb000:$imm)>;
-} // Predicates = [HasStdExtCOrZcd, HasStdExtD]
+} // Predicates = [HasStdExtCOrZcd, HasStdExtD, NoCapCRVC]
 
+// Capability-base RVC (cap-base-rvc): the same shapes with a capability base.
+// Compress-only: a 16-bit access always reads back as the standard instruction.
+let isCompressOnly = true in {
+let Predicates = [HasStdExtZca, HasCapBaseRVC] in {
+def : CompressPat<(LW GPRC:$rd, GPCRCMem:$rs1, uimm7_lsb00:$imm),
+                  (C_LW_CAP GPRC:$rd, GPCRCMem:$rs1, uimm7_lsb00:$imm)>;
+def : CompressPat<(SW GPRC:$rs2, GPCRCMem:$rs1, uimm7_lsb00:$imm),
+                  (C_SW_CAP GPRC:$rs2, GPCRCMem:$rs1, uimm7_lsb00:$imm)>;
+def : CompressPat<(LW GPRNoX0:$rd, GPCRSPMem:$rs1, uimm8_lsb00:$imm),
+                  (C_LWSP_CAP GPRNoX0:$rd, GPCRSPMem:$rs1, uimm8_lsb00:$imm)>;
+def : CompressPat<(SW GPR:$rs2, GPCRSPMem:$rs1, uimm8_lsb00:$imm),
+                  (C_SWSP_CAP GPR:$rs2, GPCRSPMem:$rs1, uimm8_lsb00:$imm)>;
+} // Predicates = [HasStdExtZca, HasCapBaseRVC]
+
+let Predicates = [HasStdExtZca, IsRV64, HasCapBaseRVC] in {
+def : CompressPat<(LD GPRC:$rd, GPCRCMem:$rs1, uimm8_lsb000:$imm),
+                  (C_LD_CAP GPRC:$rd, GPCRCMem:$rs1, uimm8_lsb000:$imm)>;
+def : CompressPat<(SD GPRC:$rs2, GPCRCMem:$rs1, uimm8_lsb000:$imm),
+                  (C_SD_CAP GPRC:$rs2, GPCRCMem:$rs1, uimm8_lsb000:$imm)>;
+def : CompressPat<(LD GPRNoX0:$rd, GPCRSPMem:$rs1, uimm9_lsb000:$imm),
+                  (C_LDSP_CAP GPRNoX0:$rd, GPCRSPMem:$rs1, uimm9_lsb000:$imm)>;
+def : CompressPat<(SD GPR:$rs2, GPCRSPMem:$rs1, uimm9_lsb000:$imm),
+                  (C_SDSP_CAP GPR:$rs2, GPCRSPMem:$rs1, uimm9_lsb000:$imm)>;
+} // Predicates = [HasStdExtZca, IsRV64, HasCapBaseRVC]
+
+let Predicates = [HasStdExtCOrZcd, HasStdExtD, HasCapBaseRVC, NoCapCRVC] in {
+def : CompressPat<(FLD FPR64C:$rd, GPCRCMem:$rs1, uimm8_lsb000:$imm),
+                  (C_FLD_CAP FPR64C:$rd, GPCRCMem:$rs1, uimm8_lsb000:$imm)>;
+def : CompressPat<(FSD FPR64C:$rs2, GPCRCMem:$rs1, uimm8_lsb000:$imm),
+                  (C_FSD_CAP FPR64C:$rs2, GPCRCMem:$rs1, uimm8_lsb000:$imm)>;
+def : CompressPat<(FLD FPR64:$rd, GPCRSPMem:$rs1, uimm9_lsb000:$imm),
+                  (C_FLDSP_CAP FPR64:$rd, GPCRSPMem:$rs1, uimm9_lsb000:$imm)>;
+def : CompressPat<(FSD FPR64:$rs2, GPCRSPMem:$rs1, uimm9_lsb000:$imm),
+                  (C_FSDSP_CAP FPR64:$rs2, GPCRSPMem:$rs1, uimm9_lsb000:$imm)>;
+} // Predicates = [HasStdExtCOrZcd, HasStdExtD, HasCapBaseRVC, NoCapCRVC]
+} // isCompressOnly = true
+
+
+//===----------------------------------------------------------------------===//
+// Compressed capability instructions (cap-crvc), stage 2 option B
+//===----------------------------------------------------------------------===//
+//
+// Decoded only in the CRVC mode (CSRUNV options bit 2; ELF flag
+// EF_CAPSTONE_CRVC), where they take the slots of C.FLDSP, C.FSDSP, C.FLD,
+// C.FSD and C.LUI x0, and three reserved slots of Zcb's Q0 100 group. The loads
+// and stores use RV128's C.LQSP, C.SQSP, C.LQ and C.SQ layouts. Each expands to
+// the existing 32-bit instruction. They sit in their own decoder namespace,
+// tried before the standard table only under the feature.
+// capstone/docs/plans/2026-11-21-capability-rvc-stage2-prototype.md
+
+// A 10-bit unsigned immediate, a multiple of 16 (C.LQSP / C.SQSP).
+def uimm10_lsb0000 : CapstoneOp,
+                     ImmLeaf<XLenVT, [{return isShiftedUInt<6, 4>(Imm);}]> {
+  let ParserMatchClass = UImmAsmOperand<10, "Lsb0000">;
+  let EncoderMethod = "getImmOpValue";
+  let DecoderMethod = "decodeUImmOperand<10>";
+  let OperandType = "OPERAND_UIMM10_LSB0000";
+  let MCOperandPredicate = [{
+    int64_t Imm;
+    if (!MCOp.evaluateAsConstantImm(Imm))
+      return false;
+    return isShiftedUInt<6, 4>(Imm);
+  }];
+}
+
+// A 9-bit unsigned immediate, a multiple of 16 (C.LQ / C.SQ).
+def uimm9_lsb0000 : CapstoneOp,
+                    ImmLeaf<XLenVT, [{return isShiftedUInt<5, 4>(Imm);}]> {
+  let ParserMatchClass = UImmAsmOperand<9, "Lsb0000">;
+  let EncoderMethod = "getImmOpValue";
+  let DecoderMethod = "decodeUImmOperand<9>";
+  let OperandType = "OPERAND_UIMM9_LSB0000";
+  let MCOperandPredicate = [{
+    int64_t Imm;
+    if (!MCOp.evaluateAsConstantImm(Imm))
+      return false;
+    return isShiftedUInt<5, 4>(Imm);
+  }];
+}
+
+let Predicates = [HasCapCRVC], DecoderNamespace = "CapCRVC" in {
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
+def C_LDCSP : RVInst16CI<0b001, 0b10, (outs GPCRNoC0:$rd),
+                         (ins GPCRSPMem:$rs1, uimm10_lsb0000:$imm),
+                         "c.ldcsp", "$rd, ${imm}(${rs1})">,
+              Sched<[WriteLDD, ReadMemBase]> {
+  bits<0> rs1;
+  let Inst{12} = imm{5};
+  let Inst{6} = imm{4};
+  let Inst{5-2} = imm{9-6};
+}
+def C_LDC : RVInst16CL<0b001, 0b00, (outs GPCRC:$rd),
+                       (ins GPCRCMem:$rs1, uimm9_lsb0000:$imm),
+                       "c.ldc", "$rd, ${imm}(${rs1})">,
+            Sched<[WriteLDD, ReadMemBase]> {
+  bits<9> imm;
+  let Inst{12-11} = imm{5-4};
+  let Inst{10} = imm{8};
+  let Inst{6-5} = imm{7-6};
+}
+}
+let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in {
+def C_STCSP : RVInst16CSS<0b101, 0b10, (outs),
+                          (ins GPCR:$rs2, GPCRSPMem:$rs1, uimm10_lsb0000:$imm),
+                          "c.stcsp", "$rs2, ${imm}(${rs1})">,
+              Sched<[WriteSTD, ReadStoreData, ReadMemBase]> {
+  bits<0> rs1;
+  let Inst{12-11} = imm{5-4};
+  let Inst{10-7} = imm{9-6};
+}
+def C_STC : RVInst16CS<0b101, 0b00, (outs),
+                       (ins GPCRC:$rs2, GPCRCMem:$rs1, uimm9_lsb0000:$imm),
+                       "c.stc", "$rs2, ${imm}(${rs1})">,
+            Sched<[WriteSTD, ReadStoreData, ReadMemBase]> {
+  bits<9> imm;
+  let Inst{12-11} = imm{5-4};
+  let Inst{10} = imm{8};
+  let Inst{6-5} = imm{7-6};
+}
+}
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
+// C.LUI's slot with rd = x0 (a HINT outside the mode), C.ADDI16SP's immediate.
+def C_CINCOFFSET16SP : RVInst16CI<0b011, 0b01, (outs GPCRSP:$rd_wb),
+                                  (ins GPCRSP:$rd, simm10_lsb0000nonzero:$imm),
+                                  "c.cincoffset16sp", "$rd, $imm">,
+                       Sched<[WriteIALU, ReadIALU]> {
+  let Constraints = "$rd = $rd_wb";
+  let Inst{12} = imm{9};
+  let Inst{11-7} = 0;
+  let Inst{6} = imm{4};
+  let Inst{5} = imm{6};
+  let Inst{4-3} = imm{8-7};
+  let Inst{2} = imm{5};
+}
+// Q0 funct3 100, [12:10] = 100..110 (Zcb uses 000..011): rs1' at [9:7], rd' or
+// rs2' at [4:2], [6:5] zero.
+class CCapQ0R<bits<3> f3, dag outs, dag ins, string opcodestr, string argstr>
+    : RVInst16<outs, ins, opcodestr, argstr, [], InstFormatOther> {
+  bits<3> ra;
+  bits<3> rb;
+  let Inst{15-13} = 0b100;
+  let Inst{12-10} = f3;
+  let Inst{9-7} = ra;
+  let Inst{6-5} = 0b00;
+  let Inst{4-2} = rb;
+  let Inst{1-0} = 0b00;
+}
+def C_MOVC : CCapQ0R<0b100, (outs GPCRC:$rb), (ins GPCRC:$ra), "c.movc",
+                     "$rb, $ra">, Sched<[WriteIALU, ReadIALU]>;
+def C_SCC : CCapQ0R<0b101, (outs GPCRC:$rb), (ins GPCRGP:$gp, GPRC:$ra),
+                    "c.scc", "$rb, $gp, $ra">, Sched<[WriteIALU, ReadIALU]> {
+  bits<0> gp;
+}
+def C_CINCOFFSET : CCapQ0R<0b110, (outs GPCRC:$ra_wb), (ins GPCRC:$ra, GPRC:$rb),
+                           "c.cincoffset", "$ra, $rb">,
+                   Sched<[WriteIALU, ReadIALU, ReadIALU]> {
+  let Constraints = "$ra = $ra_wb";
+}
+}
+} // Predicates = [HasCapCRVC], DecoderNamespace = "CapCRVC"
+
+let isCompressOnly = true, Predicates = [HasCapCRVC] in {
+def : CompressPat<(LDC GPCRNoC0:$rd, GPCRSPMem:$rs1, uimm10_lsb0000:$imm),
+                  (C_LDCSP GPCRNoC0:$rd, GPCRSPMem:$rs1, uimm10_lsb0000:$imm)>;
+def : CompressPat<(STC GPCR:$rs2, GPCRSPMem:$rs1, uimm10_lsb0000:$imm),
+                  (C_STCSP GPCR:$rs2, GPCRSPMem:$rs1, uimm10_lsb0000:$imm)>;
+def : CompressPat<(LDC GPCRC:$rd, GPCRCMem:$rs1, uimm9_lsb0000:$imm),
+                  (C_LDC GPCRC:$rd, GPCRCMem:$rs1, uimm9_lsb0000:$imm)>;
+def : CompressPat<(STC GPCRC:$rs2, GPCRCMem:$rs1, uimm9_lsb0000:$imm),
+                  (C_STC GPCRC:$rs2, GPCRCMem:$rs1, uimm9_lsb0000:$imm)>;
+def : CompressPat<(CIncOffsetImm C2, C2, simm10_lsb0000nonzero:$imm),
+                  (C_CINCOFFSET16SP C2, simm10_lsb0000nonzero:$imm)>;
+def : CompressPat<(MOVC GPCRC:$rd, GPCRC:$rs1), (C_MOVC GPCRC:$rd, GPCRC:$rs1)>;
+def : CompressPat<(SCC GPCRC:$rd, GPCRGP:$rs1, GPRC:$rs2),
+                  (C_SCC GPCRC:$rd, GPCRGP:$rs1, GPRC:$rs2)>;
+def : CompressPat<(CIncOffset GPCRC:$rd, GPCRC:$rd, GPRC:$rs2),
+                  (C_CINCOFFSET GPCRC:$rd, GPRC:$rs2)>;
+} // isCompressOnly = true, Predicates = [HasCapCRVC]

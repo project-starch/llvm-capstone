@@ -60,6 +60,18 @@ static void basic(void)
     require(p != NULL, "calloc");
     for (unsigned i = 0; i < 161; ++i) require(!p[i], "calloc zero");
     errno = EDOM; free(p); require(errno == EDOM, "free preserves errno");
+    /* calloc of a slot that was dirtied and freed: its zero check must not take the slot for untouched
+     * memory. The anchor keeps the 200-byte class's group alive, so the rounds cycle through its slots;
+     * kept() makes the compiler materialise the fill before the free and read the calloc block back. */
+    char *reuse_anchor = malloc(200); require(reuse_anchor != NULL, "calloc reuse anchor");
+    for (unsigned round = 0; round < 512; ++round) {
+        char *q = malloc(200); require(q != NULL, "calloc reuse dirty block");
+        memset(q, 0x5a, 200); free(kept(q));
+        q = kept(calloc(4, 50)); require(q != NULL, "calloc reuse");
+        for (unsigned i = 0; i < 200; ++i) require(!q[i], "calloc reuse zero");
+        free(q);
+    }
+    free(reuse_anchor);
     void *aligned = NULL;
     require(!posix_memalign(&aligned, 4096, 5001), "aligned allocation");
     require(!((uintptr_t)aligned & 4095), "alignment"); free(aligned);
@@ -223,11 +235,13 @@ int main(int argc, char **argv)
         if (!strcmp(mode, "nested-grandchild")) {
             char *grand = heap_issue(child, 16);
             require(grand != NULL, "nested grandchild derive");
-            puts("MALLOC_FAULT_READY:nested-grandchild"); fflush(stdout);
-            heap_end(p, grand);
+            /* The object alone ends: no parent is named, and its own parent lives on. */
+            heap_end(grand);
+            child[0] = 'c';
+            puts("MALLOC_FAULT_READY:nested-grandchild"); fflush(stdout); fault_store(grand);
             return survived(mode, may_survive);
         }
-        heap_end(p, child);
+        heap_end(child);
         char *back = p;
         require(back != NULL && __builtin_capstone_cap_get_cursor(back) == (uintptr_t)p,
                 "nested reclaim returns the object at its start");
@@ -237,7 +251,7 @@ int main(int argc, char **argv)
         }
         if (!strcmp(mode, "nested-double")) {
             puts("MALLOC_FAULT_READY:nested-double"); fflush(stdout);
-            heap_end(p, child);
+            heap_end(child);
             return survived(mode, may_survive);
         }
         if (!strcmp(mode, "nested-ok")) {
@@ -247,8 +261,25 @@ int main(int argc, char **argv)
             again = heap_issue(back + 48, 40); /* the cache hit: a fresh child */
             require(again != NULL, "nested re-derive");
             memset(again, 'd', 40);
-            heap_end(back, again);
+            again = heap_renew(again);         /* the next hit: the same piece, a new lifetime */
+            require(again != NULL && __builtin_capstone_cap_get_base(again) == (uintptr_t)p + 48 &&
+                    __builtin_capstone_cap_get_end(again) == (uintptr_t)p + 88 && again[39] == 'd',
+                    "nested renewal keeps bounds and bytes");
+            heap_end(again);
+            if (!may_survive) {
+                /* A pool that keeps one allocation renews malloc's own object at each return and
+                 * frees the allocation through the renewed reference: it names the same lifetime. */
+                uintptr_t base = __builtin_capstone_cap_get_base(back), end = __builtin_capstone_cap_get_end(back);
+                back = heap_renew(back);
+                require(back != NULL && __builtin_capstone_cap_get_cursor(back) == base &&
+                        __builtin_capstone_cap_get_base(back) == base &&
+                        __builtin_capstone_cap_get_end(back) == end && back[47] == 'h',
+                        "renewal of malloc's reference keeps cursor, bounds and bytes");
+            }
             free(back);
+            back = malloc(100);
+            require(back != NULL, "allocation after freeing a renewed reference");
+            memset(back, 'n', 100); free(back);
             puts("MALLOC_SURVIVED:nested-ok"); fflush(stdout);
             return 0;
         }

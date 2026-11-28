@@ -33,6 +33,12 @@ from it. This paragraph used to call it "a measurement and not a relabelled copy
 images did differ, but the configuration under test did not. The protected-allocator
 column for these programs is `virtual-malloc` (5 of 5, `2026-10-10-virtual/`).
 
+**Re-measured 2026-11-11 after the lifetime instructions changed, and it holds: 5 of 5.**
+`2026-11-11-virtual/virtual-malloc` is the same arm on the emulator with the one-operand
+`CREVOKE` and `CRENEW`, where mallocng ends an allocation through the reference `free` was given.
+Both controls fault as declared, and each case faults with cause 28 in the function the
+2026-10-10 bundle names. `verdicts.tsv` is derived from this bundle.
+
 ## What produced these numbers
 
 | arm | runner | platform |

@@ -17,10 +17,10 @@
  * reached by address arithmetic from the block, and patch 0001's
  * wmem_sublet_release hands upstream's free `block + offset`, i.e. this
  * capability, not the caller's. That is the reference control 00 uses first.
- * Patch 0001 keeps two more in the block header (wmem_sublet_block_t): `life`,
- * CDERIVEd from the block, and `generation`, CDERIVEd from life; every object
+ * Patch 0001 keeps one more in the block header (wmem_sublet_block_t):
+ * `generation`, CDERIVEd from the block; every object
  * is a CDERIVE child of `generation`, and wmem_free is
- * CREVOKE(generation, object). So `generation` is the object's DIRECT parent
+ * CREVOKE(object). So `generation` is the object's DIRECT parent
  * lifetime; control 00 uses it second, on the protected build only, since the
  * release build has no such field.
  *
@@ -55,7 +55,7 @@
 struct wm_ctl_block_hdr {
   struct wm_ctl_block_hdr *prev, *next;
 #if WM_CTL_PROTECTED
-  wmem_sublet_block_t sublet; /* patch 0001: life, generation */
+  wmem_sublet_block_t sublet; /* patch 0001: generation */
 #endif
 };
 struct wm_ctl_chunk {

@@ -627,6 +627,19 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
         StackAlign = MaybeAlign(ValVT.getScalarSizeInBits() / 8).valueOrOne();
       }
     }
+  } else if (!PendingLocs.empty() &&
+             DL.isNonIntegralAddressSpace(DL.getAllocaAddrSpace())) {
+    // C-68: the end of a split scalar passed indirectly. Its address is a
+    // stack temporary's, which is a capability when allocas are; pass it as
+    // one, in a C register or a 16-byte, 16-aligned slot, as any capability
+    // argument goes. An X register would strip the tag, and the callee would
+    // load through an untagged base.
+    Reg = State.AllocateReg(Capstone::getArgGPCRs(ABI));
+    StoreSizeBytes = 16;
+    StackAlign = Align(16);
+    for (auto &It : PendingLocs)
+      It = CCValAssign::getPending(It.getValNo(), It.getValVT(), MVT::c128,
+                                   It.getLocInfo());
   } else {
     Reg = State.AllocateReg(ArgGPRs);
   }

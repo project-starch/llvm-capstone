@@ -1,0 +1,75 @@
+{
+  "booted": true,
+  "reached_script": true,
+  "completed": true,
+  "panic": false,
+  "exits": {
+    "split0": 0,
+    "split1": 0,
+    "split2": 0,
+    "split3": 139,
+    "split4": 139,
+    "split5": 0
+  },
+  "output": {
+    "split0": [
+      "PROBE_STAGE:0 control -- carve, write both children, free",
+      "PROBE_WROTE:both children",
+      "PROBE_OK:0",
+      "CAPSTONE_VM_STATS arenas=10 pages=31 peak=32 nodes=30 steps=94 faults=22 collections=0 reclaimed=0 rounds=6 bytes_in=159 bytes_out=64 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=212477100 elapsed_ns=782611100",
+      "CAPSTONE_VM_STEPS quantum=55 service=14 fault=9 other=0 service0_delegate=0 service1_map=6 service2_unmap=1 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=1 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=6 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=probe-derive-split.dom sha256=663bfe0f09875cd19587fc8a21f4a9340d960901b3375de1a7e1b49626510b22"
+    ],
+    "split1": [
+      "PROBE_STAGE:1 geometry",
+      "PROBE_GEOM object_off=0 parent=[273326485648,273326485904) header=[273326485648,273326485696) payload=[273326485696,273326485904)",
+      "PROBE_OK:1",
+      "CAPSTONE_VM_STATS arenas=11 pages=33 peak=33 nodes=30 steps=39 faults=23 collections=0 reclaimed=0 rounds=6 bytes_in=228 bytes_out=64 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=55829100 elapsed_ns=103316100",
+      "CAPSTONE_VM_STEPS quantum=1 service=13 fault=1 other=0 service0_delegate=0 service1_map=6 service2_unmap=0 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=1 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=6 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=probe-derive-split.dom sha256=663bfe0f09875cd19587fc8a21f4a9340d960901b3375de1a7e1b49626510b22"
+    ],
+    "split2": [
+      "PROBE_STAGE:2 the header survives the payload's revoke",
+      "PROBE_REVOKED:payload",
+      "PROBE_OK:2 header still writable after the payload died",
+      "CAPSTONE_VM_STATS arenas=12 pages=33 peak=33 nodes=32 steps=39 faults=23 collections=0 reclaimed=0 rounds=6 bytes_in=197 bytes_out=64 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=70329400 elapsed_ns=130460700",
+      "CAPSTONE_VM_STEPS quantum=0 service=14 fault=2 other=0 service0_delegate=0 service1_map=7 service2_unmap=0 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=1 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=6 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=probe-derive-split.dom sha256=663bfe0f09875cd19587fc8a21f4a9340d960901b3375de1a7e1b49626510b22"
+    ],
+    "split3": [
+      "PROBE_STAGE:3 a revoked payload denies",
+      "PROBE_ABOUT_TO_FAULT:3 storing through the revoked payload",
+      "[CAPSTONE] Cap mem access on revoked capability: pc = 3f904818f0, rs1 = x13, imm = 0, cursor = 3f905170c0, bounds = (3f905170c0, 3f90517190)",
+      "capstone-exec: domain fault cause=25 pc=0x3f904818f0 address=0x3f905170c0 ra=0x3f9048e368 fp=0x3f8fffff60 entry=0x3f904807d4 code=0x3f90480000-0x3f90500000 last=0x42 preparing=0x42 sha256=663bfe0f09875cd19587fc8a21f4a9340d960901b3375de1a7e1b49626510b22 image=probe-derive-split.dom chain=0x3f90480a38,0x3f904800a8",
+      "Segmentation fault"
+    ],
+    "split4": [
+      "PROBE_STAGE:4 re-derive over the same bytes (the AG(cache) hit)",
+      "PROBE_OK:4a the fresh child works",
+      "PROBE_ABOUT_TO_FAULT:4 storing through the PREVIOUS tenant's alias",
+      "[CAPSTONE] Cap mem access on revoked capability: pc = 3faa9018f0, rs1 = x13, imm = 0, cursor = 3faa9b30c0, bounds = (3faa9b30c0, 3faa9b3190)",
+      "capstone-exec: domain fault cause=25 pc=0x3faa9018f0 address=0x3faa9b30c0 ra=0x3faa90e0b4 fp=0x3faa7fff60 entry=0x3faa9007d4 code=0x3faa900000-0x3faa980000 last=0x42 preparing=0x42 sha256=663bfe0f09875cd19587fc8a21f4a9340d960901b3375de1a7e1b49626510b22 image=probe-derive-split.dom chain=0x3faa900a38,0x3faa9000a8",
+      "Segmentation fault"
+    ],
+    "split5": [
+      "PROBE_STAGE:5 reading the CURSOR of a revoked capability",
+      "PROBE_ABOUT_TO_FAULT:5 reading the revoked payload's cursor",
+      "PROBE_OK:5 the cursor read did NOT trap, it gave 273002852544",
+      "CAPSTONE_VM_STATS arenas=11 pages=32 peak=32 nodes=30 steps=37 faults=22 collections=0 reclaimed=0 rounds=6 bytes_in=243 bytes_out=64 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=74508700 elapsed_ns=127621200",
+      "CAPSTONE_VM_STEPS quantum=0 service=13 fault=0 other=0 service0_delegate=0 service1_map=6 service2_unmap=0 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=1 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=6 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+      "capstone-exec: exit image=probe-derive-split.dom sha256=663bfe0f09875cd19587fc8a21f4a9340d960901b3375de1a7e1b49626510b22"
+    ]
+  },
+  "serial_log": "probe-derive-split.serial.log",
+  "filtered": {
+    "what": "CAPSTONE_VM_ADD_OK launcher mapping lines and kernel console lines removed from output; exits and every other line kept",
+    "removed_per_run": {
+      "split0": 0,
+      "split1": 0,
+      "split2": 0,
+      "split3": 0,
+      "split4": 0,
+      "split5": 0
+    }
+  }
+}

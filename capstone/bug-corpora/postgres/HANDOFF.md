@@ -2,6 +2,23 @@
 
 Written 2026-10-06, when this branch was parked to go back to SQLite.
 
+## 2026-11-11: re-measured on the one-operand CREVOKE and CRENEW
+
+After the lifetime instructions changed and the memory-context port's patch 0003 was converted,
+the virtual arms were run again on the emulator with the new encoding. No verdict moved.
+
+- `mmgr-repros`: `virtual-malloc` MISSED 5/5, `virtual-pg-pools` CAUGHT 5/5
+  (`mmgr-repros/results/2026-11-11-virtual`).
+- `sql-repros`: `virtual-pg-pools` CAUGHT 7, MISSED 1 (05), NO-READING 1 (09), the nine verdicts
+  of 2026-10-21 (`sql-repros/results/2026-11-11-virtual`); the lifetime controls hold on both arms
+  (`sql-repros/results/2026-11-11-controls`). `virtual-malloc` was not re-run.
+- `c-repros`: `virtual-malloc` CAUGHT 5/5 (`c-repros/results/2026-11-11-virtual`).
+- `resowner-repros`: not run. Its virtual arms are still not written; only the host runner exists.
+
+Patch 0003 gained one thing on the way: a block that `pfree` or `repalloc` reaches from one of its
+chunks now goes back to `malloc` through the pointer `malloc` returned, kept in the block header.
+The evidence is in `ports/postgres/memory-contexts/results/2026-11-11-virtual`.
+
 ## The four buckets, as built
 
 |            | nested | non-nested |

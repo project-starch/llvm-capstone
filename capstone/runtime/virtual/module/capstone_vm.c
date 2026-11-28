@@ -52,6 +52,24 @@ _Static_assert(sizeof(struct cv_step) == 136, "cv_step is two user-copy chunks a
 #include "native-grant.h"
 _Static_assert(CV_NODE_RESERVE == CAP_REV_TABLE_RESERVE, "processor reserve ABI");
 
+#ifdef CAPSTONE_VM_BENCH_HPM
+#ifndef CAPSTONE_VM_BENCH_COUNTERS
+#error "CAPSTONE_VM_BENCH_HPM needs CAPSTONE_VM_BENCH_COUNTERS"
+#endif
+/* Performance build only: hpmcounter3..8 (CSR 0xC03-0xC08) read around every CSRUNV, beside cycle and instret.
+ * The module only READS them. Which event each one counts is set in M-mode by a firmware built with
+ * CAPSTONE_HPM_EVENTS (mhpmevent3..8, and mcountinhibit[8:3] cleared); the board kernel has no perf driver to change
+ * them. CVA6's counters have no privilege filter, so a window counts what cycle counts: the context, plus any monitor
+ * work inside its CSRUNV. On a firmware that leaves them inhibited every reading is 0: the control that the events
+ * were set. */
+#define CV_BENCH_HPM_N 6
+static __always_inline void cv_read_hpm(unsigned long v[CV_BENCH_HPM_N])
+{
+    v[0] = csr_read(CSR_HPMCOUNTER3); v[1] = csr_read(CSR_HPMCOUNTER4); v[2] = csr_read(CSR_HPMCOUNTER5);
+    v[3] = csr_read(CSR_HPMCOUNTER6); v[4] = csr_read(CSR_HPMCOUNTER7); v[5] = csr_read(CSR_HPMCOUNTER8);
+}
+#endif
+
 /* One registered mapping. Arenas are allocated one by one and never move, so
  * the remap window may hold a pointer across its unlocked mremap. */
 struct arena {
@@ -177,6 +195,14 @@ struct context {
      * summed over every thread of the context. Linux's own work (escapes, delegated calls, fault
      * resolution) is outside the window. */
     atomic64_t bench_cycles, bench_instret, bench_entries;
+#ifdef CAPSTONE_VM_BENCH_HPM
+    atomic64_t bench_hpm[CV_BENCH_HPM_N];
+#endif
+    /* perf/exit-timing-vp2: where the time between two CSRUNVs goes, in cycles, all under vm_lock.
+     * et_kcyc: CV_STEP ioctls minus their CSRUNV windows, of which et_rcyc is the in-loop fault resolution;
+     * et_ucyc: from one CV_STEP's return to the next CV_STEP's start (the launcher, the calls it makes for the
+     * context, interrupts, other tasks); et_ocyc: every other ioctl; et_ev[k]: CSRUNV exits by event kind. */
+    unsigned long long et_kcyc, et_rcyc, et_ucyc, et_ocyc, et_steps, et_last, et_ev[8];
 #endif
     /* The image file, writers denied from CV_IMAGE until release. */
     struct file *image;
@@ -1487,8 +1513,28 @@ static void clear_page_tags(struct page *page)
     }
 }
 
+/* Exit teardown sweep (perf/retire-sweep-vp2), default 0 = the read-and-rewrite above for every page.
+ * Only for a teardown run while the owning task is exiting (PF_EXITING): its pages are dead, so their
+ * bytes need not be kept, only their tags cleared. 1: store zero into one word of each granule (no load:
+ * a scalar store clears its granule's tag, as clear_page_tags relies on). 2: MEASUREMENT ONLY, no sweep
+ * at all -- leaves tags in frames returned to Linux; never set outside a timing boot. 3: mode 1 for EVERY
+ * retire, CV_RETIRE included: the vp2 launcher's unmap_arena munmaps the whole mapping right after its
+ * CV_RETIRE (exec.c), so those bytes are dead too; a launcher that kept using a retired range would read
+ * zeros, never a tag. Measured cost of
+ * mode 0 on silicon: about 0.77 ms per page (557.xz_r test, 130,628 pages, ~100 s per command). */
+static unsigned int retire_exit_sweep;
+module_param(retire_exit_sweep, uint, 0644);
+static void zero_page_tags(struct page *page)
+{
+    unsigned long *p = page_address(page);
+    for (unsigned j = 0; j < PAGE_SIZE / sizeof(*p); j += 16 / sizeof(*p))
+        WRITE_ONCE(p[j], 0);
+}
+
 static int retire(struct context *c, struct arena *a, bool destroying)
 {
+    unsigned int mode = READ_ONCE(retire_exit_sweep);
+    unsigned int sweep = mode == 3 ? 1 : destroying && (current->flags & PF_EXITING) ? mode : 0;
     unsigned long flags, old, status;
     unsigned i, swept;
     if (!destroying && arena_has_thread_frame(c, a))
@@ -1535,7 +1581,9 @@ static int retire(struct context *c, struct arena *a, bool destroying)
         unsigned n = 0;
         for (i = 0; !unpinned && i < a->count; ++i) {
             if (!a->pages[i]) continue;
-            clear_page_tags(a->pages[i]);
+            /* retire_exit_sweep (exiting task only, see zero_page_tags): 1 one store per granule, 2 none */
+            if (sweep == 1) zero_page_tags(a->pages[i]);
+            else if (sweep != 2) clear_page_tags(a->pages[i]);
             a->pages[n++] = a->pages[i];
         }
         if (n) {
@@ -2069,6 +2117,18 @@ static int remap_end(struct context *c, const struct cv_remap *r)
 /* CV_STEP resolves faults and resumes for at most one supervisor quantum;
  * CV_RESOLVE gives its pin-ahead window the same bound. */
 #define CV_STEP_BUDGET_NS (5 * NSEC_PER_MSEC)
+/* step_budget_ns (perf/retire-sweep-vp2): the budget above as a 0644 parameter, default unchanged. On the
+ * 25 MHz board a pin costs about 1.2 ms, so 5 ms stops a pin-ahead window after its first 16-page batch
+ * (board faults ~ pages/17 on 557.xz_r and 519.lbm_r) and sends the fault back to the launcher; the
+ * hardware quantum there is 80 ms. */
+static unsigned long step_budget_ns = CV_STEP_BUDGET_NS;
+module_param(step_budget_ns, ulong, 0644);
+/* resume_quantum (perf/exit-timing-vp2), default off: a quantum exit (event 1) resumes inside CV_STEP, as a resolved
+ * fault does, instead of returning to the launcher. The launcher's own answer to event 1 is only sched_yield() and the
+ * next CV_STEP (exec.c virtual_service_loop); the stop check before every entry (cv_step_stop: resched, signals, the
+ * step budget) still returns it there whenever a yield could matter. Useful only with a step budget above the quantum. */
+static bool resume_quantum;
+module_param(resume_quantum, bool, 0644);
 
 #ifdef CV_TEST_HOOKS
 /* Test build only (make CV_TEST_HOOKS=1; run-step-hooks.py). The production
@@ -2508,6 +2568,19 @@ module_param(bench_instret, ullong, 0444);
 /* CSRUNV entries: each one after the first in a timed region is an escape whose resume (switcher walk,
  * the satp write's TLB flush, the refill) lands inside the next window, so a reading carries its count. */
 module_param(bench_entries, ullong, 0444);
+#ifdef CAPSTONE_VM_BENCH_HPM
+/* hpm_snapshot (perf/exit-timing-vp2), read-only: "cycle instret hpm3 .. hpm8" read at the moment of the read. A stage
+ * reads it before and after a command, so a process that runs no context (Plain) gets the same machine-wide counts as
+ * one that does: the program, the kernel and everything else on the hart in that window. */
+static int cv_hpm_snapshot_get(char *buf, const struct kernel_param *kp)
+{
+    unsigned long v[CV_BENCH_HPM_N], cy = csr_read(CSR_CYCLE), in = csr_read(CSR_INSTRET);
+    cv_read_hpm(v);
+    return sysfs_emit(buf, "%lu %lu %lu %lu %lu %lu %lu %lu\n", cy, in, v[0], v[1], v[2], v[3], v[4], v[5]);
+}
+static const struct kernel_param_ops cv_hpm_snapshot_ops = {.get = cv_hpm_snapshot_get};
+module_param_cb(hpm_snapshot, &cv_hpm_snapshot_ops, NULL, 0444);
+#endif
 #endif
 
 #define CV_EMIT(fmt, ...) do {                      \
@@ -3062,11 +3135,19 @@ static void node_stats(struct context *c)
  * inode at each lookup, so a writer through a hard link is counted elsewhere;
  * NFS, FUSE and overlayfs make no such promise either. tmpfs covers memfds,
  * whose own descriptor is not counted: the launcher requires their seals. */
+/* image_rootfs (perf/retire-sweep-vp2), default off: also accept the initramfs ("rootfs", tmpfs- or
+ * ramfs-backed) and ramfs, which keep one in-memory inode per file like tmpfs. Off, an image on the
+ * board's initramfs takes the launcher's sealed-copy fallback: launch_ns grows with the file size
+ * (502.gcc_r 21.9 s for 15.6 MB, 519.lbm_r 1.3 s for 0.27 MB). */
+static bool image_rootfs;
+module_param(image_rootfs, bool, 0644);
 static bool one_inode_per_file(struct file *file)
 {
     static const char *const fs[] = {"tmpfs", "ext2", "ext3", "ext4", "btrfs",
                                      "xfs", "erofs", "squashfs"};
     const char *name = file_inode(file)->i_sb->s_type->name;
+    if (READ_ONCE(image_rootfs) && (!strcmp(name, "rootfs") || !strcmp(name, "ramfs")))
+        return true;
     for (unsigned i = 0; i < ARRAY_SIZE(fs); ++i)
         if (!strcmp(name, fs[i])) return true;
     return false;
@@ -3079,8 +3160,15 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
     unsigned long flags;
     if (current->mm != c->mm)
         return -EPERM;
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+    unsigned long et_t0, et_in = 0;
+#endif
 retry:
     if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+    et_t0 = csr_read(CSR_CYCLE);
+    if (op == CV_STEP && c->et_last) c->et_ucyc += et_t0 - c->et_last;
+#endif
     if (c->remapping && op != CV_REMAP_END) {
         mutex_unlock(&vm_lock);
         if (wait_event_interruptible(c->remap_wait, !READ_ONCE(c->remapping))) return -EINTR;
@@ -3324,7 +3412,7 @@ thread_unwind:
         /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
          * faulting would never be preempted: bound the resolved faults by
          * one quantum of this ioctl, then return and release vm_lock. */
-        budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
+        budget_end = ktime_get_ns() + READ_ONCE(step_budget_ns);
         TEST_STEP_BEGIN();
         TEST_HOOK(3);
         for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
@@ -3370,11 +3458,21 @@ thread_unwind:
 #ifdef CAPSTONE_VM_BENCH_COUNTERS
             {
                 /* Interrupts are off: both reads bracket the CSRUNV alone. */
+#ifdef CAPSTONE_VM_BENCH_HPM
+                unsigned long hp0[CV_BENCH_HPM_N], hp1[CV_BENCH_HPM_N];
+                cv_read_hpm(hp0);
+#endif
                 unsigned long cy0 = csr_read(CSR_CYCLE), in0 = csr_read(CSR_INSTRET);
                 t->event = run_event(t, action);
                 unsigned long dcy = csr_read(CSR_CYCLE) - cy0, din = csr_read(CSR_INSTRET) - in0;
+#ifdef CAPSTONE_VM_BENCH_HPM
+                cv_read_hpm(hp1);
+                for (int k = 0; k < CV_BENCH_HPM_N; k++)
+                    atomic64_add(hp1[k] - hp0[k], &c->bench_hpm[k]);
+#endif
                 atomic64_add(dcy, &c->bench_cycles);
                 atomic64_add(din, &c->bench_instret);
+                et_in += dcy; ++c->et_ev[t->event < 7 ? t->event : 7];
                 WRITE_ONCE(bench_cycles, bench_cycles + dcy);
                 WRITE_ONCE(bench_instret, bench_instret + din);
                 WRITE_ONCE(bench_entries, bench_entries + 1);
@@ -3408,6 +3506,8 @@ thread_unwind:
                         escape_prints, action, t->event,
                         t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
             }
+            if (t->event == 1 && READ_ONCE(resume_quantum))
+                continue;   /* the stop check before the next entry hands it to the launcher when it must yield */
             if (t->event != 4)
                 break;
             /* Resolve a page fault here, as CV_RESOLVE would, and resume
@@ -3435,8 +3535,17 @@ thread_unwind:
                 TEST_REAL_STOP(false, budget_end);
                 break;
             }
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+            {
+                unsigned long et_r0 = csr_read(CSR_CYCLE);
+                int et_rc = resolve(c, t, budget_end);
+                c->et_rcyc += csr_read(CSR_CYCLE) - et_r0;
+                if (et_rc) break;
+            }
+#else
             if (resolve(c, t, budget_end))
                 break;
+#endif
             t->sfence_pending = true;
             if (!text) {
                 ++c->stats.faults;
@@ -3474,7 +3583,7 @@ thread_unwind:
         struct cv_thread *t;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
-        rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
+        rc = t ? resolve(c, t, ktime_get_ns() + READ_ONCE(step_budget_ns)) : -ESRCH;
         if (!rc) t->sfence_pending = true;
     } else if (op == CV_TOUCH) {
         struct cv_touch r;
@@ -3513,6 +3622,13 @@ out:
      * terminal exit, a discard, an error path -- instead of enumerating them and
      * missing one. A spurious wake costs a re-check. */
     wake_up_all(&slot_wait);
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+    {
+        unsigned long et_t1 = csr_read(CSR_CYCLE);
+        if (op == CV_STEP) { c->et_kcyc += et_t1 - et_t0 - et_in; ++c->et_steps; c->et_last = et_t1; }
+        else c->et_ocyc += et_t1 - et_t0;
+    }
+#endif
     mutex_unlock(&vm_lock);
     return rc;
 }
@@ -3669,6 +3785,7 @@ static int vm_release(struct inode *inode, struct file *f)
          * whose broadcasts no longer collide. This line makes the difference readable: one per
          * context, always KERN_EMERG because a verdict reads it. */
         unsigned long attempted = 0, before = c->retired_flat, pushed_before = c->pushed_flat;
+        unsigned long long sweep_pages = c->stats.pinned_pages, sweep_t0 = ktime_get_ns();
         /* One pass over the arenas present now, the next node taken before each
          * retire. The pass ends on its own, not because retire() empties the
          * tree: a refusal added there later leaves a warning and a leaked
@@ -3684,6 +3801,10 @@ static int vm_release(struct inode *inode, struct file *f)
         }
         WARN_ON(!RB_EMPTY_ROOT(&c->arenas));
         xa_destroy(&c->ids);
+        /* Must-fire, its own prefix: the teardown pass's pages and time, and the sweep mode it ran. */
+        pr_emerg("capstone_vm: teardown pages=%llu ns=%llu sweep=%u exiting=%d\n",
+                 sweep_pages - c->stats.pinned_pages, ktime_get_ns() - sweep_t0,
+                 READ_ONCE(retire_exit_sweep), !!(current->flags & PF_EXITING));
         if (node_table_flat)
             pr_emerg("capstone_vm: release retires attempted=%lu succeeded=%lu pushed=%lu first_id=%lu\n",
                      attempted, c->retired_flat - before, c->pushed_flat - pushed_before,
@@ -3694,6 +3815,18 @@ static int vm_release(struct inode *inode, struct file *f)
     pr_emerg("capstone_vm: bench cycles=%lld instret=%lld entries=%lld\n",
              (long long)atomic64_read(&c->bench_cycles), (long long)atomic64_read(&c->bench_instret),
              (long long)atomic64_read(&c->bench_entries));
+    /* Must-fire, its own prefix (never "capstone_vm: bench"), one per context: perf/exit-timing-vp2. */
+    pr_emerg("capstone_vm: exits steps=%llu kcyc=%llu rcyc=%llu ucyc=%llu ocyc=%llu ev=%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
+             c->et_steps, c->et_kcyc, c->et_rcyc, c->et_ucyc, c->et_ocyc, c->et_ev[0], c->et_ev[1], c->et_ev[2],
+             c->et_ev[3], c->et_ev[4], c->et_ev[5], c->et_ev[6], c->et_ev[7]);
+#ifdef CAPSTONE_VM_BENCH_HPM
+    /* Its own prefix, never "capstone_vm: bench": a stage's run.sh takes the LAST dmesg line matching that and counts
+     * them to check freshness, so a second bench line per context broke both (QEMU gate, 3 Nov). */
+    pr_emerg("capstone_vm: hpm hpm3=%lld hpm4=%lld hpm5=%lld hpm6=%lld hpm7=%lld hpm8=%lld\n",
+             (long long)atomic64_read(&c->bench_hpm[0]), (long long)atomic64_read(&c->bench_hpm[1]),
+             (long long)atomic64_read(&c->bench_hpm[2]), (long long)atomic64_read(&c->bench_hpm[3]),
+             (long long)atomic64_read(&c->bench_hpm[4]), (long long)atomic64_read(&c->bench_hpm[5]));
+#endif
 #endif
     list_for_each_entry_safe(t, tmp, &c->threads, link) {
         list_del(&t->link);

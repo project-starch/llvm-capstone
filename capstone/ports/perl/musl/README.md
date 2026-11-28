@@ -98,12 +98,19 @@ physical Sublet heap; their recorded results stay in the corpus's
 
 On the virtual profile the SV heads are protected by the two Sublet instructions directly:
 `PERLD_SUBLET=1` applies [`../sublet/patches/5.36.3`](../sublet/patches/5.36.3) with
-`-DPERL_CAPSTONE_SUBLET`, and each head is handed out as a CDERIVE child of its arena's
-lifetime and revoked by CREVOKE when it is freed. No adapter, region or grant is involved; the
+`-DPERL_CAPSTONE_SUBLET`, and each head is handed out as a CDERIVE child of its arena
+and revoked by CREVOKE when it is freed. No adapter, region or grant is involved; the
 patch header says what it changes and why. Measured 2026-10-11 on the Sublet-lifetime QEMU
 (`bug-corpora/perl/release-differential`): on that platform backticks fault with cause 25 in
 `fileno` and a piped `open` returns ENOSYS, on the stock image and the protected one alike, so
 the delegated `popen` path of patch 0008 does not work there; `system()` returns -1.
+
+On the one-operand lifetime instructions (2026-11-11,
+[`results/2026-11-11-same-answers`](results/2026-11-11-same-answers/README.md)) the protected image gives the stock
+image's output on all nine `t/base` files and on `scripts/smoke.pl` at 2,000 and 6,000 objects, with no domain fault;
+backticks no longer fault (`base/term.t` runs to its end with `not ok 2` on both images). At the script's default
+20,000 objects the protected image does not finish within 600 s where the stock image takes 159 s; Perl built from
+unmodified dev with the two-operand patch has the same cost per object.
 
 An upstream TAP harness can run several tests without rebooting. Place the
 upstream `t/` and `lib/` on the share, install the host CLI, then from the host's

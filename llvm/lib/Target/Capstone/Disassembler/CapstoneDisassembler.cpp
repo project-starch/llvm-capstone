@@ -227,6 +227,29 @@ static DecodeStatus DecodeSPRegisterClass(MCInst &Inst,
   return MCDisassembler::Success;
 }
 
+// cap-crvc: the 3-bit capability register field (c8-c15), and the fixed sp and
+// gp operands of c.cincoffset16sp and c.scc.
+static DecodeStatus DecodeGPCRCRegisterClass(MCInst &Inst, uint32_t RegNo,
+                                             uint64_t Address,
+                                             const MCDisassembler *Decoder) {
+  if (RegNo >= 8)
+    return MCDisassembler::Fail;
+  Inst.addOperand(MCOperand::createReg(Capstone::C8 + RegNo));
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus DecodeGPCRSPRegisterClass(MCInst &Inst,
+                                              const MCDisassembler *Decoder) {
+  Inst.addOperand(MCOperand::createReg(Capstone::C2));
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus DecodeGPCRGPRegisterClass(MCInst &Inst,
+                                              const MCDisassembler *Decoder) {
+  Inst.addOperand(MCOperand::createReg(Capstone::C3));
+  return MCDisassembler::Success;
+}
+
 static DecodeStatus DecodeGPRX5RegisterClass(MCInst &Inst,
                                              const MCDisassembler *Decoder) {
   Inst.addOperand(MCOperand::createReg(Capstone::X5));
@@ -697,6 +720,8 @@ static constexpr FeatureBitset XAndesGroup = {
 static constexpr FeatureBitset XSMTGroup = {Capstone::FeatureVendorXSMTVDot};
 
 static constexpr DecoderListEntry DecoderList32[]{
+    // cap-auipcgp: custom-1, only under the feature.
+    {DecoderTableCapAUIPCGP32, {Capstone::FeatureCapAUIPCGP}, "PC-relative capability derive"},
     // Vendor Extensions
     {DecoderTableXCV32, XCVFeatureGroup, "CORE-V extensions"},
     {DecoderTableXRivos32, XRivosFeatureGroup, "Rivos"},
@@ -761,6 +786,10 @@ static constexpr DecoderListEntry DecoderList16[]{
      {Capstone::FeatureVendorXqccmp},
      "Xqccmp (Qualcomm 16-bit Push/Pop & Double Move Instructions)"},
     {DecoderTableXwchc16, {Capstone::FeatureVendorXwchc}, "WCH QingKe XW"},
+    // cap-crvc reuses standard slots, so it is tried first, and only under the
+    // feature (the CRVC decode mode).
+    {DecoderTableCapCRVC16, {Capstone::FeatureCapCRVC},
+     "Compressed capability instructions (CRVC mode)"},
     // Standard Extensions
     // DecoderTableZicfiss16 must be checked before DecoderTable16.
     {DecoderTableZicfiss16, {}, "Zicfiss (Shadow Stack 16-bit)"},

@@ -182,6 +182,32 @@ uint32_t RISCV::calcEFlags() const {
       Err(ctx) << f << ": cannot link object files with different EF_RISCV_RVE";
   }
 
+  // Capstone stage 2 (EF_CAPSTONE_CRVC): an image with it is decoded in the
+  // CRVC mode, where C.FLD, C.FSD, C.FLDSP, C.FSDSP and C.LUI x0 mean
+  // capability instructions. An object compiled with C but without the mode
+  // may hold those forms, so it cannot join a CRVC image. An object without
+  // EF_CAPSTONE_RVC holds no 16-bit instruction and can.
+  // capstone/docs/plans/2026-11-21-capability-rvc-stage2-prototype.md
+  if (ctx.arg.emachine == EM_CAPSTONE) {
+    const InputFile *crvc = nullptr;
+    for (InputFile *f : ctx.objectFiles)
+      if (getEFlags(ctx, f) & EF_CAPSTONE_CRVC) {
+        crvc = f;
+        break;
+      }
+    if (crvc) {
+      target |= EF_CAPSTONE_CRVC;
+      for (InputFile *f : ctx.objectFiles) {
+        uint32_t eflags = getEFlags(ctx, f);
+        if ((eflags & EF_CAPSTONE_RVC) && !(eflags & EF_CAPSTONE_CRVC))
+          Err(ctx) << f
+                   << ": cannot link an object with compressed instructions "
+                      "but without EF_CAPSTONE_CRVC into an image with it, from "
+                   << crvc;
+      }
+    }
+  }
+
   return target;
 }
 
@@ -431,8 +457,26 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
 
-  case R_RISCV_GOT_HI20:
   case R_RISCV_PCREL_HI20:
+    // Capstone (C-56): a pc-relative reference to an undefined weak symbol is
+    // resolved to the absolute value (getRelocTargetVA), so the auipc becomes a
+    // lui with the same rd and an absolute address of 0 is formed. A call
+    // (R_RISCV_CALL) reaches here through relocateNoSym, with no symbol, and
+    // is unchanged.
+    if (ctx.arg.emachine == EM_CAPSTONE && rel.sym && rel.sym->isUndefined() &&
+        (read32le(loc) & 0x7f) == 0x17)
+      write32le(loc, (read32le(loc) & ~0x7fu) | 0x37);
+    // cap-auipcgp: auipcgp (custom-1) derives from gp. There is no form of it
+    // that yields a null base, so an undefined symbol is an error rather than
+    // a capability with a wrong cursor.
+    if (ctx.arg.emachine == EM_CAPSTONE && rel.sym && rel.sym->isUndefined() &&
+        (read32le(loc) & 0x7f) == 0x2b) {
+      Err(ctx) << getErrorLoc(ctx, loc) << "auipcgp against undefined symbol "
+               << rel.sym;
+      return;
+    }
+    [[fallthrough]];
+  case R_RISCV_GOT_HI20:
   case R_RISCV_TLSDESC_HI20:
   case R_RISCV_TLS_GD_HI20:
   case R_RISCV_TLS_GOT_HI20:
@@ -788,12 +832,24 @@ static void relaxTlsLe(Ctx &ctx, const InputSection &sec, size_t i,
     sec.relaxAux->relocTypes[i] = R_RISCV_RELAX;
     remove = 4;
     break;
-  case R_RISCV_TPREL_LO12_I:
+  case R_RISCV_TPREL_LO12_I: {
     // addi rd, rd, %tprel_lo(x) => addi rd, tp, st_value(x)
+    //
+    // Capstone (C-47): the thread pointer is a capability, and the sequence is
+    // `lui rd, %tprel_hi(x); addi rd, rd, %tprel_lo(x); cincoffset rc, tp, rd`.
+    // There is no %tprel_add: the integer addi forms the offset and the
+    // cincoffset adds tp. Its relaxed form must keep the offset an integer,
+    // `addi rd, zero, st_value(x)`; rebasing it on tp would add tp twice.
+    // A capability-form consumer (cincoffsetimm, opcode custom-2) is the
+    // plain-RISC-V case and takes tp.
+    unsigned base = X_TP;
+    if (ctx.arg.emachine == EM_CAPSTONE && (insn & 0x7f) == 0x13)
+      base = 0;
     sec.relaxAux->relocTypes[i] = R_RISCV_32;
-    insn = (insn & ~(31 << 15)) | (X_TP << 15);
+    insn = (insn & ~(31 << 15)) | (base << 15);
     sec.relaxAux->writes.push_back(setLO12_I(insn, val));
     break;
+  }
   case R_RISCV_TPREL_LO12_S:
     // sw rs, %tprel_lo(x)(rd) => sw rs, st_value(x)(rd)
     sec.relaxAux->relocTypes[i] = R_RISCV_32;

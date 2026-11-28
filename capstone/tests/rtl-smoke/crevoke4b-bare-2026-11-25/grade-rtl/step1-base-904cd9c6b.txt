@@ -1,0 +1,19 @@
+# c4b-grade.py <captures> expected-vectors.json base  (captures: /mnt/hdd/<user>/capstone/c4bkit/step1-b2-20261125T0859/NN-name/uart.txt, board 2)
+EXACT sublet-life: E 25  M/R {}
+EXACT b5b2-crevint: E 11  M/R {2: '0x1083'}
+EXACT b5b2-crevint-mt: E 9  M/R {2: '0x12cc', 8: '0x5', 9: '0x0'}
+EXACT b5b2-crevint-sh: E 5  M/R {2: '0x12f9', 4: '0x80000008', 5: '0x80000009', 8: '0x2', 9: '0x0', 10: '0x0', 11: '0x3365444f5c1c0d1'}
+EXACT b5b2-crevint-lat: E 9  M/R {2: '0x12d0', 8: '0x2', 9: '0x0', 13: '0x806', 14: '0xffffffffffffff8a', 15: '0x0', 16: '0x0', 17: '0x0', 18: '0x0', 19: '0x0', 20: '0x0', 21: '0x756e', 22: '0x3ab7'} lat=[2054, -118, 0, 0, 0, 0, 0, 0] cal=30062/15031 band VOID (no positive latency after the first)
+EXACT b5b2-crevsv-none: E 8  M/R {2: '0x12f3', 8: '0x2', 9: '0x0', 10: '0x0'}
+EXACT b5b2-crevsv-srev: E 8  M/R {2: '0x132b', 8: '0x2', 9: '0x0', 10: '0x0'}
+EXACT b5b2-crevsv-straw: E 8  M/R {2: '0x1312', 8: '0x2', 9: '0x0', 10: '0x0'}
+EXACT b5b2-crevsv-derive: E 5  M/R {2: '0x14af', 4: '0x8000000a', 5: '0x8000000b', 8: '0x4', 9: '0x0', 10: '0x0', 11: '0xe3377a44a5c188c1'}
+EXACT b5b2-crevsv-kill: E 4  M/R {2: '0x134b', 3: '0x80000008', 4: '0x80000009', 5: '0x8000000a', 8: '0x2', 9: '0x0', 10: '0x0', 11: '0xf3372c44d23f41be'}
+EXACT b5b2-sbdrain-none: E 4  M/R {}
+EXACT b5b2-sbdrain-fill: E 4  M/R {}
+EXACT b5b2-sbdrain-fence: E 4  M/R {}
+EXACT b5b2-sbdrain-mint: E 4  M/R {}
+EXACT b5b2-sbdrain-sret: E 4  M/R {}
+EXACT b5b2-sbdrain-cost0: E 3  M/R {2: '0xe3a'}
+EXACT b5b2-sbdrain-cost: E 3  M/R {2: '0xebf'}
+C4B-GRADE base: 17/17 exact on E

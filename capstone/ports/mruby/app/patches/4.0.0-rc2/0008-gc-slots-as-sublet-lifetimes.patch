@@ -1,22 +1,25 @@
 gc.c: every GC object slot a Sublet child lifetime of its heap page, under MRB_CAPSTONE_SUBLET (4.0.0-rc2).
 
 Two instructions do the work. CDERIVE makes a child capability of a
-non-linear parent, bounded to a sub-range; CREVOKE(parent, child) ends a
-direct child and everything below it.
+non-linear parent, bounded to a sub-range; CREVOKE(object) ends the
+object's lifetime and everything derived inside it.
 
-Each heap page keeps a lifetime over its slots (life, a CDERIVE of the page)
-and, per slot, the child it handed out. mrb_obj_alloc hands out the object
-as a child of life bounded to its slot, and registers that child, not the
-GC's own pointer, in the GC arena. The sweep, and free_heap at mrb_close,
-revoke the child once obj_free has freed the object, so every stale copy of
-the object's pointer is dead before the slot is reused. Freeing a page frees
-its malloc'd object, below which every child lies.
+Each heap page keeps, per slot, the child it handed out. mrb_obj_alloc hands
+out the object as a child of the page bounded to its slot, a CDERIVE of the
+page's own pointer, and registers that child, not the GC's own pointer, in
+the GC arena. The sweep, and free_heap at mrb_close, revoke the child once
+obj_free has freed the object, so every stale copy of the object's pointer
+is dead before the slot is reused. Freeing a page frees its malloc'd object,
+below which every child lies.
 
-The GC works on its own pointers, derived from the page. Where it is asked
-about a pointer that may be dead -- mrb_object_dead_p, and obj_free's walk
-of a dying fiber's frames, whose envs may have been swept earlier in the same
-sweep -- it finds the slot by address and reads it through its own pointer.
-gc_each_objects hands each live object to its callback as the object's child.
+The GC works on its own pointers, derived from the page. Such a pointer
+names the page, the parent of every child, not the object's lifetime, so
+gc_retire gives CREVOKE the child the page kept for the slot. Where the GC
+is asked about a pointer that may be dead -- mrb_object_dead_p, and
+obj_free's walk of a dying fiber's frames, whose envs may have been swept
+earlier in the same sweep -- it finds the slot by address and reads it
+through its own pointer. gc_each_objects hands each live object to its
+callback as the object's child.
 
 Without the define the preprocessed file is unchanged. Needs
 capstone/runtime/include on the include path (capstone/capability.h) and the
@@ -24,7 +27,7 @@ virtual profile.
 
 --- a/src/gc.c
 +++ b/src/gc.c
-@@ -166,12 +166,22 @@
+@@ -166,12 +166,20 @@
  #define MRB_HEAP_PAGE_SIZE 1024
  #endif
  
@@ -39,25 +42,23 @@ virtual profile.
    mrb_bool old:1;
    mrb_bool region:1;             /* from contiguous region, not malloc */
 +#ifdef MRB_CAPSTONE_SUBLET
-+  /* Sublet: the page's lifetime over its slots (CDERIVE of the page), and
-+     the child each live object was handed out as; NULL for a free slot. */
-+  void *life;
++  /* Sublet: the child each live object was handed out as; NULL for a free slot. */
 +  struct RBasic *issued[MRB_HEAP_PAGE_SIZE];
 +#endif
    RVALUE objects[MRB_HEAP_PAGE_SIZE];
  } mrb_heap_page;
  
-@@ -321,11 +331,64 @@
+@@ -321,11 +329,67 @@
    return FALSE;
  }
  
 +#ifdef MRB_CAPSTONE_SUBLET
-+/* Sublet lifetimes. Every object is handed out as a child of its page's
-+   lifetime, bounded to its slot (CDERIVE), and the sweep revokes that child
-+   when it frees the object (CREVOKE), so every copy of the object's pointer
-+   dies with it. The GC itself works on its own pointers, derived from the
-+   page. A pointer the GC is asked about may be dead, so it is never read
-+   through: the slot is found by address. */
++/* Sublet lifetimes. Every object is handed out as a child of its page,
++   bounded to its slot (CDERIVE), and the sweep revokes that child when it
++   frees the object (CREVOKE), so every copy of the object's pointer dies
++   with it. The GC itself works on its own pointers, derived from the page.
++   A pointer the GC is asked about may be dead, so it is never read through:
++   the slot is found by address. */
 +static mrb_heap_page*
 +gc_page_of(mrb_gc *gc, const RVALUE *p)
 +{
@@ -80,12 +81,15 @@ virtual profile.
 +  return &page->objects[((uintptr_t)object - (uintptr_t)page->objects) / sizeof(RVALUE)].as.basic;
 +}
 +
++/* The slot as a child of the page's own pointer. CDERIVE takes the offset from
++   that pointer's base, where a page carved from a region need not begin. */
 +static struct RBasic*
 +gc_issue(mrb_heap_page *page, RVALUE *p)
 +{
 +  size_t i = p - page->objects;
++  size_t offset = __builtin_capstone_cap_get_cursor(p) - __builtin_capstone_cap_get_base(page);
 +
-+  page->issued[i] = (struct RBasic*)capstone_cap_derive(page->life, i * sizeof(RVALUE), sizeof(RVALUE));
++  page->issued[i] = (struct RBasic*)capstone_cap_derive(page, offset, sizeof(RVALUE));
 +  return page->issued[i];
 +}
 +
@@ -94,7 +98,7 @@ virtual profile.
 +{
 +  size_t i = p - page->objects;
 +
-+  capstone_cap_revoke_child(page->life, page->issued[i]);
++  capstone_cap_release(page->issued[i]);
 +  page->issued[i] = NULL;
 +}
 +#endif
@@ -112,19 +116,7 @@ virtual profile.
    return is_dead(gc, object);
  }
  
-@@ -350,6 +413,11 @@
-     prev = p;
-   }
-   page->freelist = prev;
-+#ifdef MRB_CAPSTONE_SUBLET
-+  page->life = capstone_cap_derive(page,
-+      __builtin_capstone_cap_get_cursor(page->objects) - __builtin_capstone_cap_get_base(page),
-+      sizeof(page->objects));
-+#endif
- }
- 
- static void
-@@ -444,8 +512,12 @@
+@@ -444,8 +508,12 @@
      tmp = page;
      page = page->next;
      for (p = tmp->objects, e=p+MRB_HEAP_PAGE_SIZE; p<e; p++) {
@@ -138,7 +130,7 @@ virtual profile.
      }
      if (!tmp->region) {
        mrb_free(mrb, tmp);
-@@ -601,6 +673,9 @@
+@@ -601,6 +669,9 @@
      add_heap(mrb, gc);
    }
  
@@ -148,7 +140,7 @@ virtual profile.
    RVALUE *p = gc->free_heaps->freelist;
    gc->free_heaps->freelist = p->as.free.next;
    if (gc->free_heaps->freelist == NULL) {
-@@ -608,6 +683,19 @@
+@@ -608,6 +679,19 @@
    }
  
    gc->live++;
@@ -168,7 +160,7 @@ virtual profile.
    gc_protect(mrb, gc, &p->as.basic);
    *p = RVALUE_zero;
    p->as.basic.tt = ttype;
-@@ -617,6 +705,7 @@
+@@ -617,6 +701,7 @@
    }
    paint_partial_white(gc, &p->as.basic);
    return &p->as.basic;
@@ -176,7 +168,7 @@ virtual profile.
  }
  
  static inline void
-@@ -901,10 +990,20 @@
+@@ -901,10 +986,20 @@
  
            while (ce <= ci) {
              struct REnv *e = ci->u.env;
@@ -197,7 +189,7 @@ virtual profile.
              ci--;
            }
          }
-@@ -1193,6 +1292,9 @@
+@@ -1193,6 +1288,9 @@
          if (p->as.basic.tt != MRB_TT_FREE) {
            obj_free(mrb, &p->as.basic, FALSE);
            if (p->as.basic.tt == MRB_TT_FREE) {
@@ -207,7 +199,7 @@ virtual profile.
              p->as.free.next = page->freelist;
              page->freelist = p;
              freed++;
-@@ -1645,8 +1747,16 @@
+@@ -1645,8 +1743,16 @@
  
      p = page->objects;
      for (int i=0; i < MRB_HEAP_PAGE_SIZE; i++) {

@@ -1,3 +1,28 @@
+## 2026-11-28: Line B to completion, then SPEC train last
+
+Work from [Line B to completion](../plans/2026-11-28-line-b-completion.md), approved by the lead on 28 Nov. In order:
+1. **Record debt** (no board): the measurements doc (done 28 Nov), kit landings (spectest and ticklog done; the
+   campaign's after Phase B; each lane its own), ISSUES (I-17 done; the CSRUNV-era dispositions with rtl).
+2. **Boards now:** the campaign's Phase B (boards 1 and 3); the Plain arm (board 2); the stage-2 x264 bracket on the
+   first board free after Phase B.
+3. **Preparation beside the boards:** perlbench's full test (attribute the test.pl cause 28 first), Table 3 on
+   b42c8c644 with cycles outside the kernel from the tick-log accounting, the embedded suites, the corpus,
+   revocation cost, the design claims, and train readiness (memory checks, train stages, re-registrations).
+4. **The final campaign** (three runs per arm), then consolidation and a proposal of paper changes to the lead.
+5. **SPEC train, at the very end**, only when everything else is 100 % done.
+
+The 25 Nov list below is done except its step 4 (Plain, now pre-registered) and step 5 (train, last).
+
+## 2026-11-25: Finish Line B, then the final campaign
+
+Work from [the Line B campaign plan](../plans/2026-11-25-line-b-final-campaign.md). In order:
+1. Resolve the B5b-2 mcf wedge: rtl's directed sim, then the aperture build's snapshot.
+2. Seal the combined build (FLU ungate, 4(b), drain, guard, apertures), with its kits at N=2.
+3. Re-read the SPEC test chain on it.
+4. Build the matched Plain arm.
+5. Build the train stages.
+SPEC train runs only at the very end (the lead's rule); test inputs until then. The L1D stays equal on both arms.
+
 ## 2026-11-05 — Continue with matched work slices
 
 For overhead work, use matched logical start/stop points instead of waiting

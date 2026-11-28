@@ -46,7 +46,8 @@
     "capstone/bug-corpora/ffmpeg/pool-repros/results/20261006-cheribsd",
     "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-09-native-asan",
     "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-09-poisoncap",
-    "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-11-virtual"
+    "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-11-virtual",
+    "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-11-11-virtual"
   ],
   "advisories": [],
   "shape_table": true,
@@ -59,8 +60,8 @@
     "vp2-nested-pools": "virtual-ffmpeg-pool-sublet"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools",
+    "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
     "silicon-pool-stock": "results/2026-10-16-silicon/silicon-pool-stock",
     "silicon-pool-sublet": "results/2026-10-16-silicon/silicon-pool-sublet",
     "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",

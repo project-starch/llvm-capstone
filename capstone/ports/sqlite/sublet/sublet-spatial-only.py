@@ -10,10 +10,10 @@ and the lookaside release no longer revoke it (CREVOKE): a stale pointer keeps w
 protection). The revocations of the whole pool at shutdown and of a connection's lookaside generation
 stay, as do the rounding and every other line. Each edit must apply exactly once.
 
-On the block port (sublet-3220000-memsys5-block.patch, recognised by its memsys5Renew), the renewal
-of a realloc that keeps its block no longer revokes the old child either; it still derives the new
-one, so the arm makes the same calls as the port. The lookaside renewal goes through
-lookasideRelease and needs no edit of its own.
+On the block port (sublet-3220000-memsys5-block.patch, recognised by its memsys5Renew), a realloc
+that keeps its block or its slot no longer renews the lifetime (CRENEW) either: the old child stays
+live, and the block or slot goes out again as one more child (CDERIVE) with the bounds the port
+gives it.
 
 Revocation moves no memsys5 address, so this arm's reuse distances are expected to equal the
 temporal arm's; measuring that is its purpose. Without per-object revocation every hand-out keeps its
@@ -23,19 +23,40 @@ import sys
 
 EDITS = [
     ("  /* End the caller's block (CREVOKE); faults on a pointer that is not live. */\n"
-     "  capstone_cap_revoke_child(mem5.zPool, pOld);\n",
+     "  capstone_cap_release(pOld);\n",
      "  /* spatial-only arm: the caller's block is NOT revoked; its child stays live. */\n"),
     ("static LookasideSlot *lookasideRelease(sqlite3 *db, void *p){\n"
-     "  capstone_cap_revoke_child(db->lookaside.pLife, p);\n",
+     "  capstone_cap_release(p);\n",
      "static LookasideSlot *lookasideRelease(sqlite3 *db, void *p){\n"
      "  /* spatial-only arm: the slot is NOT revoked. */\n"),
 ]
 
 BLOCK_PORT_EDITS = [
-    ("  iSize = memsys5Size(pPrior);\n"
-     "  capstone_cap_revoke_child(mem5.zPool, pPrior);\n",
+    # memsys5Renew: the same block as a new child of the pool.
+    ("  return capstone_cap_renew(pPrior);\n",
+     "  /* spatial-only arm: the old child is NOT ended; the block goes out again as a new child. */\n"
+     "  int i, iSize;\n"
+     "  void *p;\n"
+     "  memsys5Enter();\n"
+     "  i = (int)(((u8 *)pPrior-mem5.zPool)/mem5.szAtom);\n"
      "  iSize = memsys5Size(pPrior);\n"
-     "  /* spatial-only arm: the old child is NOT revoked; it stays live. */\n"),
+     "  p = capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, iSize);\n"
+     "  memsys5Leave();\n"
+     "  return p;\n"),
+    # lookasideRenew: the same slot as a new child of pLife, which the connection holds;
+    # lookasideRelease no longer ends the old one.
+    ("static void *lookasideRenew(void *p){\n"
+     "#ifdef SUBLET_REALLOC_KEEPS_LIFETIME\n"
+     "  return p;\n"
+     "#else\n"
+     "  return capstone_cap_renew(p);\n",
+     "static void *lookasideRenew(sqlite3 *db, void *p){\n"
+     "#ifdef SUBLET_REALLOC_KEEPS_LIFETIME\n"
+     "  return p;\n"
+     "#else\n"
+     "  return lookasideIssue(db, lookasideRelease(db, p));\n"),
+    ("  if( isLookaside(db,p) && n<=db->lookaside.sz ) return lookasideRenew(p);\n",
+     "  if( isLookaside(db,p) && n<=db->lookaside.sz ) return lookasideRenew(db, p);\n"),
 ]
 
 

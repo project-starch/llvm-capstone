@@ -61,6 +61,9 @@ function(capstone_configure_application target)
         "${capstone}/runtime/virtual/pthread.c"
         "${capstone}/runtime/virtual/fenv.c")
       target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
+      if(CAPSTONE_MEMSET_CAP_ZERO)
+        target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_MEMSET_CAP_ZERO=1)
+      endif()
       target_compile_options(capstone-application-core PRIVATE
         "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
     else()

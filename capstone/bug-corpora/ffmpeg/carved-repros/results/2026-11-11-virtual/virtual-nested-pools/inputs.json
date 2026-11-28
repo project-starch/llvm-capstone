@@ -1,0 +1,36 @@
+{
+  "arm": "virtual-nested-pools",
+  "build": {
+    "cc_args": [
+      "-DFFC_SUBLET_CARVE",
+      "-I~/crenew-step4/corpus/tree/capstone/runtime/include"
+    ],
+    "flags": [
+      "-O0",
+      "-DCORPUS_VIRTUAL"
+    ],
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ]
+  },
+  "cases": 13,
+  "configuration": "virtual-ffmpeg-carve",
+  "contract": "verdicts-v1",
+  "corpus": "ffmpeg/carved-repros",
+  "platform": {
+    "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+    "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+    "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "profile": "virtual",
+    "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "runner": "e464b106e1eb5c8e9594f958545961db20a6c577245ddbe86bb1b9ad9aa0514a"
+  },
+  "tally": {
+    "CAUGHT": 13
+  }
+}

@@ -205,6 +205,22 @@ gates_phase() {
   # The runners read the request from the environment (memory_mode.py); run-arm.sh sets it, never the caller.
   if [[ $FAST_FAULT == on ]]; then export GATE_UNPINNED_FAST_FAULT=1; else unset GATE_UNPINNED_FAST_FAULT; fi
   printf '%s\n' "$CAPSTONE_QEMU_CPU_EXTRA" > "$OUT/cpu-extra"
+  # The module's context capacity must equal the CPU's: capstone_vm.ko defaults to supervisor_slots=1 (what silicon
+  # holds), and with no argument every thread create was refused on a 32-slot CPU ("thread create refused, 1
+  # supervisor slot in use"; the pthread, runtime, fp and memcached gates failed on dev 634fd5531e99, 2026-11-25),
+  # while a module with more slots than the CPU halts the guest at child entry. So the count is read from the CPU
+  # argument the gates boot, exported to every runner (memory_mode.py adds supervisor_slots=<n> to each insmod and
+  # logs SUPERVISOR_SLOTS:<n> after it), and read back from the guest logs at the end. No unambiguous count, no run.
+  local slots
+  slots=$(python3 -c '
+import re, sys
+found = set(re.findall(r"(?:^|,)x-capstone-supervisor-slots=([^,]*)", sys.argv[1]))
+if len(found) != 1 or not next(iter(found)).isdigit() or int(next(iter(found))) < 1:
+    sys.exit(1)
+print(int(next(iter(found))))' "$CAPSTONE_QEMU_CPU_EXTRA") ||
+    { echo "CPU_EXTRA must name x-capstone-supervisor-slots=<n> exactly once (got: $CAPSTONE_QEMU_CPU_EXTRA)" >&2; exit 2; }
+  export GATE_SUPERVISOR_SLOTS=$slots
+  printf '%s\n' "$slots" > "$OUT/supervisor-slots"
   sha256sum "$P/qemu-system-riscv64" "$P"/images/* "$P/adapter/capstone-vexec" "$P/adapter/capstone-job" \
     "$P/adapter/module/capstone_vm.ko" "$HOOKS" > "$OUT/platform.sha256"
   local plat=(--qemu "$P/qemu-system-riscv64" --images "$P/images") I=$B/img S=$G/SUMMARY.txt
@@ -264,6 +280,24 @@ gates_phase() {
   for opt in unpinned-mm unpinned-mutants; do
     [[ " $GATES " == *" $opt "* ]] && ! grep -q "^$opt  *rc=" "$S" && echo "OPTIONAL_GATE_FAILED $opt did not run" >> "$S"
   done
+  # The slot count every module load reports, read back against the CPU's from the text compare.py reads each
+  # gate's mode lines from (compare.gate_texts). A gate with no SUPERVISOR_SLOTS line, or one of another count, fails
+  # the arm the way a wrong memory mode does.
+  python3 - "$HERE" "$OUT" "$slots" "$GATES" >> "$S" 2>&1 <<'PY' || echo "MODE_CHECK_FAILED supervisor_slots" >> "$S"
+import pathlib, re, sys
+sys.path.insert(0, sys.argv[1])
+import compare
+out, want, gates = pathlib.Path(sys.argv[2]), sys.argv[3], sys.argv[4].split()
+bad = []
+for gate in gates:
+    if gate in ('unpinned-mm', 'unpinned-mutants'):
+        continue
+    seen = [v for t in compare.gate_texts(out, gate) for v in re.findall(r'SUPERVISOR_SLOTS:(\w+)', t)]
+    print(f'SLOTS {gate}: {len(seen)} line(s) {sorted(set(seen))} (CPU {want})')
+    if not seen or set(seen) != {want}:
+        bad.append(gate)
+sys.exit(1 if bad else 0)
+PY
   # The mode every gate's own log reports, read back against the requested one (a gate that
   # printed no mode line, or the other mode's, is a failed arm, not a comparable one).
   python3 "$HERE/compare.py" --check-mode "$OUT" >> "$S" 2>&1 || echo "MODE_CHECK_FAILED" >> "$S"

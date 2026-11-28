@@ -1,0 +1,33 @@
+--- a/zend-cap-mode.c	2026-11-12 09:16:18.139785849 +0800
++++ b/zend-cap-mode.c	2026-11-12 09:39:20.138559287 +0800
+@@ -155,6 +155,22 @@
+     return __builtin_capstone_cap_shrink((char *)p + hdr, start, start + bound);
+ }
+ 
++/* Is this address in a mapping of the heap? The page index heap_access walks, read without
++ * trapping: heap_access itself traps on a page no mapping owns, which gives a pointer PHP never
++ * got from this heap (a static string, CRASH-139) an illegal-instruction fault inside the layer
++ * instead of the refusal by name. */
++static int cap_in_heap(unsigned long a)
++{
++    struct heap_mid *mid;
++    struct heap_leaf *leaf;
++    if (a >> 39) { return 0; }
++    mid = __malloc_page_root[a >> 30];
++    if (!mid) { return 0; }
++    leaf = mid->leaf[(a >> 21) & 511];
++    if (!leaf) { return 0; }
++    return leaf->owner[(a >> 12) & 511] != (void *)0;
++}
++
+ /* The prefix holds the original malloc capability. heap_access first probes
+  * the supplied child for liveness, then uses the existing mapping page index
+  * to reach allocator metadata. Address arithmetic alone grants no authority.
+@@ -169,6 +185,7 @@
+     if (hdr > cur || cur - hdr < sizeof(void *)) {
+         cap_fail(ZEND_CAP_FAIL_UNKNOWN, who, cur, hdr);
+     }
++    if (!cap_in_heap(cur)) { cap_fail(ZEND_CAP_FAIL_UNKNOWN, who, cur, 0); }
+     at = heap_access(ptr);
+     parent = *(void **)((char *)at - hdr - sizeof(void *));
+     if (!__builtin_capstone_cap_get_tag(parent) ||

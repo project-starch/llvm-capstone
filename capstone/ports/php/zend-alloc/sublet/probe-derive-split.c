@@ -39,10 +39,10 @@ static unsigned long end_of(void *c)  { return __builtin_capstone_cap_get_end(c)
 static unsigned long cur_of(void *c)  { return __builtin_capstone_cap_get_cursor(c); }
 
 /* The block, and the two children the nested layer would hand out. `parent` is the heap's own
- * capability over the block -- non-linear, carrying MANAGE -- and is never handed upward. */
+ * capability over the block -- non-linear -- and is never handed upward. */
 struct carved {
     void *object;            /* what malloc returned                       */
-    void *parent;            /* the block capability: the revocation parent */
+    void *parent;            /* the block capability: both children's parent */
     void *header;            /* [object, object+48)  -- never revoked      */
     void *payload;           /* [object+48, object+BLOCK) -- per-_efree    */
     unsigned long offset;    /* the object's offset within the parent      */
@@ -72,8 +72,8 @@ int main(int argc, char **argv)
         memset(c.header, 0xAA, HDR);
         memset(c.payload, 0x55, BLOCK - HDR);
         say("PROBE_WROTE:both children");
-        capstone_cap_revoke_child(c.parent, c.header);
-        capstone_cap_revoke_child(c.parent, c.payload);
+        capstone_cap_release(c.header);
+        capstone_cap_release(c.payload);
         free(c.object);
         say("PROBE_OK:0");
         return 0;
@@ -105,7 +105,7 @@ int main(int argc, char **argv)
         say("PROBE_STAGE:2 the header survives the payload's revoke");
         if (carve(&c)) return 1;
         memset(c.payload, 0x55, BLOCK - HDR);
-        capstone_cap_revoke_child(c.parent, c.payload);
+        capstone_cap_release(c.payload);
         say("PROBE_REVOKED:payload");
         /* THE CLAIM THE WHOLE DESIGN RESTS ON. PHP writes p->cached here. */
         memset(c.header, 0xAA, HDR);
@@ -116,7 +116,7 @@ int main(int argc, char **argv)
     if (stage == 3) {
         say("PROBE_STAGE:3 a revoked payload denies");
         if (carve(&c)) return 1;
-        capstone_cap_revoke_child(c.parent, c.payload);
+        capstone_cap_release(c.payload);
         say("PROBE_ABOUT_TO_FAULT:3 storing through the revoked payload");
         memset(c.payload, 0x11, 16);
         say("PROBE_FAIL:3 the denial did not happen");
@@ -127,7 +127,7 @@ int main(int argc, char **argv)
         void *again;
         say("PROBE_STAGE:4 re-derive over the same bytes (the AG(cache) hit)");
         if (carve(&c)) return 1;
-        capstone_cap_revoke_child(c.parent, c.payload);
+        capstone_cap_release(c.payload);
         again = capstone_cap_derive(c.parent, c.offset + HDR, BLOCK - HDR);
         if (!again) { say("PROBE_FAIL:4 re-derive returned nothing"); return 1; }
         memset(again, 0x22, BLOCK - HDR);
@@ -142,7 +142,7 @@ int main(int argc, char **argv)
         unsigned long seen;
         say("PROBE_STAGE:5 reading the CURSOR of a revoked capability");
         if (carve(&c)) return 1;
-        capstone_cap_revoke_child(c.parent, c.payload);
+        capstone_cap_release(c.payload);
         say("PROBE_ABOUT_TO_FAULT:5 reading the revoked payload's cursor");
         seen = cur_of(c.payload);
         printf("PROBE_OK:5 the cursor read did NOT trap, it gave %lu\n", seen);

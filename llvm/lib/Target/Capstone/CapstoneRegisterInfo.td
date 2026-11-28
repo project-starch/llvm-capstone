@@ -351,6 +351,21 @@ def GPCRTCNonC7 : CapstoneRegisterClass<[CLenVT], 128, (sub GPCRTC, C7)> {
   let RegInfos = CLenRI;
 }
 
+// The capability bases a 16-bit load or store can name (cap-base-rvc): RVC's
+// 3-bit register field (c8-c15), and the stack capability.
+def GPCRC : CapstoneRegisterClass<[CLenVT], 128,
+                                  (add (sequence "C%u", 10, 15),
+                                       (sequence "C%u", 8, 9))> {
+  let RegInfos = CLenRI;
+}
+def GPCRSP : CapstoneRegisterClass<[CLenVT], 128, (add C2)> {
+  let RegInfos = CLenRI;
+}
+// gp, the implicit base of c.scc (cap-crvc).
+def GPCRGP : CapstoneRegisterClass<[CLenVT], 128, (add C3)> {
+  let RegInfos = CLenRI;
+}
+
 def GPR : GPRRegisterClass<(add (sequence "X%u", 10, 17),
                                 (sequence "X%u", 5, 7),
                                 (sequence "X%u", 28, 31),

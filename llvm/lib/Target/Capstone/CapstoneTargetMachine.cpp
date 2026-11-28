@@ -98,6 +98,25 @@ static cl::opt<bool> EnableCursorReadFold(
              "capability register when every reader is an ALU op or compare"),
     cl::init(true));
 
+// Off by default. On, a global's SHRINKTO / SHRINK whose every reader is a
+// load or store at a constant offset inside the object is dropped
+// (CapstoneRedundantShrink.cpp).
+static cl::opt<bool> EnableRedundantShrink(
+    "capstone-drop-redundant-shrink", cl::Hidden,
+    cl::desc("Drop a global's narrowing when every access through it is a "
+             "constant-offset load or store inside the object"),
+    cl::init(false));
+
+// Off by default. On, a loop increment (CIncOffset, CIncOffsetImm, ADDI) whose
+// base is the loop's PHI moves below the base's last use in its block, so the
+// register allocator needs no copy to close the iteration
+// (CapstoneSinkLoopIncrement.cpp).
+static cl::opt<bool> EnableSinkLoopIncrement(
+    "capstone-enable-sink-loop-increment", cl::Hidden,
+    cl::desc("Sink a loop increment below the last use of its base so the "
+             "iteration needs no closing copy"),
+    cl::init(false));
+
 static cl::opt<bool>
     EnableLoopDataPrefetch("capstone-enable-loop-data-prefetch", cl::Hidden,
                            cl::desc("Enable the loop data prefetch pass"),
@@ -126,12 +145,16 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeKCFIPass(*PR);
   initializeCapstoneDeadRegisterDefinitionsPass(*PR);
   initializeCapstoneCursorReadFoldPass(*PR);
+  initializeCapstoneSinkLoopIncrementPass(*PR);
+  initializeCapstoneRedundantShrinkPass(*PR);
   initializeCapstoneLateBranchOptPass(*PR);
   initializeCapstoneMakeCompressibleOptPass(*PR);
   initializeCapstoneGatherScatterLoweringPass(*PR);
   initializeCapstoneCodeGenPreparePass(*PR);
+  initializeCapstoneMemcpyAlignDispatchPass(*PR);
   initializeCapstoneMisalignedCapAccessPass(*PR);
   initializeCapstoneCapGlobalInitPass(*PR);
+  initializeCapstonePadSubwordAtomicGlobalsPass(*PR);
   initializeCapstonePostRAExpandPseudoPass(*PR);
   initializeCapstoneMergeBaseOffsetOptPass(*PR);
   initializeCapstoneOptWInstrsPass(*PR);
@@ -488,6 +511,9 @@ bool CapstonePassConfig::addRegAssignAndRewriteOptimized() {
 }
 
 void CapstonePassConfig::addIRPasses() {
+  // C-74: before AtomicExpand widens a sub-word atomic to its word, at every
+  // optimization level (the fault was seen at -O0).
+  addPass(createCapstonePadSubwordAtomicGlobalsPass());
   addPass(createAtomicExpandLegacyPass());
   addPass(createCapstoneZacasABIFixPass());
 
@@ -561,6 +587,10 @@ void CapstonePassConfig::addCodeGenPrepare() {
   if (getOptLevel() != CodeGenOptLevel::None)
     addPass(createTypePromotionLegacyPass());
   TargetPassConfig::addCodeGenPrepare();
+  // After CodeGenPrepare, so no earlier IR pass re-forms or re-aligns the copy
+  // (off unless -capstone-memcpy-align-dispatch).
+  if (getOptLevel() != CodeGenOptLevel::None)
+    addPass(createCapstoneMemcpyAlignDispatchPass());
   // At every level: an under-aligned capability access is not an optimisation
   // artefact (a packed struct makes one at -O0), and its scalar expansion
   // drops the tag (C-69, on unless -capstone-misaligned-cap-dispatch=false).
@@ -665,6 +695,10 @@ void CapstonePassConfig::addPreEmitPass2() {
 void CapstonePassConfig::addMachineSSAOptimization() {
   addPass(createCapstoneVectorPeepholePass());
   addPass(createCapstoneFoldMemOffsetPass());
+  // Before the generic SSA passes, so DeadMachineInstructionElim removes the
+  // li/add a dropped SHRINK leaves behind.
+  if (EnableRedundantShrink)
+    addPass(createCapstoneRedundantShrinkPass());
 
   TargetPassConfig::addMachineSSAOptimization();
 
@@ -704,6 +738,11 @@ void CapstonePassConfig::addPreRegAlloc() {
     addPass(&MachinePipelinerID);
 
   addPass(createCapstoneVMV0EliminationPass());
+
+  // Last before PHI elimination, so the coalescer sees each increment after the
+  // final use of the value it replaces.
+  if (TM->getOptLevel() != CodeGenOptLevel::None && EnableSinkLoopIncrement)
+    addPass(createCapstoneSinkLoopIncrementPass());
 }
 
 void CapstonePassConfig::addFastRegAlloc() {

@@ -1,0 +1,1577 @@
+{
+ "inputs": {
+  "pre_registration": "capstone/docs/plans/2026-10-11-nested-lifetime-controls.md",
+  "llvm_capstone_revision": {
+   "tree": "branch one-operand-crevoke-crenew at 59201bdf2, QEMU at ea57497908",
+   "inputs_sha256": {
+    "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c": "fd91d092e81a83f2d0c4ca5b3580c1eec128b9825093bf1b4fc41abcdee8caca",
+    "capstone/bug-corpora/mruby/gc-slot-repros/controls/build.sh": "6ce649488f00de0ba0284f5e24bfcb38f942815764fef9dec82756f7a322bbe0",
+    "capstone/bug-corpora/mruby/gc-slot-repros/controls/run.py": "29e32e9a2e1e1ba7cba7882f4cc21fc267463a96f82a566860f492ebad221b01",
+    "capstone/bug-corpora/mruby/gc-slot-repros/controls/collect.py": "dfe51439c7a065574b1a9fcc7e02aafa2c0c9d662bceca181a7ceac2134f54cf",
+    "capstone/ports/mruby/app/patches/4.0.0-rc2/0008-gc-slots-as-sublet-lifetimes.patch": "31c512ae806ba11b6baba32bae80f38e43daa523c61220050ef2dd17809b6b90",
+    "capstone/ports/mruby/app/build-mruby-domain.sh": "693edef3f896182009d8226070699da24357afc1228c5dd6450587561a634ba2",
+    "capstone/runtime/virtual/run-staged.py": "563040af03e8ec940ad2d916562b42232cbe93dfa4b1fdf4cc4083600182254a"
+   }
+  },
+  "configuration": {
+   "platform": "virtual profile, one hart, exact bounds, 2 GiB; module loaded without parameters (pinned, one context); guest CPU with x-capstone-test-csrs=true",
+   "qemu_sha256": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+   "launcher_capstone_vexec_sha256": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+   "module_capstone_vm_ko_sha256": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+   "kernel_Image_sha256": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+   "firmware_fw_jump_elf_sha256": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+   "rootfs_ext2_sha256": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+   "compiler_clang_sha256": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+   "sdk": "corpus SDK (CAPSTONE_SDK_CORPUS=1, effective -fno-builtin), copied per arm; libc f4c80123c8aef4d84cdb5f513c89465c1e2010b63fb407054293a38a0645747d",
+   "guest_env": "CAPSTONE_EXEC_DIAGNOSTICS=1"
+  },
+  "builds": {
+   "mruby": "4.0.0-rc2 (9d523e2f74f2), ports/mruby/app/build-mruby-domain.sh, MRBD_PIN=4.0.0-rc2, MRBD_TESTS=1",
+   "release": {
+    "MRBD_SUBLET": 0,
+    "mruby_image_sha256": "e8593fdae83a821545385b28215c2f586b177b77bc90f252d6a94506f73202af",
+    "libmruby_a_sha256": "354a678f0808aef7cd4b422d911ba6d6590ddbd684f171535ceeeca695fa2961",
+    "controls_dom_sha256": "468283d06fe8609cbf32d9b350b7c11e5badd38e47230026ccd6871c1bd2613b"
+   },
+   "protected": {
+    "MRBD_SUBLET": 1,
+    "mruby_image_sha256": "0391d7d629e25700cec43c4b01a3b8d0538444b68d8ddbd7e5f661ac5f0236f6",
+    "libmruby_a_sha256": "dbfa30e06ac286a1cb3e454e251c9ddb33f2d5d9acff464f8988b2b034858e83",
+    "controls_dom_sha256": "a7df2579fca5211dbcfc9e940e2d5e686b28a63ad6b762fa978ad87ada634f16"
+   },
+   "lifetime_instructions": "CDERIVE/CREVOKE/CRENEW words in the executable sections: release 6/3/0 (the C library's mallocng), protected 8/5/0; the same in controls.dom of each arm",
+   "controls_flags": "probe/build-capi.sh's flags plus -g, plus -DMRB_CAPSTONE_SUBLET -I capstone/runtime/include on the protected arm"
+  },
+  "host": "three boots per arm, the two arms side by side, each with a lock file of its own inside one exclusive hold of the host's shared QEMU lock"
+ },
+ "boots": [
+  {
+   "arm": "protected",
+   "rep": 1,
+   "boot_completed": true,
+   "boot_wall_seconds": 78.2,
+   "staged_sha256": {
+    "capstone-vexec": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "capstone_vm.ko": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "controls.dom": "a7df2579fca5211dbcfc9e940e2d5e686b28a63ad6b762fa978ad87ada634f16"
+   },
+   "platform_sha256": {
+    "Image": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "qemu-system-riscv64": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+   },
+   "gate_sha256": "e1941dbe119944b98159a15b43b993dfdcfb0b700feb9721100a08d449df1ad0",
+   "runner_sha256": "29e32e9a2e1e1ba7cba7882f4cc21fc267463a96f82a566860f492ebad221b01",
+   "run_staged_sha256": "563040af03e8ec940ad2d916562b42232cbe93dfa4b1fdf4cc4083600182254a"
+  },
+  {
+   "arm": "protected",
+   "rep": 2,
+   "boot_completed": true,
+   "boot_wall_seconds": 70.6,
+   "staged_sha256": {
+    "capstone-vexec": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "capstone_vm.ko": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "controls.dom": "a7df2579fca5211dbcfc9e940e2d5e686b28a63ad6b762fa978ad87ada634f16"
+   },
+   "platform_sha256": {
+    "Image": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "qemu-system-riscv64": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+   },
+   "gate_sha256": "e1941dbe119944b98159a15b43b993dfdcfb0b700feb9721100a08d449df1ad0",
+   "runner_sha256": "29e32e9a2e1e1ba7cba7882f4cc21fc267463a96f82a566860f492ebad221b01",
+   "run_staged_sha256": "563040af03e8ec940ad2d916562b42232cbe93dfa4b1fdf4cc4083600182254a"
+  },
+  {
+   "arm": "protected",
+   "rep": 3,
+   "boot_completed": true,
+   "boot_wall_seconds": 63.3,
+   "staged_sha256": {
+    "capstone-vexec": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "capstone_vm.ko": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "controls.dom": "a7df2579fca5211dbcfc9e940e2d5e686b28a63ad6b762fa978ad87ada634f16"
+   },
+   "platform_sha256": {
+    "Image": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "qemu-system-riscv64": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+   },
+   "gate_sha256": "e1941dbe119944b98159a15b43b993dfdcfb0b700feb9721100a08d449df1ad0",
+   "runner_sha256": "29e32e9a2e1e1ba7cba7882f4cc21fc267463a96f82a566860f492ebad221b01",
+   "run_staged_sha256": "563040af03e8ec940ad2d916562b42232cbe93dfa4b1fdf4cc4083600182254a"
+  },
+  {
+   "arm": "release",
+   "rep": 1,
+   "boot_completed": true,
+   "boot_wall_seconds": 76.2,
+   "staged_sha256": {
+    "capstone-vexec": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "capstone_vm.ko": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "controls.dom": "468283d06fe8609cbf32d9b350b7c11e5badd38e47230026ccd6871c1bd2613b"
+   },
+   "platform_sha256": {
+    "Image": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "qemu-system-riscv64": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+   },
+   "gate_sha256": "e1941dbe119944b98159a15b43b993dfdcfb0b700feb9721100a08d449df1ad0",
+   "runner_sha256": "29e32e9a2e1e1ba7cba7882f4cc21fc267463a96f82a566860f492ebad221b01",
+   "run_staged_sha256": "563040af03e8ec940ad2d916562b42232cbe93dfa4b1fdf4cc4083600182254a"
+  },
+  {
+   "arm": "release",
+   "rep": 2,
+   "boot_completed": true,
+   "boot_wall_seconds": 66.5,
+   "staged_sha256": {
+    "capstone-vexec": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "capstone_vm.ko": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "controls.dom": "468283d06fe8609cbf32d9b350b7c11e5badd38e47230026ccd6871c1bd2613b"
+   },
+   "platform_sha256": {
+    "Image": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "qemu-system-riscv64": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+   },
+   "gate_sha256": "e1941dbe119944b98159a15b43b993dfdcfb0b700feb9721100a08d449df1ad0",
+   "runner_sha256": "29e32e9a2e1e1ba7cba7882f4cc21fc267463a96f82a566860f492ebad221b01",
+   "run_staged_sha256": "563040af03e8ec940ad2d916562b42232cbe93dfa4b1fdf4cc4083600182254a"
+  },
+  {
+   "arm": "release",
+   "rep": 3,
+   "boot_completed": true,
+   "boot_wall_seconds": 63.6,
+   "staged_sha256": {
+    "capstone-vexec": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "capstone_vm.ko": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "controls.dom": "468283d06fe8609cbf32d9b350b7c11e5badd38e47230026ccd6871c1bd2613b"
+   },
+   "platform_sha256": {
+    "Image": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "qemu-system-riscv64": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+   },
+   "gate_sha256": "e1941dbe119944b98159a15b43b993dfdcfb0b700feb9721100a08d449df1ad0",
+   "runner_sha256": "29e32e9a2e1e1ba7cba7882f4cc21fc267463a96f82a566860f492ebad221b01",
+   "run_staged_sha256": "563040af03e8ec940ad2d916562b42232cbe93dfa4b1fdf4cc4083600182254a"
+  }
+ ],
+ "runs": {
+  "protected/parent": [
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 13,
+     "received": 13,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "page-read-next",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:162"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     }
+    ],
+    "A": {
+     "address": "0x3f9b732c70",
+     "base": "0x3f9b732c70",
+     "page": "0x3f9b71c080",
+     "objects": "0x3f9b7200c0",
+     "index": 959
+    },
+    "B": null,
+    "C": null,
+    "lines": [
+     "CTL parent start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3f9b732c70 base=0x3f9b732c70 page=0x3f9b71c080 objects=0x3f9b7200c0 index=959 slot=0x3f9b732c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ page: tt=MRB_TT_FREE next=0x3f9b732b30; A's slot is the page's freelist head=yes",
+     "WRITE page: wrote 0x5a5a1234c0ffee11 at slot+64, read back 0x5a5a1234c0ffee11",
+     "CTL parent completed"
+    ],
+    "rep": 1
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 13,
+     "received": 13,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "page-read-next",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:162"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     }
+    ],
+    "A": {
+     "address": "0x3fbe7fdc70",
+     "base": "0x3fbe7fdc70",
+     "page": "0x3fbe7e7080",
+     "objects": "0x3fbe7eb0c0",
+     "index": 959
+    },
+    "B": null,
+    "C": null,
+    "lines": [
+     "CTL parent start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fbe7fdc70 base=0x3fbe7fdc70 page=0x3fbe7e7080 objects=0x3fbe7eb0c0 index=959 slot=0x3fbe7fdc70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ page: tt=MRB_TT_FREE next=0x3fbe7fdb30; A's slot is the page's freelist head=yes",
+     "WRITE page: wrote 0x5a5a1234c0ffee11 at slot+64, read back 0x5a5a1234c0ffee11",
+     "CTL parent completed"
+    ],
+    "rep": 2
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 13,
+     "received": 13,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "page-read-next",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:162"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     }
+    ],
+    "A": {
+     "address": "0x3fbc532c70",
+     "base": "0x3fbc532c70",
+     "page": "0x3fbc51c080",
+     "objects": "0x3fbc5200c0",
+     "index": 959
+    },
+    "B": null,
+    "C": null,
+    "lines": [
+     "CTL parent start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fbc532c70 base=0x3fbc532c70 page=0x3fbc51c080 objects=0x3fbc5200c0 index=959 slot=0x3fbc532c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ page: tt=MRB_TT_FREE next=0x3fbc532b30; A's slot is the page's freelist head=yes",
+     "WRITE page: wrote 0x5a5a1234c0ffee11 at slot+64, read back 0x5a5a1234c0ffee11",
+     "CTL parent completed"
+    ],
+    "rep": 3
+   }
+  ],
+  "protected/sibling": [
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 12,
+     "received": 12,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3fa957db30",
+     "base": "0x3fa957db30",
+     "page": "0x3fa9567080",
+     "objects": "0x3fa956b0c0",
+     "index": 955
+    },
+    "B": {
+     "address": "0x3fa957dc70",
+     "base": "0x3fa957dc70",
+     "page": "0x3fa9567080",
+     "objects": "0x3fa956b0c0",
+     "index": 959
+    },
+    "C": null,
+    "lines": [
+     "CTL sibling start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fa957db30 base=0x3fa957db30 page=0x3fa9567080 objects=0x3fa956b0c0 index=955 slot=0x3fa957db30 rvalue=80",
+     "ADDR B=0x3fa957dc70 base=0x3fa957dc70 page=0x3fa9567080 objects=0x3fa956b0c0 index=959 slot=0x3fa957dc70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ B: tt=18 payload=\"B-SIBLING-PAYLOAD-0123456789abcd\" intact=yes",
+     "WRITE B: read back \"B-WRITTEN-AFTER-A-WAS-SWEPT-0001\" match=yes",
+     "CTL sibling completed"
+    ],
+    "rep": 1
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 12,
+     "received": 12,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3f864bdb30",
+     "base": "0x3f864bdb30",
+     "page": "0x3f864a7080",
+     "objects": "0x3f864ab0c0",
+     "index": 955
+    },
+    "B": {
+     "address": "0x3f864bdc70",
+     "base": "0x3f864bdc70",
+     "page": "0x3f864a7080",
+     "objects": "0x3f864ab0c0",
+     "index": 959
+    },
+    "C": null,
+    "lines": [
+     "CTL sibling start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3f864bdb30 base=0x3f864bdb30 page=0x3f864a7080 objects=0x3f864ab0c0 index=955 slot=0x3f864bdb30 rvalue=80",
+     "ADDR B=0x3f864bdc70 base=0x3f864bdc70 page=0x3f864a7080 objects=0x3f864ab0c0 index=959 slot=0x3f864bdc70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ B: tt=18 payload=\"B-SIBLING-PAYLOAD-0123456789abcd\" intact=yes",
+     "WRITE B: read back \"B-WRITTEN-AFTER-A-WAS-SWEPT-0001\" match=yes",
+     "CTL sibling completed"
+    ],
+    "rep": 2
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 12,
+     "received": 12,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3fac7fdb30",
+     "base": "0x3fac7fdb30",
+     "page": "0x3fac7e7080",
+     "objects": "0x3fac7eb0c0",
+     "index": 955
+    },
+    "B": {
+     "address": "0x3fac7fdc70",
+     "base": "0x3fac7fdc70",
+     "page": "0x3fac7e7080",
+     "objects": "0x3fac7eb0c0",
+     "index": 959
+    },
+    "C": null,
+    "lines": [
+     "CTL sibling start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fac7fdb30 base=0x3fac7fdb30 page=0x3fac7e7080 objects=0x3fac7eb0c0 index=955 slot=0x3fac7fdb30 rvalue=80",
+     "ADDR B=0x3fac7fdc70 base=0x3fac7fdc70 page=0x3fac7e7080 objects=0x3fac7eb0c0 index=959 slot=0x3fac7fdc70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ B: tt=18 payload=\"B-SIBLING-PAYLOAD-0123456789abcd\" intact=yes",
+     "WRITE B: read back \"B-WRITTEN-AFTER-A-WAS-SWEPT-0001\" match=yes",
+     "CTL sibling completed"
+    ],
+    "rep": 3
+   }
+  ],
+  "protected/stale": [
+   {
+    "outcome": "fault",
+    "exit": 139,
+    "transcript": null,
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "stale-read-A",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:176"
+     }
+    ],
+    "A": {
+     "address": "0x3f94872c70",
+     "base": "0x3f94872c70",
+     "page": "0x3f9485c080",
+     "objects": "0x3f948600c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3f94872c70",
+     "base": "0x3f94872c70",
+     "page": "0x3f9485c080",
+     "objects": "0x3f948600c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL stale start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3f94872c70 base=0x3f94872c70 page=0x3f9485c080 objects=0x3f948600c0 index=959 slot=0x3f94872c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3f94872c70 base=0x3f94872c70 page=0x3f9485c080 objects=0x3f948600c0 index=959 slot=0x3f94872c70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3f94872c70 A=0x3f94872c70 equal=yes",
+     "STALE reading through A's old pointer 0x3f94872c70"
+    ],
+    "fault": {
+     "cause": 25,
+     "pc": "0x3f9440f870",
+     "function": "ctl_probe_stale_read_A",
+     "offset": 140,
+     "image_va": "0x1f870",
+     "file_line": "gc-slot-repros/controls/controls.c:176:72",
+     "launcher_line": "capstone-exec: domain fault cause=25 pc=0x3f9440f870 address=0x3f94872c84 ra=0x3f9440f868 fp=0x3f942ffda0 entry=0x3f944008e4 code=0x3f94400000-0x3f94800000 last=0xc0de0006 preparing=0xc0de0006 sha256=a7df2579fca5211dbcfc9e940e2d5e686b28a63ad6b762fa978ad87ada634f16 image=./controls.dom chain=0x3f94410bac,0x3f94400b48,0x3f944000a8",
+     "last_probe": {
+      "name": "stale-read-A",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:176"
+     }
+    },
+    "rep": 1
+   },
+   {
+    "outcome": "fault",
+    "exit": 139,
+    "transcript": null,
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "stale-read-A",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:176"
+     }
+    ],
+    "A": {
+     "address": "0x3f97366c70",
+     "base": "0x3f97366c70",
+     "page": "0x3f97350080",
+     "objects": "0x3f973540c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3f97366c70",
+     "base": "0x3f97366c70",
+     "page": "0x3f97350080",
+     "objects": "0x3f973540c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL stale start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3f97366c70 base=0x3f97366c70 page=0x3f97350080 objects=0x3f973540c0 index=959 slot=0x3f97366c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3f97366c70 base=0x3f97366c70 page=0x3f97350080 objects=0x3f973540c0 index=959 slot=0x3f97366c70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3f97366c70 A=0x3f97366c70 equal=yes",
+     "STALE reading through A's old pointer 0x3f97366c70"
+    ],
+    "fault": {
+     "cause": 25,
+     "pc": "0x3f96c0f870",
+     "function": "ctl_probe_stale_read_A",
+     "offset": 140,
+     "image_va": "0x1f870",
+     "file_line": "gc-slot-repros/controls/controls.c:176:72",
+     "launcher_line": "capstone-exec: domain fault cause=25 pc=0x3f96c0f870 address=0x3f97366c84 ra=0x3f96c0f868 fp=0x3f972ffda0 entry=0x3f96c008e4 code=0x3f96c00000-0x3f97000000 last=0xc0de0006 preparing=0xc0de0006 sha256=a7df2579fca5211dbcfc9e940e2d5e686b28a63ad6b762fa978ad87ada634f16 image=./controls.dom chain=0x3f96c10bac,0x3f96c00b48,0x3f96c000a8",
+     "last_probe": {
+      "name": "stale-read-A",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:176"
+     }
+    },
+    "rep": 2
+   },
+   {
+    "outcome": "fault",
+    "exit": 139,
+    "transcript": null,
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "stale-read-A",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:176"
+     }
+    ],
+    "A": {
+     "address": "0x3fb4e46c70",
+     "base": "0x3fb4e46c70",
+     "page": "0x3fb4e30080",
+     "objects": "0x3fb4e340c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3fb4e46c70",
+     "base": "0x3fb4e46c70",
+     "page": "0x3fb4e30080",
+     "objects": "0x3fb4e340c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL stale start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fb4e46c70 base=0x3fb4e46c70 page=0x3fb4e30080 objects=0x3fb4e340c0 index=959 slot=0x3fb4e46c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3fb4e46c70 base=0x3fb4e46c70 page=0x3fb4e30080 objects=0x3fb4e340c0 index=959 slot=0x3fb4e46c70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3fb4e46c70 A=0x3fb4e46c70 equal=yes",
+     "STALE reading through A's old pointer 0x3fb4e46c70"
+    ],
+    "fault": {
+     "cause": 25,
+     "pc": "0x3fb480f870",
+     "function": "ctl_probe_stale_read_A",
+     "offset": 140,
+     "image_va": "0x1f870",
+     "file_line": "gc-slot-repros/controls/controls.c:176:72",
+     "launcher_line": "capstone-exec: domain fault cause=25 pc=0x3fb480f870 address=0x3fb4e46c84 ra=0x3fb480f868 fp=0x3fb4dffda0 entry=0x3fb48008e4 code=0x3fb4800000-0x3fb4c00000 last=0x40 preparing=0x40 sha256=a7df2579fca5211dbcfc9e940e2d5e686b28a63ad6b762fa978ad87ada634f16 image=./controls.dom chain=0x3fb4810bac,0x3fb4800b48,0x3fb48000a8",
+     "last_probe": {
+      "name": "stale-read-A",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:176"
+     }
+    },
+    "rep": 3
+   }
+  ],
+  "protected/successor": [
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 13,
+     "received": 13,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3fbae16c70",
+     "base": "0x3fbae16c70",
+     "page": "0x3fbae00080",
+     "objects": "0x3fbae040c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3fbae16c70",
+     "base": "0x3fbae16c70",
+     "page": "0x3fbae00080",
+     "objects": "0x3fbae040c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL successor start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fbae16c70 base=0x3fbae16c70 page=0x3fbae00080 objects=0x3fbae040c0 index=959 slot=0x3fbae16c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3fbae16c70 base=0x3fbae16c70 page=0x3fbae00080 objects=0x3fbae040c0 index=959 slot=0x3fbae16c70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3fbae16c70 A=0x3fbae16c70 equal=yes",
+     "READ C: tt=18 payload=\"C-SUCCESSOR-PAYLOAD-0123456789ab\" match=yes",
+     "WRITE C: read back \"C-WRITTEN-THROUGH-C-0123456789ab\" match=yes",
+     "CTL successor completed"
+    ],
+    "rep": 1
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 13,
+     "received": 13,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3fb23f2c70",
+     "base": "0x3fb23f2c70",
+     "page": "0x3fb23dc080",
+     "objects": "0x3fb23e00c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3fb23f2c70",
+     "base": "0x3fb23f2c70",
+     "page": "0x3fb23dc080",
+     "objects": "0x3fb23e00c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL successor start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fb23f2c70 base=0x3fb23f2c70 page=0x3fb23dc080 objects=0x3fb23e00c0 index=959 slot=0x3fb23f2c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3fb23f2c70 base=0x3fb23f2c70 page=0x3fb23dc080 objects=0x3fb23e00c0 index=959 slot=0x3fb23f2c70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3fb23f2c70 A=0x3fb23f2c70 equal=yes",
+     "READ C: tt=18 payload=\"C-SUCCESSOR-PAYLOAD-0123456789ab\" match=yes",
+     "WRITE C: read back \"C-WRITTEN-THROUGH-C-0123456789ab\" match=yes",
+     "CTL successor completed"
+    ],
+    "rep": 2
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 13,
+     "received": 13,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-issued",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:169"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3fa40bdc70",
+     "base": "0x3fa40bdc70",
+     "page": "0x3fa40a7080",
+     "objects": "0x3fa40ab0c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3fa40bdc70",
+     "base": "0x3fa40bdc70",
+     "page": "0x3fa40a7080",
+     "objects": "0x3fa40ab0c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL successor start layout=0008 rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fa40bdc70 base=0x3fa40bdc70 page=0x3fa40a7080 objects=0x3fa40ab0c0 index=959 slot=0x3fa40bdc70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3fa40bdc70 base=0x3fa40bdc70 page=0x3fa40a7080 objects=0x3fa40ab0c0 index=959 slot=0x3fa40bdc70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3fa40bdc70 A=0x3fa40bdc70 equal=yes",
+     "READ C: tt=18 payload=\"C-SUCCESSOR-PAYLOAD-0123456789ab\" match=yes",
+     "WRITE C: read back \"C-WRITTEN-THROUGH-C-0123456789ab\" match=yes",
+     "CTL successor completed"
+    ],
+    "rep": 3
+   }
+  ],
+  "release/parent": [
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 12,
+     "received": 12,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-next",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:162"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     }
+    ],
+    "A": {
+     "address": "0x3f86b72c70",
+     "base": "0x3f86b60080",
+     "page": "0x3f86b60080",
+     "objects": "0x3f86b600c0",
+     "index": 959
+    },
+    "B": null,
+    "C": null,
+    "lines": [
+     "CTL parent start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3f86b72c70 base=0x3f86b60080 page=0x3f86b60080 objects=0x3f86b600c0 index=959 slot=0x3f86b72c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ page: tt=MRB_TT_FREE next=0x3f86b72b30; A's slot is the page's freelist head=yes",
+     "WRITE page: wrote 0x5a5a1234c0ffee11 at slot+64, read back 0x5a5a1234c0ffee11",
+     "CTL parent completed"
+    ],
+    "rep": 1
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 12,
+     "received": 12,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-next",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:162"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     }
+    ],
+    "A": {
+     "address": "0x3fa0532c70",
+     "base": "0x3fa0520080",
+     "page": "0x3fa0520080",
+     "objects": "0x3fa05200c0",
+     "index": 959
+    },
+    "B": null,
+    "C": null,
+    "lines": [
+     "CTL parent start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fa0532c70 base=0x3fa0520080 page=0x3fa0520080 objects=0x3fa05200c0 index=959 slot=0x3fa0532c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ page: tt=MRB_TT_FREE next=0x3fa0532b30; A's slot is the page's freelist head=yes",
+     "WRITE page: wrote 0x5a5a1234c0ffee11 at slot+64, read back 0x5a5a1234c0ffee11",
+     "CTL parent completed"
+    ],
+    "rep": 2
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 12,
+     "received": 12,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "page-read-next",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:162"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     },
+     {
+      "name": "page-read-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:166"
+     },
+     {
+      "name": "page-write-tail",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:164"
+     }
+    ],
+    "A": {
+     "address": "0x3fa203dc70",
+     "base": "0x3fa202b080",
+     "page": "0x3fa202b080",
+     "objects": "0x3fa202b0c0",
+     "index": 959
+    },
+    "B": null,
+    "C": null,
+    "lines": [
+     "CTL parent start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fa203dc70 base=0x3fa202b080 page=0x3fa202b080 objects=0x3fa202b0c0 index=959 slot=0x3fa203dc70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ page: tt=MRB_TT_FREE next=0x3fa203db30; A's slot is the page's freelist head=yes",
+     "WRITE page: wrote 0x5a5a1234c0ffee11 at slot+64, read back 0x5a5a1234c0ffee11",
+     "CTL parent completed"
+    ],
+    "rep": 3
+   }
+  ],
+  "release/sibling": [
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 11,
+     "received": 11,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3fb7622b30",
+     "base": "0x3fb7610080",
+     "page": "0x3fb7610080",
+     "objects": "0x3fb76100c0",
+     "index": 955
+    },
+    "B": {
+     "address": "0x3fb7622c70",
+     "base": "0x3fb7610080",
+     "page": "0x3fb7610080",
+     "objects": "0x3fb76100c0",
+     "index": 959
+    },
+    "C": null,
+    "lines": [
+     "CTL sibling start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fb7622b30 base=0x3fb7610080 page=0x3fb7610080 objects=0x3fb76100c0 index=955 slot=0x3fb7622b30 rvalue=80",
+     "ADDR B=0x3fb7622c70 base=0x3fb7610080 page=0x3fb7610080 objects=0x3fb76100c0 index=959 slot=0x3fb7622c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ B: tt=18 payload=\"B-SIBLING-PAYLOAD-0123456789abcd\" intact=yes",
+     "WRITE B: read back \"B-WRITTEN-AFTER-A-WAS-SWEPT-0001\" match=yes",
+     "CTL sibling completed"
+    ],
+    "rep": 1
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 11,
+     "received": 11,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3fae0d2b30",
+     "base": "0x3fae0c0080",
+     "page": "0x3fae0c0080",
+     "objects": "0x3fae0c00c0",
+     "index": 955
+    },
+    "B": {
+     "address": "0x3fae0d2c70",
+     "base": "0x3fae0c0080",
+     "page": "0x3fae0c0080",
+     "objects": "0x3fae0c00c0",
+     "index": 959
+    },
+    "C": null,
+    "lines": [
+     "CTL sibling start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fae0d2b30 base=0x3fae0c0080 page=0x3fae0c0080 objects=0x3fae0c00c0 index=955 slot=0x3fae0d2b30 rvalue=80",
+     "ADDR B=0x3fae0d2c70 base=0x3fae0c0080 page=0x3fae0c0080 objects=0x3fae0c00c0 index=959 slot=0x3fae0d2c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ B: tt=18 payload=\"B-SIBLING-PAYLOAD-0123456789abcd\" intact=yes",
+     "WRITE B: read back \"B-WRITTEN-AFTER-A-WAS-SWEPT-0001\" match=yes",
+     "CTL sibling completed"
+    ],
+    "rep": 2
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 11,
+     "received": 11,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3f8f8f2b30",
+     "base": "0x3f8f8e0080",
+     "page": "0x3f8f8e0080",
+     "objects": "0x3f8f8e00c0",
+     "index": 955
+    },
+    "B": {
+     "address": "0x3f8f8f2c70",
+     "base": "0x3f8f8e0080",
+     "page": "0x3f8f8e0080",
+     "objects": "0x3f8f8e00c0",
+     "index": 959
+    },
+    "C": null,
+    "lines": [
+     "CTL sibling start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3f8f8f2b30 base=0x3f8f8e0080 page=0x3f8f8e0080 objects=0x3f8f8e00c0 index=955 slot=0x3f8f8f2b30 rvalue=80",
+     "ADDR B=0x3f8f8f2c70 base=0x3f8f8e0080 page=0x3f8f8e0080 objects=0x3f8f8e00c0 index=959 slot=0x3f8f8f2c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "READ B: tt=18 payload=\"B-SIBLING-PAYLOAD-0123456789abcd\" intact=yes",
+     "WRITE B: read back \"B-WRITTEN-AFTER-A-WAS-SWEPT-0001\" match=yes",
+     "CTL sibling completed"
+    ],
+    "rep": 3
+   }
+  ],
+  "release/stale": [
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 10,
+     "received": 10,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "stale-read-A",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:176"
+     }
+    ],
+    "A": {
+     "address": "0x3f8501ec70",
+     "base": "0x3f8500c080",
+     "page": "0x3f8500c080",
+     "objects": "0x3f8500c0c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3f8501ec70",
+     "base": "0x3f8500c080",
+     "page": "0x3f8500c080",
+     "objects": "0x3f8500c0c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL stale start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3f8501ec70 base=0x3f8500c080 page=0x3f8500c080 objects=0x3f8500c0c0 index=959 slot=0x3f8501ec70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3f8501ec70 base=0x3f8500c080 page=0x3f8500c080 objects=0x3f8500c0c0 index=959 slot=0x3f8501ec70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3f8501ec70 A=0x3f8501ec70 equal=yes",
+     "STALE reading through A's old pointer 0x3f8501ec70",
+     "STALE read through A returned \"C-SUCCESSOR-PAYLOAD-0123456789ab\" equals-C's-data=yes",
+     "CTL stale completed"
+    ],
+    "rep": 1
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 10,
+     "received": 10,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "stale-read-A",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:176"
+     }
+    ],
+    "A": {
+     "address": "0x3f924fdc70",
+     "base": "0x3f924eb080",
+     "page": "0x3f924eb080",
+     "objects": "0x3f924eb0c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3f924fdc70",
+     "base": "0x3f924eb080",
+     "page": "0x3f924eb080",
+     "objects": "0x3f924eb0c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL stale start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3f924fdc70 base=0x3f924eb080 page=0x3f924eb080 objects=0x3f924eb0c0 index=959 slot=0x3f924fdc70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3f924fdc70 base=0x3f924eb080 page=0x3f924eb080 objects=0x3f924eb0c0 index=959 slot=0x3f924fdc70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3f924fdc70 A=0x3f924fdc70 equal=yes",
+     "STALE reading through A's old pointer 0x3f924fdc70",
+     "STALE read through A returned \"C-SUCCESSOR-PAYLOAD-0123456789ab\" equals-C's-data=yes",
+     "CTL stale completed"
+    ],
+    "rep": 2
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 10,
+     "received": 10,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "stale-read-A",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:176"
+     }
+    ],
+    "A": {
+     "address": "0x3fba5f2c70",
+     "base": "0x3fba5e0080",
+     "page": "0x3fba5e0080",
+     "objects": "0x3fba5e00c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3fba5f2c70",
+     "base": "0x3fba5e0080",
+     "page": "0x3fba5e0080",
+     "objects": "0x3fba5e00c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL stale start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fba5f2c70 base=0x3fba5e0080 page=0x3fba5e0080 objects=0x3fba5e00c0 index=959 slot=0x3fba5f2c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3fba5f2c70 base=0x3fba5e0080 page=0x3fba5e0080 objects=0x3fba5e00c0 index=959 slot=0x3fba5f2c70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3fba5f2c70 A=0x3fba5f2c70 equal=yes",
+     "STALE reading through A's old pointer 0x3fba5f2c70",
+     "STALE read through A returned \"C-SUCCESSOR-PAYLOAD-0123456789ab\" equals-C's-data=yes",
+     "CTL stale completed"
+    ],
+    "rep": 3
+   }
+  ],
+  "release/successor": [
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 12,
+     "received": 12,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3f837fdc70",
+     "base": "0x3f837eb080",
+     "page": "0x3f837eb080",
+     "objects": "0x3f837eb0c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3f837fdc70",
+     "base": "0x3f837eb080",
+     "page": "0x3f837eb080",
+     "objects": "0x3f837eb0c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL successor start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3f837fdc70 base=0x3f837eb080 page=0x3f837eb080 objects=0x3f837eb0c0 index=959 slot=0x3f837fdc70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3f837fdc70 base=0x3f837eb080 page=0x3f837eb080 objects=0x3f837eb0c0 index=959 slot=0x3f837fdc70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3f837fdc70 A=0x3f837fdc70 equal=yes",
+     "READ C: tt=18 payload=\"C-SUCCESSOR-PAYLOAD-0123456789ab\" match=yes",
+     "WRITE C: read back \"C-WRITTEN-THROUGH-C-0123456789ab\" match=yes",
+     "CTL successor completed"
+    ],
+    "rep": 1
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 12,
+     "received": 12,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3fac4d2c70",
+     "base": "0x3fac4c0080",
+     "page": "0x3fac4c0080",
+     "objects": "0x3fac4c00c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3fac4d2c70",
+     "base": "0x3fac4c0080",
+     "page": "0x3fac4c0080",
+     "objects": "0x3fac4c00c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL successor start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fac4d2c70 base=0x3fac4c0080 page=0x3fac4c0080 objects=0x3fac4c00c0 index=959 slot=0x3fac4d2c70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3fac4d2c70 base=0x3fac4c0080 page=0x3fac4c0080 objects=0x3fac4c00c0 index=959 slot=0x3fac4d2c70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3fac4d2c70 A=0x3fac4d2c70 equal=yes",
+     "READ C: tt=18 payload=\"C-SUCCESSOR-PAYLOAD-0123456789ab\" match=yes",
+     "WRITE C: read back \"C-WRITTEN-THROUGH-C-0123456789ab\" match=yes",
+     "CTL successor completed"
+    ],
+    "rep": 2
+   },
+   {
+    "outcome": "completed",
+    "exit": 0,
+    "transcript": {
+     "complete": true,
+     "printed": 12,
+     "received": 12,
+     "write_errors": 0
+    },
+    "probes": [
+     {
+      "name": "page-read-tt",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:160"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     },
+     {
+      "name": "obj-write",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:174"
+     },
+     {
+      "name": "obj-read",
+      "at": "capstone/bug-corpora/mruby/gc-slot-repros/controls/controls.c:172"
+     }
+    ],
+    "A": {
+     "address": "0x3fb6a3dc70",
+     "base": "0x3fb6a2b080",
+     "page": "0x3fb6a2b080",
+     "objects": "0x3fb6a2b0c0",
+     "index": 959
+    },
+    "B": null,
+    "C": {
+     "address": "0x3fb6a3dc70",
+     "base": "0x3fb6a2b080",
+     "page": "0x3fb6a2b080",
+     "objects": "0x3fb6a2b0c0",
+     "index": 959
+    },
+    "lines": [
+     "CTL successor start layout=release rvalue=80 page_slots=1024 pages=1 live=720 generational=1",
+     "ADDR A=0x3fb6a3dc70 base=0x3fb6a2b080 page=0x3fb6a2b080 objects=0x3fb6a2b0c0 index=959 slot=0x3fb6a3dc70 rvalue=80",
+     "FREED A after 1 full gc: tt=MRB_TT_FREE read through the page",
+     "ADDR C=0x3fb6a3dc70 base=0x3fb6a2b080 page=0x3fb6a2b080 objects=0x3fb6a2b0c0 index=959 slot=0x3fb6a3dc70 rvalue=80",
+     "REUSE C after 1 allocations: C=0x3fb6a3dc70 A=0x3fb6a3dc70 equal=yes",
+     "READ C: tt=18 payload=\"C-SUCCESSOR-PAYLOAD-0123456789ab\" match=yes",
+     "WRITE C: read back \"C-WRITTEN-THROUGH-C-0123456789ab\" match=yes",
+     "CTL successor completed"
+    ],
+    "rep": 3
+   }
+  ]
+ },
+ "predictions": {
+  "protected/parent": {
+   "prediction": "completed: A freed (MRB_TT_FREE, issued[i] NULL, read through the page); A's slot read and written through the page pointer, the parent of A's child",
+   "verdict": "holds",
+   "repetitions": 3,
+   "per_rep": [
+    "slot read (MRB_TT_FREE) and written through the page",
+    "slot read (MRB_TT_FREE) and written through the page",
+    "slot read (MRB_TT_FREE) and written through the page"
+   ]
+  },
+  "protected/sibling": {
+   "prediction": "completed: B on A's page, intact after A was freed, written and read back",
+   "verdict": "holds",
+   "repetitions": 3,
+   "per_rep": [
+    "B on A's page, intact, written and read back",
+    "B on A's page, intact, written and read back",
+    "B on A's page, intact, written and read back"
+   ]
+  },
+  "protected/successor": {
+   "prediction": "completed: C's address equals A's; C read and written",
+   "verdict": "holds",
+   "repetitions": 3,
+   "per_rep": [
+    "C at A's address, read and written",
+    "C at A's address, read and written",
+    "C at A's address, read and written"
+   ]
+  },
+  "protected/stale": {
+   "prediction": "fault: cause 25 at the stale-read-A probe",
+   "verdict": "holds",
+   "repetitions": 3,
+   "per_rep": [
+    "cause 25 in ctl_probe_stale_read_A at gc-slot-repros/controls/controls.c:176:72",
+    "cause 25 in ctl_probe_stale_read_A at gc-slot-repros/controls/controls.c:176:72",
+    "cause 25 in ctl_probe_stale_read_A at gc-slot-repros/controls/controls.c:176:72"
+   ]
+  },
+  "release/parent": {
+   "prediction": "completed: A freed; A's slot read and written through the page pointer",
+   "verdict": "holds",
+   "repetitions": 3,
+   "per_rep": [
+    "slot read (MRB_TT_FREE) and written through the page",
+    "slot read (MRB_TT_FREE) and written through the page",
+    "slot read (MRB_TT_FREE) and written through the page"
+   ]
+  },
+  "release/sibling": {
+   "prediction": "completed: B on A's page, intact after A was freed, written and read back",
+   "verdict": "holds",
+   "repetitions": 3,
+   "per_rep": [
+    "B on A's page, intact, written and read back",
+    "B on A's page, intact, written and read back",
+    "B on A's page, intact, written and read back"
+   ]
+  },
+  "release/successor": {
+   "prediction": "completed: C's address equals A's; C read and written",
+   "verdict": "holds",
+   "repetitions": 3,
+   "per_rep": [
+    "C at A's address, read and written",
+    "C at A's address, read and written",
+    "C at A's address, read and written"
+   ]
+  },
+  "release/stale": {
+   "prediction": "completed: the read through A returns C's data",
+   "verdict": "holds",
+   "repetitions": 3,
+   "per_rep": [
+    "read through A returned C's data",
+    "read through A returned C's data",
+    "read through A returned C's data"
+   ]
+  }
+ }
+}

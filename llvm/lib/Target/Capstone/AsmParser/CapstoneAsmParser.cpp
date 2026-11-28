@@ -849,6 +849,10 @@ public:
 
   bool isUImm9Lsb000() const { return isUImmShifted<6, 3>(); }
 
+  bool isUImm9Lsb0000() const { return isUImmShifted<5, 4>(); }
+
+  bool isUImm10Lsb0000() const { return isUImmShifted<6, 4>(); }
+
   bool isUImm14Lsb00() const { return isUImmShifted<12, 2>(); }
 
   bool isUImm10Lsb00NonZero() const {
@@ -1672,6 +1676,14 @@ bool CapstoneAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     return generateImmOutOfRangeError(
         Operands, ErrorInfo, 0, (1 << 9) - 8,
         "immediate must be a multiple of 8 bytes in the range");
+  case Match_InvalidUImm9Lsb0000:
+    return generateImmOutOfRangeError(
+        Operands, ErrorInfo, 0, (1 << 9) - 16,
+        "immediate must be a multiple of 16 bytes in the range");
+  case Match_InvalidUImm10Lsb0000:
+    return generateImmOutOfRangeError(
+        Operands, ErrorInfo, 0, (1 << 10) - 16,
+        "immediate must be a multiple of 16 bytes in the range");
   case Match_InvalidSImm8Unsigned:
     return generateImmOutOfRangeError(Operands, ErrorInfo, -(1 << 7),
                                       (1 << 8) - 1);

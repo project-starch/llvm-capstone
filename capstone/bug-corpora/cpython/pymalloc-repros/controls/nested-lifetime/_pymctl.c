@@ -18,9 +18,9 @@
  * THE PARENT REFERENCE. obmalloc keeps, per arena, the capability the system
  * allocator (mallocng) returned for the 1 MiB arena: allarenas[i].arena_ptr,
  * patch 0009, read through _Py_ARENA_PTR. In the protected build patch 0014
- * derives arena_life from it (CDERIVE) and every client block from arena_life
- * (CDERIVE again), and pymalloc_free revokes the block's child through
- * arena_life (CREVOKE), then continues with arena_inside(ao, p) =
+ * derives every client block from it (CDERIVE), and pymalloc_free ends the
+ * block's child (CREVOKE, the client's reference alone), then continues with
+ * arena_inside(ao, p) =
  * _Py_ARENA_PTR(ao) + (p - ao->address) and pool = POOL_ADDR(that). Control 1
  * takes exactly that path: the arena found by address, _Py_ARENA_PTR plus the
  * offset, POOL_ADDR, then the pool plus A's offset in it. In the release build

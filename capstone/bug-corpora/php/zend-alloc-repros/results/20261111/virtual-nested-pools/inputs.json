@@ -1,0 +1,38 @@
+{
+  "arm": "virtual-nested-pools",
+  "boot": {
+    "booted": true,
+    "completed": true,
+    "panic": false,
+    "reached_script": true
+  },
+  "cases": 30,
+  "configuration": "php-real-exact",
+  "contract": "verdicts-v1",
+  "corpus": "zend-alloc-repros",
+  "image_sha256": "a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949",
+  "note": "one boot per arm; every run in it is one capstone-vexec process at this arm's PHP_CAP_MODE. The trigger files are the corpus's own, staged verbatim",
+  "php_cap_mode": 7,
+  "platform": {
+    "compiler": "llvm/bin",
+    "firmware": "unrecorded",
+    "kernel": "kit/images",
+    "qemu": "kit/qemu-system-riscv64",
+    "runner": "capstone/bug-corpora/php/tools/run-php-corpus.py"
+  },
+  "population": "the 30 cases of php/zend-alloc-repros",
+  "probe_sha256": "499c38174334c5f0fb63d9ead196f9e3032937638a11d1d32a227a39d14a2d07",
+  "scoring": {
+    "attribution": "declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes)",
+    "gate": "default: a case whose pristine record is a SIGNAL reads out-of-denominator on every arm, whatever the arm did -- the unprotected program dies anyway, so there is no pair to read",
+    "protective_causes": [
+      25,
+      28
+    ],
+    "score_oracle_crashes": false
+  },
+  "tally": {
+    "CAUGHT": 20,
+    "NO-READING:out-of-denominator": 10
+  }
+}

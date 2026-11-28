@@ -263,6 +263,9 @@ def GPCRMemZeroOffset : MemOperand<GPCR> {
 def SPMem : MemOperand<SP>;
 
 def GPRCMem : MemOperand<GPRC>;
+// Capability bases of the 16-bit loads and stores (cap-base-rvc).
+def GPCRCMem : MemOperand<GPCRC>;
+def GPCRSPMem : MemOperand<GPCRSP>;
 
 class SImmAsmOperand<int width, string suffix = "">
     : ImmAsmOperand<"S", width, suffix> {
@@ -2537,9 +2540,10 @@ def SHRINKTO : RVInstI<0b000, OPC_CAP_OP, (outs GPCR:$rd),
 // runs after the last MCP and rewrites every MOVC whose source is still read as STC+LDC through a
 // stack slot, and a CheckOnly instance after MakeCompressible fails the build if one survives. The
 // outliner runs later still and only moves instructions, so the MOVCs it sees already have dead
-// sources. This model can stay a pure copy because nothing before that pass needs it not to be.
+// sources. Since 2026-11-20 MOVC is also hasSideEffects (C-46): nothing then deletes or moves the
+// MOVC itself. That does not order a later read of the source after it; the rewrite above does.
 // +movc-keeps-integer-source disables the rewrite for a bitstream whose MOVC keeps untagged sources.
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
 def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPCR:$rd), (ins GPCR:$rs1),
                    "movc", "$rd, $rs1"> {
   let rs2 = 0;
@@ -2703,6 +2707,14 @@ def SCC : RVInstR<0b0000101, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
                   (ins GPCR:$rs1, GPR:$rs2),
                   "scc", "$rd, $rs1, $rs2">;
 
+// auipcgp rd, imm20 (cap-auipcgp): scc rd, gp, (pc + (imm20 << 12)). U-type in
+// custom-1 (0x2b), free in P1's decoder. gp is an implicit source: the result
+// carries gp's type, permissions, bounds and node, so no authority is minted.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Uses = [C3],
+    Predicates = [HasCapAUIPCGP], DecoderNamespace = "CapAUIPCGP" in
+def AUIPCGP : RVInstU<OPC_CUSTOM_1, (outs GPCR:$rd), (ins uimm20_auipc:$imm20),
+                      "auipcgp", "$rd, $imm20">, Sched<[WriteIALU]>;
+
 // INIT: Initialization (R-Type)
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def INIT : RVInstR<0b0001001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
@@ -2758,6 +2770,20 @@ def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 // llvm/test/CodeGen/Capstone/global-base-nonlinear.ll.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8, Uses = [X3] in
 def PseudoCapGlobalBase : Pseudo<(outs GPCR:$rd), (ins GPR:$rs1), []>;
+
+// C-56: the base of an extern-weak global under -capstone-image-gp, which may be
+// undefined. lld resolves an undefined weak %pcrel_hi/%pcrel_lo pair to an
+// absolute 0 (lld/ELF/Arch/RISCV.cpp), so $rs1 is 0 exactly when the symbol is
+// undefined. The AsmPrinter emits
+//   mv rd, rs1 ; beqz rs1, 1f ; scc rd, gp, rs1 ; [shrinkto rd, rd, size] ; 1:
+// so an undefined symbol yields the integer 0, an untagged null, instead of a
+// capability with gp's authority and a cursor outside gp's bounds (whose SHRINK
+// faults). $size 0 means no SHRINKTO: a function, or an object whose size does
+// not fit the immediate. The branch exists only in the emitted code, so no MIR
+// pass sees it, and no MIR pass can hoist the SHRINK above the test.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 16, Uses = [X3] in
+def PseudoCapWeakGlobal : Pseudo<(outs GPCR:$rd),
+                                 (ins GPR:$rs1, simm12_i64_op:$size), []>;
 
 // MREV: Create revocation capability
 // hasSideEffects: allocates a revocation-tree node and deepens the source's, so

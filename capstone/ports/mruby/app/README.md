@@ -163,15 +163,15 @@ three of which revoke-on-free cannot see.
 ## Every GC object slot a Sublet lifetime (`MRBD_SUBLET=1`, virtual profile)
 
 Patch 0008 (4.0.0-rc2, `MRB_CAPSTONE_SUBLET`) makes every GC object slot a
-child lifetime of its heap page. Each page keeps a lifetime over its slots
-(`CDERIVE` of the page) and, per slot, the child it handed out; `mrb_obj_alloc`
-returns the object as a child bounded to its slot, and the sweep revokes that
+child lifetime of its heap page. Each page keeps, per slot, the child it
+handed out; `mrb_obj_alloc` returns the object as a child of the page bounded
+to its slot (`CDERIVE` of the page's own pointer), and the sweep revokes that
 child (`CREVOKE`) once `obj_free` has freed the object, so a stale reference to
 a collected object faults instead of reaching the slot's next occupant. The GC
 works on its own pointers, derived from the page; where it is asked about a
 pointer that may be dead (`mrb_object_dead_p`, and `obj_free`'s walk of a dying
 fiber's frames) it finds the slot by address. Without the define `gc.c`
-preprocesses as without the patch. 61 lines of code.
+preprocesses as without the patch. 58 lines of code.
 
 It runs on the virtual profile: build with `MRBD_SDK` naming a virtual SDK, and
 `malloc` is that SDK's musl mallocng, which bounds and retires every object it
@@ -182,6 +182,13 @@ the same one failure (`File#path`, a file-I/O test the guest answers empty),
 [release corpus](../../../bug-corpora/mruby/release-differential) reads 19
 caught without the patch and 22 with it, the three it adds being the GC-slot
 rows.
+
+On the one-operand lifetime instructions (2026-11-11): the release corpus reads 20 faults without the patch and 23
+with it, 44 of the 46 cells as recorded
+([results/2026-11-11-virtual](../../../bug-corpora/mruby/release-differential/results/2026-11-11-virtual/README.md)),
+and the GC-slot controls hold. mrbtest has no capability fault on either image, and on each image one run with native's
+result and runs in which mruby-io tests read their scratch file empty
+([results/2026-11-11-mrbtest](results/2026-11-11-mrbtest/README.md)).
 
 Until 2026-10-11 this port also carried two physical-domain arms on the Sublet
 heap (`runtime/sublet_heap.c`): `MRBD_HEAP=sublet`, every body and page on the

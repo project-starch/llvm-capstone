@@ -1,0 +1,78 @@
+{
+ "schema": 1,
+ "date": "2026-11-11",
+ "program": "PostgreSQL 17.5",
+ "workload": "capstone/ports/postgres/app/work.sql (sha256 f4310b7544287f8b1b400fac0820cf3162fe137048bcb940ff92cd158055346c)",
+ "row_extraction": "run-ports.py pg_rows (regex \\t(?: \\d+: [^\\n]+|----)); each row hashed and compared with per_row_sha256 of results/2026-10-11-same-answers/result.json, whose rows equal native 17.5",
+ "patch_0003_sha256": {
+  "protected-as-converted": "c63524ea57311e610bc52ec8aba44b1fb9270e4e6179f06d28eefebe84b68cea",
+  "protected": "29b94c5a026e4fc4031a620b985745ca0fa92aa0872aaa89f347972b3f996638"
+ },
+ "arms": {
+  "stock": {
+   "image_sha256": "9f3f6c872cf7df297c967fba172a141f3035689a9e241a7bde0104858725710d",
+   "manifest_nested": "none",
+   "exit": 0,
+   "domain_faults": 0,
+   "rows": 22,
+   "final_count_1500": true,
+   "per_row_sha256_equal_to_2026_10_11_record": true,
+   "stats": {
+    "nodes": 4461,
+    "collections": 0,
+    "reclaimed": 0,
+    "node_capacity": 5120,
+    "node_growths": 1,
+    "node_bytes": 94208,
+    "arenas": 88,
+    "pages": 998,
+    "peak": 2680
+   }
+  },
+  "protected-as-converted": {
+   "image_sha256": "e7efdd7dfaf9e176069d64f2ce95ef9b6cb8356fb7b197a2cb0bc51354ac229a",
+   "manifest_nested": "postgres",
+   "exit": 0,
+   "domain_faults": 0,
+   "rows": 22,
+   "final_count_1500": true,
+   "per_row_sha256_equal_to_2026_10_11_record": true,
+   "stats": {
+    "nodes": 62066,
+    "collections": 5,
+    "reclaimed": 57377,
+    "node_capacity": 17408,
+    "node_growths": 4,
+    "node_bytes": 290816,
+    "arenas": 96,
+    "pages": 1032,
+    "peak": 2684
+   }
+  },
+  "protected": {
+   "image_sha256": "260e63bd61f54ff6f931536d2bf03a9937290753ffc0e8af19fb2bae977f0c3f",
+   "manifest_nested": "postgres",
+   "exit": 0,
+   "domain_faults": 0,
+   "rows": 22,
+   "final_count_1500": true,
+   "per_row_sha256_equal_to_2026_10_11_record": true,
+   "stats": {
+    "nodes": 62079,
+    "collections": 5,
+    "reclaimed": 57371,
+    "node_capacity": 17408,
+    "node_growths": 4,
+    "node_bytes": 290816,
+    "arenas": 96,
+    "pages": 1042,
+    "peak": 2694
+   }
+  }
+ },
+ "verdict": {
+  "all_arms_exit_0_without_fault": true,
+  "all_arms_equal_recorded_native_rows": true
+ },
+ "n": "1 per arm, one boot"
+}

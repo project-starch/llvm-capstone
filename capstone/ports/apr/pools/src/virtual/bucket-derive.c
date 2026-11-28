@@ -6,7 +6,7 @@
  * pieces in the same order. What this one adds:
  *   carve    the piece is a CDERIVE child of the block (the node's issued
  *            child, which aprp_node_lend hands over), bounded to the piece;
- *   file     CREVOKE(block, piece) -- apr_bucket_free's pointer, and every copy
+ *   file     CREVOKE(piece) -- apr_bucket_free's pointer, and every copy
  *            of it, is dead; the freelist link stays here, by index, because a
  *            link written through the revoked piece would fault;
  *   reissue  a fresh child of the block over the same bytes.
@@ -125,7 +125,7 @@ void aprb_file(void *list, void *node) {
   if (p->filed || !p->handle)
     aprp_fail(538);
   struct list *l = list_for(list);
-  capstone_cap_revoke_child(blocks[p->block].header, p->handle);
+  capstone_cap_release(p->handle);
   p->handle = NULL;
   p->filed = 1;
   p->next_free = l->head;

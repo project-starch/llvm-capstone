@@ -1,0 +1,42 @@
+# rcm (this directory's rcm.c, hardware pattern, the default), per trace. Image = the first 12 hex digits of the stage image's sha256.
+# Columns per organisation: record-path reads and writes per 1k protected instructions, and record-TLB walks per 1k.
+
+gcc train01 Full  image 58124bcc766c  protected instructions 12,221,817,514
+  P1: reads     1.325  writes   0.509  walks  0.225
+  RC: reads     0.736  writes   0.123  walks  0.285
+  GC: reads     0.937  writes   0.509  walks  0.131
+  NC: reads   140.389  writes   0.509  walks  1.358
+  B5: vc_misses 9330610 op_reads 6868020 ev34 11109042 ev35 5089588 ev37 15268764 writes 6223628 bypass 0 ev31 26581980 hit_rate 0.6858 fill_share 0.5744 ev31-35-37 6223628
+  trap 0 sret 0 mret 0 dup_writes 2186704 dup_reads 7579488
+
+mcf test Full  image fa650b98b77a  protected instructions 26,637,508,524
+  P1: reads     6.799  writes   0.014  walks  0.022
+  RC: reads     1.710  writes   0.005  walks  0.022
+  GC: reads     6.694  writes   0.014  walks  0.023
+  NC: reads   213.004  writes   0.014  walks  0.022
+  B5: vc_misses 180746072 op_reads 361691 ev34 135312219 ev35 45795544 ev37 137386632 writes 362117 bypass 0 ev31 183544293 hit_rate 0.7471 fill_share 0.7485 ev31-35-37 362117
+  trap 0 sret 0 mret 0 dup_writes 121704 dup_reads 475246
+
+perlbench test Full  image c1744e87cb22  protected instructions 84,333,526,628
+  P1: reads     2.990  writes   1.419  walks  0.251
+  RC: reads     0.864  writes   0.242  walks  0.244
+  GC: reads     1.739  writes   1.419  walks  0.097
+  NC: reads   169.269  writes   1.419  walks  0.752
+  B5: vc_misses 119527948 op_reads 132608610 ev34 214805238 ev35 37331320 ev37 111993960 writes 119651176 bypass 0 ev31 268976456 hit_rate 0.8519 fill_share 0.4164 ev31-35-37 119651176
+  trap 0 sret 0 mret 0 dup_writes 41484682 dup_reads 140077260
+
+gcc train01 FRCDKMS (board 2), edges  image 3ed5c0be9791  protected instructions 12,258,808,580
+  P1: reads     1.342  writes   0.508  walks  0.238
+  RC: reads     0.753  writes   0.116  walks  0.294
+  GC: reads     0.979  writes   0.508  walks  0.153
+  NC: reads   140.451  writes   0.508  walks  1.358
+  B5: vc_misses 9582151 op_reads 6868020 ev34 11061188 ev35 5388983 ev37 16166949 writes 6223628 bypass 0 ev31 27779560 hit_rate 0.6724 fill_share 0.5820 ev31-35-37 6223628
+  trap 6956 sret 0 mret 0 dup_writes 2186704 dup_reads 7579488
+
+mcf test FRCDKMS (board 2), edges  image 3d7e62118636  protected instructions 26,646,288,295
+  P1: reads     6.802  writes   0.014  walks  0.025
+  RC: reads     1.714  writes   0.005  walks  0.026
+  GC: reads     6.697  writes   0.014  walks  0.026
+  NC: reads   212.978  writes   0.014  walks  0.025
+  B5: vc_misses 180877654 op_reads 364533 ev34 135336778 ev35 45905409 ev37 137716227 writes 363353 bypass 0 ev31 183984989 hit_rate 0.7467 fill_share 0.7485 ev31-35-37 363353
+  trap 32024 sret 0 mret 0 dup_writes 122928 dup_reads 475537

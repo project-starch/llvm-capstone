@@ -1,0 +1,13 @@
+--- a/zend_API.c	2026-11-12 09:16:18.143785926 +0800
++++ b/zend_API.c	2026-11-12 09:16:18.199787019 +0800
+@@ -1963,6 +1963,10 @@
+ 		zend_error(E_CORE_ERROR, "Property %s of class %s cannot be read", Z_OBJCE_P(object)->name, name);
+ 	}
+ 	ZVAL_STRINGL(&property, name, name_length, 0);
++	/* DIAGNOSTIC, forced probe only: the two fields 5.0.0 leaves uninitialised, set to the value
++	   with which the defect executes (a reference count of zero). */
++	property.refcount = 0;
++	property.is_ref = 0;
+ 	value = Z_OBJ_HT_P(object)->read_property(object, &property, silent TSRMLS_CC);
+ 
+ 	EG(scope) = old_scope;

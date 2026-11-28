@@ -156,8 +156,7 @@ def judge(n, stem, arm, rec):
     every_done = rec["accesses"] and all(a["done"] for a in rec["accesses"])
     if n in (0, 1) or (n == 2 and arm == "release"):
         want = {0: ["A-former-range-after-reset", "A-former-range-written"]
-                   + (["A-former-range-via-generation", "A-former-range-written-via-generation",
-                       "A-former-range-via-life", "A-former-range-written-via-life"]
+                   + (["A-former-range-via-generation", "A-former-range-written-via-generation"]
                       if arm == "protected" else []),
                 1: ["C-written"],
                 2: ["C-written", "stale-A-reads-C"]}[n]

@@ -269,7 +269,7 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
     // NOTE: We don't check for C extension to minimize differences in generated
     // code.
     bool IsShiftedCompressible =
-        isInt<6>(ShiftedVal) && !STI.hasFeature(Capstone::TuneLUIADDIFusion);
+        isInt<6>(ShiftedVal) && !STI.hasFeature(Capstone::TuneCapstoneLUIADDIFusion);
     CapstoneMatInt::InstSeq TmpSeq;
     generateInstSeqImpl(ShiftedVal, STI, TmpSeq);
 

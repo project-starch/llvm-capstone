@@ -1,0 +1,12 @@
+#!/bin/sh
+# mtrip boot: the trap-route test (regs, its strip control, the loader), then the M-round-trip cost from U, three runs.
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+echo "TRAPTEST: up, kernel $(uname -r)"
+/regs; echo "TRAPTEST: regs status $?"
+/regs-strip23; echo "TRAPTEST: regs-strip23 status $?"
+/enter; echo "TRAPTEST: enter status $?"
+for i in 1 2 3; do /mtrip; echo "TRAPTEST: mtrip $i rc=$?"; done
+echo "TRAPTEST: done"
+busybox poweroff -f; echo "TRAPTEST: poweroff failed"; sleep 999999

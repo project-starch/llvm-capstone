@@ -109,6 +109,28 @@ PLATFORM_PRECONDITIONS = {
 }
 
 
+# A REACH WITNESS a case declares (2026-11-12): its defect executes only on a condition the script
+# does not control -- uninitialised memory -- so a completed run on one arm says nothing about the
+# defect on that arm or on any other, and the stock arm cannot be the judge's control for `reached`.
+# The declaration names an event the arm's OWN transcript shows when the defect executes; the runner
+# (ports/php/app/run-realphp.py, REACH_WITNESSES) then takes reach per arm from that event and reads a
+# completed run without it as NO-READING:not-reached. It goes into oracle.json, the file that runner
+# reads, and into this table so that regenerating the corpus keeps it. A declaration needs a
+# measurement behind it, named in `measured_by`: the condition read on the measured image, and the
+# witness shown to appear when the condition is forced.
+REACH_WITNESSES = {
+    "CRASH-139": {
+        "kind": "nested-free-entry",
+        "conditional_on": "an uninitialised field on the C stack: zend_read_property() (Zend/zend_API.c:1957) builds the member zval without setting its reference count, and the engine frees the static string only when that field holds zero",
+        "witness": "the arm's own transcript shows the nested layer's free entry (zend_cap_reclaim, which _efree calls on every arm) stopping on the pointer: a ZEND_CAP_FAIL code 3 or 4 line that names a free, or a fault whose call path is _efree -> zend_cap_reclaim",
+        "why": "Whether the invalid free executes is decided by what earlier calls left on the stack, not by the script, so one arm's completed run says nothing about the defect on any arm and the stock arm cannot be the control for reached. Measured on the run19 image (results/2026-11-12-crash-139): the field holds 48 on all four arms in every run, read by a probe script on the measured image and by a diagnostic build; the free never executes and every arm completes. With the field forced to zero in a second diagnostic build the free arrives at the layer's free entry on every arm, the stock arm included, and the layer's lookup stops there. The layer looks up every pointer _efree is given before anything ends, in every mode, so a run in which the free executes shows the witness, and a completed run did not execute it.",
+        "measured_by": "results/2026-11-12-crash-139",
+    },
+}
+REACH_WITNESS_NOTE = (" Reach is per arm for this case: its defect is conditional on uninitialised memory, and "
+                      "oracle.json's reach_witness names the event in an arm's own transcript that shows it executed.")
+
+
 def requires_kind(text):
     if not text.strip():
         return ""
@@ -355,6 +377,8 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
     why, decided_by = population_reason(pop, m["cwe"], shipped, a["outcome"])
     if decided_by:
         oracle["population_decided_by"] = decided_by
+    if cid in REACH_WITNESSES:
+        oracle["reach_witness"] = REACH_WITNESSES[cid]
     case = {
         "case": number,
         "upstream_fix": fix,
@@ -395,6 +419,8 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
         "note": f"population: {pop} -- {why}. Collected by the corpus as {m['how_collected']['origin_stream']} ({m['how_collected']['history_status']}, confidence {m['how_collected']['confidence']}).",
     }
     case.update(PLATFORM_PRECONDITIONS.get(cid, {}))
+    if cid in REACH_WITNESSES:
+        case["note"] += REACH_WITNESS_NOTE
     # The file each declared site must be seen in: ASan's own frame for the main site, the table
     # above for a site declared beyond ASan's stack. A judge matches a site by function AND file,
     # so a same-named routine in another file is never the site (review 2026-10-28).
@@ -548,6 +574,20 @@ def self_test():
     checks.append(("only CRASH-084 declares one", sorted(PLATFORM_PRECONDITIONS), ["CRASH-084"]))
     checks.append(("and says why, naming the musl branch",
                    "unsetenv" in PLATFORM_PRECONDITIONS["CRASH-084"]["platform_precondition_why"], True))
+    checks.append(("only CRASH-139 declares a reach witness", sorted(REACH_WITNESSES), ["CRASH-139"]))
+    checks.append(("with its kind, the condition, the witness, the reason and the measurement behind it",
+                   sorted(REACH_WITNESSES["CRASH-139"]), ["conditional_on", "kind", "measured_by", "why", "witness"]))
+    checks.append(("and the measurement is a record of this corpus",
+                   (CORPUS_DIR / REACH_WITNESSES["CRASH-139"]["measured_by"] / "README.md").is_file(), True))
+    if oracles:
+        # THE COMMITTED CASES AGAINST THE TABLE, for the same reason as the population gate above:
+        # --write cannot be re-run on every host, so a hand-applied declaration is checked here.
+        checks.append(("every committed oracle.json carries exactly the reach witness the table declares",
+                       {o["id"]: o["reach_witness"] for o in oracles if "reach_witness" in o}, REACH_WITNESSES))
+        notes = {json.loads((d / "oracle.json").read_text())["id"]: json.loads((d / "case.json").read_text())["note"]
+                 for d in sorted(CORPUS_DIR.glob("[0-9][0-9]_*"))}
+        checks.append(("and the case.json note of exactly those cases says reach is per arm",
+                       sorted(i for i, n in notes.items() if n.endswith(REACH_WITNESS_NOTE)), sorted(REACH_WITNESSES)))
     checks.append(("the fix id is the first 12 hex digits", fix_id("4f161fe28997f5d1f818fc6ae95a8131066cf1a2"), "4f161fe28997"))
     checks.append(("an 11-digit fix id stays as given", fix_id("b599e434add"), "b599e434add"))
     bad = [(n, g, w) for n, g, w in checks if g != w]

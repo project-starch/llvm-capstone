@@ -1,5 +1,68 @@
 # Current Capstone state
 
+## 2026-11-28: Line B's final seals measured; the SPEC test campaign two-thirds read; Plain not yet booted
+
+**The arms** (the hardware Section 5 specifies): Full **b42c8c644** (WNS +0.605 ns, 150,303 LUT; kits b5b2n 21/21,
+crevoke4b 16/16, wapflu on two boards), +Spatial **14f2ef81a**, Plain rvbase **8db8f9cda**. 904cd9c6b, 88db40027 and
+28fcbb646 are superseded. Stage 2's seal N **796af23d9** is a separate experiment.
+
+**What is read** (details and commits: `docs/ref/fpga-silicon-measurements-for-paper.md`, the Line B entries of 28 Nov):
+- **SPEC test, final kernels** (kit b5b2-campaign-2026-11-26, interim): every stage PASS on 42 boots, outputs equal
+  to the twin, no cause-25 at an LDC, mcf completes. Full against +Spatial on one board: imagick +0.15 %, gcc +1.03 %,
+  perlbench −0.65 % (inside the noise), mcf +5.5 %. The qualification perl gap (11 s) is not reproduced. Boards agree
+  within 0.06 %.
+- **Qualification rows** on the bring-up kernel (kit b5b2-spectest-2026-11-25, on dev): all PASS, x264 by its seven
+  data outputs.
+- **Code placement alone** moves perlbench 4.1 % and nab 2.21 s (compiler stage2-placement-b42).
+- **Stage 2:** GO on gcc alone (−1.62 %), flat elsewhere; it does not replace b42c8c644 in this campaign.
+- **Record cache:** NO BUILD on gcc, perlbench and mcf (mcf from silicon's own tick positions, kit
+  b5b2-ticklog-2026-11-27); Line B has no record-cache hardware.
+- **Hardware cost:** Full 2.655x, +Spatial 2.457x CVA6's core LUTs (docs/plans/2026-11-26-hw-cost-lineb.md).
+- **Linux on Line B:** the final Full and +Spatial kernels (NO_HZ_IDLE at HZ=100), the msghdr loader, memcached served.
+
+**Not yet read, and what the paper needs from Line B:** every number against Plain (the Plain arm is pre-registered,
+runtime/b5b2-linux 932491ce4360, and is queued on board 2); perlbench on its full test input (a test.pl child faults with
+cause 28, to be attributed first); Table 3's application rows; the embedded suites; the security corpus beyond SQLite
+and PHP; revocation cost on silicon; and SPEC train, which runs last. Plan:
+[Line B to completion](../plans/2026-11-28-line-b-completion.md).
+
+**Superseded below:** the 25 Nov section's x264/imagick cause-24 faults (x264b and imagick pass on b42c8c644) and its
+open mcf wedge (mcf completes on b42c8c644, consistent with R-80's fix; S-35 still owes the 28fcbb646 control).
+
+## 2026-11-25: Line B on silicon (B5b-2, the trap route) runs Linux, SPEC and the one-operand applications
+
+The submitted paper measured P1 (d83d3a633). Line B, Section 5 as written, is now on silicon:
+- **B5b-2, bitstream 904cd9c6b**, is CONFIRMED N=2 on bare kits (boards 2 and 3). It carries the Sublet format, the
+  record and the three instructions, and the trap route; CSRUNV, the supervisor, the domain switcher, the CPMP and the
+  custom-3 family are removed.
+- **Linux boots on it** with the integer-M firmware (caplifive-opensbi `trap-route-keep-tags` eb85e21c: STC/LDC of the
+  registers across M traps, causes 24-30 delegated) and the collaborator's trap-route kernel.
+  - The trap-route test reads regs 0, with its strip control 23.
+  - Under the flag-off firmware the same payload faults with cause 24, a1's tag lost with its cursor intact. Keep-tags
+    is needed for regs.S: stock N=1 boot, keep-tags N=3 boots on two bitstreams.
+  - Kit: `tests/rtl-smoke/b5b2-linux-2026-11-25/`, dev 634fd5531e99.
+- **Interruptible CREVOKE (4(b)) on silicon**, seal 88db40027: 16 arms plus the control as pre-registered (8 of them
+  discriminate the two bitstreams), a resumed-chunk stop latency of 1,130 cycles, N=1 (dev d139d076f84e). It also carries the committed-store-queue drain and the CAP_WB guard.
+- **The five one-operand applications** (SQLite, mruby, gcc, Perl makerand, tshark) ran on 904cd9c6b with stock's
+  answers. The M-16 stress form ran 1.17e8 protected allocations without a stop (one boot; bound < 2.6e-8 per
+  fast allocation; hardware not separated from the one-operand wmem revision). Records: nested-workloads ba26257f256a, 5d902b54a271.
+- **SPEC test on Line B** (images: compiler's B5T/B5TL0/B5TL1 arms, dev 937208e0991f, ILLEGAL 0):
+  - gcc passes;
+  - x264 and imagick fault with cause 24 in all three arms, tval 0. imagick's is a NULL increment by control flow, and
+    its twin passes. x264's is consistent with one (tval 0, three arms), but its source line and a completed twin run
+    are unverified. The rule that would explain both is the untagged-CINCOFFSET rule, which 904cd9c6b applies only under
+    vctx and the reference always. Its FLU ungate is in the combined build 28fcbb646, whose run on silicon is the
+    confirmation;
+  - mcf went silent after about 46 min (boot 5): a wedge with an LDC at the LSU head and four stores queued without a
+    D$ grant, mechanism open. It shares M-16's LSU-head signature (sw=219, sw=220) and differs
+    in the store port (sw=221 0xf8 against 0x02), across bitstreams; whether it is M-16's mechanism is open. 28fcbb646 carries observation apertures for it.
+- **C5** (the redundant-bounds flags as every virtual SDK's default) is on dev (e12fee7a561b), after the harness fix
+  ba66310faf14.
+
+Open for the final campaign: the mcf wedge; the combined build's seal and kits; a Plain baseline matched in kernel tick
+(the trap kernel is HZ_PERIODIC, the measured configuration NO_HZ_IDLE), THP, SMP and allocator; train stages for
+the Line B images. See [the Line B campaign plan](../plans/2026-11-25-line-b-final-campaign.md).
+
 ## 2026-11-10 — Normalized third-party defect classification
 
 The 425 declared bug-corpus records now have a normalized, auditable classification artifact:

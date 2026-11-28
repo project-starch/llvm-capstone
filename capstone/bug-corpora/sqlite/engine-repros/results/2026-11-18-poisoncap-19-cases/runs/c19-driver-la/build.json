@@ -1,0 +1,66 @@
+{
+  "compiler": "~/poisoncap-platform/work/sdk/bin/clang",
+  "target": [
+    "--target=riscv64-unknown-freebsd",
+    "-march=rv64imafdcxcheri",
+    "-mabi=l64pc128d",
+    "-mno-relax",
+    "-fuse-ld=lld",
+    "--sysroot=~/poisoncap-platform/work/output/rootfs-riscv64-purecap"
+  ],
+  "amalgamation": "sqlite/amalgamation-published",
+  "opt": "-O0",
+  "heap_bytes": 268435456,
+  "heap_min": 16,
+  "heap_malloc": true,
+  "no_lookaside": false,
+  "groups": {
+    "core": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_PREUPDATE_HOOK",
+      "-DSQLITE_COUNTOFVIEW_OPTIMIZATION"
+    ],
+    "fts3": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_FTS3",
+      "-DSQLITE_ENABLE_FTS4"
+    ],
+    "fts5": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_FTS5"
+    ]
+  },
+  "cases": {
+    "02_b9e0f62c3a_backup_pager_after_detach": {
+      "tag": "backupattach",
+      "group": "core",
+      "extra": []
+    },
+    "11_dee0359ddb_fts3_zterm_stale_buffer": {
+      "tag": "fts3zterm",
+      "group": "fts3",
+      "extra": []
+    },
+    "13_fix-2026-06-08_fts5_near_stale_phrase": {
+      "tag": "fts5near",
+      "group": "fts5",
+      "extra": []
+    }
+  },
+  "built": [
+    "02_b9e0f62c3a_backup_pager_after_detach",
+    "11_dee0359ddb_fts3_zterm_stale_buffer",
+    "13_fix-2026-06-08_fts5_near_stale_phrase"
+  ],
+  "controls": [
+    "libc_revoke",
+    "reuse_clean",
+    "uaf_interior",
+    "uaf_keepperm",
+    "uaf_libc",
+    "uaf_offsets",
+    "uaf_read",
+    "uaf_read_before_free"
+  ],
+  "failed": []
+}

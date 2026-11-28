@@ -312,6 +312,17 @@ test suite (`mrbtest`, 1,710 tests) runs to the same result on both images --
 Patch 0008 is 61 lines of code in `gc.c`. It replaces the adapter of 438 patch
 lines that held the GC's slots linearly in a region of the Sublet heap.
 
+
+### Again on the one-operand lifetime instructions (2026-11-11)
+
+Both arms were run again after `CREVOKE` became a one-operand instruction and patch 0008 was converted to it
+([results/2026-11-11-virtual](results/2026-11-11-virtual/README.md)): `virtual-malloc` 20 faults and 3 completed,
+`virtual-nested-pools` 23 faults, and 44 of the 46 cells with the cause and function recorded above. Case 23 faults
+with cause 28 in `mrb_ary_new_capa` on both arms, which is the compiler and reads the same on unmodified dev. The
+protected arm needed four attempts: a process now and then stops making progress in the kernel, on unmodified dev as
+well, and the record says what was and was not established about it. The GC-slot controls hold
+([gc-slot-repros/results/2026-11-11-controls](../gc-slot-repros/results/2026-11-11-controls/README.md)).
+
 ## The system-allocator cases on the baseline and on CheriBSD (2026-10-11)
 
 Seven cases free their object through libc: 01, 03, 06, 09, 10, 11 and 17.

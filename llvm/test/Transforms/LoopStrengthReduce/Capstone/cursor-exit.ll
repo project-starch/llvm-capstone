@@ -382,3 +382,60 @@ exit:
 }
 
 declare void @consume(ptr addrspace(200))
+
+; A count SCEV derives from mustprogress. `for (i = 0; i != n; i += 2)` over bytes is finite only by that assumption:
+; for an odd n the integer test never meets n. Clang marks such C11 loops mustprogress, so the count is exact and the
+; cursor test is used (byte step 2, period 2^63). For an odd n over an 8-byte buffer, the integer loop runs on into
+; a bounds trap at q[8]; the cursor loop returns after three iterations, before any out-of-bounds access.
+; Ruled acceptable by the semantics owner (2026-11-26):
+; - nothing illegal executes silently; the property Capstone owes is "no illegal access goes undetected", not "every
+;   UB program traps where -O0 would";
+; - a side-effect-free loop that never terminates is UB under C11;
+; - the Plain compiler makes the same assumption, so the arms stay matched.
+; CHECK-LABEL: @step2_mustprogress(
+; CHECK:       [[IV:%.*]] = phi ptr addrspace(200)
+; CHECK:       [[NEXT:%.*]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 2
+; CHECK:       icmp eq ptr addrspace(200) [[NEXT]], %lsr.cap.end
+define i64 @step2_mustprogress(ptr addrspace(200) %q, i64 %n) mustprogress {
+entry:
+  %z = icmp eq i64 %n, 0
+  br i1 %z, label %exit, label %loop
+loop:
+  %i = phi i64 [0, %entry], [%next, %loop]
+  %s = phi i64 [0, %entry], [%s2, %loop]
+  %p = getelementptr inbounds i8, ptr addrspace(200) %q, i64 %i
+  %v = load i8, ptr addrspace(200) %p
+  %vw = zext i8 %v to i64
+  %s2 = add i64 %s, %vw
+  %next = add i64 %i, 2
+  %done = icmp eq i64 %next, %n
+  br i1 %done, label %exit, label %loop
+exit:
+  %r = phi i64 [0, %entry], [%s2, %loop]
+  ret i64 %r
+}
+
+; The same loop without mustprogress has no exact count, so the integer test stays: the pin of the integer test.
+; CHECK-LABEL: @step2_no_mustprogress(
+; CHECK-NOT:   lsr.cap.end
+; CHECK:       icmp eq i64 %n, %next
+; CHECK-NOT:   lsr.cap.end
+; CHECK:       ret i64
+define i64 @step2_no_mustprogress(ptr addrspace(200) %q, i64 %n) {
+entry:
+  %z = icmp eq i64 %n, 0
+  br i1 %z, label %exit, label %loop
+loop:
+  %i = phi i64 [0, %entry], [%next, %loop]
+  %s = phi i64 [0, %entry], [%s2, %loop]
+  %p = getelementptr inbounds i8, ptr addrspace(200) %q, i64 %i
+  %v = load i8, ptr addrspace(200) %p
+  %vw = zext i8 %v to i64
+  %s2 = add i64 %s, %vw
+  %next = add i64 %i, 2
+  %done = icmp eq i64 %next, %n
+  br i1 %done, label %exit, label %loop
+exit:
+  %r = phi i64 [0, %entry], [%s2, %loop]
+  ret i64 %r
+}

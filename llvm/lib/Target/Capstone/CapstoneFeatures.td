@@ -1713,6 +1713,61 @@ def FeatureMovcKeepsIntegerSource
                        "true",
                        "MOVC leaves an untagged (integer) source register intact">;
 
+// Capability-base RVC (default off). With C, a load or store whose base is a
+// capability in c8-c15, or the stack capability c2, is emitted as the standard
+// 16-bit C.LW/C.LD/C.SW/C.SD/C.FLD/C.FSD or its SP-relative form. Every access on
+// this target takes a capability base (Load_ri), so the upstream patterns, which
+// name GPR bases, never fire on it. A 16-bit load or store expands to the same
+// 32-bit encoding, and that encoding already reaches memory through the base
+// register's capability, so this changes code size and not semantics or the ISA.
+def FeatureCapBaseRVC
+    : SubtargetFeature<"cap-base-rvc", "CapBaseRVC", "true",
+                       "Compress loads and stores whose base is a capability">;
+def HasCapBaseRVC : Predicate<"Subtarget->hasCapBaseRVC()">,
+                    AssemblerPredicate<(all_of FeatureCapBaseRVC),
+                                       "Capability-base RVC">;
+
+// Compressed capability instructions, stage 2 option B (default off; see
+// capstone/docs/plans/2026-11-21-capability-rvc-stage2-prototype.md). An image
+// built with it is decoded in the CRVC mode: C.FLD, C.FSD, C.FLDSP, C.FSDSP and
+// C.LUI x0 are reinterpreted as c.ldc, c.stc, c.ldcsp, c.stcsp and
+// c.cincoffset16sp, and Q0 100 [12:10] = 100..110 hold c.movc, c.scc and
+// c.cincoffset. So the displaced forms are never emitted under it, and every
+// object is marked EF_CAPSTONE_CRVC.
+def FeatureCapCRVC
+    : SubtargetFeature<"cap-crvc", "CapCRVC", "true",
+                       "Compressed capability instructions (CRVC decode mode)",
+                       [FeatureStdExtZca]>;
+def HasCapCRVC : Predicate<"Subtarget->hasCapCRVC()">,
+                 AssemblerPredicate<(all_of FeatureCapCRVC),
+                                    "Compressed capability instructions">;
+def NoCapCRVC : Predicate<"!Subtarget->hasCapCRVC()">,
+                AssemblerPredicate<(all_of (not FeatureCapCRVC))>;
+
+// Zcb byte and halfword loads and stores with a capability base (default off), the
+// stage-1 move for Zcb: c.lbu, c.lhu, c.lh, c.sb and c.sh with the base in c8-c15.
+// The hardware expands them to the same 32-bit encodings, which already access
+// memory through the base capability, so this changes code size, not semantics or
+// the ISA. Measured as its own arm (plans/2026-11-21-capability-rvc-stage2-prototype.md).
+def FeatureCapBaseZcb
+    : SubtargetFeature<"cap-base-zcb", "CapBaseZcb", "true",
+                       "Compress Zcb byte and halfword accesses whose base is a capability",
+                       [FeatureStdExtZcb]>;
+def HasCapBaseZcb : Predicate<"Subtarget->hasCapBaseZcb()">,
+                    AssemblerPredicate<(all_of FeatureCapBaseZcb),
+                                       "Capability-base Zcb">;
+
+// A PC-relative capability derive, auipcgp rd, imm20: rd = gp with its cursor
+// set to pc + (imm20 << 12), as auipc followed by scc rd, gp. The authority is
+// gp's, never the PCC's: the PCC contributes only its address. Default off; a
+// prototype in custom-1 (docs/history/21-11-2026_09-30-00_pcrel-capability-derive-census.md).
+def FeatureCapAUIPCGP
+    : SubtargetFeature<"cap-auipcgp", "HasCapAUIPCGP", "true",
+                       "PC-relative capability derive from gp (auipcgp)">;
+def HasCapAUIPCGP : Predicate<"Subtarget->hasCapAUIPCGP()">,
+                    AssemblerPredicate<(all_of FeatureCapAUIPCGP),
+                                       "PC-relative capability derive (auipcgp)">;
+
 def FeatureSaveRestore : SubtargetFeature<"save-restore", "EnableSaveRestore",
                                           "true", "Enable save/restore.">;
 

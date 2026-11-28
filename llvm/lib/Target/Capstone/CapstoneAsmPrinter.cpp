@@ -23,6 +23,7 @@
 #include "TargetInfo/CapstoneTargetInfo.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
@@ -37,6 +38,7 @@
 #include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCSectionELF.h"
+#include "llvm/MC/MCSymbolELF.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -138,6 +140,7 @@ public:
   void emitGlobalVariable(const GlobalVariable *GV) override;
 
 private:
+  void emitSizeAssumptions(const MachineFunction &MF);
   void emitStaticCapGCTSection(const Module &M);
   void emitCapGlobalInitTableEntry(const Module &M);
   void emitGpCaptableTable(const Module &M);
@@ -538,6 +541,35 @@ void CapstoneAsmPrinter::emitInstruction(const MachineInstr *MI) {
                                        .addReg(AsIntReg(MI->getOperand(0).getReg()))
                                        .addImm(0));
       return;
+    case Capstone::PseudoCapWeakGlobal: {
+      // C-56, see the pseudo's definition. The integer write leaves rd an
+      // untagged 0 when the symbol is undefined; otherwise rd is formed from gp.
+      Register Dst = MI->getOperand(0).getReg();
+      Register Addr = MI->getOperand(1).getReg();
+      int64_t ShrinkImm = MI->getOperand(2).getImm();
+      if (AsIntReg(Dst) != Addr)
+        EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::ADDI)
+                                         .addReg(AsIntReg(Dst))
+                                         .addReg(Addr)
+                                         .addImm(0));
+      MCSymbol *Null = OutContext.createTempSymbol();
+      EmitToStreamer(*OutStreamer,
+                     MCInstBuilder(Capstone::BEQ)
+                         .addReg(Addr)
+                         .addReg(Capstone::X0)
+                         .addExpr(MCSymbolRefExpr::create(Null, OutContext)));
+      EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::SCC)
+                                       .addReg(Dst)
+                                       .addReg(Capstone::C3)
+                                       .addReg(Addr));
+      if (ShrinkImm)
+        EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::SHRINKTO)
+                                         .addReg(Dst)
+                                         .addReg(Dst)
+                                         .addImm(ShrinkImm));
+      OutStreamer->emitLabel(Null);
+      return;
+    }
     }
   }
 
@@ -726,6 +758,8 @@ bool CapstoneAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
   SetupMachineFunction(MF);
   emitFunctionBody();
 
+  emitSizeAssumptions(MF);
+
   // Emit the XRay table
   emitXRayTable();
 
@@ -834,6 +868,46 @@ void CapstoneAsmPrinter::emitEndOfAsmFile(Module &M) {
   emitCapGlobalInitTableEntry(M);
   emitGpCaptableTable(M);
   emitGpCaptableInitDesc(M);
+}
+
+// .capstone.size_assume, not allocated: one record per declared global whose
+// narrowing CapstoneRedundantShrink dropped in this function, an 8-byte
+// little-endian size (the bytes from the symbol's start that the remaining
+// accesses reach) followed by the symbol's NUL-terminated name.
+// capstone/runtime/host/capstone_vm/compiler.py (capstone-cc's link) fails an
+// image whose definition of a named symbol is smaller than a record requires.
+// Like .stack_sizes, the section is SHF_LINK_ORDER to the function's own text
+// section, so --gc-sections drops a function's records with the function: a
+// record of code that is not in the image must not demand a definition the
+// same garbage collection removed.
+void CapstoneAsmPrinter::emitSizeAssumptions(const MachineFunction &MF) {
+  MapVector<const GlobalValue *, uint64_t> Need;
+  for (const auto &[GV, Bytes] :
+       MF.getInfo<CapstoneMachineFunctionInfo>()->sizeAssumptions()) {
+    uint64_t &Max = Need[GV];
+    Max = std::max(Max, Bytes);
+  }
+  if (Need.empty())
+    return;
+  const auto &Text = static_cast<const MCSectionELF &>(*MF.getSection());
+  unsigned Flags = ELF::SHF_LINK_ORDER;
+  StringRef GroupName;
+  if (const MCSymbol *Group = Text.getGroup()) {
+    GroupName = Group->getName();
+    Flags |= ELF::SHF_GROUP;
+  }
+  MCSection *Sec = OutContext.getELFSection(
+      ".capstone.size_assume", ELF::SHT_PROGBITS, Flags, 0, GroupName, true,
+      Text.getUniqueID(),
+      static_cast<const MCSymbolELF *>(Text.getBeginSymbol()));
+  OutStreamer->pushSection();
+  OutStreamer->switchSection(Sec);
+  for (const auto &[GV, Bytes] : Need) {
+    OutStreamer->emitIntValue(Bytes, 8);
+    OutStreamer->emitBytes(getSymbol(GV)->getName());
+    OutStreamer->emitIntValue(0, 1);
+  }
+  OutStreamer->popSection();
 }
 
 // If this module has a capability-global initializer (synthesized by the

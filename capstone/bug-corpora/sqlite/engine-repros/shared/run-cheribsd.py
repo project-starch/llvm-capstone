@@ -145,11 +145,18 @@ def main():
                         "non-reading, not a miss. Recorded in the run record.")
     p.add_argument("--work", type=pathlib.Path,
                    default=pathlib.Path.home() / "arms/sqlite/cheribsd")
+    p.add_argument("--stock-quarantine", action="store_true",
+                   help="non-nested only: run with NOREVOKE=1 as well, so the case is on the "
+                        "system allocator but nothing forces a sweep -- CheriBSD's default "
+                        "asynchronous revocation. A separate configuration from the forced one; "
+                        "recorded as such, never folded into cheribsd-platform's cells.")
     a = p.parse_args()
+    if a.stock_quarantine and a.mode != "non-nested":
+        sys.exit("--stock-quarantine only applies to --mode non-nested")
 
     sysalloc = a.mode == "non-nested"
     suffix = "_sys" if sysalloc else ""
-    envp = "NOMEM5=1 " if sysalloc else ""
+    envp = ("NOMEM5=1 NOREVOKE=1 " if a.stock_quarantine else "NOMEM5=1 ") if sysalloc else ""
 
     tags = case_tags()
     groups = tag_groups()
@@ -315,6 +322,7 @@ def main():
         "arm": ARM_OF_MODE[a.mode], "mode": a.mode,
         "revocation_default": rev.strip(), "poscontrol_exit": pc_code,
         "case_timeout_s": a.case_timeout,
+        "stock_quarantine": a.stock_quarantine,
         "resolver": ({"object": pc_where.group(1), "base": pc_where.group(2),
                       "symbol": pc_where.group(3)} if pc_ok else None),
         "skipped": dict(skipped), "tally": tally, "cases": results}, indent=2) + "\n")

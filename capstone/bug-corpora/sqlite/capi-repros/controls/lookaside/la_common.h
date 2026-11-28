@@ -40,8 +40,7 @@ static sqlite3 *la_open(void) {
          (unsigned)sizeof(LookasideSlot *));
   ctl_bounds("lookaside-pStart", l->pStart);
 #ifdef REPRO322_VIRTUAL_SUBLET
-  /* The patch's two lifetimes over the buffer: pBlock (from pStart), pLife (parent of every slot). */
-  ctl_bounds("lookaside-pBlock", l->pBlock);
+  /* The patch's lifetime over the buffer: pLife (from pStart), the parent of every slot. */
   ctl_bounds("lookaside-pLife", l->pLife);
 #endif
   ctl_check("lookaside-enabled", l->bDisable == 0 && l->sz > 0 && l->pStart != (void *)db);

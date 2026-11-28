@@ -1,0 +1,38 @@
+{
+  "arm": "virtual-malloc",
+  "image_sha256": "708d23a2ca31ff15b7d54be4e2fc6b3dc481dec75b0baf9ba401b344d150ec92",
+  "cases": 11,
+  "controls": {
+    "eval": true,
+    "shim": true
+  },
+  "timeout_s": 600,
+  "platform": {
+    "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "ssh_server": "f4fa3153325d7098785926e5edda553b31dfd9f9cb3448023b83a61e53b77d9b",
+    "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "job_helper": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+    "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+    "runner": "aabfa66858b2c35e59f34fb4bc3999d510b639f31a093ba6bd4763d8f0352c98",
+    "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+    "profile": "virtual",
+    "exact_bounds": true
+  },
+  "triggers": {
+    "01_ad5fedb002_for-loop-gv-freed-early": "252a969a740e904cf26f706b68697d74ecf3fa7c9d72156edf5137ac7ee56d16",
+    "02_d2cddbe1df_caller-args-freed-sv": "c87184d0421a29edd8cfdcafc6e014b355b7e9561fbc3413073f43740b1af0d4",
+    "03_9e298ab597_av-extend-unshift-stale-slots": "a0a8f4c0945e174e2cd80e9a5136f9bc2d61d26044b7fcbcedcb444525e74e32",
+    "04_e4be969235_join-delimiter-freed-by-magic": "33ded74f3bf0dcacb54075989f413b4c2c456b953f6d50b18e22903275f6e6cb",
+    "05_17535c984a_cloned-const-sub-unrefcounted": "e0fbcd45a7b6a6c984b25bea51dd30ce131c43af94384182cedb3cc301f3dad5",
+    "06_40727c420c_code-blocks-count-reused": "e5902280a01895e022335bf2faf6415f9a38a4756c09922e8325c899c4016926",
+    "07_39b4841b25_recursive-code-eval-rex-freed": "d29f8739eeb3ede942e2e55f2fa1153a9bc6e9e61f3023ea3e51319e93790e78",
+    "08_b7b77ffc1e_clear-errsv-on-a-glob": "37088baf07fe4d3b0e894c4b305a7c66ce41b6bf616499ca8d44276cfbcf112c",
+    "09_1189b87114_special-block-cv-freed": "56e1f2399456071fd80e508dfec1a0cb6b4c074468f55fc32409bba5ebf57471",
+    "10_254b30e378_perlio-scalar-write-overlap": "961e4e41cf7ed9d65a4414e6bb35658fa724b4d0344390618240399ee27ad6e4",
+    "11_af11b0c528_cow-subbeg-across-code-eval": "c9544f35c16d5fdceac444584a485a553f906dbc85c4409b44207afa1fcd2a18"
+  }
+}

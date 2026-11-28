@@ -143,8 +143,8 @@ applies. The native, CheriBSD and stock virtual builds take two:
 one replaces the includes with the port's shims, the other connects the
 free-list transitions to the port's ledger. The Sublet build
 (`-DMCP_SUBLET=ON`, the `virtual-nested-pools` arm) takes the shims and the
-application's patch 0006 instead -- the two lifetime instructions in `slabs.c`
-and `cache.c` -- and has no ledger. Reduced: the consumer. Each `case.c`
+application's patch 0006 instead -- the lifetime instructions in `slabs.c`
+(CDERIVE, CREVOKE) and `cache.c` (CRENEW) -- and has no ledger. Reduced: the consumer. Each `case.c`
 writes its sequence inside `MC_CASE(NN)` and is a complete translation unit on
 every target; [`shared/corpus.h`](shared/corpus.h) is the seam.
 

@@ -67,7 +67,8 @@ static cl::opt<bool> CapstoneShrinkToGlobals(
     "capstone-shrinkto-globals", cl::Hidden,
     cl::desc("Narrow small data globals with SHRINKTO instead of SHRINK"),
     cl::init(false));
-static cl::opt<unsigned> CapstoneShrinkToEndAdjust(
+// Non-static: also read by CapstoneRedundantShrink.cpp.
+cl::opt<unsigned> CapstoneShrinkToEndAdjust(
     "capstone-shrinkto-end-adjust", cl::Hidden,
     cl::desc("Added to the SHRINKTO length of a global (1 on bitstreams whose "
              "SHRINKTO ends at cursor + imm - 1)"),
@@ -1743,6 +1744,33 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   // Inside one pseudo, no LINEAR value is ever an SSA value with multiple uses:
   // the operand is the scalar symbol offset and the result is already NONLIN.
   (void)GP; // gp is an implicit Use of the pseudo (Uses = [X3]).
+
+  // C-56: an extern-weak global may be undefined, and then its address is 0.
+  // See PseudoCapWeakGlobal: the base is formed only when the address is not 0,
+  // so `&weak == NULL` holds and an undefined object is never SHRINKed. Only at
+  // offset 0, where lld's absolute value is 0; image-gp only, where the address
+  // is the integer cursor.
+  if (capstoneImageGpAbiActive())
+    if (auto *GA = dyn_cast<GlobalAddressSDNode>(Symbol);
+        GA && GA->getOffset() == 0 && GA->getGlobal()->hasExternalWeakLinkage()) {
+      int64_t ShrinkImm = 0;
+      if (const auto *GVar = dyn_cast<GlobalVariable>(GA->getGlobal());
+          CapstoneShrinkGlobals && GVar && !GVar->isThreadLocal() &&
+          GVar->getValueType()->isSized()) {
+        uint64_t Size =
+            CurDAG->getDataLayout().getTypeAllocSize(GVar->getValueType());
+        uint64_t Imm = Size + (CapstoneShrinkToGlobals ? CapstoneShrinkToEndAdjust : 0);
+        if (Size > 0 && Imm <= 2047)
+          ShrinkImm = (int64_t)Imm;
+      }
+      ReplaceNode(Node, CurDAG->getMachineNode(
+                            Capstone::PseudoCapWeakGlobal, DL, PtrVT,
+                            SDValue(Offset, 0),
+                            CurDAG->getSignedTargetConstant(
+                                ShrinkImm, DL, Subtarget->getXLenVT())));
+      return;
+    }
+
   SDNode *Delined = CurDAG->getMachineNode(Capstone::PseudoCapGlobalBase, DL,
                                            PtrVT, SDValue(Offset, 0));
 
@@ -4328,7 +4356,11 @@ static bool selectConstantAddr(SelectionDAG *CurDAG, const SDLoc &DL,
                                  CurDAG->getTargetConstant(Hi20, DL, VT)),
           0);
     } else {
-      Base = CurDAG->getRegister(Capstone::X0, VT);
+      // C-57: a capability-typed base is the null capability, C0. X0 and C0
+      // share an encoding, but X0 is not in a capability register class, and the
+      // machine verifier rejects it as a load's base.
+      Base = CurDAG->getRegister(isCapabilityVT(VT) ? Capstone::C0 : Capstone::X0,
+                                 VT);
     }
     Offset = CurDAG->getSignedTargetConstant(Lo12, DL, VT);
     return true;
@@ -4385,7 +4417,7 @@ static bool isWorthFoldingAdd(SDValue Add) {
   return true;
 }
 
-bool isRegImmLoadOrStore(SDNode *User, SDValue Add) {
+static bool isRegImmLoadOrStore(SDNode *User, SDValue Add) {
   switch (User->getOpcode()) {
   default:
     return false;
