@@ -2946,6 +2946,21 @@ returned 0 and the smoke passed all 9 steps. Read by `appd/parse-abba.py` and `p
 - What makes up the +789 M is not separated by this boot. The twin prices the added instructions at +10.00 %; the
   boot adds 1.94 M CDERIVEs and CREVOKEs, 16.6 M paged record accesses and 7.5 M L1D misses.
 
+**Cycle attribution (added 2026-11-22, the method of the test.pl attribution in the prot6 section), protected minus
+stock, +788.8 M in-context cycles** (the means of p1/p2 and u1/u2):
+
+| part | cycles | share | price and its source |
+|---|---:|---:|---|
+| the port's instructions | 491.7 M | 62.3 % | +173,265,263 twin instructions (`nested/out/nperl-fix`, the in-context `run_cycles` of p1/p2 minus u1/u2: 1,905,131,312 against 1,731,866,049) at 2.838 cycles each, the stock arm's own cycles per twin instruction (a model: the mean) |
+| record-table walks | 12.3 M | 1.6 % | hpm4, read as cycles (measured; the table's rounded values) |
+| event-23 replays | 24.7-29.0 M | 3.1-3.7 % | +1.45 M at 17-20 cycles each (Addendum 1's RTL estimate, from source) |
+| **not attributed** | **255.7-260.1 M** | **32.4-33.0 %** | |
+
+- The remainder's share is close to test.pl's (34.4-35.4 % at the same mean price). The L1D misses (+7.46 M) are
+  not priced; if they carried the whole remainder, each would cost 34-35 cycles.
+- As on test.pl, the instruction price is the softest number here. No board run has priced the CDERIVE/CREVOKE pairs
+  and the head checks on their own. At a lower price the instructions take less and the remainder grows.
+
 ## gcc (SPEC 502.gcc_r) with its pool allocator protected
 
 **Scope.** SPEC's Full build protects only `malloc`. gcc carves its own objects from three allocators. This lane
@@ -3368,6 +3383,579 @@ gcc reads released names through old references by design (`SSA_NAME_IN_FREE_LIS
   none on train01. +0.33 M instructions; **the whole gcc port +0.752 %** of gcc's code against the arm with both gcc
   fixes. Growing obstack objects stay without a lifetime of their own until obstack_finish: gcc reads a growing
   object's base in four places (pretty-print.c, reorg.c), none of which runs on train01.
+
+### perlbench test.pl: where the scalar-heads port's instructions go, and an O(1) arena lookup (QEMU twin, 2026-11-21)
+
+**Correction to the post-submission brief, sent to the SPEC lane:** the "+789 M unattributed" were in-context cycles of
+Perl 5.36 on suns.pl on P1, not perlbench instructions. On SPEC's test.pl, the paper's footing, the port adds +3,629 M
+instructions to perlbench's own code (+4.303 %, every function counted exactly by `capstone/tests/record-trace/
+zones-twin.c` on the twin a0501ebc39; stock c1744e87…, protected f5449ace…, both with SPEC's output but the twin's three
+known scripts).
+
+- About three quarters is the arena lookup, not lifetime work: the lookup repair's binary search over an address-sorted
+  index runs about 15 halvings over test.pl's 26,678 arenas, inside sv_setsv_flags (upstream's two SvIS_FREED tests per
+  call, 106 instructions a call), the head release (72), Perl_sv_arena_head (80) and the head issue in the
+  constructors (66-80).
+- An O(1) lookup with the protection unchanged (`own-allocators/500.perlbench_r/fix-lookup-pages.py`): **+2.894 %**,
+  -1,188 M instructions, at +0.86 MB of peak memory on test.pl. A first line that aligned arenas to 4 KiB reached
+  +2.859 % but cost +8.56 MB (mallocng's aligned blocks), which the memory runs caught; it was replaced.
+- The fixture (`make-heads-fixture.py`, from the build's own perlmain.c, which stays outside the repository; an interpreter embedded from the build's own objects): freed heads fault (cause
+  25), live heads read, a second interpreter's heads read while the first one's fault, with the normal table and with
+  a 1-slot table; a build without the verify-on-hit faults with cause 24 on live heads.
+- Not yet read: cycles. The board's +5.84 % on test.pl (prot2) is the paper's footing; the new image needs its own P1
+  pair before any cycle figure is attributed or quoted. The paper is unchanged.
+- An instrument defect found on the way: the twin runner's per-process memory sampler matched processes by their
+  15-character comm, so it read 0 for perlbench ("perlbench_r_bas"); a fixed copy matches argv[0] and prints NONE when
+  nothing matched. No reading in this document used that column.
+
+### Pre-registration: perlbench test.pl on P1, stock and the O(1)-lookup port in one boot (written 2026-11-21 08:10, before the boot)
+
+**Question.** What does the scalar-heads port with the page-indexed arena lookup (prot6) cost perlbench in cycles on
+SPEC's test.pl, and where do those cycles go? The twin prices its instructions at +2.894 % against +4.303 % for the
+paper's protected image (prot2), whose board cost was +5.84 % in-context (st2/pt2 above).
+
+**Boot.** Board 1 (granted by the SPEC lane after its spatial-only chain, pid 2687886), bitstream P1 (`…-pagedtbl_
+d83d3a633`, seal `dc411e36…`; the chain flashes it with the seal check if another bitstream is resident, and reads it
+back), kit `nested/kits/bkit91-rec1m` (2^20 records), one booking for the whole boot. Stage `nested/p1g/pair6`
+(`pair6.SHA256SUMS`, 574 files): the table's perlbench test stage with its arm section twice, **u** = stock
+(c1744e87…, the paper's Full image) then **p** = prot6 (37381b03…), each makerand.pl then test.pl. Both images xz-packed.
+Budget 86400 (`BAKED_TIMEOUT` 345600), booking 660 min. Expected about 7.5 h of commands.
+- Rule 8 (`nested/p1g/pair6-recheck`): real bake rc 0, `BOARD_STUB=2` on st2's transcript and on its cut rc 0 and 0,
+  real firmware 23,760,392 B (`d0ea5bf0…`), the relinked kernel at `node_flat_records=1048576`.
+- Twin check of the same stage (`census/out/twin-pair6`) must show both arms' makerand.out equal to SPEC's and test.out
+  as stock's (the twin's three known scripts) before the chain is armed.
+- When the boot ends, the chain touches `perf/natstage/perlpair-b1.DONE` (the SPEC lane's gate).
+
+**Outcomes.**
+- VOID as for every P1 boot. Answers: every command rc 0; makerand.out and test.out of both arms byte-equal to SPEC's
+  references, else no cost is read.
+- Stock check: u's test.pl in-context cycles against st2's 267,194.0 M, expected within 1 %. Outside it, the cost is
+  still read within this boot but the cross-boot comparisons are not.
+- **Cost of test.pl, p against u, in-context cycles. Predicted +3.5 % to +5.5 %**: the twin's 1,188 M fewer
+  instructions than prot2, at the stock arm's 3.17 cycles per twin instruction, are 3.8 G cycles, -1.4 points from
+  prot2's +5.84 %; the record traffic is unchanged.
+- Readings for the cycle attribution (step 2): hpm3 record-TLB misses, hpm4 walk cycles (taken as cycles directly),
+  hpm5 paged accesses, hpm7 event-23 replays, hpm8 L1D misses, each p minus u; the twin's instructions p minus u. The
+  per-event prices used will each name their source (a measured pair or a model), and the remainder is stated as a
+  number.
+- Limits stated in advance: one run per arm, the arms in a fixed order in one boot (u first), not interleaved.
+
+### Results: perlbench test.pl on P1, stock and the O(1)-lookup port in one boot (board 1, 2026-11-22 00:47-08:32): +5.08 % in-context, output correct
+
+**Configuration.** As pre-registered (b50563709f73). Chain `nested/p1g/b1-pair6.*` on board 1; the chain flashed P1
+with the seal check and read it back resident (`…-pagedtbl_d83d3a633.bit`). Kit `nested/kits/bkit91-rec1m`; the
+transcript reads `node_flat_records=1048576`. Transcript `spec/board/out-nat-p1-pair6-b1/pair6/board.txt`, sha256
+`79b7b65f49e46d694b35f8655bbb8b2a063e3b5897f4a7450aef3d13e4300e87`, firmware `0edfee07…`, kernel build #280.
+`b0-stats` returned 0. The smoke reads PASS with `task` waived, as in every P1 boot. The watchdog sampled throughout
+(1,449 lines).
+- The kit's `spec-classify.py` printed "NO RESULT: no @@SPEC-DONE" for this boot, as for st2 and pt2. It expects
+  `@@SPEC-DONE <count>`, and the table's stage prints `@@SPEC-DONE 500.perlbench_r test`. All four commands began and
+  ended. The readings below come from the transcript itself (`read-pair.py`, a scratch reader). It reproduces st2's
+  267,194,043,894 and pt2's 282,785,227,858 to the cycle.
+
+| test.pl (command 1) | u = stock c1744e87 | p = prot6 37381b03 | p vs u |
+|---|---:|---:|---|
+| in-context cycles | 267,219,156,375 | 280,802,971,216 | **+5.08 %** (+13,583.8 M) |
+| kernel + other | 44,339,795,047 | 45,829,237,769 | +3.36 % (+1,489.4 M) |
+| uptime span, s | 12,798.09 | 13,410.64 | **+4.79 %** |
+| record-TLB misses (hpm3) | 24,091,058 | 45,536,269 | +21.4 M (+89 %) |
+| walk cycles (hpm4) | 508.8 M | 817.9 M | +309.1 M |
+| paged record accesses (hpm5) | 361.3 M | 608.6 M | +247.3 M |
+| event-23 replays (hpm7) | 52,729,351 | 96,018,225 | +43.3 M (+82 %) |
+| L1D misses (hpm8) | 1,305.7 M | 1,416.2 M | +110.5 M (+8.5 %) |
+
+makerand.pl (command 0): in-context 6,820,045,701 against 6,598,343,477, −3.25 %; span 275.29 s against 266.40 s.
+Both commands together: in-context +4.88 %, span +4.62 %.
+
+**Against the pre-registration.**
+- Answers: **met.** All four commands return 0. Both arms' `makerand.out` (43,841 bytes) and `test.out` (15,555
+  bytes), decoded from the transcript, are byte-equal to SPEC's `data/test/output` files; all four `.err` files are
+  empty. The console shows no fault line.
+- Stock check: **met.** u's test.pl reads +0.009 % against st2's 267,194.0 M, so the cross-boot comparisons stand.
+- Cost of test.pl, p against u: **+5.08 % in-context. Predicted +3.5 % to +5.5 %: met**, in the upper half.
+- Against prot2 (pt2, board 1, 2026-11-18): pt2 reads +5.83 % against this boot's u. The O(1) lookup therefore saves
+  1,982.3 M cycles. The prediction priced its 1,188,489,807 fewer twin instructions at 3.8 G. The pair measures
+  **1.67 cycles per removed instruction** (cross-boot; both stock checks met), not the stock arm's average of 3.17.
+  The removed instructions are the arena index's binary search; that they cost about half the program's mean is read,
+  why is not (cache hits and a predictable loop would explain it, and this boot does not show either).
+- The record counters are unchanged from prot2, as predicted: hpm3 +21.4 M against +21.7 M, hpm5 +247.3 M against
+  +247.7 M, hpm7 +43.3 M against +43.7 M.
+
+**Cycle attribution (step 2), p minus u, +13,583.8 M in-context cycles.**
+
+| part | cycles | share | price and its source |
+|---|---:|---:|---|
+| the port's instructions | 7,733.2 M | 56.9 % | +2,440,563,172 twin instructions (zone, prot6 minus stock) at 3.169 cycles each, the u arm's own cycles per twin instruction (a model: the mean) |
+| record-table walks | 309.1 M | 2.3 % | hpm4, read as cycles (measured) |
+| event-23 replays | 735.9-865.8 M | 5.4-6.4 % | +43.3 M at 17-20 cycles each (Addendum 1's RTL estimate, from source) |
+| **not attributed** | **4,675.8-4,805.6 M** | **34.4-35.4 %** | |
+
+- The L1D misses (+110.5 M) are not priced: no measured price exists. If they carried the whole remainder, each
+  would cost 42-43 cycles.
+- **prot2's +15,591.2 M (pt2 against st2, the paper's image), the brief's attribution item.** The same reading of
+  that pair puts 11,497.9 M (73.7 %) in its +3,629,052,979 twin instructions at st2's mean (3.168), 343.3 M (2.2 %)
+  in walks and 742.7-873.7 M (4.8-5.6 %) in event-23 replays. That leaves 2,876-3,007 M (18.4-19.3 %) unattributed.
+  Both images make the same record traffic (the protected arms' hpm3, hpm5 and hpm7 counts within 1 % of each other), yet the remainders differ by 1.8 G. So
+  the mean price is wrong for at least the lookup's instructions. The decomposition this boot supports is the
+  difference itself: 1,982.3 M (12.7 % of prot2's cost) is the binary-search lookup prot6 removes, measured as a pair.
+  The other 13,583.8 M is prot6's cost, divided as in the table above with its 34-35 % remainder.
+- **The instruction price decides the remainder, and it is the softest number here.** At the mean (3.17) the
+  instructions take 57 %. At the price this boot's pair measured for the lookup's instructions (1.67), they take
+  4,070.6 M (30.0 %), and the remainder grows to 8,338-8,468 M (61.4-62.3 %). Neither price is measured for the
+  instructions that stay: the CDERIVE/CREVOKE pairs and the head checks. No board run has priced those
+  instructions by themselves.
+- The paged table's cost beyond its walks is not separated by this boot. That cost is its effect on the program's L1D
+  and on the record TLB's reach. A run that would separate it is the same image on a bitstream with a larger record
+  TLB, or the same image with the checks compiled out and the lifetimes kept.
+- Limits, as registered: one run per arm, u first, not interleaved. makerand reads −3.25 % (p faster), as earlier
+  protected images read −1.08 % and −2.54 %; it is not explained, and an order effect on a 270 s command is not
+  excluded.
+- The paper is unchanged. The paper's perlbench figure is prot2's +5.84 %; a change to prot6's +5.08 % is the lead's
+  decision.
+
+### perlbench test.pl: SV bodies as lifetimes on top of the heads port (QEMU twin, 2026-11-22): +0.733 % of perlbench's code
+
+The second of the three perlbench allocators (heads, then bodies, then hash entries and op slabs; each one priced on
+its own). `500.perlbench_r/port-sv-bodies.py` runs after the heads port and both lookup fixes, under
+`PERL_CAPSTONE_SUBLET_BODIES`:
+- Every body that an SV type keeps in an arena becomes a child lifetime bounded to the body (CDERIVE when
+  `new_body_inline` pops it), and it is revoked when the body is freed (CREVOKE in `del_body`, from `sv_clear` and
+  `sv_upgrade`).
+- The arenas are carved from 32 MiB segments, each one Newx block with an aligned interior as the segment's lifetime.
+  A body's parent is found by comparing its address with the few segments, so there is no arena lookup.
+- The free lists hold the segment's own pointers, and SvANY keeps upstream's offset. For the PV types it points 32 B
+  below the body, inside the representable window.
+- Hash entries keep upstream's arenas, so this arm prices bodies alone.
+
+Checks:
+- **Control.** `sv.c` compiled without the new define is byte-identical to prot6's `sv.o`. The script, run on prot6's
+  `sv.c`, reproduces the built file, and `sv.c` is the only source that differs.
+- **Fixture** (`make-bodies-fixture.py`, generated from the build's own perlmain.c, which stays outside the
+  repository), run on the twin (`census/out/perlfxb-2d7a7d4b`):
+  - in the protected build a live PV body reads (mode 0). A freed body (1), a body freed by an upgrade to PVMG (2) and
+    a freed body among 5,000 PVs and 500 AVs (3) fault with cause 25, after the 4,999 other PVs read their own lengths
+    and the 500 AVs their sizes. A body of a destroyed interpreter faults after a second interpreter's 3,000 bodies read (4);
+  - every fault is at the fixture's own `ld a0, 0x20(a0)` through the kept pointer, which is the read of `xpv_cur`;
+  - the control built with `PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE` reads in modes 0-3, returning whatever the freed
+    body holds.
+    It faults in mode 4 too: freeing a segment ends every lifetime carved from it, so mode 4 has no control that
+    separates the per-body revocation. The fixture's docstring first said the control reads in every mode. That was
+    corrected before this commit.
+- **test.pl** (`census/out/zperl-bodies-279647af`, image `279647af…`): makerand.out and test.out are byte-equal to the
+  stock twin run's.
+  - Image zone: 87,410,533,001 instructions against prot6's 86,774,090,874, **+636,442,127 (+0.733 %)**. Against stock's
+    84,333,527,702 that makes +3.649 % for heads and bodies together, against +2.894 % for heads alone.
+  - Where it goes: `Perl_sv_upgrade` +286.5 M and `Perl_sv_clear` +227.4 M, the inlined issue and retire. Then
+    `__heap_mapping` +90.5 M, which is one 32 MiB segment per process with an index leaf provisioned for each of its
+    pages, about 33 instructions a page over 318 processes. Then `memset` +12.4 M, `Perl_more_bodies` +11.2 M,
+    `nontrivial_free` +10.0 M and `__heap_unmapping` +7.2 M.
+- **Calls to `Perl_more_bodies`: 44,019, against prot6's 5,077.** A diagnostic build counted them per type
+  (`census/out/zperl-bodcnt-3a458858`, not committed). All 5,077 are hash-entry arenas (type 0) in both images, and
+  the other 38,942 are SV body arenas. Most likely clang inlined prot6's 246-byte `Perl_more_bodies` into its callers
+  in `sv.c`, and the carve, at 524 bytes, stopped that; this is inferred from the sizes and was not read from the
+  disassembly. The same build saw one segment per process and no body issued or retired outside a segment.
+- **Memory** (`census/out/rss-bodies-279647af`): peak used 102,464 kB: -156 kB against prot6's 102,620 kB, and
+  +4.6 % against stock's 97,968 kB. With the peak unchanged, the segments' untouched pages are evidently not
+  resident; that is inferred, not counted.
+- Not yet read: cycles. A board pair is needed first, as for prot6.
+
+### perlbench test.pl: hash entries as lifetimes on top of the heads port (QEMU twin, 2026-11-22): +0.112 % of perlbench's code
+
+The third perlbench allocator, priced alone like the bodies. `500.perlbench_r/port-he.py` runs after the bodies port
+and is built with `PERL_CAPSTONE_SUBLET_HE` and without `PERL_CAPSTONE_SUBLET_BODIES`:
+- The hash-entry arenas (`PL_body_roots[HE_SVSLOT]`) are carved from the bodies port's 32 MiB segments; SV bodies keep
+  upstream's arenas.
+- `hv.c`'s `new_he` hands each entry out as a child lifetime bounded to the `HE` (CDERIVE), and `del_HE` revokes it
+  (CREVOKE) before it links the entry through the segment's own pointer. Shared string table entries are `HE`s too and
+  are covered the same way.
+- `hv.c` reaches `sv.c`'s segment table through `capstone_sv_segs.h`, which the script writes.
+
+Checks:
+- **Control.** In the HE tree, `hv.c` and `sv.c` compiled without the new define are byte-identical to prot6's `hv.o`
+  and `sv.o`.
+- **Fixture** (`make-he-fixture.py`, from the build's own perlmain.c; `census/out/perlfxh-b7bb6577`):
+  - in the protected build a live entry reads its value (mode 0). The old entry faults with cause 25 after its key is
+    deleted (1), after the hash grew from 11 to 5,000 keys and the key was deleted (2: every key fetched its own value
+    first and the kept entry still read), after `hv_clear` (3), and after the hash itself was freed (4);
+  - every fault is at the fixture's own `ldc a0, 0x20(a0)` in `main`, the read of `he_valu` through the kept pointer;
+  - the control built with `PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE` reads in all five modes, mode 4 included: freeing a
+    hash frees its entries one by one, while the segment stays, so here every mode has a control.
+- **test.pl** (`census/out/zperl-he-e9994b2e`, image `e9994b2e…`): makerand.out and test.out are byte-equal to the
+  stock twin run's.
+  - Image zone: 86,871,309,097 instructions against prot6's 86,774,090,874, **+97,218,223 (+0.112 %)**. Against stock's
+    84,333,527,702 that makes +3.009 % for heads and hash entries together.
+  - Where it goes: `__heap_mapping` +86.2 M, one segment per process as in the bodies arm. Then the issue and retire:
+    `Perl_hv_common` +33.5 M, `S_hv_free_ent_ret` +22.4 M, `Perl_refcounted_he_chain_2hv` +7.3 M. Then
+    `Perl_more_bodies` +10.0 M, `Perl_sv_force_normal_flags` +8.4 M.
+  - Against those, `Perl_sv_upgrade` -53.5 M, `Perl_sv_setsv_flags` -12.4 M and `Perl_sv_arena_head` -5.6 M. As in the
+    bodies arm, `Perl_more_bodies` is now called 43,701 times instead of 5,077, and `Perl_sv_upgrade` shrank from
+    1,604 to 1,306 bytes, so the arena code most likely left it; that explains about 10 M of the 53.5 M (inferred from
+    the sizes and the calls, not read from the disassembly). The rest of these decreases is not attributed.
+  - The other functions add +0.9 M (858,740), and 15,681 instructions fall outside every named function.
+- **Memory** (`census/out/rss-he-e9994b2e`, test.out byte-equal to stock's): peak used 102,504 kB: -116 kB against
+  prot6's 102,620 kB, and +4.6 % against stock's 97,968 kB.
+- Not read: cycles.
+
+### perlbench test.pl: ops as lifetimes of their op slabs, on top of the heads port (QEMU twin, 2026-11-22)
+
+The last of the perlbench allocators, priced alone. `500.perlbench_r/port-op-slabs.py` runs after the heads port and
+both lookup fixes, under `PERL_CAPSTONE_SUBLET_OPS`:
+- Each op slab carries a lifetime of its own memory (`opslab_life`, a new field after `opslab_refcnt`, so no other
+  field moves and no slot grows).
+- `Perl_Slab_Alloc` hands each op out as a child of the slab that holds it (CDERIVE), bounded to its whole slot,
+  header included, up to the next slot: Perl reads the slot header through the op, and grows a LISTOP into a LOOP in
+  place when the slot has room.
+- `Perl_Slab_Free` revokes the child (CREVOKE) and links the slot through the slab's own pointer, so the free chain
+  holds only own pointers and a reused slot is handed out as a new child.
+- The holding slab is found by walking the CV's slab chain and comparing the op's address with each slab's lifetime.
+- `opslab_force_free` frees the live ops of an unfinished CV through the slabs' own pointers. Those are recognised by
+  their bounds (the whole slab) and not revoked: their lifetimes end when the slab is freed.
+
+Checks:
+- **Control.** Of the build's 69 objects, 68 are byte-identical to prot6's, and `op.c` compiled without the new
+  define is byte-identical to prot6's `op.o`.
+- **Fixture** (`make-ops-fixture.py`, from the build's own perlmain.c; `census/out/perlfxo-a3d4f121`). The ops are
+  made with `newOP` while `PL_compcv` is a fresh CV, so they come from that CV's slabs, and are read through a kept
+  `OP*`:
+  - in the protected build a live op reads its pp function (mode 0). A freed op faults with cause 25 (1), as does a
+    freed op whose slot was reused at the same address, after the new op and a neighbour read (2), and a freed op
+    among 3,000 over the slabs' growth, after the other 2,999 read (3). An op of a CV freed with its ops still live
+    faults too (4);
+  - every fault is at the fixture's own `ldc a0, 0x20(a0)` in `main`, the read of `op_ppaddr` through the kept
+    pointer. None is in `Perl_Slab_Free`, so in mode 4 the own-pointer path took the slabs' own pointers and not a
+    child;
+  - the control built with `PERL_CAPSTONE_SUBLET_OPS_NOREVOKE` reads in modes 0-3 and faults in mode 4: freeing a
+    slab ends every op lifetime carved from it, revoked or not, so mode 4 has no control that separates the per-op
+    revocation, as in the bodies arm.
+
+**Result, revision 1 on test.pl (twin, `census/out/zperl-ops-b296436b`, image `b296436b…`): the outputs differ from
+stock's, so it is not priced.**
+- makerand.out equals the twin stock arm's. test.out does not: three tests the stock arm passes print "FAILED--no
+  leader found" (comp/package_block, uni/opcroak, uni/package). The twin's stock arm already fails io/perlio and
+  op/inccode(-tie), as every twin arm does (prot6, HE and bodies each equal stock's test.out byte for byte), so the
+  reference for this check is the twin stock arm, not SPEC's file.
+- The console shows three faults with cause 25 during test.pl. With the image mapped at 0x3ff7c00000 = vaddr 0x10000,
+  two are at `Perl_op_free`+0x60 (`lhu a0, 0x38(s1)`, the `o->op_type == OP_FREED` test at op_free's head) and one at
+  +0xe6 (`lhu a0, 0x38(s7)`, the same test on a kid in the kid loop).
+- Perl reads those ops after freeing them by design. op.c says so above both reads: "During the forced freeing of ops
+  after compilation failure, kidops may be freed before their parents." All three tests compile string evals that
+  fail (`eval q[package Foo {]`, a prototype croak). So this is a defect of the port: a freed op's type and sibling are
+  read through its revoked child. It is not a fault in Perl. The fixture did not catch it, because no mode let a
+  compilation fail.
+- Revision 2 (`port-op-slabs.py`, this commit) reads those two fields through the slab's own pointer, and only while
+  `opslab_force_free` frees the chain that holds the op. Every other read of a freed op still goes through its child.
+  The fixture gains mode 5: three string evals that fail to compile, which must return with no fault. Revision 1 must
+  fault in mode 5, which is the positive control.
+- Revision 2's image is `b75cbd06…` (unstripped `06ab5518…`). Its op.h equals revision 1's, and its op.c differs from
+  revision 1's only in the hunks above (46 diff lines). The other 68 objects are revision 1's own files.
+- Revision 1's zone is not used, because three of test.pl's tests ended early. Its memory run was stopped while it
+  waited for the slot (`rss-ops-b296436b-void-stopped`).
+
+**Result, revision 2's fixture (`census/out/perlfxo2-5a1b1473`; revision 1, revision 2 and revision 2's no-revoke
+control, each in modes 0-5): revision 2 is not a fix, and mode 5 had no working control.**
+- Modes 0-4 read as in revision 1's fixture in all three builds: mode 0 reads; modes 1-4 fault with cause 25 at
+  `main`+0x206, +0x370, +0x406 and +0x74e, the fixture's own `ldc a0, 0x20(a0)`. The control reads in modes 1-3, with
+  `read_after_free` printed, and faults in mode 4 at `main`+0x74e.
+- Mode 5, revision 1: cause 25 at `Perl_op_free`+0x60 (`lhu a0, 0x38(s1)`). That is test.pl's fault, so the positive
+  control fires.
+- Mode 5, revision 2: cause 25 at `Perl_op_free`+0x98 (`lhu a0, 0x38(a1)`). This is op_free's type test, reached with
+  a1 equal to the op's own child. Either no `opslab_force_free` was running, or the chain it was freeing did not hold
+  the op. Perl frees ops after a failed compilation outside that window too: op_free's comment also says "ops may be
+  freed twice". So the guard had the wrong scope.
+- Mode 5, no-revoke control: cause 24 at `Perl_sv_setsv_flags`+0xc2 (`lw a0, 0x14(a1)`). That is the heads port's head
+  read when the destination SV is in no arena, on an untagged pointer. None of the three builds printed mode 5's
+  `returned` line. A control that faults is not a control, so until mode 5 returns in a build without the ops port, the
+  two mode-5 faults above are evidence about op_free's pc and nothing more.
+- The memory run of revision 2 was refused before it started (`census/out/rss-ops2-b75cbd06` holds a placeholder).
+  Its test.pl run, `zperl-ops2-b75cbd06`, was already running and is kept as data for revision 3.
+- **Revision 2 on test.pl** (`zperl-ops2-b75cbd06`): makerand.out equals the twin stock arm's. test.out does not:
+  - uni/opcroak now passes;
+  - comp/package_block and uni/package still print "FAILED--no leader found";
+  - the console shows two faults with cause 25, both at `Perl_op_free`+0x98 (`lhu a0, 0x38(a1)`, vaddr 0x5572a in
+    revision 2's image). That is mode 5's pc in revision 2's fixture.
+  So the fixture's mode 5 reproduces what test.pl hits, though its own control is still to be shown working. The zone
+  (87,136,450,735) is not used.
+
+**Revision 3 (`port-op-slabs.py`, this commit) and its fixture (`perlfxo3-3d40f11b`, queued).**
+- Every op slab enters an index sorted by address: in `S_new_slab`, with the slab's own address range (not its
+  lifetime's bounds, which may be rounded outward); in `opslab_free`, it leaves before the free.
+- op_free's two reads of a possibly freed op, the type test and a kid's type and sibling, find the slab by binary
+  search. The search reads no slab and not the op. The two reads then go through the slab's own pointer, in every
+  context. Revision 2's `opslab_force_free` window is gone.
+- Every other read of an op still goes through its child:
+  - a stale op whose slot was reused passes the type test, then faults at op_free's next read. That is the protection
+    firing;
+  - a slab already freed is not in the index, so the read goes through the child and faults.
+- Image `aba18d33…` (unstripped `74d8c86a…`). op.h equals revision 1's. op.c differs from revision 1's by 89 diff
+  lines, and its warnings equal revision 2's (24).
+- The fixture gains mode 6: three string evals that compile and run, after the same steps as mode 5. Every build must
+  return in mode 6, which shows the fixture can run an eval at all.
+- A fifth build links the fixture against prot6's objects, with no ops port and a main compiled without the ops
+  define. It is mode 5's reference: it must return in modes 5 and 6. A fault there means mode 5 itself is broken.
+- The fixture's commands: prot6 in modes 1, 5 and 6; revisions 1 and 2 in modes 5 and 6; revision 3 and its no-revoke
+  control in modes 0-6.
+- Then test.pl priced (`zperl-ops3-aba18d33`). The memory run (`rss-ops3-aba18d33`) runs only if test.out and
+  makerand.out equal the twin stock arm's (`census/chain-ops3.sh`). Before launch, that gate was run on recorded
+  pairs: prot6 reads equal, revision 1 differs, a missing run differs.
+
+**Result, revision 3's fixture (`census/out/perlfxo3-3d40f11b`, 21 commands): modes 5 and 6 are broken in the fixture
+itself, as the pre-registered branch above allowed ("a fault there means mode 5 itself is broken").**
+- prot6, with no ops port, faults in mode 5 and in mode 6, with cause 24 at `Perl_sv_setsv_flags`+0xc2
+  (`lw a0, 0x14(a1)`, the head read when the destination SV is in no arena). So does every other build in mode 6
+  (revisions 1, 2 and 3 and the control), and revision 3 and the control in mode 5, all at that same instruction.
+- Cause: the fixture booted the interpreter from `-e 0`. For `-e`, perl opens /dev/null as the script
+  (`S_open_script`, perl.c:3800). The twin's sandbox refuses it, and every command's stderr reads
+  "Can't open /dev/null: Permission denied". That croak ends `perl_parse` inside `open_script` (perl.c:2162), before
+  `init_predump_symbols` (:2229) and `init_postdump_symbols` (:2234). The fixture never read `perl_parse`'s status. So
+  every mode ran on a half-built interpreter. Modes 0-4 only make and free ops, and they read as designed.
+- The other readings, for the record:
+  - prot6 mode 1 reads the freed op (`read_after_free` printed, rc 0): no protection without the port, as expected;
+  - revision 3, modes 1-4: cause 25 in `main` at +0x210, +0x424, +0x37c and +0x48a, each the fixture's own
+    `ldc a0, 0x20(a0)`. Mode 2 printed `same=1 o3_ok=1 o2_ok=1` and mode 3 `live_ok=2999 bad=0` before the fault;
+  - the control reads in modes 1-3 and faults in mode 4 at `main`+0x48a, as before;
+  - in mode 5, revisions 1 and 2 still fault in `Perl_op_free`, at +0x60 and +0x98 with cause 25, before the eval
+    reaches `sv_setsv_flags`. Revision 3 no longer faults in op_free; it reaches the fault that prot6 hits.
+  That last point is a reading on a broken interpreter, not a result.
+
+**Fixture revision 2 (`make-ops-fixture.py`, this commit) and its run, pre-registered (20:27).**
+- The fixture writes `fx-boot.pl` (`1;`) in its working directory through PerlIO, then runs `perl_parse` on that file
+  and `perl_run`. If either returns non-zero it prints `FIXTURE boot failed` and exits 3. Mode 7 boots from `-e 0`
+  instead, as revision 1 did: that is the boot check's positive control.
+- Five builds, objects unchanged (`perlspec/fx2/fixture-ops3b`, built by the same link lines as revision 1's
+  builds): prot6 `8d1ba63c…`, revision 1 `19d3f29d…`, revision 2 `45cd5565…`, revision 3 `c81dca75…`, the control
+  `7d89f2f1…`. 24 commands: prot6 in modes 0, 1, 5, 6 and 7; revisions 1 and 2 in modes 5 and 6; revision 3 in modes
+  0-7; the control in modes 0-6. The run is `perlfxo3b-c81dca75`, after the queued runs on slot 28.
+- Predictions:
+  - mode 7 prints `FIXTURE boot failed` and exits 3 in prot6 and revision 3. No other command prints it;
+  - prot6: mode 0 reads, mode 1 reads after the free, mode 5 returns with `errors=3`, mode 6 with `errors=0`;
+  - revision 1: mode 5 faults in `Perl_op_free` with cause 25 (mode 5's positive control); mode 6 returns `errors=0`;
+  - revision 2: mode 5 faults in `Perl_op_free` with cause 25; mode 6 returns `errors=0`;
+  - revision 3: mode 0 reads; modes 1-4 fault with cause 25 in `main`; mode 5 returns `errors=3`; mode 6 `errors=0`;
+  - the control: modes 0-3 read; mode 4 faults in `main`; mode 5 returns `errors=3`; mode 6 `errors=0`.
+- Branches:
+  - mode 7 does not fail the boot: the check cannot fire, and the boot lines of the other commands are not evidence;
+  - prot6 faults in mode 5 or 6: the fixture is still broken there, and modes 5 and 6 decide nothing;
+  - prot6 returns in both and revision 3 faults in mode 5: revision 3 is insufficient, whatever test.pl reads;
+  - revision 1 returns in mode 5: mode 5 does not reproduce test.pl's fault, and a return from revision 3 there
+    proves nothing;
+  - any of modes 0-4 reads differently from revision 3's fixture above: the half-built interpreter had changed them,
+    and those modes are re-read from this run.
+
+**Result (`census/out/perlfxo3b-c81dca75`, 24 commands): every prediction held. On the fixture, revision 3 fixes
+the failed-compilation shape and keeps the protection.**
+- The boot check fires: mode 7 prints `FIXTURE boot failed parse=13 run=0` and exits 3 in prot6 and in revision 3.
+  No other command prints it.
+- prot6: mode 0 reads; mode 1 reads after the free (`read_after_free` printed, rc 0); mode 5 returns `errors=3`,
+  mode 6 `errors=0`. So mode 5 has a working reference.
+- Revision 1 faults in mode 5 with cause 25 at `Perl_op_free`+0x60, and revision 2 at `Perl_op_free`+0x98, the pcs
+  test.pl hit. Both return `errors=0` in mode 6. So mode 5's positive control fires, and the fault needs a failed
+  compilation.
+- Revision 3: mode 0 reads; modes 1-4 fault with cause 25 in `main` at +0x328, +0x53c, +0x494 and +0x5a2, each the
+  fixture's `ldc a0, 0x20(a0)` (mode 2 printed `same=1 o3_ok=1 o2_ok=1` first, mode 3 `live_ok=2999 bad=0`, mode 4
+  `cv_freed`); mode 5 returns `errors=3`; mode 6 `errors=0`.
+- The control reads in modes 1-3 (`read_after_free` each time), faults in mode 4 at `main`+0x5a2, and returns in
+  modes 5 and 6.
+- Modes 0-4 read as on the half-built interpreter, so the earlier readings of those modes stand.
+- What this does not show: that test.pl passes. That is `zperl-ops3-aba18d33`.
+
+**Revision 3 on test.pl (`census/out/zperl-ops3-aba18d33`, image `aba18d33…`): outputs equal stock's, at +4.775 %.**
+- test.out and makerand.out are byte-equal to the stock twin run's (`cmp`; specdiff 1/2, as for stock, prot6 and
+  bodies). The console has no `capstone_task: fault` line. comp/package_block, uni/package and uni/opcroak pass.
+- Image zone 90,917,822,656: **+4,143,731,782 (+4.775 %) against prot6**, +7.807 % against stock for heads and ops.
+  Per function against prot6 (the named functions sum to +4,143,731,347):
+  - `memmove` +2,887.3 M, at 709,488 more calls (20,478,129 to 21,187,617), about 4,070 instructions per added call;
+  - `Perl_op_free` +792.3 M at the same 2,683,185 entries, about 295 instructions per call;
+  - `Perl_Slab_Free` +291.7 M (4,022,039 entries, 0 in prot6), `Perl_Slab_Alloc` +133.6 M at the same entries,
+    `S_new_slab` +57.0 M (413,912 entries, absent from prot6's counts).
+- Reading. The index is a sorted array: `S_op_slab_register` and `S_op_slab_unregister` shift it with `Move` (a
+  `memmove`) on every new and freed slab, and op_free's two lookups are a binary search. 413,912 slabs registered
+  and unregistered allow up to 827,824 such moves, against 709,488 added calls. So the `memmove` growth is most likely
+  the index's shifts, over arrays of some thousands of live slabs. That is inferred from the counts: no caller of
+  `memmove` was read. `Perl_Slab_Free` and `S_new_slab` reporting entries only in revision 3 most likely means clang
+  stopped inlining them, which was not read from the disassembly either.
+- So revision 3 is correct on test.pl and the fixture, and its index costs most of its price. The memory run
+  (`rss-ops3-aba18d33`) was started by the chain's gate. The next revision replaces the sorted array.
+- **Memory** (`census/out/rss-ops3-aba18d33`, test.out and makerand.out byte-equal to stock's, END 01:02): peak used
+  102,464 kB, -156 kB against prot6's 102,620 kB and +4.6 % against stock's 97,968 kB (2 samples matched). It is the
+  bodies arm's peak to the kilobyte, which at this granularity says only that neither port moves the peak.
+
+**Revision 4 (`port-op-slabs.py`, this commit): the index by page, pre-registered (22:27).**
+- The index has an entry for each 4 KiB page a slab's memory touches: `{slab, page, end}` in an open-addressing table
+  (linear probing; a deletion shifts the cluster back, so there are no tombstones; the table doubles at half load).
+  A slab enters at S_new_slab and leaves at opslab_free, one entry per page, at most 9 for the largest slab
+  (2,048 pointers of 16 bytes). op_free's two lookups hash the op's page and scan its cluster. As in revision 3, a
+  lookup reads no slab and not the op, and the two reads go through the slab's own pointer.
+- Image `26dfe710…` (unstripped `d2db8e9c…`), symbols `census/perl-ops4.syms`. op.h equals revision 1's. op.c
+  differs from revision 3's by 142 diff lines, the index only. Warnings 24, as in revision 3. op.o has one CREVOKE and
+  six CDERIVE, as revision 3's. The no-revoke control's op.o has no CREVOKE and six CDERIVE.
+- Fixture (`perlfxo4-26dfe710`, `perlspec/fx2/fixture-ops4`; fixture revision 2's main): prot6 in modes 5 and 7,
+  revision 1 in mode 5, revision 4 in modes 0-7 (`ad5f528f…`), its control in modes 0-6 (`7814d89f…`). 18 commands.
+- Then test.pl priced (`zperl-ops4-26dfe710`). Then the memory run (`rss-ops4-26dfe710`), only if test.out and
+  makerand.out equal the stock twin run's (`census/chain-ops4.sh`). Before launch, a copy with the runs stubbed
+  took each gate branch on recorded results: revision 3's (equal: memory run), revision 1's and a missing directory
+  (no memory run).
+- Predictions:
+  - fixture: as revision 3 on fixture revision 2. prot6 returns `errors=3` in mode 5 and fails the boot in mode 7.
+    Revision 1 faults in `Perl_op_free` in mode 5. Revision 4 reads in mode 0, faults with cause 25 in `main` in
+    modes 1-4, returns `errors=3` in mode 5 and `errors=0` in mode 6, and fails the boot in mode 7. The control reads
+    in modes 1-3, faults in mode 4, and returns in modes 5 and 6;
+  - test.pl: outputs byte-equal to stock's, and no capability fault on the console;
+  - zone: from +0.8 % to +2.0 % over prot6's 86,774,090,874. That is revision 3's +4.775 % less its `memmove` growth
+    and most of op_free's search;
+  - `memmove` within 5 % of prot6's 1,037,644,188 instructions.
+- Branches:
+  - `memmove` still more than 5 % above prot6's: revision 3's growth was not the sorted array's shifts, and that
+    reading is withdrawn;
+  - the zone above +2.0 % with `memmove` back: the remaining price is the carve and the revocation, and it is
+    reported per function as it stands;
+  - any fixture reading other than predicted, or test.pl's outputs not equal to stock's: revision 4 is not used, and
+    the hash table is the suspect, since it is the only change from revision 3.
+
+**Result, revision 4's fixture (`perlfxo4-26dfe710`, END 01:03): every one of the 18 readings as predicted.**
+- prot6: mode 5 returns `errors=3`. Mode 7 fails the boot (`parse=13`, rc 3), so the boot check fires.
+- Revision 1: mode 5 faults with cause 25 at `Perl_op_free+0x60`, the positive control.
+- Revision 4:
+  - mode 0 reads (`live ok=1 slabbed=1`);
+  - modes 1-4 fault with cause 25 in `main`, at `main+0x328`, `+0x53c`, `+0x494` and `+0x5a2`. Each is the fixture's
+    own read through a freed op's pointer;
+  - mode 5 returns `errors=3`, mode 6 `errors=0`, and mode 7 fails the boot.
+- The no-revoke control reads freed ops in modes 1-3 (`read_after_free`, rc 0), faults in mode 4 at `main+0x5a2`,
+  and returns in modes 5 and 6.
+- So the page index refuses what revision 3's sorted array refused, on the same fixture. test.pl
+  (`zperl-ops4-26dfe710`) is running.
+
+**Revision 4 on test.pl (`census/out/zperl-ops4-26dfe710`, 01:03-05:37): outputs equal stock's at +0.724 % against
+prot6. That is below the band of +0.8 % to +2.0 %, so the prediction missed on the cheap side.**
+- test.out and makerand.out are byte-equal to the stock twin run's (`cmp`; specdiff 1/2, as for every arm). The
+  console has no `capstone_task: fault` line.
+- **`memmove`:** 1,037,615,195 instructions against prot6's 1,037,644,188 (−0.003 %), at the same 20,478,129 calls.
+  That is within 5 %, so the reading of revision 3's growth stands: the sorted array's shifts.
+- Image zone 87,402,132,122: **+628,041,248 (+0.724 %) against prot6**, and +3.639 % against stock's
+  84,333,527,702 for heads and ops. Per function against prot6 (`fndelta.py`; the named functions sum to
+  +628,039,940):
+  - `Perl_op_free` +208.7 M at the same 2,683,185 entries, about 78 instructions per call. In revision 3 it was
+    +792.3 M, about 295 per call;
+  - `Perl_Slab_Free` +205.8 M at 4,022,039 entries, 0 in prot6;
+  - `Perl_Slab_Alloc` +133.6 M at the same entries;
+  - `S_new_slab` +51.7 M at 413,912 entries, and `Perl_opslab_free` +23.4 M at 143,772 entries, both absent from
+    prot6's counts;
+  - everything else lies within ±5 M per function.
+- Why the band missed. The band assumed that "most of" op_free's search would go. The page hash cut op_free's added
+  price by 74 %, which is more than that. `Perl_Slab_Free` also fell, from +291.7 M to +205.8 M. `Perl_Slab_Alloc`
+  (+133.6 M in both) and `S_new_slab` (+57.0 M, now +51.7 M) stayed near revision 3's. These counts are the only
+  evidence; no disassembly was read.
+- **Memory** (`census/out/rss-ops4-26dfe710`, both outputs byte-equal to stock's): peak used **102,384 kB**.
+  - That is −236 kB against prot6 (102,620), −80 kB against revision 3 (102,464), and **+4.5 % against stock's
+    97,968 kB**.
+  - The page index does not move the peak at this granularity.
+- So revision 4 is correct on the fixture (18/18) and on test.pl, keeps the protection, and is the op-slab revision
+  to price. Its price on test.pl alone against prot6 is +0.724 %.
+
+## perlbench train on the twin: the image zone per allocator (2026-11-22)
+
+The same twin configuration as test.pl (slot 28, `perf/natio/images`, `dom_grant_root=/tmp/nt/sr`, zones4 plugin at
+shift 2, 2^20 flat records), on the FRCDKMSa3 train stage (`stages-frcdkmsa3-train/500.perlbench_r-train-native`,
+the protected arms' images replaced). Each zone is the image zone (`ZONE image`) summed over the five commands.
+
+| arm | run | specdiff | image zone | against stock | against prot6 |
+|---|---|---|---:|---:|---:|
+| stock | `ztrain-stock-c1744e87` | 6/6 | 205,262,327,464 | | |
+| prot6 (heads) | `ztrain-prot6-37381b03` | 6/6 | 216,796,670,174 | +5.619 % | |
+| hash entries | `ztrain-he-e9994b2e` | 6/6 | 216,596,614,164 | +5.522 % | -200,056,010 (-0.092 %) |
+| bodies | `ztrain-bodies-279647af` | **5/6** | not priced | | |
+| bodies, 2^22 records | `ztrain-bodies-r22-279647af` | 6/6 | 218,898,234,466 | +6.643 % | +2,101,564,292 (+0.969 %) |
+| prot6, 2^22 records | `ztrain-prot6-r22-37381b03` | 6/6 | 216,796,670,174 | +5.619 % | 0 |
+
+- **Hash entries cost less than prot6 on train**, where they cost +0.112 % on test.pl. Per function (fndelta, the
+  named functions sum to -200,055,869):
+  - decreases: `Perl_sv_upgrade` -191.2 M at the same 46,036,356 entries; `Perl_sv_setsv_flags` -37.7 M; then
+    `Perl_sv_free2` -11.9 M and `Perl_sv_arena_head` -11.3 M;
+  - the port's own costs: `Perl_hv_common` +28.9 M, `Perl_sv_force_normal_flags` +24.6 M, `S_hv_free_ent_ret`
+    +15.7 M, `Perl_more_bodies` +8.7 M (3,133 to 46,002 calls), `__heap_mapping` +1.1 M.
+  - These are test.pl's shapes: `Perl_sv_upgrade` and `Perl_sv_setsv_flags` fell there too (-53.5 M, -12.4 M) and are
+    mostly not attributed. On train, the segment costs `__heap_mapping` only +1.1 M against test.pl's +86.2 M, because
+    train runs 5 processes and test.pl 318. So the unattributed decrease outweighs the port's costs. The size of that
+    decrease is still not explained: it is a code-layout change in `sv.c`, read from per-function counts, not from the
+    disassembly.
+- **Bodies: splitmail (command 3) died with SIGSEGV, rc 139.** The console line is `capstone_task: fault rc=-14
+  kind=2 cause=30 pc=0x3ff7c0f2fc`. With the image at 0x3ff7c00000 = vaddr 0x10000, that pc is 0x1f2fc in
+  `__heap_mapping`. The word there is 0xa30c15db: opcode 0x5b, funct3 1, funct7 0x51. That is CDERIVE (capability.h's
+  `capstone_cap_derive`: `.insn r 0x5b, 0x1, 0x51`), which the debug objdump prints as `<unknown>`. Commands 0-2 and 4
+  returned rc 0.
+  - Cause 30 is INSUF_RESOURCES. In the twin's own QEMU (`native01/qemu55`, a0501ebc39) it is raised only when the
+    lifetime table has too few free records:
+    - `capstone_require_node` (op_helper.c:1240-1253);
+    - `CAP_REV_EXHAUSTED` (:1265);
+    - fewer than 2 free ids (capstone_table.c:476-477);
+    - the supervisor's node-pressure paths (capstone_supervisor.c:707, :920).
+  - So the table of 2^20 records filled with live lifetimes. The ids55 table recycles records: in a perlbench train arm
+    (T3), scrabbl created 14.1 times the table's records and completed (`tests/rtl-smoke/ids55-flat-module/RESULTS-twin.md`).
+    What filled it is therefore the live count: heads plus bodies at once, on the largest command. That is inferred
+    from the raise sites and the arms that passed. No live count was read.
+  - A twin kit at 2^20 records cannot run the bodies port on splitmail train. The board's ids55 default is also 2^20
+    (`paper-nested-allocators/notes/section5-rtl-encoding-evidence.txt`, from capstone_vm.c's `node_flat_records`).
+  - **Rerun at 2^22 records** (`ztrain-bodies-r22-279647af`, 64 MiB of the 256 MiB CMA; the same image and stage, only
+    the table size differs): rc 0, specdiff 6/6, splitmail included. So the 2^20 failure was the table's size, as the
+    raise sites predicted; the live count itself was still not read.
+  - Image zone 218,898,234,466: **+2,101,564,292 (+0.969 %) against prot6**, +6.643 % against stock for heads and
+    bodies together. On test.pl bodies cost +0.733 %. Per function against prot6 (fndelta, the named functions sum to
+    +2,101,568,306):
+    - the issue and retire: `Perl_sv_upgrade` +1,200.6 M at the same 46,036,356 entries, `Perl_sv_clear` +1,026.2 M at
+      35,883,962 entries, `Perl_more_bodies` +10.0 M (3,133 to 46,007 calls, the same rise as on test.pl);
+    - decreases: `Perl_sv_setsv_flags` -72.9 M, `Perl_sv_arena_head` -14.7 M, `Perl_sv_free2` -11.9 M,
+      `Perl_newSV` -10.5 M, `Perl_sv_mortalcopy_flags` -9.2 M, `__libc_malloc_impl` -5.8 M. These are not attributed.
+  - Comparability. The zone was taken at 2^22, the other arms' at 2^20. The failed 2^20 run wrote no zone, so its
+    four completed commands cannot be paired with this run. The evidence that the geometry does not move the image's
+    count is still T3's F0-vs-W agreement within 0.001 % per command (`tests/rtl-smoke/ids55-flat-module/RESULTS-twin.md`);
+    at the time of this run 2^22 was unpaired (the pair below now pairs it). The table's work is done in the emulator's helpers, outside the image range the zone counts.
+  - Consequence for the board: an ids55 kit at its 2^20 default cannot run this arm on splitmail train. A bodies board
+    cycle needs a larger table. The SPEC lane offers a kit cut from bkit91 with only `node_flat_records` changed to
+    4194304 (bkit91-rec1m is the 2^20 precedent). The same cycle must pair stock or prot6 at 2^22 against 2^20 on one
+    image, so that the bodies delta in cycles is not confounded by the table's size.
+  - **The twin's pair, pre-registered (20:30):** prot6's train stage again at 2^22 (`ztrain-prot6-r22-37381b03`), with
+    everything else as `ztrain-prot6-37381b03`. Prediction: specdiff 6/6, and an image zone within 0.001 % of
+    216,796,670,174 (T3's F0-vs-W band). Branches:
+    - within 0.001 %: the geometry does not move the image's count on this stage, and the bodies delta above stands;
+    - beyond it: the bodies delta is restated against prot6 at 2^22, and the difference is reported as the table's
+      cost on the image.
+  - **Result** (`ztrain-prot6-r22-37381b03`, END 00:07): rc 0, specdiff 6/6, image zone **216,796,670,174, equal to
+    the 2^20 run's to the instruction**. Per function, all 2,788 `FN` lines of the two capmix files have equal counts
+    and entries (read over every line, not fndelta's top rows). So the first branch holds: on this stage the table's size does not move the image's count, and bodies'
+    +2,101,564,292 (+0.969 %) against prot6 stands as measured.
+    - Outside the image the two runs differ, and neither zone is a measure here. The user zone outside the image is
+      4,332,830,738 at 2^22 against 4,299,404,280 at 2^20 (bodies at 2^22: 4,331,995,799); not attributed. The kernel
+      zone varies across this table's arms from 4,048,869,547 (stock) to 201,478,463,827 (prot6 at 2^20), and is
+      4,169,137,669 here; it is not read as a cost of any arm.
+    - A first launch of this run was stopped before it took the lock, because it was given bodies' symbol file
+      (`perl-bodies.syms`) instead of prot6's; its directory is kept as `ztrain-prot6-r22-37381b03-void-stopped` and
+      wrote no zone. The run above used `perl-prot6.syms`, checked in its environment before launch.
+
+### The CRENEW and liveness-test variant: no environment measures it yet (2026-11-23)
+
+The programme asks for a perlbench variant with CRENEW and the liveness test. Where each can run, enumerated:
+- **The liveness test.** No QEMU decodes it. The programme lists it as a stage-2 proposal, "first in QEMU and the
+  compiler" (plan lines 67 and 127). Its performance case is already measured: today a liveness test is mallocng's
+  load probe in `free`, `realloc` and `calloc`, and a dedicated instruction replaces one instruction with one. On perl
+  that is 26.7 M probes, 0.032 % of instructions and 0.162 % of loads (`compiler/liveness-census` 77bf93aef483,
+  `docs/history/21-11-2026_10-00-00_liveness-test-census.md`). So the variant's liveness half has no instruction
+  saving to measure. Its case is semantic: no read permission or bytes in bounds are needed.
+- **CRENEW**:
+  - The twin's QEMU (`native01/qemu55`, a0501ebc39) does not decode it. `insn32.decode` has `csderive` (0x51),
+    `cskill` (0x52) and `csretire` (0x53), and no entry at 0x54; `git grep -i crenew` in `target/riscv` finds nothing.
+  - P1's RTL decodes 0x54 as CSNODE (plan, section 1.1).
+  - The one-operand environment (`nested/oneop`, QEMU 9e69171f1c) has it. Its table carries no generations, so CRENEW
+    cannot renew in place, and the table's cost there is the kit's sweeps (the gcc section above).
+  - The reference model c1985bb529 has it, with generations, and no kit (plan, section 1.1).
+- **What a CRENEW arm could read.** The bodies port's image cost is its code, around the lifetime instructions:
+  `Perl_sv_upgrade` +1,200.6 M and `Perl_sv_clear` +1,026.2 M on train. Renewing a body when it goes on the free list
+  would replace the release's CREVOKE with CRENEW. A reused body would then need no CDERIVE when it is taken again. The
+  image zone of an arm in the one-operand environment would see that change in the port's code. It would not see the
+  table's cost, which that kit charges to its sweeps. Cycles need a bitstream with CRENEW, and none is written
+  (B5b-1 step (c)). How much of `Perl_sv_upgrade`'s +1,200.6 M is the derive path a renew would skip is not read
+  from the port's code here, so no saving is predicted.
+- **Decision.** The arm needs perl rebuilt in the one-operand environment, on that environment's compiler and SDK
+  (application ABI 2, mallocng, virtual profile), and every bodies-port control repeated there. That build is
+  deferred behind item 5 (the bug-corpus images), which has a consumer on the board.
 
 ## Item 5: the SQLite and PHP bug corpora for the board (2026-11-23)
 
