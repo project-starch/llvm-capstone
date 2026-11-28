@@ -4452,6 +4452,162 @@ registered band of 60,000-93,000 s. The runtime lane asked whether the run had o
   - Before that run, the heartbeat's size field needs a command that the board's busybox has, for example `wc -c`.
     It must also print `NA` instead of 0 when the command fails.
 
+## PHP against a pristine second binary (2026-11-22)
+
+Item 4 of the programme: Fig. 10's PHP pairing compares the protected image with a pristine second binary. The P1 row
+(2026-11-18) compared two run-time modes of one image instead, mode 4 against mode 6.
+
+### Pre-registration: QEMU twin, PHP pristine vs protected (written 2026-11-22 06:10, before the run)
+
+- **Images.** Both come from the same `perf/appd/php/build.sh` build (FRCDKMS SDK, the F/P1 flags at -O2):
+  - not protected: `php-stock.strip.dom` `13d187b0…`, pristine `zend_alloc.c` over mallocng (`PHP_REALPHP_ALLOC=stock`).
+    It carries no `PHP_CAP_MODE` or `ZEND_CAP_MODE` string;
+  - protected: `php-nested.strip.dom` `d63abbc5…` in mode 6, the P1 row's protected arm.
+- **Stage.** `nested/appd/php10s`, made with `make-abba-stage.py`: u1 p1 p2 u2, the P1 row's input and workload
+  (`bench10-check.php` `655fd6d4…`, `-n`), the same normalisation and output capture. Its `run.sh` differs from
+  `nested/appd/php10`'s only in the stage name and in the stock arm's `PHP_CAP_MODE=4`, which the pristine binary does not
+  read.
+- **Run.** One twin boot on slot 28, the flags of `nphp10-1`, no plugin. Read with `parse-abba.py`, as `nphp10-1` was.
+
+Predictions:
+- **Answers.** Every command's normalised output equals the native reference `8f692e64…`. The protected commands print
+  `ZEND_CAP_MODE 6 exact=0 revoke=1`, and the stock commands print no ZEND_CAP_MODE line.
+- **Repeats.** Within 0.1 % per arm on in-context cycles.
+- **Cost, protected vs pristine, in-context.** UNCERTAIN in size. On the twin the lifetime alone (mode 6 vs mode 4) was
+  +0.16 %. Mode 4 also gives every block back to mallocng, where pristine zend_alloc keeps its own caches, so this
+  pairing adds the geometry difference. I predict +0.5 % to +15 %. A result below mode 6 vs mode 4's +0.16 % would mean
+  that pristine zend_alloc costs more than mode 4's geometry; that is to be explained, not absorbed.
+- **The geometry alone.** This boot gives protected vs pristine. Pristine vs mode 4 then comes from comparing this
+  boot's stock arm with `nphp10-1`'s mode-4 arm, which are two boots. It is labelled as such, not read as a paired
+  result.
+
+VOID if any command's answer differs, or if the protected commands do not print mode 6.
+
+### Result: protected PHP costs +15.43 % against pristine zend_alloc, just above the predicted band (`nested/out/nphp10s-1`, 06:40-10:12)
+
+| command | rc | answer | in-context cycles | kernel + other | runs |
+|---|---|---|---:|---:|---:|
+| u1 pristine | 0 | `8f692e64…` | 7,605,688,343 | 37,199,838 | 4,949 |
+| p1 mode 6 | 0 | `8f692e64…` | 8,779,246,529 | 49,800,409 | 6,478 |
+| p2 mode 6 | 0 | `8f692e64…` | 8,779,247,394 | 49,935,512 | 6,478 |
+| u2 pristine | 0 | `8f692e64…` | 7,605,688,196 | 36,830,655 | 4,949 |
+
+Read with `parse-abba.py` from the boot's serial log (sha256 `6f661677…`); the stderr of each command decoded from it.
+- **Answers: met.** Every normalised output equals the native reference. p1 and p2 print `ZEND_CAP_MODE 6 exact=0
+  revoke=1`, and their allocator line reads 3,442,469 issues, retires and revokes with 0 live. u1 and u2 print
+  nothing on stderr. Not VOID.
+- **Repeats: met**, 0.00 % in both arms (147 and 865 cycles apart).
+- **Cost, protected vs pristine, in-context: +15.43 %. Predicted +0.5 % to +15 %: missed, just above the band.**
+- The protected arm reads the same as `nphp10-1`'s protected arm (8,779.2 M), so the two boots agree where they
+  share an image.
+- **The geometry alone** (two boots, not a paired result): pristine reads 7,605.7 M against `nphp10-1`'s mode 4,
+  8,765.5 M. On the twin, mode 4's geometry (every block back to mallocng) therefore costs +15.25 % over pristine
+  zend_alloc's own caches, and the lifetime adds +0.16 % on top. The protected arm also makes 1,529 more trips out of
+  context per command (6,478 against 4,949 runs) and spends 12.8 M more cycles outside it. That fits mallocng mapping
+  and unmapping what zend_alloc would keep, but this run does not show the calls themselves.
+- So on the twin almost all of PHP's cost against pristine is the allocator substitution, not the lifetimes. A protected
+  zend_alloc that keeps its own chunk caches (lifetimes carved from its chunks, as the perlbench and gcc ports do) is
+  the variant that would separate them. It has not been built. The P1 row's unprotected arm (`nested/appd/php10`) runs
+  mode 4, not pristine; which comparison the paper uses is the lead's decision.
+
+### Pre-registration: PHP pristine against protected mode 6 on P1, u1 p1 p2 u2 in one boot (written 2026-11-25 00:28, before the boot)
+
+**Question.** The twin's result above puts protected PHP at +15.43 % against pristine zend_alloc. Almost all of that is
+the allocator substitution, not the lifetimes. This boot reads the same pairing on P1. That is Fig. 10's pairing, a
+pristine second binary, which the P1 row (mode 6 against mode 4 of one image, +2.34 %) does not provide.
+
+**Configuration.**
+- **Stage** `nested/p1ps/php10s` (`php10s.SHA256SUMS`, 20 files), made by bkit91's `make-train-stage.sh` from
+  `nested/appd/php10s`, the twin's stage.
+  - Against the P1 row's board stage `nested/p1a/php10` (`diff -rq`), three files differ:
+    - `php_unprot` is the pristine `13d187b0…` in place of `d63abbc5…`;
+    - `run.sh` drops `PHP_CAP_MODE=4` from the two u commands and renames the stage;
+    - `plan.json` names the stage and the u image.
+  - `php_prot` (`d63abbc5…`, mode 6), the workload (`bench10-check.php` `655fd6d4…`), the normalisation and the smoke
+    are the P1 row's, byte for byte.
+- **Kit** `bkit91-k2n-native-p1-tree-cscfix` (SHA256SUMS verified), the P1 row's kit: 262,144 records.
+- **Bitstream** P1 `…-tagoverlap6c-pagedtbl_d83d3a633`, board 2, where it is resident. The chain reads it back by name
+  and flashes it, sha checked, only if it is not.
+- **Chain** `nested/p1s100/nat-run3p.sh 2 1 nested/p1ps/p1ps-b2.conf`, list line `php10s 2400 120`. That gives
+  `BAKED_TIMEOUT=9600`, as the row's, and a booking of 120 min.
+- **Checked off the board** (rule 8, `nested/p1/recheck-p1.sh` with `RD=nested/p1ps`):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on the P1 row's real transcript (`out-nat-p1a-php-b2/php10`) and on its cut after
+    `@@SPEC-BEGIN`, both PASS all 9 steps and print `BAKED_TIMEOUT=9600`;
+  - real firmware 19,566,088 B (`9dc4cadc…`);
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/p1ps/dry.log`).
+- **Reader:** `nested/appd/parse-abba.py` (`1d0459d5…`) against the native reference `8f692e64…`, then
+  `nested/p1/abba.py` (`fe8e1531…`).
+  - On the P1 row's transcript it reproduces that row's figures (+2.32 % span, +151.69 % record-TLB misses).
+  - On the cut transcript it exits 2.
+
+**Rules.**
+- **Answers:** every command rc 0 with the native normalised output. p1 and p2 print `ZEND_CAP_MODE 6 exact=0
+  revoke=1` and retire all 3,442,469 issues. u1 and u2 print no `ZEND_CAP_MODE` line. Otherwise VOID.
+- **Repeats:** `run_cycles` within 1 % in each arm, or the cost is not read.
+
+**Predictions** (in-context cycles, ABBA means).
+1. **The protected arm repeats the P1 row's protected arm** (22,903.2 M) within 1 %: the same image, kit and
+   bitstream in a different boot.
+2. **Cost, protected against pristine: +8 % to +31 %, point +18 %.**
+   - On P1 the row's mode-4 arm ran 2.553 times its twin cycles.
+   - The pristine arm at 2.3 to 2.8 times its twin 7,605.7 M gives 17,493-21,296 M. Against 22,903 M that is +7.5 %
+     to +30.9 %, and +18.1 % at 2.553.
+3. **The geometry share:** P1's mode 4 against pristine (two boots, not a pair) is the substitution's cost on silicon.
+   The row's +2.34 % is the lifetime's. The prediction is that the substitution is most of the total, as on the twin.
+4. **Duration:** 12 to 16 min per pristine command (the row's mode-4 commands took 15.2 min), and about 75 min for the
+   boot.
+
+**Limits.**
+- The pristine binary differs from mode 4 in block geometry and caches, not only in the lifetimes. So prediction 3
+  rests on two boots, with no pair between them.
+- One boot.
+- hpm6 (grow) can read nonzero in the first commands, as on the row. It is reported, not read.
+
+### Result: protected PHP costs +29.78 % against pristine zend_alloc on P1, inside the band (board 2, 2026-11-25 00:28-01:32, read against 246d1c4f383b)
+
+The chain (pid 2204581) read P1 back by name as resident (no flash), booked 1491, and unbooked it. The smoke passed all
+9 steps. The chain's `SPEC rc=2` is the generic classifier, which does not read this stage's markers; it is not a
+verdict. Transcript `…/out-nat-p1ps-php-b2/php10s/board.txt` (sha256 `8506e1ca…`), read by `parse-abba.py`
+(`1d0459d5…`) against `8f692e64…` and `abba.py` (`fe8e1531…`).
+
+| command | rc | answer | in-context cycles | kernel + other | context entries |
+|---|---|---|---:|---:|---:|
+| u1 pristine | 0 | `8f692e64…` | 17,637,636,211 | 296,702,525 | 5,624 |
+| p1 mode 6 | 0 | `8f692e64…` | 22,887,566,222 | 427,165,472 | 7,569 |
+| p2 mode 6 | 0 | `8f692e64…` | 22,868,235,362 | 426,930,663 | 7,558 |
+| u2 pristine | 0 | `8f692e64…` | 17,619,420,646 | 295,729,335 | 5,613 |
+
+- **Answers: met.** Every normalised output equals the native reference. p1 and p2 print `ZEND_CAP_MODE 6 exact=0
+  revoke=1`, and their allocator line reads 3,442,469 issues, retires and revokes with 0 live. u1 and u2 print nothing
+  on stderr. Not VOID.
+- **Repeats: met**, 0.10 % (u) and 0.08 % (p).
+
+**Against the predictions.**
+1. **The protected arm repeats the row: met.** 22,877.9 M against the row's 22,903.2 M, −0.11 %.
+2. **Cost: +29.78 % (+5,249.4 M), inside the band** (+8 % to +31 %), well above the point (+18 %).
+   - The pristine arm ran 2.318 times its twin cycles (17,628.5 M over 7,605.7 M), at the low end of the 2.3-2.8 range.
+     The point assumed the row's mode-4 ratio, 2.553. The protected arm ran 2.606 times its twin's 8,779.2 M.
+   - So on silicon pristine zend_alloc gains less over the twin than mode 4 and mode 6 do, and the cost in percent is
+     nearly twice the twin's +15.43 %.
+3. **The substitution is most of the total: met.** It is a cross-boot reading, as registered.
+   - Mode 4 (the row's u, 22,379.1 M) against pristine (this boot, 17,628.5 M) is +4,750.6 M, +26.95 %.
+   - The row's lifetime cost (mode 6 against mode 4) is +524.1 M, +2.34 %.
+   - Of their sum, 5,274.7 M, the substitution is 90.1 %. The sum differs from this boot's own p−u (5,249.4 M) by
+     25.3 M, 0.11 % of p, which is the cross-boot difference in the protected arm.
+   - On the twin the same split was +15.25 % and +0.16 %.
+4. **Duration: missed, narrowly.** The pristine commands took 11.98 and 11.97 min (predicted 12 to 16 min), and the
+   protected ones 15.57 and 15.56 min. The boot took 63.8 min, against about 75.
+
+**Reported, not read.**
+- The protected arm enters context 34.6 % more often (7,569 against 5,624) and spends +44.2 % more cycles in kernel and
+  other (+130.8 M). On the twin it was 1,529 more entries per command.
+- Record-TLB misses +162 %, walk cycles +176 %, L1D misses +341 % (+77.6 M), event-23 replays +14 %.
+- hpm6 (grow) reads 10 and 8 in u1 and p1 and 0 after, as on the row.
+
+**Limits.** One boot. Prediction 3 rests on two boots with no pair between them. The pristine binary differs from mode
+4 in block geometry and caches, not only in the lifetimes.
+
 ## Item 5: the SQLite and PHP bug corpora for the board (2026-11-23)
 
 The programme's item 5: prepare the images and the pre-registration, and the runtime lane queues them on a P1 board.
