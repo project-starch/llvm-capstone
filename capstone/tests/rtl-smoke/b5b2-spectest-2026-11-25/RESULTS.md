@@ -117,9 +117,27 @@ as a property of either seal.
 PREDICTED`. The unfixed 28fcbb646 control that must wedge is still unread, so this shows the fixed arm completing,
 not the wedge gone.
 
+## x264b rows (Amendments 11-14)
+
+Graded under v2 with v1 beside it (Amendment 14), by x264's seven data outputs (Amendment 13); times are up1 − up0 of
+each command, read from the capture by this lane.
+
+| Board | Seal | Row | Image | gen (s) | run (s) | v2 / v1 | uart |
+|---|---|---|---|---|---|---|---|
+| 3 | b42c8c644 | B5T-x264b | 783d3276 | 2,127.35 | 33,839.95 | PASS 7/7 / PASS | e2ad11b2 |
+| 3 | b42c8c644 | B5TL0-x264b | 0b483e78 | 2,126.51 | 33,865.01 | PASS 7/7 / PASS | c42c2150 |
+| 3 | b42c8c644 | B5TL1-x264b | b3251258 | 2,127.40 | 33,881.05 | PASS 7/7 / PASS | c90303dd |
+| 1 | 14f2ef81a | SP-B5TL1-x264b | 62ea4930 | 2,126.10 | 33,795.06 | PASS 7/7 / PASS | 955503a9 |
+
+- Every command rc 0; no `cause=` substring in any capture; specdiff 0/3 NO-OUTPUT on each, as Amendment 13 predicts.
+- **The pair** is B5TL1-x264b against SP-B5TL1-x264b, the same userland: +Spatial reads −0.25 % on run. It is
+  cross-board (board 1 against board 3); the boards agree within 0.07 % on the campaign's CF rows.
+- B5TL0 and B5T read −0.05 % and −0.12 % against B5TL1 on the same board (run).
+- **UNGATED:** board 3's three rows ran in session r77b3x, armed before the rule that every boot runs
+  preflight-board-run.sh first, so none of them has a preflight exit line. SP-B5TL1-x264b did run it.
+- The board lane first compared SP-B5TL1-x264b with B5T-x264b, a different userland; that is not a pair.
+
 ## Still owed
 
-- Board 3: B5T/B5TL0/B5TL1-x264b.
-- Board 1: SP-B5TL1-x264b.
-- Every one of these grades under v2, with v1 beside it (Amendment 14). x264 is graded by its data hashes
-  (Amendment 13).
+Nothing on this kit's boards. The campaign's timed rows (b5b2-campaign-2026-11-26) supersede these as the Line B
+readings; these remain the qualification rows.
