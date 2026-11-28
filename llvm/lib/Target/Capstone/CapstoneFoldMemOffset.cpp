@@ -19,9 +19,13 @@
 #include "CapstoneSubtarget.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/CodeGen/MachineBlockFrequencyInfo.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
+#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
@@ -40,6 +44,10 @@ STATISTIC(NumPoolChainsBeyondImm,
           "Constant-pool chains refused: a displacement beyond 2047");
 STATISTIC(NumPoolChainsAtEntry,
           "Constant-pool chains given the entry block's shared base");
+STATISTIC(NumPoolBasesBelowEntry,
+          "Shared constant-pool bases placed below the entry block");
+STATISTIC(NumPoolBasesNotShared,
+          "Constant-pool bases left per chain: no loop, or a hotter block");
 
 // The rebase below leaves one PseudoLLA/PseudoCapGlobalBase pair per chain and
 // counts on Early MachineLICM to hoist them. Under high GPR pressure it does
@@ -54,6 +62,32 @@ static cl::opt<bool> PoolBaseAtEntry(
     "capstone-pool-base-at-entry", cl::init(false), cl::Hidden,
     cl::desc("Under the image-gp ABI, give every rebased constant-pool load "
              "one shared base built in the entry block (default off)."));
+
+// The entry placement costs every path through the function, including those
+// that read no constant at all: perlbench's Perl_pp_modulo builds the base and
+// saves one more callee-saved register on each of its 1.9 M calls, for loads
+// only cold paths reach (+5 instructions a call; tests/spec8-split). Placement
+// alone does not fix that: MachineSink already moves the entry pair down to the
+// loads' common dominator, and in Perl_pp_modulo that block is on the hot path,
+// above two cold branches. So this option shares the base only where sharing is
+// cheaper. Only chains whose loads are all in loops take part (a load in no
+// loop gains nothing, and static block frequencies cannot see that the branches
+// above it are cold). It finds the nearest common dominator of their loads,
+// moves it out of every loop containing it to the outermost one's preheader,
+// and shares the base there only if that block runs no more often than the
+// chains' own pairs would together, each at its own loads' common dominator
+// (where MachineSink leaves it); otherwise every chain keeps its own pair, as
+// with neither option. In imagick's HorizontalFilter the loop's loads share a
+// base built in the preheader. In Perl_pp_modulo no load is in a loop, so
+// nothing is shared. The address and its safety argument are the entry
+// placement's (&cp#B, below); only the block changes, and the block dominates
+// every load.
+static cl::opt<bool> PoolBaseAtUseDominator(
+    "capstone-pool-base-at-use-dominator", cl::init(false), cl::Hidden,
+    cl::desc("As -capstone-pool-base-at-entry, but build the shared base at "
+             "the nearest common dominator of its loads, outside every loop "
+             "containing it, for chains whose loads are in loops, where that "
+             "block runs no more often than their own bases (default off)."));
 #define Capstone_FOLD_MEM_OFFSET_NAME "Capstone Fold Memory Offset"
 
 namespace {
@@ -72,6 +106,13 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
+    // Only the use-dominator placement reads them; with it off the pass's
+    // analyses, and so the pipeline, are as before.
+    if (PoolBaseAtUseDominator) {
+      AU.addRequired<MachineDominatorTreeWrapperPass>();
+      AU.addRequired<MachineLoopInfoWrapperPass>();
+      AU.addRequired<MachineBlockFrequencyInfoWrapperPass>();
+    }
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
@@ -104,8 +145,13 @@ public:
 } // end anonymous namespace
 
 char CapstoneFoldMemOffset::ID = 0;
-INITIALIZE_PASS(CapstoneFoldMemOffset, DEBUG_TYPE, Capstone_FOLD_MEM_OFFSET_NAME,
-                false, false)
+INITIALIZE_PASS_BEGIN(CapstoneFoldMemOffset, DEBUG_TYPE,
+                      Capstone_FOLD_MEM_OFFSET_NAME, false, false)
+INITIALIZE_PASS_DEPENDENCY(MachineDominatorTreeWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(MachineLoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(MachineBlockFrequencyInfoWrapperPass)
+INITIALIZE_PASS_END(CapstoneFoldMemOffset, DEBUG_TYPE,
+                    Capstone_FOLD_MEM_OFFSET_NAME, false, false)
 
 FunctionPass *llvm::createCapstoneFoldMemOffsetPass() {
   return new CapstoneFoldMemOffset();
@@ -402,7 +448,10 @@ static bool isPoolLoadOpc(unsigned Opc) {
 // (the five-argument getSectionForConstant); under the image-gp ABI the
 // Capstone override ignores the profile suffix, so passing an empty suffix
 // here predicts exactly what the printer emits with any profile.
-static bool rebaseConstantPool(MachineFunction &MF, MachineRegisterInfo &MRI) {
+static bool rebaseConstantPool(MachineFunction &MF, MachineRegisterInfo &MRI,
+                               MachineDominatorTree *MDT,
+                               MachineLoopInfo *MLI,
+                               MachineBlockFrequencyInfo *MBFI) {
   if (!capstoneImageGpAbiActive())
     return false;
   const MachineConstantPool *MCP = MF.getConstantPool();
@@ -524,7 +573,7 @@ static bool rebaseConstantPool(MachineFunction &MF, MachineRegisterInfo &MRI) {
       LoadMI->getOperand(2).setImm(LoadMI->getOperand(2).getImm() + Disp);
     Changed = true;
   }
-  if (!PoolBaseAtEntry)
+  if (!PoolBaseAtEntry && !PoolBaseAtUseDominator)
     return Changed;
 
   // Every chain now on entry B, the base's own included, shares one pair built
@@ -535,19 +584,80 @@ static bool rebaseConstantPool(MachineFunction &MF, MachineRegisterInfo &MRI) {
   for (Candidate &Cand : Candidates)
     if (Cand.LLA->getOperand(1).getIndex() == BaseCPI)
       Shared.push_back(&Cand);
-  if (Shared.size() < 2)
+  if (PoolBaseAtUseDominator) {
+    // Sharing pays by giving loads an operand invariant in a loop around
+    // them, so only chains whose every load is in a loop take part; the rest
+    // keep their own pairs. A load in no loop gains nothing, and the shared
+    // block would sit above its branches, which static frequencies cannot
+    // rank: in Perl_pp_modulo they read two paths 50/50 where one is cold.
+    // One chain is enough: its pair leaves the loop, which is what Early
+    // MachineLICM declines to do under pressure.
+    llvm::erase_if(Shared, [&](Candidate *Cand) {
+      return llvm::any_of(Cand->Loads, [&](MachineInstr *LoadMI) {
+        return !MLI->getLoopFor(LoadMI->getParent());
+      });
+    });
+    if (Shared.empty()) {
+      ++NumPoolBasesNotShared;
+      return Changed;
+    }
+  } else if (Shared.size() < 2) {
     return Changed;
+  }
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
-  MachineBasicBlock &Entry = MF.front();
-  MachineBasicBlock::iterator At = Entry.getFirstNonPHI();
+  MachineBasicBlock *Home = &MF.front();
+  if (PoolBaseAtUseDominator) {
+    // The nearest common dominator of every shared load, then out of each
+    // loop containing it into that loop's preheader. Without a preheader the
+    // walk stops in the loop, where the base is still built before its loads
+    // (the block dominates them) but is not invariant in that loop.
+    MachineBasicBlock *NCD = nullptr;
+    for (Candidate *Cand : Shared)
+      for (MachineInstr *LoadMI : Cand->Loads)
+        NCD = NCD ? MDT->findNearestCommonDominator(NCD, LoadMI->getParent())
+                  : LoadMI->getParent();
+    assert(NCD && "a shared chain has at least one load");
+    for (MachineLoop *L = MLI->getLoopFor(NCD); L; L = L->getParentLoop()) {
+      MachineBasicBlock *Pre = L->getLoopPreheader();
+      if (!Pre)
+        break;
+      NCD = Pre;
+    }
+    // Shared, the base runs once per entry to NCD. Per chain, each pair runs
+    // where MachineSink would leave it: the nearest common dominator of that
+    // chain's own loads, not the block instruction selection put it in (often
+    // a hot one above the loads' branches, which would make sharing look free).
+    // Share only if that is no worse.
+    BlockFrequency Own;
+    for (Candidate *Cand : Shared) {
+      MachineBasicBlock *ChainNCD = nullptr;
+      for (MachineInstr *LoadMI : Cand->Loads)
+        ChainNCD = ChainNCD ? MDT->findNearestCommonDominator(
+                                  ChainNCD, LoadMI->getParent())
+                            : LoadMI->getParent();
+      Own += MBFI->getBlockFreq(ChainNCD);
+    }
+    if (MBFI->getBlockFreq(NCD) > Own) {
+      ++NumPoolBasesNotShared;
+      return Changed;
+    }
+    Home = NCD;
+    if (Home != &MF.front())
+      ++NumPoolBasesBelowEntry;
+  }
+  // The entry placement keeps its insertion point exactly; a block below the
+  // entry may be a landing pad, so its labels stay first.
+  MachineBasicBlock::iterator At =
+      PoolBaseAtUseDominator ? Home->SkipPHIsLabelsAndDebug(Home->begin())
+                             : Home->getFirstNonPHI();
   Register OldAddr = BaseCand->LLA->getOperand(0).getReg();
   Register OldCap =
       MRI.use_instr_nodbg_begin(OldAddr)->getOperand(0).getReg();
   Register Addr = MRI.cloneVirtualRegister(OldAddr);
   Register Cap = MRI.cloneVirtualRegister(OldCap);
-  BuildMI(Entry, At, DebugLoc(), TII->get(Capstone::PseudoLLA), Addr)
+  BuildMI(*Home, At, DebugLoc(), TII->get(Capstone::PseudoLLA), Addr)
       .addConstantPoolIndex(BaseCPI);
-  BuildMI(Entry, At, DebugLoc(), TII->get(Capstone::PseudoCapGlobalBase), Cap)
+  BuildMI(*Home, At, DebugLoc(), TII->get(Capstone::PseudoCapGlobalBase), Cap)
       .addReg(Addr, RegState::Kill);
   for (Candidate *Cand : Shared) {
     Register ChainAddr = Cand->LLA->getOperand(0).getReg();
@@ -571,7 +681,15 @@ bool CapstoneFoldMemOffset::runOnMachineFunction(MachineFunction &MF) {
 
   // Before the fold walk, and before Early MachineLICM / MachineCSE, which
   // this pass precedes: they do the hoisting and merging the rebase enables.
-  bool MadeChange = rebaseConstantPool(MF, MRI);
+  MachineDominatorTree *MDT = nullptr;
+  MachineLoopInfo *MLI = nullptr;
+  MachineBlockFrequencyInfo *MBFI = nullptr;
+  if (PoolBaseAtUseDominator) {
+    MDT = &getAnalysis<MachineDominatorTreeWrapperPass>().getDomTree();
+    MLI = &getAnalysis<MachineLoopInfoWrapperPass>().getLI();
+    MBFI = &getAnalysis<MachineBlockFrequencyInfoWrapperPass>().getMBFI();
+  }
+  bool MadeChange = rebaseConstantPool(MF, MRI, MDT, MLI, MBFI);
 
   // This optimization may increase size by preventing compression.
   if (MF.getFunction().hasOptSize())
