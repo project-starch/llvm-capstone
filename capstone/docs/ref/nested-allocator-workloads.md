@@ -7289,6 +7289,260 @@ Read by `read-pairnf.py` (`3ed8e1d1…`, exit 0) with pairf's, pairn's and pair6
 - Source of every cycle price above: P1's `run_cycles` for each command on board 1, as the pre-registration names.
   The twin supplies only the instruction counts (`counts.txt`).
 
+## Fig. 10's one-operand revisions for B5b-2 (2026-11-25)
+
+### The images: rebuilt on the trap route, every one scanned clean
+
+The compiler lane found that the FRCDKMSa3 images carry two-operand CREVOKE, which B5b-2 makes illegal, and that they
+link the vexec runtime, which is the wrong one. The runtime lane relayed compiler's recipe:
+- the trap-route SDK `c4/b5b2spec/sdk-trap` (origin/trap/eval `ed8cc375c2b1`'s `build-sdk.sh`, llvm-c9 clang
+  `29027126f39b`) and the Full arm's flags;
+- every image scanned with dev's `capstone/tests/b5b2-illegal-scan/scan_illegal.py` (`937208e0991f`), where exit 0
+  is clean.
+
+The one-operand ports needed no source change. Scripts are in `nested/b5b2/` (`env.sh` `1c2879b0…`, the Full flags
+being the cclever base set plus `FRCDKMSa3/extra-flags`). Each port keeps its oneop recipe; only the SDK, the runtime
+tree and the flags change.
+
+| program | script | arms (sha256) |
+|---|---|---|
+| SQLite speedtest1, memsys5 patch | `build-sqlite.sh` | unprot `00d66489`, prot `03ca5713` |
+| mruby 4.0.0-rc2, 0008 | `build-mruby.sh` | stock `576bc0ee`, prot `636e4cab` |
+| Perl 5.36.3, 0001 / 0001 + 0002 | `build-perl.sh` | stock `87ce6988`, prot `c27c9c9c`, p0002 `73f02969` |
+| gcc 502, the collaborator's three allocators and gcc's own free lists | `build-gcc.sh` | stock `48bd30a0`, fix `6c78dc88`, all `06e61814`, all-abc-bm-ls-tfl-phi `0b88e520` |
+| tshark 4.6.8, wmem 0001 | `build-tshark.sh` | stock `c209a353`, prot `4e01172f` |
+
+- **Every image scans ILLEGAL=0** (`nested/b5b2/MANIFEST.txt`, `b4228bba…`).
+  - The scanner fires on prot6 (9 two-operand CREVOKEs, exit 1).
+  - The oneop SQLite image scans clean too, so the scan alone does not separate the SDKs.
+- **Every image links the trap runtime.** `trap_altstack` is defined in each, and absent from a FRCDKMSa3 image.
+- **The Full flags reach every image.**
+  - mruby has SHRINKTO 7,601, where the oneop image had none; Perl and tshark have their own.
+  - Perl's `make.log` carries them on its compile lines, and tshark's SDK `sdk.json` lists them.
+- Each port's own route to the flags:
+  - **mruby.** `MRBD_OPT` also reaches the native host build, so the flags come from a wrapper `capstone-cc` in a copy
+    of the SDK (`b5b2/sdk`; the wrapper's sha256 is `de4d3de2…`). `build-mruby-domain.sh` writes into its SDK
+    directory, so it is never given the compiler lane's own.
+  - **Perl and tshark.** Each builds its own SDK from the trap tree (`b5b2/wt-trap`, a worktree at `ed8cc375c2b1`).
+    - Perl's `build-perl-domain.sh` is called directly from Fig. 10's port trees, because `build-virtual.sh` takes the
+      port from `CAPSTONE_REPO_ROOT`.
+    - tshark is the trap tree's own build: its wmem 0001 equals Fig. 10's. Its flags go through
+      `CAPSTONE_SDK_EXTRA_CODEGEN` in the joined form `-mllvm=X`, because the split form reached clang without its
+      `-mllvm`.
+  - **gcc's arms** are oneop's build trees, with their `make.out` retargeted to the trap SDK and the flags. Every one
+    of the 387 compiles and the link is asserted, and the trees are rebuilt by the port's `replay-build.sh`.
+- Disclosed: llvm-c9's freshness gate prints STALE (176 ninja steps pending, outside the revision chain), as in
+  compiler's own SDK build.
+
+### Pre-registration: B5b-2 boot A, SQLite, mruby and gcc, stock against protected, board 2 (written 2026-11-25 13:14, before the boot)
+
+**Question.** Do Fig. 10's one-operand revisions run on B5b-2 silicon, on the trap route, with the stock answers, and
+what do they cost there in wall-clock time? No board has run them before.
+
+**The image.** `nested/b5b2/boardA/out/fw_payload.bin`, sha256
+`298b89daa59d6186daaf7039558f1c98ab9b8835317ce0a3c76fc3cece991416`, 25,851,912 B, under the 26,000,000 B cap.
+- Built by the runtime lane's `trapk/fpga/make-payload.sh` with KEEP=y: the board's rootfs unchanged, the trap-route
+  kernel relinked, and the keep-tags firmware.
+- The overlay (`make-boardA.py`, `0d8b028b…`) carries compiler's `/init` and `smoke.dom` from boot 5, unchanged, and
+  an empty probe list. Three stages, each command in a fresh tmpfs directory with its image xz-unpacked there:
+  - **N1 SQLite:** `speedtest1 --heap 8388608 64 --size 1 st.db`, u p p u;
+  - **N2 mruby:** `bm_ao_render.rb 16`, u p p u;
+  - **N3 gcc:** SPEC's test `t1.c -O3 -finline-limit=50000 -o out.s`, u p. gcc's p is the port with gcc's own free
+    lists (`all-abc-bm-ls-tfl-phi`).
+- Stripped images (`nested/b5b2/strip`, `llvm-objcopy --strip-all` keeping the three capstone sections).
+
+**Run.** The board lane runs it with its B5b-2 capture runner on board 2, resident `…-r75d-b5b2n_904cd9c6b.bit`,
+read back before and after. The bound is 3 h; `/init`'s watchdog bounds each stage at 3,600 s. The gate is boot 5's
+`control smoke.dom rc=7` on board 3, which the board lane reports.
+
+**Reader** `nested/b5b2/read-boardA.py` (`48d72b29…`):
+- the control line;
+- SQLite's STUDY-ORACLE phases per arm against `phases.json`'s native reference (32 phases);
+- mruby's stdout against `cfd73bb1…` (781 B, the native reference);
+- gcc's `out.s` against SPEC's `t1.opts-O3_-finline-limit_50000.s` (`58111208…`);
+- per program, the protected arms' mean span against the stock arms'.
+
+It was tested three ways: a twin log cut in mruby (exit 1: NO RESULT, NOT RUN), the complete twin log (exit 0), and
+that log with one phase hash and one mruby hash altered (exit 1, both marked WRONG).
+
+**Twin evidence** (`nested/b5b2/twinA`, the trap-route QEMU twin as `trapk/run-trap.sh` boots, `boot.py` with its
+per-line timeout raised from 300 s to 3,600 s; log `f63c48cc…`):
+- control `smoke.dom rc=7`;
+- every arm rc 0 with its reference answer: SQLite 32/32 phases ×4, mruby `cfd73bb1` ×4, gcc `out.s` equal ×2;
+- twin spans, not a prediction of silicon: SQLite p/u +9.0 %, mruby +13.2 %, gcc +18.7 %.
+- gcc prints the SPEC input's own warning (`conflicting types for built-in function 'printf'`, 68 B), as on any
+  platform.
+- An earlier twin run of the same overlay was cut by `boot.py`'s 300 s line limit during mruby. The twin's clock runs
+  slower than the guest's, so `/init`'s 120 s tick does not keep it. Its four SQLite and two mruby arms matched.
+
+**Predictions.**
+1. The control reads `smoke.dom rc=7`.
+2. Every arm returns rc 0 with its reference answer.
+3. **Cost** (wall-clock span, the only time this image reads): p against u in each program, between −2 % and +30 %,
+   point at the twin's value. No counter in this image is in-context, so a span includes the kernel and the trap
+   route's own work.
+
+**What each outcome says.**
+- **All answers met:** the one-operand revisions run on B5b-2 silicon with stock's answers. Item 4 then has its
+  first silicon row for these three, priced in wall-clock time.
+- **A protected arm faults or answers differently while its stock arm returns:** a B5b-2 defect or a port defect,
+  reported with its dmesg and stderr. The scan has already ruled out an illegal encoding.
+- **The control fails:** the boot is void (loader or kit).
+
+**Limits.**
+- One boot. The spans are from `/proc/uptime`, without in-context counters.
+- The arms are ABBA for SQLite and mruby, and one each for gcc.
+
+### Result: boot A, every arm returns with its reference answer; protected against stock −2.3 % SQLite, +5.2 % mruby, +9.0 % gcc in wall-clock time (board 2, 2026-11-25 13:18-14:06, read against de6399c1dfff)
+
+**Run.** The board lane ran the image on board 2 with its B5b-2 capture runner. Resident
+`…-r75d-b5b2n_904cd9c6b.bit`, read back by name before and after (rc 3 both times: the name matches and the console
+exposes no sha256, which the runner accepts). The run ended on `TRAPTEST: done` (rc 0), and board 2 was unbooked
+(`UNBOOK 1505: 200`).
+
+- **Deviation.** The registered gate, boot 5's control on board 3, did not run first. The runtime lane waived it for
+  this boot. The in-boot control, the same `smoke.dom` from boot 5, ran before every stage.
+- The console capture is `b5b2linux/b2bootA-20261125T0518/uart.txt` (`922be290…`, the board lane's tree). I re-ran
+  the reader (`48d72b29…`) on it: exit 0, with output identical to the board lane's grade file.
+
+**Readings.**
+- **Control:** `TRAPTEST: control smoke.dom rc=7`.
+- **N1 SQLite**, stage rc 0. Each arm rc 0, 32/32 STUDY-ORACLE phases equal to the native reference, stderr 0 B.
+  - Spans u1 35.57 s, p1 33.06 s, p2 33.42 s, u2 32.49 s. Mean p 33.24 s against mean u 34.03 s: **−2.32 %**.
+- **N2 mruby**, stage rc 0. Each arm rc 0, stdout `cfd73bb1…` (781 B) equal to the native reference, stderr 0 B.
+  - Spans u1 506.94 s, p1 532.93 s, p2 533.34 s, u2 507.03 s. Mean p against mean u: **+5.16 %**.
+- **N3 gcc**, stage rc 0. Each arm rc 0, `out.s` `58111208…` equal to SPEC's reference.
+  - stderr 68 B in both arms. It is the SPEC input's own warning (`t1.c:2:5: warning: conflicting types for built-in
+    function 'printf'`), as on the twin.
+  - Spans u1 7.20 s, p1 7.85 s: **+9.03 %**.
+- dmesg shows each image entering through the `.dom` loader (`sublet: <name>[pid] enters …`), one line per arm.
+
+**Against the predictions.**
+1. The control reads `smoke.dom rc=7`: **met.**
+2. Every arm returns rc 0 with its reference answer: **met**, all ten arms.
+3. Cost between −2 % and +30 % in each program:
+   - mruby (+5.2 %) and gcc (+9.0 %): **met**;
+   - SQLite (−2.3 %): **not met**, 0.3 points below the band's floor.
+   - All three are well below the twin's values (+9.0 %, +13.2 %, +18.7 %), which were the registered points.
+
+**What it says.**
+- **The one-operand revisions of SQLite, mruby and gcc run on B5b-2 silicon, on the trap route, with stock's answers.**
+  These are the first silicon rows for these three.
+- **mruby's cost is resolved.** The two stock arms agree to 0.09 s and the two protected arms to 0.41 s, against a
+  26 s gap. +5.2 % is the protected revision's wall-clock price in this boot.
+- **SQLite's is not.** The stock arms differ by 3.08 s between u1 and u2, and the protected arms lie between them. The
+  first arm of the boot is the slowest. So the −2.3 % sits inside this boot's own order effect, and it reads as "no
+  cost resolved at about ±5 %". It does not say the protected revision is faster.
+- **gcc's +9.0 %** is one arm each, so it has no spread of its own.
+- The twin's spans overstated every cost. Its clock is not the board's, as the pre-registration said; its spans were
+  never a prediction of silicon.
+
+**Limits.**
+- One boot. Wall-clock spans from `/proc/uptime`, including the kernel and the trap route's work. No in-context
+  counters.
+- SQLite is ABBA with a first-arm effect larger than the difference read. gcc is one arm each.
+
+### Pre-registration: B5b-2 boots B-stock and B-prot, Fig. 10's Wireshark workload one arm per boot, with Perl makerand.pl, board 2 (written 2026-11-25 13:38, before the boots)
+
+**Question.** Does Fig. 10's Wireshark revision run on B5b-2 silicon with stock's answer? What does it cost in
+wall-clock time across the two boots? And do Perl 5.36's stock and 0001 + 0002 images run there at all?
+
+**Why two boots.**
+- The base payload without an overlay is about 17.2 MB. The two stripped tshark images are 5.2 MB each in xz, so
+  they do not fit under the 26,000,000 B cap together.
+- So each boot carries one tshark arm and one Perl arm.
+
+**The images** (`make-payload.sh`, KEEP=y; overlays by `make-boardB.py`, `07323665…`):
+- **B-stock:** `nested/b5b2/boardB-stock/out/fw_payload.bin`, sha256
+  `c89a676d3d67ec537ec770f530c34dc53755f505274c65e7d5c4e52f4f3b6272`. Contents: Perl stock, then tshark stock.
+- **B-prot:** `nested/b5b2/boardB-prot/out/fw_payload.bin`, sha256
+  `2effea0096ee964f4239300ce66eeea707920acaf57d1e70d33bcc867fa4d9fa`. Contents: Perl p0002, then tshark prot.
+- Both are 25,851,912 B, as boot A's image is. The payload pads to its size, so they are told apart by hash, and their
+  initramfs files differ from the overlay on.
+- **Stage N0, Perl 5.36 on SPEC's test `makerand.pl`.** This is does-it-run only, with no cost reading, at about 0.1 s
+  of work.
+  - SPEC's `test.pl` cannot serve Perl 5.36. It runs each test as `..//$^X`, and upstream 5.36 makes `$^X` absolute,
+    so every child fails (317 of 317 on the native build).
+  - The reference is native 5.36's own `makerand.out`, `acbf40c2…`: deterministic, and not SPEC's 43,841 B because
+    5.36's rand differs.
+  - Fig. 10's suns.pl row is a train input and waits for the final campaign (runtime lane, the lead's rule).
+- **Stage N1, Fig. 10's Wireshark workload, as oneop's `run-app-zones4.sh` runs it.**
+  - Each of the 169 captures of `set169.txt` runs as `tshark -r caps/<c> -V -n`, with TZ=UTC and an empty
+    configuration directory.
+  - Each stdout is appended after a `=== <c> rc=<n>` header. The answer is that file's sha256, against oneop's
+    `b190069b…`, which matched in all six oneop boots.
+  - A heartbeat is printed every 20 captures.
+
+**Run.** The board lane runs both boots with its B5b-2 capture runner on board 2, stock first, each bounded at 2 h,
+with the resident read back. `/init` bounds each stage at 3,600 s.
+
+**Reader** `nested/b5b2/read-boardB.py` (`122f1974…`): the control line, the Perl arm, then the tshark arm's 169
+inputs, 0 nonzero, the answer's hash, and its span.
+- On both twin logs it exits 0.
+- On a twin log of the overlay without the Perl stage it exits 1 (`perl: NO STAGE`).
+
+**Twin evidence** (the trap-route QEMU twin, as boot A's; logs `a9ec37c9…` and `f469853f…`): both boots give control
+rc=7, Perl's `acbf40c2…`, tshark's 169 inputs with 0 nonzero, and `b190069b…`.
+- The twin's spans are not repeatable. tshark stock read 166.3 s and 193.1 s in two twin runs of the same image, and
+  prot 194.3 s and 181.7 s. None is read.
+
+**Predictions.**
+1. Both controls read `rc=7`.
+2. Both Perl arms answer `acbf40c2…` with rc 0.
+3. Both tshark arms answer `b190069b…` with 169 inputs and 0 nonzero.
+4. **Cost** (cross-boot, wall-clock span, kernel and trap route included): prot against stock between −5 % and +15 %,
+   point +2.3 %, oneop's image-instruction cost.
+
+**What each outcome says.**
+- **All met:** Fig. 10's Wireshark revision runs on B5b-2 silicon with stock's answer, and so does Perl 5.36.
+- **tshark prot does not return, or answers differently:** reported with the heartbeat and dmesg. M-16's stop on P1
+  was in this allocator's CDERIVE, but B5b-2 is another bitstream with another route, so nothing is predicted from it.
+- **A control fails:** that boot is void.
+
+**Limits.**
+- The cost is cross-boot, one boot per arm, spans only.
+- Perl is does-it-run only.
+
+### Result: boots B-stock and B-prot, Wireshark and Perl run with stock's answers; tshark prot against stock +2.5 % (board 2, 2026-11-25 14:06-15:56, read against 17d859cc89e4)
+
+**Run.** The board lane ran each image on board 2, `…-r75d-b5b2n_904cd9c6b.bit`, read back by name before and after each
+boot (rc 3: the name matches, no sha256 exposed). Each run ended on `TRAPTEST: done` and board 2 was unbooked
+(`UNBOOK 1506: 200`, `1508: 200`). The captures are `b5b2linux/b2bootB-20261125T0540-{stock,prot}/uart.txt`
+(`f36522b0…`, `4ac7b197…`, the board lane's tree). I re-ran the reader (`122f1974…`) on each: exit 0, and the output is
+identical to the board lane's grade files.
+
+**Readings.**
+
+| boot | control | Perl makerand.pl | tshark arm | 169 inputs, nonzero | answer | span |
+|---|---|---|---|---|---|---|
+| B-stock | `rc=7` | perl-stock: rc 0, `acbf40c2…` (43,824 B), 276.4 s | u1 | 169, 0 | `b190069b…` (34,055,148 B) | 1,766.43 s |
+| B-prot | `rc=7` | perl-p0002: rc 0, `acbf40c2…`, 272.2 s | p1 | 169, 0 | `b190069b…` | 1,811.13 s |
+
+- tshark's stderr is 1,758,495 B in both arms. It is the same dissector-registration `OOPS` lines in both, starting
+  `dissector table "arcnet.protocol_id" doesn't exist`. The twin's arms wrote 1,758,498 B each. The 3-byte
+  difference was not read further: the answer, which is stdout, is equal.
+- Heartbeats: 8 per arm, each every 20 captures.
+
+**Against the predictions.**
+1. Both controls read `rc=7`: **met.**
+2. Both Perl arms answer `acbf40c2…` with rc 0: **met** (does-it-run only).
+3. Both tshark arms answer `b190069b…` with 169 inputs and 0 nonzero: **met.**
+4. Cost between −5 % and +15 %, point +2.3 %: **met.** Prot against stock is **+2.53 %** (1,811.13 s against
+   1,766.43 s), cross-boot.
+
+**What it says.**
+- **Fig. 10's Wireshark revision runs on B5b-2 silicon, on the trap route, with stock's answer, and so does Perl 5.36.**
+  With boot A, all five one-operand applications have a silicon row with stock's answers.
+- **The protected tshark returned on B5b-2 in its one boot.** Its protected wmem path issues about 1.9·10^6
+  allocations a run. At P1's stress-form estimate (4.9·10^-8 per allocation), a run returns with probability about
+  0.91. So this return says little about M-16 on B5b-2; the stress boot S is the test for that.
+- The +2.53 % lies at oneop's image-instruction point (+2.3 %). It comes from one boot per arm, across boots.
+
+**Limits.**
+- One boot per arm, so the cost carries the boot-to-boot spread, which is not measured here.
+- The wall-clock spans include the kernel and the trap route.
+- The Perl arms are does-it-run only.
+
 ### Result: boot S, M-16's stress form returns three times on B5b-2; no stop in 1.17·10^8 protected allocations, so the hazard there is below 2.6·10^-8 (95 %) (board 2, 2026-11-25 15:57-16:57, read against 9b7c370ba5c7)
 
 **Run.** The board lane ran the payload (`2b19fc2a…`, 21,657,608 B) on board 2, `…-r75d-b5b2n_904cd9c6b.bit`, read back
