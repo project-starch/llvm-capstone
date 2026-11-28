@@ -112,3 +112,17 @@ CF twin on every stage except x264's encoded stream and stderr.
   B5TL1's pair by the lead's train rule.
 - /init differs from the campaign's by the control line only.
 - The cross-board offset (about 0.06 % between boards on CF) applies when Plain and CF run on different boards.
+
+## Amendment 1 (2026-11-28, before any boot of this kit): the board and the runner bounds
+
+- **Board 2.** It stood idle while the stage-2 x264 bracket's pre-registration was not yet pushed, so by the Line B
+  plan's rule (an idle board goes to the first pushed pre-registration) this session runs on board 2, b42c8c644
+  resident before the flash and restored after it. The choice of board predicts nothing here.
+- **Runner bounds** are the Full arm's (4,500 s short, 45,300 s g1b, 44,100 s x264b), not the "about 1 h / 4 h /
+  10 h" the runtime lane's message to the board lane suggested: each must exceed the image's own stage bounds (3,600; g1b's sum 44,400;
+  x264's 43,200) or a slow but legitimate Plain stage would be cut by the runner instead of read, which P2 tests. The
+  wedge guard is the runner's 1,200 s silence limit.
+- **rvbase 8db8f9cda on silicon before:** the P1 train campaign's Plain rows ran on it (boards 2 and 3, kit bkit95;
+  origin/spec-silicon results/2026-11-08-train PREREG:5354, :5846). Its seal is a manual one (finish.verdict
+  COLLECT-FAILED 127: no collector in the riscv-base tree; SEAL.txt with the .bit sha256 efc3ab8a…, 0 routing
+  errors, WNS +0.177). This kit's Plain kernel has not booted on it before.
