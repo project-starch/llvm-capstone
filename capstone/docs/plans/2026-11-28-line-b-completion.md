@@ -124,6 +124,25 @@ control, and is graded at source by the registering lane with a positive control
    with an external initrd or a split payload for inputs over the 26 MB cap), item 9 (the Addendum 231/232/t202s2
    re-registrations), Plain train images, SQLite `--size 100`. Built and twin-checked here, booted only in phase 5.
 
+**Train readiness, what the 28 Nov inventory found** (P1's train PREREG, origin/spec-silicon results/2026-11-08-train):
+- **Stages:** make-stage.py (spec-silicon only, not on dev) takes `--size train`; perlbench needs `--keep-lib`, xz
+  `--link-inputs` and per-command stages; a native stage is made in two steps (make-native-stage.py, as P1's
+  Addendum 200). gcc runs train01 only: 200.c and scilab.c need 1.62 and 1.24 GiB against about 962 MiB.
+- **Size:** seven of eight train stages fit a 26 MB payload (the base rootfs is 7.76 MB). **xz does not** (c0 about
+  27 MB, c1 about 34 MB) and needs the external initrd.
+- **The initrd route transfers to Line B:** P1 loaded a second file by JTAG `load_image` at 0x98000000 and passed it
+  with `initrdmem=` (Addenda 229, 231). The Line B kernel (Linux 6.1) has `initrdmem` (init/do_mounts_initrd.c:66) and
+  the same CMA at 0xac000000. Owed: a DTB with initrdmem in its bootargs, the driver's second load, a twin probe, then
+  a board probe.
+- **Memory:** no Line B train input has been checked at 962 MiB. P1 needed H16 for mcf and xz c0 (both OOM-killed
+  without it), and perlbench more than 2^18 records (Line B's table grows on demand).
+- **Cost:** about 48-54 board-hours per arm per run on P1's figures; three runs on three arms is about 430-500
+  board-hours, 6-7 days on three boards.
+- **The re-registrations:** Addendum 231 (xz train on Full + H16, withdrawn by 236), the ordering half of 232 (Plain
+  xz), and t202s2 (+Spatial imagick and x264 train), restated for the Line B arms.
+- An x264 label to fix: b5b2-spectest PREREG:294 calls Addendum 195's 30,671 s encode "train only"; it is the test
+  size (train is `--frames 142`, test `--frames 156`).
+
 ### Phase 3, the final campaign on the boards (three runs per arm, drift-balanced, board-constant pairs, intervals)
 - perl full test on CF, CS and Plain; embedded suites on all three; Table 3 pairs on CF; the corpus on CF; revocation
   cost; any Plain long rows still at N < 3; stage 2 as its own arm only if the lead asks.
