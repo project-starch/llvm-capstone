@@ -1,0 +1,40 @@
+Capstone: register tags kept across M traps, causes 24-30 delegated
+Boot HART MEDELEG         : 0x000000007f00b109
+[    0.208894] captag: bulk=0 (requires firmware S-mode CBZE permission)
+[    1.182218] sublet: 63-bit Sublet format, exact bounds 0
+[    1.965471] sublet: .dom loader registered
+[   24.516008] Run /init as init process
+TRAPTEST: id uid=0(root) gid=0(root)
+TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955424 kB
+[   27.549699] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81c5e000
+okTRAPTEST: control smoke.dom rc=7
+TRAPTEST: stage B5T-505.mcf_r begin
+@@QSTEP-BEGIN B5T-505.mcf_r
+@@SPEC-STAGE 505.mcf_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-ARM-BEGIN capstone-lifetimes
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@NATIVE-CNT 0 begin absent
+[   33.264358] sublet: mcf_r_base.nati[57] enters 0x3ff7fe0000, table 0x81cb9000
+TRAPTEST: tick 147.22
+TRAPTEST: tick 267.80
+TRAPTEST: tick 388.34
+TRAPTEST: tick 508.92
+TRAPTEST: tick 629.46
+TRAPTEST: tick 750.03
+TRAPTEST: tick 870.57
+TRAPTEST: tick 991.12
+TRAPTEST: tick 1111.67
+TRAPTEST: tick 1232.21
+TRAPTEST: tick 1352.77
+TRAPTEST: tick 1473.35
+TRAPTEST: tick 1593.89
+TRAPTEST: tick 1714.47
+TRAPTEST: tick 1835.02
+TRAPTEST: tick 1955.59
+TRAPTEST: tick 2076.14
+TRAPTEST: tick 2196.72
+TRAPTEST: tick 2317.26
+TRAPTEST: tick 2437.83
+TRAPTEST: tick 2558.39
+TRAPTEST: tick 2678.94
+TRAPTEST: tick 2799.49

@@ -1,0 +1,11 @@
+# a stubbed dry run (board-run rule 8), kept beside the pre-registrations
+2026-11-25T17:05:40Z armed
+2026-11-25T17:05:40Z the b42c8c644 full chain ended
+2026-11-25T17:05:40Z gates PASS: seal a5c45a46d sha 9b46b14fb6252873; plan ARMED dry (sha16 3ec272ddd78da42e)
+2026-11-25T17:05:42Z crevoke4b: kit rc=0 42 FLASH END caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynb 42 READBACK after flash = caplifive_ids55-native-tagcache-mlp-fpieee-h  C4BKIT cand VOID: a readback does not name -wap-flu-r80-r77_b42c8c644.bit; the sublet-life control reads VOID IMAGE
+2026-11-25T17:05:43Z wapflu: kit rc=1  ERROR no load directories
+2026-11-25T17:06:00Z boot3: 00 RUN END rc=0 [lx 01:06:00] end: TRAPTEST: done seen; 8932 chars 00 GRADE rc=0 B5B2-LINUX-3 P1=ok P2=ok P3=ok P4=ok 
+2026-11-25T17:06:17Z B5T-g2b: 17 RUN END rc=0 [lx 01:06:17] end: TRAPTEST: done seen; 19636 chars 17 GRADE rc=2 ERROR stage 1B5T-519.lbm_r is not in the expected list ['B5T-538.imagick_r', 'B5T-525.x264_r'] 
+2026-11-25T17:06:17Z B5T-g2b c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-25T17:06:19Z ldcexc2: kit rc=1  ERROR no load directory <path>/b5b2linux/dryr77b/o-ldcexc2/01-sublet-life
+2026-11-25T17:06:19Z SESSION END

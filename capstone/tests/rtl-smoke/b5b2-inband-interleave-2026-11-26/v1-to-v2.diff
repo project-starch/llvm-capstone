@@ -1,0 +1,37 @@
+1c1,2
+< """grade-spec-chain.py UART_TXT OUTDIR STAGES : grade one boot of b5b2-spectest-2026-11-25 Amendment 1's chain (runtime/b5b2-linux
+---
+> """grade-spec-chain-v2.py UART_TXT OUTDIR STAGES : grade-spec-chain.py (4fa95eaf) plus INBAND, below; its header follows.
+> grade-spec-chain.py UART_TXT OUTDIR STAGES : grade one boot of b5b2-spectest-2026-11-25 Amendment 1's chain (runtime/b5b2-linux
+17c18,27
+<      e7b3046cf5e8, "data_hash_verdict EQUAL"; the reference reads the same on the Full and spatial-only twins)."""
+---
+>      e7b3046cf5e8, "data_hash_verdict EQUAL"; the reference reads the same on the Full and spatial-only twins).
+>  INBAND (v2; the console-interleave hazard the runtime lane raised 2026-11-26 from nested-corpus, nested-workloads 0e8089933116):
+>      on the slow UART a kernel printk ("[ <t>] ...") or a TRAPTEST line can land inside an @@SPEC-FILE base64 block or an
+>      @@SPEC-HASH block, as a whole line or mid-line. run-stage.py's reader then raises on the base64/gzip decode (the stage
+>      read MISS that protection did not cause), and a mid-line splice in a hash line silently truncates that file's hash.
+>      Inside those blocks only, every "[ <t>] ...\n" and "TRAPTEST: ...\n" is removed with its newline, so a split line
+>      rejoins; the stage's step.txt is the result, step.raw.txt its slice as captured, and "INBAND <stage>: k interleaved
+>      line(s) removed" is printed (nothing is printed when k = 0, so a clean capture grades byte-identically). A line still
+>      not base64 inside a file block (or not "<64 hex>  <name>" inside a hash block) makes the stage NO READING (unreadable
+>      in-band block), never MISS. gzip's CRC32 checks every decoded file."""
+26a37,45
+> IB_LINE = re.compile(r'(?:\[ *\d+\.\d+\] |TRAPTEST: )[^\n]*\n')
+> B64 = re.compile(r'[A-Za-z0-9+/]+={0,2}'); HL = re.compile(r'[0-9a-f]{64}  \S.*')
+> def inband_clean(body):   # (cleaned body, lines removed, residual foreign lines)
+>     out, k, bad, i = [], 0, [], 0
+>     for m in re.finditer(r'^(@@SPEC-FILE [^\n]*\n|@@SPEC-HASH-BEGIN (\S+)\n)(.*?)^(@@SPEC-FILE-END$|@@SPEC-HASH-END \2$)', body, re.M | re.S):
+>         out.append(body[i:m.start(3)]); blk, n = IB_LINE.subn('', m.group(3)); k += n; out.append(blk); i = m.end(3)
+>         pat = B64 if m.group(1).startswith('@@SPEC-FILE ') else HL
+>         bad += [l for l in blk.split('\n') if l and not pat.fullmatch(l)]
+>     out.append(body[i:]); return ''.join(out), k, bad
+71c90,93
+<     d = out / n; d.mkdir(exist_ok=True); (d / 'step.txt').write_text(body)
+---
+>     d = out / n; d.mkdir(exist_ok=True)
+>     cb, k, bad = inband_clean(body)
+>     if k or bad: (d / 'step.raw.txt').write_text(body); print(f'INBAND {n}: {k} interleaved line(s) removed' + (f'; {len(bad)} foreign line(s) remain: {bad[0][:100]!r}' if bad else ''))
+>     body = cb; (d / 'step.txt').write_text(body)
+77a100
+>     if bad: res.append((n, 'NO READING', f'unreadable in-band block: {len(bad)} foreign line(s) after removing {k} interleaved', [])); continue

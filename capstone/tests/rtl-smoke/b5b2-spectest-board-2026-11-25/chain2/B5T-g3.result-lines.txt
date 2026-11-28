@@ -1,0 +1,22 @@
+# chain 2 image B5T-g3 (board 3, 904cd9c6b), from its capture and its grade; result lines only
+
+## grade
+capture: 10577 chars; OpenSBI banner present; Run /init present
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5T-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 7.13 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5T-502.gcc_r begin
+  TRAPTEST: stage B5T-502.gcc_r rc=0
+B5B2-SPECCHAIN C=ok B5T-502.gcc_r=PASS done=yes
+
+## end lines
+okTRAPTEST: control smoke.dom rc=7
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=44.71 up1=51.84 sys=0,0,0 nbench=0  :: 
+@@QSTEP-END B5T-502.gcc_r rc=0
+
+## kernel fault lines
+(none)
+
+## mapfaults.py (vaddr = pc - entry + 0x10000; the faulting instruction is marked >, the window runs from 20 bytes before it to 6 after)
+no fault lines

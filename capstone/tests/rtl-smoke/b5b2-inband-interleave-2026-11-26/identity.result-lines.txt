@@ -1,0 +1,16 @@
+# identity: v1 (grade-spec-chain.py 4fa95eaf) and v2 (grade-spec-chain-v2.py b976d288) on every real SPEC capture graded so far, outputs compared byte for byte (the grade directory's path normalised)
+r77b3-20261125T1706-B5T-g2b uart a9213eb00fc4c980 | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5T-538.imagick_r=PASS B5T-525.x264_r=NO READING done=yes
+r77b3-20261125T1706-B5TL0-g2b uart 7d780b138c60b8f5 | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5TL0-538.imagick_r=PASS B5TL0-525.x264_r=NO READING done=NO
+r77b3-20261125T1706-B5TL1-g2b uart 7e82eba94087df5c | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS B5TL1-525.x264_r=NO READING done=NO
+r77b3-20261125T1706-B5T-g3 uart 57555b2a4d4941fc | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5T-502.gcc_r=PASS done=yes
+r77b3-20261125T1706-B5TL0-g3 uart f524e665281120ed | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5TL0-502.gcc_r=PASS done=yes
+r77b3-20261125T1706-B5TL1-g3 uart f162859384c018fd | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+r77b3-20261125T1706-B5T-g1b uart 04869b4bb72c38de | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5T-519.lbm_r=PASS B5T-544.nab_r=PASS B5T-557.xz_r=PASS B5T-505.mcf_r=PASS done=yes
+r77b2-20261125T1832-B5T-g2b uart 7f639b2d683cfce9 | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5T-538.imagick_r=PASS B5T-525.x264_r=NO READING done=NO
+r77b2-20261125T1832-B5TL0-g2b uart 8a9c8f09bde07f40 | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5TL0-538.imagick_r=PASS B5TL0-525.x264_r=NO READING done=NO
+r77b2-20261125T1832-B5TL1-g2b uart ea18cfd24451aa63 | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS B5TL1-525.x264_r=NO READING done=NO
+spb1d-20261126T0521-SP-B5TL1-g2i uart 9744a3f18ed7180a | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS done=yes
+spb1d-20261126T0521-SP-B5TL1-g3 uart 938159537dd1b64e | IDENTICAL | verdicts equal | B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+spb1d-20261126T0521-SP-B5TL1-g4mk uart 19ac5f19b7cfb21d | DIFFER: > INBAND B5TL1-500.perlbench_r: 2 interleaved line(s) removed  | verdicts equal | B5B2-SPECCHAIN C=ok B5TL1-500.perlbench_r=PASS done=yes
+b3chain2-20261125T0716-B5T-g2 uart 55b8b1c290c4c8eb | DIFFER: > INBAND B5T-525.x264_r: 9 interleaved line(s) removed  | verdicts equal | B5B2-SPECCHAIN C=ok B5T-525.x264_r=MISS B5T-538.imagick_r=MISS done=yes
+twin run-sptwin2-x264b boot.log 86f501c539223e39 | > INBAND B5TL1-525.x264_r: 1 interleaved line(s) removed  | verdicts equal | B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=PASS done=yes

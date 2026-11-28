@@ -1,0 +1,56 @@
+# chain 2 image B5TL1-g2 (board 3, 904cd9c6b), from its capture and its grade; result lines only
+
+## grade
+capture: 14388 chars; OpenSBI banner present; Run /init present
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-525.x264_r MISS: QSTEP rc=0; read rc=1
+    READ 525.x264_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 1, hashes 10, in-band 2, specdiff 0/3 PASS
+    run0: rc 139 113.21 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    specdiff NO-OUTPUT ['imagevalidate_frame_100.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_100.out imagevalidate_frame_100.out :: (specdiff tail omitted: it quotes local paths)
+    specdiff NO-OUTPUT ['imagevalidate_frame_155.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_155.out imagevalidate_frame_155.out :: (specdiff tail omitted: it quotes local paths)
+    specdiff NO-OUTPUT ['imagevalidate_frame_50.out']: SPEC/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_50.out imagevalidate_frame_50.out :: (specdiff tail omitted: it quotes local paths)
+S B5TL1-538.imagick_r MISS: QSTEP rc=0; read rc=1
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 2, hashes 7, in-band 4, specdiff 0/1 PASS
+    run0: rc 139 1.06 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    specdiff FAIL: SPEC/benchspec/CPU/538.imagick_r/data/test/output/test_validate.out test_validate.out :: (specdiff tail omitted: it quotes local paths)
+  TRAPTEST: stage B5TL1-525.x264_r begin
+  TRAPTEST: stage B5TL1-525.x264_r rc=0
+  TRAPTEST: stage B5TL1-538.imagick_r begin
+  TRAPTEST: stage B5TL1-538.imagick_r rc=0
+B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=MISS B5TL1-538.imagick_r=MISS done=yes
+
+## end lines
+okTRAPTEST: control smoke.dom rc=7
+@@SPEC-END 0 gen capstone-lifetimes 0 rc=0 up0=37.00 up1=2163.81 sys=0,0,0 nbench=0  :: 
+@@SPEC-END 1 run capstone-lifetimes 0 rc=139 up0=2170.26 up1=2283.47 sys=0,0,0 nbench=0  :: 
+@@QSTEP-END B5TL1-525.x264_r rc=0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=139 up0=3370.42 up1=3371.48 sys=0,0,0 nbench=0  :: 
+@@SPEC-END 1 val capstone-lifetimes 0 rc=255 up0=3377.80 up1=3378.26 sys=0,0,0 nbench=0  :: 
+@@QSTEP-END B5TL1-538.imagick_r rc=0
+
+## kernel fault lines
+sublet: fault cause=24 pc=0x3ff7c3babe address=0x0 pid=191 comm=imagick_r_base. ra=0x3ff7c3b4da fp=0x8 entry=0x3ff7c00000 code=0x3ff7c00000-0x3ff7dec000
+sublet: fault cause=24 pc=0x3ff7e3a3e2 address=0x0 pid=109 comm=x264_r_base.nat ra=0x3ff7e345ea fp=0x3ff7df8920 entry=0x3ff7e00000 code=0x3ff7e00000-0x3ff7e99000
+
+## mapfaults.py (vaddr = pc - entry + 0x10000; the faulting instruction is marked >, the window runs from 20 bytes before it to 6 after)
+fault cause=24 pid=109 comm=x264_r_base.nat pc=0x3ff7e3a3e2 ra=0x3ff7e345ea address=0x0 code 0x3ff7e00000-0x3ff7e99000
+  image 525.x264_r/stage/bin/native/x264_r_base.native f686fe9679b04d69: pc vaddr 0x4a3e2, ra vaddr 0x445ea
+    4a3ce: 3e 97        	add	a4, a4, a5
+    4a3d0: db 16 dd 18  	cincoffset	a3, s10, a3
+    4a3d4: db b6 06 00  	ldc	a3, 0x0(a3)
+    4a3d8: db 98 e7 02  	shrink	a7, a5, a4
+    4a3dc: 09 67        	lui	a4, 0x2
+    4a3de: 93 97 4b 00  	slli	a5, s7, 0x4
+  > 4a3e2: db 96 46 19  	cincoffset	a3, a3, s4
+    4a3e6: 5b 48 d8 00  	stc	a3, 0x10(a6)
+fault cause=24 pid=191 comm=imagick_r_base. pc=0x3ff7c3babe ra=0x3ff7c3b4da address=0x0 code 0x3ff7c00000-0x3ff7dec000
+  image 538.imagick_r/stage/bin/native/imagick_r_base.native a666e331f10d73cc: pc vaddr 0x4babe, ra vaddr 0x4b4da
+    4baaa: 49 00        	c.nop	0x12
+    4baac: 2e 76        	ld	a2, 0xe8(sp)
+    4baae: 5b 16 cb 18  	cincoffset	a2, s6, a2
+    4bab2: 11 a8        	j	0x4bac6 <.text+0x3bac6>
+    4bab4: 81 40        	li	ra, 0x0
+    4bab6: 23 10 15 00  	sh	ra, 0x0(a0)
+    4baba: 5b 2b 8b 00  	cincoffsetimm	s6, s6, 0x8
+  > 4babe: 5b 25 25 00  	cincoffsetimm	a0, a0, 0x2
+    4bac2: 63 0a cb 04  	beq	s6, a2, 0x4bb16 <.text+0x3bb16>

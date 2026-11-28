@@ -1,0 +1,18 @@
+# a stubbed dry run (board-run rule 8), kept beside the pre-registrations
+2026-11-25T16:52:34Z armed
+2026-11-25T16:53:34Z the b42c8c644 full chain ended
+2026-11-25T16:53:34Z gates PASS: seal a5c45a46d sha 9b46b14fb6252873; plan ARMED dry (sha16 51b0fcff64d9c837)
+2026-11-25T16:53:35Z crevoke4b: kit rc=0  C4BKIT cand VOID: a readback does not name -wap-flu-r80-r77_b42c8c644.bit; the sublet-life control reads VOID IMAGE
+2026-11-25T16:53:52Z n-armed: 52 RUN END rc=0 [lx 00:53:52] end: TRAPTEST: done seen; 8932 chars 52 GRADE rc=0 B5B2-LINUX-3 P1=ok P2=ok P3=ok P4=ok 
+2026-11-25T16:53:52Z n-late: SKIPPED here, not armed (<path>/b5b2linux/dryr77/n-late.armed absent)
+2026-11-25T16:53:52Z n-bad: SKIPPED, the image's sha256 differs from its arming file (<path>/b5b2linux/dryr77/n-bad.armed): NOT RUN, the session goes on
+2026-11-25T16:53:52Z n-none: SKIPPED here, not armed (<path>/b5b2linux/dryr77/n-none.armed absent)
+2026-11-25T16:54:10Z B5T-g1b: 10 RUN END rc=0 [lx 00:54:10] end: TRAPTEST: done seen; 19636 chars 10 GRADE rc=2 ERROR stage 1B5T-519.lbm_r is not in the expected list ['B5T-519.lbm_r', 'B5T-544.nab_r', 'B5T-557.xz_r', 'B5T-505.mcf_r'] 
+2026-11-25T16:54:10Z B5T-g1b c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-25T16:54:10Z B5T-g1b mcf: ERROR no mcf entry in <path>/b5b2linux/dryr77/o-B5T-g1b/uart.txt; 
+2026-11-25T16:54:11Z ldcexc2: kit rc=0  LDCKIT fixed VOID BOOT: a readback does not name -wap-flu-r80-r77_b42c8c644.bit: ['caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrink
+2026-11-25T16:54:11Z n-armed: already run; skipped here
+2026-11-25T16:54:28Z n-late: 28 RUN END rc=0 [lx 00:54:28] end: TRAPTEST: done seen; 8932 chars 28 GRADE rc=0 B5B2-LINUX-3 P1=ok P2=ok P3=ok P4=ok 
+2026-11-25T16:54:28Z n-bad: SKIPPED, the image's sha256 differs from its arming file (<path>/b5b2linux/dryr77/n-bad.armed): NOT RUN, the session goes on
+2026-11-25T16:54:28Z n-none: SKIPPED here, not armed (<path>/b5b2linux/dryr77/n-none.armed absent)
+2026-11-25T16:54:28Z SESSION END

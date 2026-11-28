@@ -1,0 +1,25 @@
+capture: 154 lines, 8741 chars
+line 2: OpenSBI v1.3
+P1 AS PREDICTED: Capstone keep-tags line at line 12
+P2 AS PREDICTED: Boot HART MEDELEG = 0x000000007f00b109
+  Boot HART MIDELEG         : 0x0000000000000222
+  Boot HART ISA Extensions  : none
+  Platform Name             : ARIANE RISC-V
+line 59: Linux banner present
+P3 AS PREDICTED: Run /init at line 139; sublet line before it; captag line before it; loader-registered line before it
+  sublet: 63-bit Sublet format, exact bounds 0
+  captag: bulk=0 (requires firmware S-mode CBZE permission)
+  sublet: .dom loader registered
+P4 DIFFERS FROM THE TWIN (a known failure, not a pass):
+  TRAPTEST: up, kernel 6.1.0
+  TRAPTEST: regs status 0
+  TRAPTEST: enter status 200
+  TRAPTEST: loop alive
+  TRAPTEST: done
+
+B5B2-LINUX P1=ok P2=ok P3=ok P4=MISS
+
+kernel lines between TRAPTEST lines (from the capture):
+[   21.959494] sublet: test loader: pid 26 protected, table 0x81c5e000
+[   43.569447] sublet: test loader: pid 27 protected, table 0x81c58000
+[   45.880424] reboot: System halted

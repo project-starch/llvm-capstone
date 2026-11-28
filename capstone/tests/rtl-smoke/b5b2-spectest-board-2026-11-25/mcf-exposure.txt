@@ -1,0 +1,8 @@
+# mcf exposure on silicon (mcf-exposure.py): entry = the kernel time of mcf_r_base's "enters" line; end = fault, watchdog
+# (entry + the stage bound), stage end, or the last kernel time before a silence. For the rtl lane's per-second wedge rate.
+# boot 5's wedge fell in the 120 s after its last tick, so its exposure is a lower bound.
+
+boot5                  board 3 904cd9c6b  mcf entry     33.26 s  end   2799.49 s  exposure   2766.2 s  SILENCE (a wedge at or after the last kernel time)
+B5T-g1r-b2             board 2 88db40027  mcf entry   4731.63 s  end   8331.63 s  exposure   3600.0 s  watchdog at 3600 s (no wedge)
+B5T-g1r-b3             board 3 904cd9c6b  mcf entry   4731.97 s  end   8331.97 s  exposure   3600.0 s  watchdog at 3600 s (no wedge)
+pooled: 9,966.2 s of mcf, 1 wedge(s)

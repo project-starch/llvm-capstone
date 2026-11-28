@@ -1,0 +1,61 @@
+# scan-inband.py a0f8467d over every board SPEC capture graded so far and the +Spatial twin's x264b log (2026-11-26)
+INBAND <mnt-hdd>/capstone/b5b2linux/b2diag-20261125T1231-B5T-g1b/uart.txt blocks 31/4 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/b2diag-20261125T1231-B5T-g2/uart.txt blocks 4/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/b2diag-20261125T1231-B5TL0-g2/uart.txt blocks 4/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/b2diag-20261125T1231-B5TL1-g2/uart.txt blocks 4/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/b3chain2-20261125T0716-B5T-g2/uart.txt blocks 6/2 foreign 9
+    HASH line 178: TRAPTEST: tick 2321.54
+    HASH line 179: TRAPTEST: tick 2442.09
+    HASH line 180: TRAPTEST: tick 2562.64
+    HASH line 181: TRAPTEST: tick 2683.19
+    HASH line 182: TRAPTEST: tick 2803.73
+    HASH line 183: TRAPTEST: tick 2924.28
+    HASH line 184: TRAPTEST: tick 3044.83
+    HASH line 185: TRAPTEST: tick 3165.38
+    HASH line 186: TRAPTEST: tick 3285.94
+INBAND <mnt-hdd>/capstone/b5b2linux/b3chain2-20261125T0716-B5T-g3/uart.txt blocks 3/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/b3chain2-20261125T0716-B5T-g4/uart.txt blocks 0/0 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/b3chain2-20261125T0716-B5TL0-g2/uart.txt blocks 6/2 foreign 9
+    HASH line 178: TRAPTEST: tick 2320.93
+    HASH line 179: TRAPTEST: tick 2441.47
+    HASH line 180: TRAPTEST: tick 2562.01
+    HASH line 181: TRAPTEST: tick 2682.56
+    HASH line 182: TRAPTEST: tick 2803.10
+    HASH line 183: TRAPTEST: tick 2923.65
+    HASH line 184: TRAPTEST: tick 3044.20
+    HASH line 185: TRAPTEST: tick 3164.73
+    HASH line 186: TRAPTEST: tick 3285.26
+INBAND <mnt-hdd>/capstone/b5b2linux/b3chain2-20261125T0716-B5TL0-g3/uart.txt blocks 3/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/b3chain2-20261125T0716-B5TL1-g2/uart.txt blocks 6/2 foreign 9
+    HASH line 178: TRAPTEST: tick 2321.04
+    HASH line 179: TRAPTEST: tick 2441.59
+    HASH line 180: TRAPTEST: tick 2562.14
+    HASH line 181: TRAPTEST: tick 2682.68
+    HASH line 182: TRAPTEST: tick 2803.22
+    HASH line 183: TRAPTEST: tick 2923.78
+    HASH line 184: TRAPTEST: tick 3044.32
+    HASH line 185: TRAPTEST: tick 3164.86
+    HASH line 186: TRAPTEST: tick 3285.41
+INBAND <mnt-hdd>/capstone/b5b2linux/b3chain2-20261125T0716-B5TL1-g3/uart.txt blocks 3/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/b3chain3-20261125T1145-B5T-g1r/uart.txt blocks 4/2 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/b3chain5-20261125T1210-B5TL0-g1b/uart.txt blocks 28/3 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b2-20261125T1832-B5T-g2b/uart.txt blocks 4/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b2-20261125T1832-B5TL0-g2b/uart.txt blocks 4/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b2-20261125T1832-B5TL1-g2b/uart.txt blocks 4/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b3-20261125T1706-B5T-g1b/uart.txt blocks 31/4 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b3-20261125T1706-B5T-g2b/uart.txt blocks 4/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b3-20261125T1706-B5T-g3/uart.txt blocks 3/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b3-20261125T1706-B5TL0-g1b/uart.txt blocks 28/3 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b3-20261125T1706-B5TL0-g2b/uart.txt blocks 4/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b3-20261125T1706-B5TL0-g3/uart.txt blocks 3/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b3-20261125T1706-B5TL1-g2b/uart.txt blocks 4/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/r77b3-20261125T1706-B5TL1-g3/uart.txt blocks 3/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/spb1d-20261126T0521-SP-B5TL1-g2i/uart.txt blocks 4/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/spb1d-20261126T0521-SP-B5TL1-g3/uart.txt blocks 3/1 foreign 0
+INBAND <mnt-hdd>/capstone/b5b2linux/spb1d-20261126T0521-SP-B5TL1-g4mk/uart.txt blocks 2/1 foreign 2
+    HASH line 268: TRAPTEST: tick 399.24
+    HASH line 668: TRAPTEST: tick 519.80
+INBAND <mnt-hdd>/capstone/trapk/run-sptwin2-x264b/boot.log blocks 2/1 foreign 1
+    HASH line 394: TRAPTEST: tick 5043.31
+
+SCAN-INBAND captures 28, with a foreign line 5

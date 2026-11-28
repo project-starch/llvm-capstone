@@ -1,0 +1,64 @@
+--- scan-c25ldc.py.old
++++ scan-c25ldc.py
+@@ -3,26 +3,49 @@
+ stage, is mapped by mapfaults.py to its instruction. A cause 25 at an `ldc` is a FINDING against the PRE fix (or a new
+ mechanism): it is mapped and reported, NOT classified as R-77. Whether the object was live is not visible on the board,
+ so every such fault is reported, with its stage. Cause 25 elsewhere is listed as "cause 25, not at an LDC". Prints
+-C25LDC NONE / C25LDC FINDING (n) / C25LDC NO DATA (the capture is missing or empty)."""
++C25LDC NONE / C25LDC FINDING (n) / C25LDC NO DATA (the capture is missing or empty).
++2026-11-26 (the runtime lane): a fault line is matched ANYWHERE in a line, not only at its start, because the slow console
++splices printk into program output ("CONTROL uaf-mem5[ 2243.33] sublet: fault cause=25 ..."). The anchored match missed 10 of
++nested-corpus's 150 events. Every event is also echoed by the stage's "TRAPTEST: dmesg [t] ..." dump, so events are de-duplicated
++by (timestamp, pid, pc) and placed at their first occurrence. "sublet: kernel fault cause=25" (a fault taken in a syscall,
++nr=<syscall>) is listed apart, by (timestamp, pid); it is not an LDC and never a FINDING. Positive control: nested-corpus's capture
++gives 150 events and 2 kernel faults; the old anchored match gave 140 and 0.
++Also 2026-11-26: a fault whose instruction mapfaults.py cannot map is "NOT MAPPED", never "not at an LDC", and makes the
++verdict C25LDC NO READING (exit 3) unless a FINDING exists; each fault reads only its OWN block of mapfaults' output (keyed by
++pid and pc, ending at the next block). Before, an unmapped fault printed "not at an LDC" with a NONE verdict, and a block ran
++on into the next fault's disassembly."""
+ import os, re, subprocess, sys
+ X = os.path.dirname(os.path.abspath(__file__))
+ p, arm = sys.argv[1:3]
+ try: t = open(p, errors='replace').read().replace('\r', '')
+ except OSError as e: print(f'C25LDC NO DATA: {e}'); sys.exit(2)
+ if not t.strip(): print('C25LDC NO DATA: empty capture'); sys.exit(2)
+-stages = [(m.start(), m.group(1)) for m in re.finditer(r'^@@QSTEP-BEGIN (\S+)$', t, re.M)]
++stages = [(m.start(), m.group(1)) for m in re.finditer(r'@@QSTEP-BEGIN (\S+)', t)]
+ def stage_at(i): return ([n for s, n in stages if s <= i] or ['(before any stage)'])[-1]
+-fl = [(m.start(), m.group(1), m.group(2)) for m in re.finditer(r'^\[ *[0-9.]+\] (sublet: fault cause=25 pc=(0x[0-9a-f]+)[^\n]*)$', t, re.M)]
+-if not fl: print('C25LDC NONE: no cause-25 fault in the capture'); sys.exit(0)
++seen = {}; kseen = {}
++for m in re.finditer(r'\[ *([0-9.]+)\] (sublet: fault cause=25 pc=(0x[0-9a-f]+)[^\n]*)', t):
++    pid = re.search(r'pid=(\d+)', m.group(2)); seen.setdefault((m.group(1), pid.group(1) if pid else '?', m.group(3)), (m.start(), m.group(2), m.group(3)))
++for m in re.finditer(r'\[ *([0-9.]+)\] (sublet: kernel fault cause=25 [^\n]*)', t):
++    pid = re.search(r'pid=(\d+)', m.group(2)); kseen.setdefault((m.group(1), pid.group(1) if pid else '?'), (m.start(), m.group(2)))
++fl = sorted(seen.values()); kf = sorted(kseen.values())
++print(f'events: {len(fl)} sublet-fault cause-25 event(s), de-duplicated by (timestamp, pid, pc); {len(kf)} kernel fault(s) cause 25')
++for pos, line in kf: print(f'cause 25 in the kernel (a syscall), not at an LDC: stage {stage_at(pos)}: {line[:160]}')
++if not fl: print('C25LDC NONE: no cause-25 fault in the capture' if not kf else f'C25LDC NONE at an LDC (no user cause-25 fault; {len(kf)} kernel fault(s), listed above)'); sys.exit(0)
+ mp = subprocess.run([sys.executable, '-I', f'{X}/mapfaults.py', p, arm], capture_output=True, text=True).stdout
+-find = 0
++find = unm = 0
++hdr = [(m.start(), int(m.group(1)), int(m.group(2), 16)) for m in re.finditer(r'^fault cause=25 pid=(\d+) comm=\S+ pc=(0x[0-9a-f]+)', mp, re.M)]
+ for pos, line, pc in fl:
+-    pid = re.search(r'pid=(\d+)', line).group(1)
+-    blk = mp[mp.find(f'pid={pid} '):] if f'pid={pid} ' in mp else ''
++    # this fault's own block of mapfaults' output: from its header (pid AND pc) to the next header, never past it
++    pm = re.search(r'pid=(\d+)', line); pid = int(pm.group(1)) if pm else -1
++    hs = [k for k, (h, hp, hpc) in enumerate(hdr) if hp == pid and hpc == int(pc, 16)]
++    blk = mp[hdr[hs[0]][0]:(hdr[hs[0] + 1][0] if hs[0] + 1 < len(hdr) else len(mp))] if hs else ''
+     ins = re.search(r'^\s+>\s+([0-9a-f]+):\s+(?:[0-9a-f]{2} )+\s*(\S+)(.*)$', blk, re.M)
+     at = f'vaddr 0x{ins.group(1)} {ins.group(2)}{ins.group(3).rstrip()}' if ins else 'NOT MAPPED'
+-    is_ldc = bool(ins and ins.group(2) == 'ldc'); find += is_ldc
+-    print(f"{'FINDING' if is_ldc else 'cause 25, not at an LDC'}: stage {stage_at(pos)}: {line[:160]}  ->  {at}")
+-print(f'\nC25LDC ' + (f'FINDING ({find}): cause 25 at an LDC on b42c8c644 -- against the PRE fix or a new mechanism; mapped, not classified as R-77' if find else
+-                     f'NONE at an LDC ({len(fl)} cause-25 fault(s) elsewhere, listed above)'))
+-sys.exit(1 if find else 0)
++    is_ldc = bool(ins and ins.group(2) == 'ldc'); find += is_ldc; unm += not ins
++    print(f"{'FINDING' if is_ldc else 'cause 25, NOT MAPPED (no reading of its instruction)' if not ins else 'cause 25, not at an LDC'}: stage {stage_at(pos)}: {line[:160]}  ->  {at}")
++kn = f', {len(kf)} kernel fault(s)' if kf else ''
++if find: v = f'FINDING ({find}): cause 25 at an LDC on b42c8c644 -- against the PRE fix or a new mechanism; mapped, not classified as R-77' + (f'; {unm} more NOT MAPPED' if unm else '')
++elif unm: v = f'NO READING: {unm} of {len(fl)} cause-25 fault(s) NOT MAPPED to an instruction, so "not at an LDC" is not established for them{kn}; listed above'
++else: v = f'NONE at an LDC ({len(fl)} cause-25 fault(s) elsewhere{kn}, listed above)'
++print(f'\nC25LDC {v}')
++sys.exit(1 if find else 3 if unm else 0)

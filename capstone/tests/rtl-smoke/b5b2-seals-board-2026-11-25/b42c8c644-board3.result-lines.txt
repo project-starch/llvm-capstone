@@ -1,0 +1,577 @@
+# board 3, the b42c8c644 (final candidate) session (orch-r77.sh), cut at 2026-11-26T07:27:45Z while the session runs on (later steps follow in a later record)
+# its first boots are the seal's silicon Tier 1 kits: b5b2n (the flash), crevoke4b, wapflu, graded against the simulated vectors of
+# fca456c2aad8 (b5b2n) and 1258f0833b60 (crevoke4b, wapflu), which the r77 graders re-check at grade time
+
+## session log
+2026-11-25T17:06:33Z armed
+2026-11-25T17:42:34Z the b42c8c644 full chain ended
+2026-11-25T17:44:35Z gates PASS: seal b42c8c644 sha 6a09f34d50842e01; plan ARMED by the board lane after reading every pin below (sha16 f23df18660a54639)
+2026-11-25T18:08:57Z b5b2n: kit rc=0 51 FLASH END caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynb 52 READBACK after flash = caplifive_ids55-native-tagcache-mlp-fpieee-h  B5B2N-KIT 21/21 AS PREDICTED
+2026-11-25T18:26:48Z crevoke4b: kit rc=0  C4BKIT cand 16/16 AS PREDICTED; 
+2026-11-25T18:28:25Z wapflu: kit rc=0  WFKIT cand 1/1 AS PREDICTED; 
+2026-11-25T18:28:30Z nested-corpus: SKIPPED here, not armed (<path>/b5b2linux/nested-corpus.armed absent)
+2026-11-25T18:28:30Z nested-cpymem: SKIPPED here, not armed (<path>/b5b2linux/nested-cpymem.armed absent)
+2026-11-25T18:33:26Z boot3: 26 RUN END rc=0 [lx 02:33:25] end: TRAPTEST: done seen; 9088 chars 26 GRADE rc=0 B5B2-LINUX-3 P1=ok P2=ok P3=ok P4=ok 
+2026-11-25T22:39:24Z B5T-g2b: 23 RUN END rc=0 [lx 06:39:23] end: TRAPTEST: done seen; 15044 chars 24 GRADE rc=1 B5B2-SPECCHAIN C=ok B5T-538.imagick_r=PASS B5T-525.x264_r=NO READING done=yes 
+2026-11-25T22:39:24Z B5T-g2b c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-25T22:45:32Z B5TL0-g2b: 32 RUN END rc=5 [lx 06:45:31] end: STOPPED by the STOP file; 11591 chars 32 GRADE rc=1 B5B2-SPECCHAIN C=ok B5TL0-538.imagick_r=PASS B5TL0-525.x264_r=NO READING done=NO 
+2026-11-25T22:45:32Z B5TL0-g2b c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-25T22:51:32Z B5TL1-g2b: 32 RUN END rc=5 [lx 06:51:31] end: STOPPED by the STOP file; 11591 chars 32 GRADE rc=1 B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS B5TL1-525.x264_r=NO READING done=NO 
+2026-11-25T22:51:32Z B5TL1-g2b c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-25T22:57:11Z B5T-g3: 10 RUN END rc=0 [lx 06:57:07] end: TRAPTEST: done seen; 10762 chars 11 GRADE rc=0 B5B2-SPECCHAIN C=ok B5T-502.gcc_r=PASS done=yes 
+2026-11-25T22:57:11Z B5T-g3 c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-25T23:02:48Z B5TL0-g3: 47 RUN END rc=0 [lx 07:02:46] end: TRAPTEST: done seen; 10771 chars 48 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL0-502.gcc_r=PASS done=yes 
+2026-11-25T23:02:48Z B5TL0-g3 c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-25T23:08:35Z B5TL1-g3: 34 RUN END rc=0 [lx 07:08:32] end: TRAPTEST: done seen; 10771 chars 35 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes 
+2026-11-25T23:08:35Z B5TL1-g3 c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T03:01:26Z B5T-g1b: 24 RUN END rc=0 [lx 11:01:23] end: TRAPTEST: done seen; 33643 chars 26 GRADE rc=0 B5B2-SPECCHAIN C=ok B5T-519.lbm_r=PASS B5T-544.nab_r=PASS B5T-557.xz_r=PASS B5T-505.mcf_r=PASS done=yes 
+2026-11-26T03:01:26Z B5T-g1b c25: C25LDC NONE: no cause-25 fault in the capture
+2026-11-26T03:01:26Z B5T-g1b mcf: MCF COMPLETED: no mcf fault; consistent with R-80, not evidence for it (Amendment 8); exposure: mcf entry   6866.38 s  end  13710.67 s  exposure   6844.3 s  stage ended rc=0
+2026-11-26T04:59:48Z B5TL0-g1b: 47 RUN END rc=0 [lx 12:59:46] end: TRAPTEST: done seen; 30221 chars 48 GRADE rc=0 B5B2-SPECCHAIN C=ok B5TL0-519.lbm_r=PASS B5TL0-544.nab_r=PASS B5TL0-557.xz_r=PASS done=yes 
+2026-11-26T04:59:48Z B5TL0-g1b c25: C25LDC NONE: no cause-25 fault in the capture
+
+## b5b2n
+-- b5b2-cptag-diag (grade-diag.py) --
+01-sublet-life-r1          AS PREDICTED      SR [35]
+15-b5b2-cptag-r1           AS PREDICTED      SR [24]; position 22 (reading 21) = 1
+23-b5b2-cptag-diag-r1      H-fetch           raw 22-28: 1 | cold 4 4 | warm 4 4 flag 1 | miss 43 (warm delta 0; half the miss scale 19.5)
+
+DIAG wap-flu-r80-r77_b42c8c644: control exact; diag loads ['H-fetch']
+-- the 22 graded images (grade-b5b2nkit-l.py) --
+readback: caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit | after loads: caplifive_…-r75d-b5b2n-crev4b-wap-flu-r80-r77_b42c8c644.bit
+01-sublet-life-r1            AS PREDICTED      SR 35; ungraded positions 25-34: 0x0 0x200000000 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0
+02-b5b2-illegal-r1           AS PREDICTED      SR 76
+03-b5b2-illegal-runv-r1      AS PREDICTED      SR 4
+04-b5b2-illegal-csup-r1      AS PREDICTED      SR 46
+05-b5b2-uprot-r1             AS PREDICTED      SR 19
+06-b5b2-uprot-mis-r1         AS PREDICTED      SR 23
+07-b5b2-rule2-r1             AS PREDICTED      SR 14
+08-b5b2-rule2-pair-r1        AS PREDICTED      SR 21
+09-b5b2-sref-r1              AS PREDICTED      SR 20
+10-b5b2-sref-gen-r1          AS PREDICTED      SR 20
+11-b5b2-scratch-r1           AS PREDICTED      SR 54
+12-b5b2-mwrite-r1            AS PREDICTED      SR 8
+13-b5b2-raw-r1               AS PREDICTED      SR 38
+14-b5b2-rawlcc-r1            AS PREDICTED      SR 5
+15-b5b2-cptag-r1             AS PREDICTED      SR 24
+16-b5b2-cptag2-r1            AS PREDICTED      SR 13
+17-b5b2-nsedge-r1            AS PREDICTED      SR 17
+18-b5b2-ctxport-f4-r1        AS PREDICTED      SR 6
+19-b5b2-ctxport-f4ctl-r1     AS PREDICTED      SR 6
+20-b5b2-ctxport-widelo-r1    AS PREDICTED      SR 6
+21-b5b2-ctxport-widehi-r1    AS PREDICTED      SR 6
+22-b5b2-ctxport-edgem-r1     AS PREDICTED      SR 6
+
+control sublet-life AS PREDICTED on its graded positions
+B5B2N-KIT 21/21 AS PREDICTED
+
+## crevoke4b
+01-sublet-life           AS PREDICTED           
+02-b5b2-crevint          AS PREDICTED           recorded p2=0x14a1
+03-b5b2-crevint-mt       AS PREDICTED           recorded p2=0x1761 p8=0x5 p9=0x5
+04-b5b2-crevint-sh       AS PREDICTED           recorded p2=0x1ac0 p4=0x100000047 p5=0x800000cf p8=0x2 p9=0x2 p10=0x1 p11=0x9227b3d4c7c6bfb1
+05-b5b2-crevint-lat      AS PREDICTED           latency band PASS: lat [1222, -119, 565, -130, 565, -130, 0, 0] ticks; cycles/ticks 30062/15031; positive after the first in cycles [(2, 1130), (4, 1130)] (bound 15,000; first 1222 recorded); recorded p2=0x1a23 p8=0x6 p9=0x6 p13=0x4c6 p14=0xffffffffffffff89 p15=0x235 p16=0xffffffffffffff7e p17=0x235
+06-b5b2-crevsv-none      AS PREDICTED           recorded p2=0x1a24 p8=0x6 p9=0x6 p10=0x3
+07-b5b2-crevsv-srev      AS PREDICTED           recorded p2=0x1f6e p8=0x6 p9=0x6 p10=0x3
+08-b5b2-crevsv-straw     AS PREDICTED           recorded p2=0x1f2f p8=0x6 p9=0x6 p10=0x3
+09-b5b2-crevsv-derive    AS PREDICTED           recorded p2=0x1ffa p4=0x800000cf p5=0x800000ce p8=0x6 p9=0x4 p10=0x3 p11=0xd443b2166d8185e1
+10-b5b2-crevsv-kill      AS PREDICTED           recorded p2=0x1d6e p3=0x80000008 p4=0x800000d0 p5=0x800000cf p8=0x6 p9=0x4 p10=0x3 p11=0x5323b3b7586ffcf6
+11-b5b2-sbdrain-none     AS PREDICTED           
+12-b5b2-sbdrain-fill     AS PREDICTED           
+13-b5b2-sbdrain-fence    AS PREDICTED           
+14-b5b2-sbdrain-mint     AS PREDICTED           
+15-b5b2-sbdrain-sret     AS PREDICTED           
+16-b5b2-sbdrain-cost0    AS PREDICTED           recorded p2=0xe7a
+17-b5b2-sbdrain-cost     AS PREDICTED           recorded p2=0xee9
+
+C4BKIT cand 16/16 AS PREDICTED; 
+
+## wapflu
+01-sublet-life           AS PREDICTED           
+02-b5b2-untagged         AS PREDICTED           
+
+WFKIT cand 1/1 AS PREDICTED; 
+
+## boot3
+boot 3; capture: 157 lines, 8932 chars
+P1 AS PREDICTED: Capstone line Capstone: register tags kept across M traps, causes 24-30 delegated
+P2 AS PREDICTED: Boot HART MEDELEG = 0x000000007f00b109
+P3 AS PREDICTED: Linux banner present; Run /init at line 139; kernel lines before it [True, True, True]
+  TRAPTEST: up, kernel 6.1.0
+  sublet: test loader: pid 26 protected, table 0x81c56000
+  TRAPTEST: regs status 0
+  sublet: test loader: pid 27 protected, table 0x81c60000
+  TRAPTEST: regs-strip23 status 23
+  sublet: test loader: pid 28 protected, table 0x81c6b000
+  TRAPTEST: enter status 200
+  TRAPTEST: loop alive
+  TRAPTEST: dmesg [   21.968719] sublet: test loader: pid 26 protected, table 0x81c56000
+  TRAPTEST: dmesg [   43.568929] sublet: test loader: pid 27 protected, table 0x81c60000
+  TRAPTEST: dmesg [   65.168938] sublet: test loader: pid 28 protected, table 0x81c6b000
+  TRAPTEST: done
+  reboot: System halted
+P4 AS PREDICTED: statuses {'regs': 0, 'regs-strip23': 23, 'enter': 200}
+STRIP CONTROL 23
+
+B5B2-LINUX-3 P1=ok P2=ok P3=ok P4=ok
+
+## B5T-g2b
+capture: 14712 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955664 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5T-538.imagick_r PASS: QSTEP rc=0; read rc=0
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 8, in-band 4, specdiff 1/1 PASS
+    run0: rc 0 11.85 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5T-525.x264_r NO READING: watchdog kill at 14,400 s
+  TRAPTEST: stage B5T-538.imagick_r begin
+  TRAPTEST: stage B5T-538.imagick_r bound 3600s
+  TRAPTEST: stage B5T-538.imagick_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209018] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.181186] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.964101] sublet: .dom loader registered
+  TRAPTEST: dmesg [   31.691742] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x8245e000
+  TRAPTEST: dmesg [   38.723498] sublet: imagick_r_base.[61] enters 0x3ff7c00000, table 0x82474000
+  TRAPTEST: stage B5T-525.x264_r begin
+  TRAPTEST: stage B5T-525.x264_r bound 14400s
+  TRAPTEST: watchdog killed sh /stages/B5T-525.x264_r/stage/run.sh after 14400s
+  TRAPTEST: stage B5T-525.x264_r rc=137
+  TRAPTEST: dmesg [ 2223.223013] sublet: x264_r_base.nat[225] enters 0x3ff7f00000, table 0x82481000
+
+B5B2-SPECCHAIN C=ok B5T-538.imagick_r=PASS B5T-525.x264_r=NO READING done=yes
+
+## B5TL0-g2b
+capture: 11390 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955668 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL0-538.imagick_r PASS: QSTEP rc=0; read rc=0
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 8, in-band 4, specdiff 1/1 PASS
+    run0: rc 0 11.84 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5TL0-525.x264_r NO READING: no QSTEP-END (the capture ended inside the stage)
+  TRAPTEST: stage B5TL0-538.imagick_r begin
+  TRAPTEST: stage B5TL0-538.imagick_r bound 3600s
+  TRAPTEST: stage B5TL0-538.imagick_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209007] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.182122] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.964855] sublet: .dom loader registered
+  TRAPTEST: dmesg [   31.238524] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82460000
+  TRAPTEST: dmesg [   38.240458] sublet: imagick_r_base.[61] enters 0x3ff7c00000, table 0x82473000
+  TRAPTEST: stage B5TL0-525.x264_r begin
+  TRAPTEST: stage B5TL0-525.x264_r bound 14400s
+
+B5B2-SPECCHAIN C=ok B5TL0-538.imagick_r=PASS B5TL0-525.x264_r=NO READING done=NO
+
+## B5TL1-g2b
+capture: 11390 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955672 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-538.imagick_r PASS: QSTEP rc=0; read rc=0
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 8, in-band 4, specdiff 1/1 PASS
+    run0: rc 0 11.63 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5TL1-525.x264_r NO READING: no QSTEP-END (the capture ended inside the stage)
+  TRAPTEST: stage B5TL1-538.imagick_r begin
+  TRAPTEST: stage B5TL1-538.imagick_r bound 3600s
+  TRAPTEST: stage B5TL1-538.imagick_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.208870] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.182411] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.965102] sublet: .dom loader registered
+  TRAPTEST: dmesg [   31.268807] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82460000
+  TRAPTEST: dmesg [   38.272591] sublet: imagick_r_base.[61] enters 0x3ff7c00000, table 0x8249c000
+  TRAPTEST: stage B5TL1-525.x264_r begin
+  TRAPTEST: stage B5TL1-525.x264_r bound 14400s
+
+B5B2-SPECCHAIN C=ok B5TL1-538.imagick_r=PASS B5TL1-525.x264_r=NO READING done=NO
+
+## B5T-g3
+capture: 10577 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955760 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5T-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 7.15 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5T-502.gcc_r begin
+  TRAPTEST: stage B5T-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.208849] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.181274] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.964584] sublet: .dom loader registered
+  TRAPTEST: dmesg [   37.437058] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82460000
+  TRAPTEST: dmesg [   45.129249] sublet: cpugcc_r_base.n[57] enters 0x3ff7000000, table 0x82497000
+
+B5B2-SPECCHAIN C=ok B5T-502.gcc_r=PASS done=yes
+
+## B5TL0-g3
+capture: 10586 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955760 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL0-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 7.07 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL0-502.gcc_r begin
+  TRAPTEST: stage B5TL0-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209044] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.182458] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.965240] sublet: .dom loader registered
+  TRAPTEST: dmesg [   37.448281] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82463000
+  TRAPTEST: dmesg [   45.122336] sublet: cpugcc_r_base.n[57] enters 0x3ff7000000, table 0x8249b000
+
+B5B2-SPECCHAIN C=ok B5TL0-502.gcc_r=PASS done=yes
+
+## B5TL1-g3
+capture: 10586 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955760 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-502.gcc_r PASS: QSTEP rc=0; read rc=0
+    READ 502.gcc_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 1/1 PASS
+    run0: rc 0 5.76 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-502.gcc_r begin
+  TRAPTEST: stage B5TL1-502.gcc_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209036] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.182239] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.965396] sublet: .dom loader registered
+  TRAPTEST: dmesg [   37.463875] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82460000
+  TRAPTEST: dmesg [   45.153181] sublet: cpugcc_r_base.n[57] enters 0x3ff7000000, table 0x82471000
+
+B5B2-SPECCHAIN C=ok B5TL1-502.gcc_r=PASS done=yes
+
+## B5T-g1b
+capture: 33008 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955424 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5T-519.lbm_r PASS: QSTEP rc=0; read rc=0
+    READ 519.lbm_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 4, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 1051.91 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5T-544.nab_r PASS: QSTEP rc=0; read rc=0
+    READ 544.nab_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 754.92 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5T-557.xz_r PASS: QSTEP rc=0; read rc=0
+    READ 557.xz_r test capstone-lifetimes: 12/12 commands ended, rc!=0: 0, hashes 26, in-band 24, specdiff 12/12 PASS
+    run0: rc 0 321.97 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run1: rc 0 329.72 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run2: rc 0 349.24 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run3: rc 0 906.17 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run4: rc 0 497.67 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run5: rc 0 987.45 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run6: rc 0 206.95 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run7: rc 0 210.42 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run8: rc 0 211.45 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run9: rc 0 299.06 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run10: rc 0 242.93 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run11: rc 0 310.48 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5T-505.mcf_r PASS: QSTEP rc=0; read rc=0
+    READ 505.mcf_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 2/2 PASS
+    run0: rc 0 6828.57 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5T-519.lbm_r begin
+  TRAPTEST: stage B5T-519.lbm_r bound 3600s
+  TRAPTEST: stage B5T-519.lbm_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.208841] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.181592] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.964080] sublet: .dom loader registered
+  TRAPTEST: dmesg [   27.536543] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81c61000
+  TRAPTEST: dmesg [   33.922567] sublet: lbm_r_base.nati[60] enters 0x3ff7fe0000, table 0x81cd3000
+  TRAPTEST: stage B5T-544.nab_r begin
+  TRAPTEST: stage B5T-544.nab_r bound 3600s
+  TRAPTEST: stage B5T-544.nab_r rc=0
+  TRAPTEST: dmesg [ 1107.051241] sublet: nab_r_base.nati[134] enters 0x3ff7f00000, table 0x81e10000
+  TRAPTEST: stage B5T-557.xz_r begin
+  TRAPTEST: stage B5T-557.xz_r bound 7200s
+  TRAPTEST: stage B5T-557.xz_r rc=0
+  TRAPTEST: dmesg [ 1877.299266] sublet: xz_r_base.nativ[208] enters 0x3ff7fc0000, table 0x81c69000
+  TRAPTEST: dmesg [ 2205.522298] sublet: xz_r_base.nativ[246] enters 0x3ff7fc0000, table 0x81cee000
+  TRAPTEST: dmesg [ 2541.491344] sublet: xz_r_base.nativ[283] enters 0x3ff7fc0000, table 0x81daf000
+  TRAPTEST: dmesg [ 2896.989900] sublet: xz_r_base.nativ[321] enters 0x3ff7fc0000, table 0x81d9e000
+  TRAPTEST: dmesg [ 3809.427230] sublet: xz_r_base.nativ[364] enters 0x3ff7fc0000, table 0x815a9000
+  TRAPTEST: dmesg [ 4313.340406] sublet: xz_r_base.nativ[403] enters 0x3ff7fc0000, table 0x81ce8000
+  TRAPTEST: dmesg [ 5307.043677] sublet: xz_r_base.nativ[446] enters 0x3ff7fc0000, table 0x81d2a000
+  TRAPTEST: dmesg [ 5520.272033] sublet: xz_r_base.nativ[483] enters 0x3ff7fc0000, table 0x81d5b000
+  TRAPTEST: dmesg [ 5736.953567] sublet: xz_r_base.nativ[520] enters 0x3ff7fc0000, table 0x81dbe000
+  TRAPTEST: dmesg [ 5954.670435] sublet: xz_r_base.nativ[557] enters 0x3ff7fc0000, table 0x81cbd000
+  TRAPTEST: dmesg [ 6260.014376] sublet: xz_r_base.nativ[594] enters 0x3ff7fc0000, table 0x81d5e000
+  TRAPTEST: dmesg [ 6509.230110] sublet: xz_r_base.nativ[631] enters 0x3ff7fc0000, table 0x81cdf000
+  TRAPTEST: stage B5T-505.mcf_r begin
+  TRAPTEST: stage B5T-505.mcf_r bound 30000s
+  TRAPTEST: stage B5T-505.mcf_r rc=0
+  TRAPTEST: dmesg [ 6866.379270] sublet: mcf_r_base.nati[788] enters 0x3ff7fe0000, table 0x81cca000
+
+B5B2-SPECCHAIN C=ok B5T-519.lbm_r=PASS B5T-544.nab_r=PASS B5T-557.xz_r=PASS B5T-505.mcf_r=PASS done=yes
+
+## B5TL0-g1b
+capture: 29681 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         954984 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL0-519.lbm_r PASS: QSTEP rc=0; read rc=0
+    READ 519.lbm_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 4, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 1053.41 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5TL0-544.nab_r PASS: QSTEP rc=0; read rc=0
+    READ 544.nab_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 2, specdiff 1/1 PASS
+    run0: rc 0 754.0 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+S B5TL0-557.xz_r PASS: QSTEP rc=0; read rc=0
+    READ 557.xz_r test capstone-lifetimes: 12/12 commands ended, rc!=0: 0, hashes 26, in-band 24, specdiff 12/12 PASS
+    run0: rc 0 322.46 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run1: rc 0 328.9 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run2: rc 0 348.75 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run3: rc 0 903.85 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run4: rc 0 496.1 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run5: rc 0 986.63 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run6: rc 0 207.18 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run7: rc 0 210.26 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run8: rc 0 211.0 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run9: rc 0 298.63 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run10: rc 0 241.78 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+    run11: rc 0 309.88 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL0-519.lbm_r begin
+  TRAPTEST: stage B5TL0-519.lbm_r bound 3600s
+  TRAPTEST: stage B5TL0-519.lbm_r rc=0
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209033] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.182299] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.965305] sublet: .dom loader registered
+  TRAPTEST: dmesg [   25.710939] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x81c61000
+  TRAPTEST: dmesg [   32.118764] sublet: lbm_r_base.nati[60] enters 0x3ff7fe0000, table 0x81cc6000
+  TRAPTEST: stage B5TL0-544.nab_r begin
+  TRAPTEST: stage B5TL0-544.nab_r bound 3600s
+  TRAPTEST: stage B5TL0-544.nab_r rc=0
+  TRAPTEST: dmesg [ 1106.741131] sublet: nab_r_base.nati[134] enters 0x3ff7f00000, table 0x81e11000
+  TRAPTEST: stage B5TL0-557.xz_r begin
+  TRAPTEST: stage B5TL0-557.xz_r bound 7200s
+  TRAPTEST: stage B5TL0-557.xz_r rc=0
+  TRAPTEST: dmesg [ 1876.022426] sublet: xz_r_base.nativ[208] enters 0x3ff7fc0000, table 0x81e12000
+  TRAPTEST: dmesg [ 2204.745520] sublet: xz_r_base.nativ[246] enters 0x3ff7fc0000, table 0x81d08000
+  TRAPTEST: dmesg [ 2539.928436] sublet: xz_r_base.nativ[283] enters 0x3ff7fc0000, table 0x815a9000
+  TRAPTEST: dmesg [ 2894.940574] sublet: xz_r_base.nativ[321] enters 0x3ff7fc0000, table 0x81d03000
+  TRAPTEST: dmesg [ 3805.062805] sublet: xz_r_base.nativ[364] enters 0x3ff7fc0000, table 0x81cf0000
+  TRAPTEST: dmesg [ 4307.454601] sublet: xz_r_base.nativ[403] enters 0x3ff7fc0000, table 0x815a9000
+  TRAPTEST: dmesg [ 5300.364246] sublet: xz_r_base.nativ[446] enters 0x3ff7fc0000, table 0x81ccd000
+  TRAPTEST: dmesg [ 5513.822901] sublet: xz_r_base.nativ[483] enters 0x3ff7fc0000, table 0x81cde000
+  TRAPTEST: dmesg [ 5730.370262] sublet: xz_r_base.nativ[520] enters 0x3ff7fc0000, table 0x81da3000
+  TRAPTEST: dmesg [ 5947.663299] sublet: xz_r_base.nativ[557] enters 0x3ff7fc0000, table 0x81e11000
+  TRAPTEST: dmesg [ 6252.556365] sublet: xz_r_base.nativ[594] enters 0x3ff7fc0000, table 0x81d0c000
+  TRAPTEST: dmesg [ 6500.620924] sublet: xz_r_base.nativ[631] enters 0x3ff7fc0000, table 0x81cf2000
+
+B5B2-SPECCHAIN C=ok B5TL0-519.lbm_r=PASS B5TL0-544.nab_r=PASS B5TL0-557.xz_r=PASS done=yes
+
+## the x264 ruling (stop-x264.sh, runtime lane 2026-11-26): its log
+2026-11-25T22:42:50Z armed
+2026-11-25T22:42:50Z b3 B5TL0-g2b: <path>/b5b2linux/r77b3-20261125T1706-B5TL0-g2b started; waiting for imagick's stage end
+2026-11-25T22:45:30Z b3 B5TL0-g2b: imagick ended (TRAPTEST: stage B5TL0-538.imagick_r rc=0); STOP written
+2026-11-25T22:46:30Z b3 B5TL1-g2b: <path>/b5b2linux/r77b3-20261125T1706-B5TL1-g2b started; waiting for imagick's stage end
+2026-11-25T22:51:30Z b3 B5TL1-g2b: imagick ended (TRAPTEST: stage B5TL1-538.imagick_r rc=0); STOP written
+2026-11-26T03:09:32Z b2 B5T-g2b: <path>/b5b2linux/r77b2-20261125T1832-B5T-g2b started; waiting for imagick's stage end
+2026-11-26T03:15:12Z b2 B5T-g2b: imagick ended (TRAPTEST: stage B5T-538.imagick_r rc=0); STOP written
+2026-11-26T03:16:12Z b2 B5TL0-g2b: <path>/b5b2linux/r77b2-20261125T1832-B5TL0-g2b started; waiting for imagick's stage end
+2026-11-26T03:21:32Z b2 B5TL0-g2b: imagick ended (TRAPTEST: stage B5TL0-538.imagick_r rc=0); STOP written
+2026-11-26T03:22:32Z b2 B5TL1-g2b: <path>/b5b2linux/r77b2-20261125T1832-B5TL1-g2b started; waiting for imagick's stage end
+2026-11-26T03:27:52Z b2 B5TL1-g2b: imagick ended (TRAPTEST: stage B5TL1-538.imagick_r rc=0); STOP written
+2026-11-26T03:27:52Z END
+
+## B5TL0-g2b ruling note
+x264 stopped by ruling (runtime, 2026-11-26): x264 test run exceeds its 14,400 s bound on this board, B5T-g2b read >12,180 s; imagick's reading counts as registered; the partial capture is kept
+
+## B5TL1-g2b ruling note
+x264 stopped by ruling (runtime, 2026-11-26): x264 test run exceeds its 14,400 s bound on this board, B5T-g2b read >12,180 s; imagick's reading counts as registered; the partial capture is kept
+
+## B5T-g2b stage and SPEC lines
+TRAPTEST: stage B5T-538.imagick_r begin
+TRAPTEST: stage B5T-538.imagick_r bound 3600s
+@@SPEC-STAGE 538.imagick_r test arms=capstone-lifetimes commands=1 validations=1
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=38.34 up1=50.19 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 val capstone-lifetimes 0
+@@SPEC-END 1 val capstone-lifetimes 0 rc=0 up0=56.61 up1=62.25 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 538.imagick_r test
+TRAPTEST: stage B5T-538.imagick_r rc=0
+TRAPTEST: stage B5T-525.x264_r begin
+TRAPTEST: stage B5T-525.x264_r bound 14400s
+@@SPEC-STAGE 525.x264_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 gen capstone-lifetimes 0
+@@SPEC-END 0 gen capstone-lifetimes 0 rc=0 up0=89.00 up1=2216.58 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 run capstone-lifetimes 0
+TRAPTEST: stage B5T-525.x264_r rc=137
+
+## B5TL0-g2b stage and SPEC lines
+TRAPTEST: stage B5TL0-538.imagick_r begin
+TRAPTEST: stage B5TL0-538.imagick_r bound 3600s
+@@SPEC-STAGE 538.imagick_r test arms=capstone-lifetimes commands=1 validations=1
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=37.86 up1=49.70 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 val capstone-lifetimes 0
+@@SPEC-END 1 val capstone-lifetimes 0 rc=0 up0=56.13 up1=61.76 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 538.imagick_r test
+TRAPTEST: stage B5TL0-538.imagick_r rc=0
+TRAPTEST: stage B5TL0-525.x264_r begin
+TRAPTEST: stage B5TL0-525.x264_r bound 14400s
+@@SPEC-STAGE 525.x264_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 gen capstone-lifetimes 0
+
+## B5TL1-g2b stage and SPEC lines
+TRAPTEST: stage B5TL1-538.imagick_r begin
+TRAPTEST: stage B5TL1-538.imagick_r bound 3600s
+@@SPEC-STAGE 538.imagick_r test arms=capstone-lifetimes commands=1 validations=1
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=37.89 up1=49.52 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 val capstone-lifetimes 0
+@@SPEC-END 1 val capstone-lifetimes 0 rc=0 up0=55.92 up1=61.55 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 538.imagick_r test
+TRAPTEST: stage B5TL1-538.imagick_r rc=0
+TRAPTEST: stage B5TL1-525.x264_r begin
+TRAPTEST: stage B5TL1-525.x264_r bound 14400s
+@@SPEC-STAGE 525.x264_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 gen capstone-lifetimes 0
+
+## B5T-g3 stage and SPEC lines
+TRAPTEST: stage B5T-502.gcc_r begin
+@@SPEC-STAGE 502.gcc_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=44.74 up1=51.89 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 502.gcc_r test
+TRAPTEST: stage B5T-502.gcc_r rc=0
+
+## B5TL0-g3 stage and SPEC lines
+TRAPTEST: stage B5TL0-502.gcc_r begin
+@@SPEC-STAGE 502.gcc_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=44.74 up1=51.81 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 502.gcc_r test
+TRAPTEST: stage B5TL0-502.gcc_r rc=0
+
+## B5TL1-g3 stage and SPEC lines
+TRAPTEST: stage B5TL1-502.gcc_r begin
+@@SPEC-STAGE 502.gcc_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=44.78 up1=50.54 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 502.gcc_r test
+TRAPTEST: stage B5TL1-502.gcc_r rc=0
+
+## B5T-g1b stage and SPEC lines
+TRAPTEST: stage B5T-519.lbm_r begin
+TRAPTEST: stage B5T-519.lbm_r bound 3600s
+@@SPEC-STAGE 519.lbm_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=33.55 up1=1085.46 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 519.lbm_r test
+TRAPTEST: stage B5T-519.lbm_r rc=0
+TRAPTEST: stage B5T-544.nab_r begin
+TRAPTEST: stage B5T-544.nab_r bound 3600s
+@@SPEC-STAGE 544.nab_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=1106.68 up1=1861.60 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 544.nab_r test
+TRAPTEST: stage B5T-544.nab_r rc=0
+TRAPTEST: stage B5T-557.xz_r begin
+TRAPTEST: stage B5T-557.xz_r bound 7200s
+@@SPEC-STAGE 557.xz_r test arms=capstone-lifetimes commands=12 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=1876.92 up1=2198.89 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 run capstone-lifetimes 1
+@@SPEC-END 1 run capstone-lifetimes 1 rc=0 up0=2205.15 up1=2534.87 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 2 run capstone-lifetimes 2
+@@SPEC-END 2 run capstone-lifetimes 2 rc=0 up0=2541.11 up1=2890.35 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 3 run capstone-lifetimes 3
+@@SPEC-END 3 run capstone-lifetimes 3 rc=0 up0=2896.61 up1=3802.78 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 4 run capstone-lifetimes 4
+@@SPEC-END 4 run capstone-lifetimes 4 rc=0 up0=3809.05 up1=4306.72 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 5 run capstone-lifetimes 5
+@@SPEC-END 5 run capstone-lifetimes 5 rc=0 up0=4312.96 up1=5300.41 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 6 run capstone-lifetimes 6
+@@SPEC-END 6 run capstone-lifetimes 6 rc=0 up0=5306.67 up1=5513.62 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 7 run capstone-lifetimes 7
+@@SPEC-END 7 run capstone-lifetimes 7 rc=0 up0=5519.89 up1=5730.31 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 8 run capstone-lifetimes 8
+@@SPEC-END 8 run capstone-lifetimes 8 rc=0 up0=5736.58 up1=5948.03 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 9 run capstone-lifetimes 9
+@@SPEC-END 9 run capstone-lifetimes 9 rc=0 up0=5954.29 up1=6253.35 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 10 run capstone-lifetimes 10
+@@SPEC-END 10 run capstone-lifetimes 10 rc=0 up0=6259.64 up1=6502.57 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 11 run capstone-lifetimes 11
+@@SPEC-END 11 run capstone-lifetimes 11 rc=0 up0=6508.86 up1=6819.34 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 557.xz_r test
+TRAPTEST: stage B5T-557.xz_r rc=0
+TRAPTEST: stage B5T-505.mcf_r begin
+TRAPTEST: stage B5T-505.mcf_r bound 30000s
+@@SPEC-STAGE 505.mcf_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=6866.01 up1=13694.58 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 505.mcf_r test
+TRAPTEST: stage B5T-505.mcf_r rc=0
+
+## B5TL0-g1b stage and SPEC lines
+TRAPTEST: stage B5TL0-519.lbm_r begin
+TRAPTEST: stage B5TL0-519.lbm_r bound 3600s
+@@SPEC-STAGE 519.lbm_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=31.75 up1=1085.16 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 519.lbm_r test
+TRAPTEST: stage B5TL0-519.lbm_r rc=0
+TRAPTEST: stage B5TL0-544.nab_r begin
+TRAPTEST: stage B5TL0-544.nab_r bound 3600s
+@@SPEC-STAGE 544.nab_r test arms=capstone-lifetimes commands=1 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=1106.37 up1=1860.37 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 544.nab_r test
+TRAPTEST: stage B5TL0-544.nab_r rc=0
+TRAPTEST: stage B5TL0-557.xz_r begin
+TRAPTEST: stage B5TL0-557.xz_r bound 7200s
+@@SPEC-STAGE 557.xz_r test arms=capstone-lifetimes commands=12 validations=0
+@@SPEC-BEGIN 0 run capstone-lifetimes 0
+@@SPEC-END 0 run capstone-lifetimes 0 rc=0 up0=1875.64 up1=2198.10 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 1 run capstone-lifetimes 1
+@@SPEC-END 1 run capstone-lifetimes 1 rc=0 up0=2204.37 up1=2533.27 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 2 run capstone-lifetimes 2
+@@SPEC-END 2 run capstone-lifetimes 2 rc=0 up0=2539.55 up1=2888.30 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 3 run capstone-lifetimes 3
+@@SPEC-END 3 run capstone-lifetimes 3 rc=0 up0=2894.56 up1=3798.41 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 4 run capstone-lifetimes 4
+@@SPEC-END 4 run capstone-lifetimes 4 rc=0 up0=3804.69 up1=4300.79 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 5 run capstone-lifetimes 5
+@@SPEC-END 5 run capstone-lifetimes 5 rc=0 up0=4307.08 up1=5293.71 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 6 run capstone-lifetimes 6
+@@SPEC-END 6 run capstone-lifetimes 6 rc=0 up0=5299.99 up1=5507.17 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 7 run capstone-lifetimes 7
+@@SPEC-END 7 run capstone-lifetimes 7 rc=0 up0=5513.44 up1=5723.70 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 8 run capstone-lifetimes 8
+@@SPEC-END 8 run capstone-lifetimes 8 rc=0 up0=5729.99 up1=5940.99 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 9 run capstone-lifetimes 9
+@@SPEC-END 9 run capstone-lifetimes 9 rc=0 up0=5947.28 up1=6245.91 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 10 run capstone-lifetimes 10
+@@SPEC-END 10 run capstone-lifetimes 10 rc=0 up0=6252.18 up1=6493.96 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-BEGIN 11 run capstone-lifetimes 11
+@@SPEC-END 11 run capstone-lifetimes 11 rc=0 up0=6500.24 up1=6810.12 sys=0,0,0 nbench=0  :: (specdiff tail omitted)
+@@SPEC-DONE 557.xz_r test
+TRAPTEST: stage B5TL0-557.xz_r rc=0

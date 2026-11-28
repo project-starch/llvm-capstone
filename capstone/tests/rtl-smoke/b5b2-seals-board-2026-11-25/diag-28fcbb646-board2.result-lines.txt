@@ -1,0 +1,118 @@
+# board 2, the 28fcbb646 DIAGNOSTIC seal session (orch-diag.sh): the session log, then each step's grade
+
+## session log
+2026-11-25T12:31:38Z armed
+2026-11-25T12:33:40Z gates PASS: seal 28fcbb646 sha 925607df163bd8c8
+2026-11-25T12:37:45Z wapflu: kit rc=0 59 FLASH END caplifive_ids55-native-tagcache-mlp-fpieee-hpmr 59 READBACK after flash = caplifive_ids55-native-tagcache-ml  WFKIT cand 1/1 AS PREDICTED; 
+2026-11-25T12:54:15Z crevoke4b: kit rc=0 C4BKIT cand 16/16 AS PREDICTED; 
+2026-11-25T14:00:37Z B5T-g2: 36 RUN END rc=0 [lx 22:00:35] end: TRAPTEST: done seen; 12787 chars 37 GRADE rc=1 B5B2-SPECCHAIN C=ok B5T-525.x264_r=NO READING B5T-538.imagick_r=PASS done=yes 
+2026-11-25T15:06:58Z B5TL0-g2: 57 RUN END rc=0 [lx 23:06:57] end: TRAPTEST: done seen; 12806 chars 58 GRADE rc=1 B5B2-SPECCHAIN C=ok B5TL0-525.x264_r=NO READING B5TL0-538.imagick_r=PASS done=yes 
+2026-11-25T16:13:15Z B5TL1-g2: 14 RUN END rc=0 [lx 00:13:14] end: TRAPTEST: done seen; 12806 chars 15 GRADE rc=1 B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=NO READING B5TL1-538.imagick_r=PASS done=yes 
+
+## wapflu
+01-sublet-life           AS PREDICTED           
+02-b5b2-untagged         AS PREDICTED           
+
+WFKIT cand 1/1 AS PREDICTED; 
+
+## crevoke4b
+01-sublet-life           AS PREDICTED           
+02-b5b2-crevint          AS PREDICTED           recorded p2=0x14a1
+03-b5b2-crevint-mt       AS PREDICTED           recorded p2=0x175f p8=0x5 p9=0x5
+04-b5b2-crevint-sh       AS PREDICTED           recorded p2=0x1abf p4=0x100000047 p5=0x800000cf p8=0x2 p9=0x2 p10=0x1 p11=0x9227b3d4c7c6bfb1
+05-b5b2-crevint-lat      AS PREDICTED           latency band PASS: lat [1222, -119, 587, -130, 565, -130, 0, 0] ticks; cycles/ticks 30062/15031; positive after the first in cycles [(2, 1174), (4, 1130)] (bound 15,000; first 1222 recorded); recorded p2=0x1a54 p8=0x6 p9=0x6 p13=0x4c6 p14=0xffffffffffffff89 p15=0x24b p16=0xffffffffffffff7e p17=0x235
+06-b5b2-crevsv-none      AS PREDICTED           recorded p2=0x1a21 p8=0x6 p9=0x6 p10=0x3
+07-b5b2-crevsv-srev      AS PREDICTED           recorded p2=0x1f72 p8=0x6 p9=0x6 p10=0x3
+08-b5b2-crevsv-straw     AS PREDICTED           recorded p2=0x1f38 p8=0x6 p9=0x6 p10=0x3
+09-b5b2-crevsv-derive    AS PREDICTED           recorded p2=0x1ffb p4=0x800000cf p5=0x800000ce p8=0x6 p9=0x4 p10=0x3 p11=0xd443b2166d8185e1
+10-b5b2-crevsv-kill      AS PREDICTED           recorded p2=0x1d6d p3=0x80000008 p4=0x800000d0 p5=0x800000cf p8=0x6 p9=0x4 p10=0x3 p11=0x5323b3b7586ffcf6
+11-b5b2-sbdrain-none     AS PREDICTED           
+12-b5b2-sbdrain-fill     AS PREDICTED           
+13-b5b2-sbdrain-fence    AS PREDICTED           
+14-b5b2-sbdrain-mint     AS PREDICTED           
+15-b5b2-sbdrain-sret     AS PREDICTED           
+16-b5b2-sbdrain-cost0    AS PREDICTED           recorded p2=0xe7a
+17-b5b2-sbdrain-cost     AS PREDICTED           recorded p2=0xee9
+
+C4BKIT cand 16/16 AS PREDICTED; 
+
+## B5T-g2
+capture: 12546 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955664 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5T-525.x264_r NO READING: watchdog kill at 3,600 s
+S B5T-538.imagick_r PASS: QSTEP rc=0; read rc=0
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 8, in-band 4, specdiff 1/1 PASS
+    run0: rc 0 20.86 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5T-525.x264_r begin
+  TRAPTEST: watchdog killed sh /stages/B5T-525.x264_r/stage/run.sh after 3600s
+  TRAPTEST: stage B5T-525.x264_r rc=137
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209121] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.182505] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.965942] sublet: .dom loader registered
+  TRAPTEST: dmesg [   31.675952] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x8245b000
+  TRAPTEST: dmesg [ 2172.363021] sublet: x264_r_base.nat[109] enters 0x3ff7f00000, table 0x824a6000
+  TRAPTEST: stage B5T-538.imagick_r begin
+  TRAPTEST: stage B5T-538.imagick_r rc=0
+  TRAPTEST: dmesg [ 3646.469661] sublet: imagick_r_base.[149] enters 0x3ff7c00000, table 0x8248c000
+
+B5B2-SPECCHAIN C=ok B5T-525.x264_r=NO READING B5T-538.imagick_r=PASS done=yes
+
+## B5TL0-g2
+capture: 12565 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955668 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL0-525.x264_r NO READING: watchdog kill at 3,600 s
+S B5TL0-538.imagick_r PASS: QSTEP rc=0; read rc=0
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 8, in-band 4, specdiff 1/1 PASS
+    run0: rc 0 20.9 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL0-525.x264_r begin
+  TRAPTEST: watchdog killed sh /stages/B5TL0-525.x264_r/stage/run.sh after 3600s
+  TRAPTEST: stage B5TL0-525.x264_r rc=137
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.208864] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.180992] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.963928] sublet: .dom loader registered
+  TRAPTEST: dmesg [   31.210064] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82457000
+  TRAPTEST: dmesg [ 2170.491224] sublet: x264_r_base.nat[109] enters 0x3ff7f00000, table 0x82478000
+  TRAPTEST: stage B5TL0-538.imagick_r begin
+  TRAPTEST: stage B5TL0-538.imagick_r rc=0
+  TRAPTEST: dmesg [ 3645.817920] sublet: imagick_r_base.[149] enters 0x3ff7c00000, table 0x82485000
+
+B5B2-SPECCHAIN C=ok B5TL0-525.x264_r=NO READING B5TL0-538.imagick_r=PASS done=yes
+
+## B5TL1-g2
+capture: 12565 chars; OpenSBI banner present; Run /init present
+  Capstone: register tags kept across M traps, causes 24-30 delegated
+  Boot HART MEDELEG         : 0x000000007f00b109
+  sublet: .dom loader registered
+  TRAPTEST: id uid=0(root) gid=0(root)
+  TRAPTEST: up, kernel 6.1.0, mem MemTotal:         955672 kB
+C AS PREDICTED: okTRAPTEST: control smoke.dom rc=7
+S B5TL1-525.x264_r NO READING: watchdog kill at 3,600 s
+S B5TL1-538.imagick_r PASS: QSTEP rc=0; read rc=0
+    READ 538.imagick_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 8, in-band 4, specdiff 1/1 PASS
+    run0: rc 0 20.64 s instret None cycles None entries None peak_pages None nodes None collections None (bench line NOT fresh)
+  TRAPTEST: stage B5TL1-525.x264_r begin
+  TRAPTEST: watchdog killed sh /stages/B5TL1-525.x264_r/stage/run.sh after 3600s
+  TRAPTEST: stage B5TL1-525.x264_r rc=137
+  TRAPTEST: dmesg [    0.000000] Kernel command line: earlycon console=ttyS0,57600 rdinit=/init sublet.dom_binfmt=1
+  TRAPTEST: dmesg [    0.209042] captag: bulk=0 (requires firmware S-mode CBZE permission)
+  TRAPTEST: dmesg [    1.181714] sublet: 63-bit Sublet format, exact bounds 0
+  TRAPTEST: dmesg [    1.964337] sublet: .dom loader registered
+  TRAPTEST: dmesg [   31.254493] sublet: smoke.dom[32] enters 0x3ff7ff0000, table 0x82463000
+  TRAPTEST: dmesg [ 2170.962234] sublet: x264_r_base.nat[109] enters 0x3ff7e00000, table 0x82481000
+  TRAPTEST: stage B5TL1-538.imagick_r begin
+  TRAPTEST: stage B5TL1-538.imagick_r rc=0
+  TRAPTEST: dmesg [ 3646.108475] sublet: imagick_r_base.[149] enters 0x3ff7c00000, table 0x824f9000
+
+B5B2-SPECCHAIN C=ok B5TL1-525.x264_r=NO READING B5TL1-538.imagick_r=PASS done=yes

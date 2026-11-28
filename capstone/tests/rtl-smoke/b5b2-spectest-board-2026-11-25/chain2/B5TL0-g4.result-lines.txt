@@ -1,0 +1,3 @@
+# chain 2 image B5TL0-g4 (board 3, 904cd9c6b): STOPPED at the runtime lane's ruling (test.pl kept off the boards)
+The interrupt landed during the image load, before continue: no capture, no reading. The runner's own power-off and unlock failed
+(the interrupt broke its socket); a separate cleanup session powered the board off and unlocked it. Booking 1521 released.

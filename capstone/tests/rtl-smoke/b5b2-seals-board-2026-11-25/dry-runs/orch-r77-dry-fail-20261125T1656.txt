@@ -1,0 +1,4 @@
+# a stubbed dry run (board-run rule 8), kept beside the pre-registrations
+2026-11-25T16:54:42Z armed
+2026-11-25T16:55:42Z the b42c8c644 full chain ended
+2026-11-25T16:55:42Z STOP: the b42c8c644 full grade is not PASS ('R80-FULL FAIL (9/10 keys)'); no booking
