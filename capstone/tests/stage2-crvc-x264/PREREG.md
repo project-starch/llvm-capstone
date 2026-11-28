@@ -115,3 +115,36 @@ QEMU lock. These are harness tests, not measurements; twin times are not board t
   - frames 0, 50, 100, 150 and 155 are equal;
   - BuckBunny.yuv is equal.
 - **This is the reason for the output rule's exclusion above.**
+
+## Amendment 1 (2026-11-28, before any X board boot): x264's run on silicon is about 32,840 s, not 12,200 s; the drift control is checked against silicon gen times
+
+**The error.** The pre-registration took x264's run as "about 12,200 s". That came from tests/spec8-lsrh-board's "a run of
+more than 12,180 s", a floor read from runs that were cut. The campaign's completed x264b boots read the run phase, up1 -
+up0 on its SPEC-END run line, as:
+
+| boot | bitstream | gen | run |
+|---|---|---:|---:|
+| camp8-b3-20261126T2207-03-CF-B5TL1-x264b | b42c8c644 | 2,056.62 | 32,838.90 |
+| camp8x-b2-20261127T0342-02-CF-B5TL1-x264b | b42c8c644 | 2,056.43 | 32,816.41 |
+| camp8r2-b1-20261126T2156-22-CS-B5TL1-x264b | 14f2ef81a | 2,056.00 | 32,732.00 |
+| camp8r2-b1-20261126T2156-24-CS-B5TL1-x264b | 14f2ef81a | 2,056.33 | 32,709.89 |
+
+**What changes.** Every rule is in fractions of mean(OFF), so no rule changes. The seconds the pre-registration quoted
+change with the scale:
+- **The band:** 2.162 % × [0, 0.37] = [0, 0.80 %], about **[0, 263] s** of a 32,800 s run, not 97 s. It is still below
+  1 %, so x264 is still no GO stage.
+- **Prediction 2 becomes:** Δ lies in [-263, 0] s. At gcc's r = 0.179, about -127 s; at perlbench's r ≈ 0, about 0.
+  **Predicted:** -Δ below 127 s, so r below gcc's.
+- **The session is about 29 h, not 13 h:** three boots of about 34,900 s (gen + run + crvcmis), plus two flashes.
+  - Each boot fits its stage bound of 43,200 s, with about 8,300 s spare.
+  - The board lane's session bound is 44,400 s per boot.
+
+**The drift control, checked against silicon before any reading.**
+- **The twin cannot test it.** On the twin pair, gen read 113.95 against 122.37 s, outside the window by 8.4 s. Twin
+  times come from a host-timed QEMU with no icount, and they are not board times.
+- **On silicon,** gen in the configuration above read 2,056.00 to 2,056.62 s in four boots, on two boards and two
+  bitstreams. Its spread of 0.62 s lies inside the rule's q = 0.0005 × 2,056 + 0.02 = 1.05 s.
+- Gen in the earlier r77b3x and spb1e boots (kernel and firmware before the campaign's FW_FAST_RDTIME images) read
+  2,126.10 to 2,127.40 s. That is a different configuration, and it is not used.
+- **The rule is unchanged.** If the three K boots on N spread gen beyond q, the drift control fires and the bracket is
+  UNDECIDED, as written.
