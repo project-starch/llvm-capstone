@@ -5209,6 +5209,506 @@ watchdog log has a stall line.
 the re-slot and 156 from this run. Like the re-slot, this is P1's flat table, not the paged tree, and it reads verdicts
 only, not memory or cycles.
 
+## Fig. 10's one-operand revisions in the one-operand environment (2026-11-23)
+
+The programme's item 4 asks for Fig. 10's one-operand revisions, in the environment of item 2 (revision 71ce199d8fea,
+QEMU 9e69171f1c, rebuilt as `nested/oneop`), so that they are ready for silicon when bitstream 4 exists.
+- **Which revisions.** At native-kernel-new-qemu 5060011844e, Fig. 10's tree, nine lifetime patches use one-operand
+  CREVOKE (`capstone_cap_release`) or CRENEW (`capstone_cap_renew`):
+  - SQLite `sublet-3220000-memsys5.patch`;
+  - CPython 0014;
+  - FFmpeg 0003;
+  - memcached 0006;
+  - mruby 0008;
+  - Perl 0001;
+  - PHP's zend-alloc layer;
+  - PostgreSQL 0003;
+  - Wireshark wmem 0001.
+- **The API.** 5060011844e pins QEMU 35de150cef, not the environment's 9e69171f1c. The two revisions'
+  `runtime/include/capstone/capability.h` define the same functions with the same encodings: `capstone_cap_release`
+  is `.insn r 0x5b, 0x1, 0x52, x0, obj, x0`, and `capstone_cap_renew` is funct7 0x54. So the patches build
+  against this environment's SDK.
+- **Order.** SQLite first: it has the smallest workload and this lane's longest record.
+
+### Pre-registration: SQLite speedtest1 `--size 1`, Fig. 10's revision, in oneop (written 2026-11-23 00:34, before the runs)
+
+- **Images** (`nested/oneop/fig10/build-sqlite.sh`, the environment's SDK and compiler, clang cba01ed3090d, `-O2`):
+  the adapted amalgamation `7fc92e19…`, and `speedtest1.c` `16750ede…`.
+  - unprot: stock memsys5, `speedtest1.dom` `f0ea7e65dbca76a2…`.
+  - prot: `sublet-3220000-memsys5.patch` of 5060011844e (`8fa2d094e4edc6a3…`) applied with `-F0`, `8e166381d039dc2b…`.
+  - By encoding, `sqlite3.o` holds no lifetime instruction on the unprot arm. On the prot arm it holds CDERIVE 10,
+    one-operand CREVOKE 5 and CRENEW 14.
+- **Runs.** `fig10/chain-sqlite.sh`: six boots of the environment's kit (`oneop/kit`, lock domain A), one run each
+  of `--heap 8388608 64 --size 1 st.db` under `-icount` shift 0.
+  - Boots 1-2: `opcount.so`, executed 0x5B instructions by region and funct7, on unprot and then prot.
+  - Boots 3-6: `zones3.so`, exact instructions by code address, as ABBA u1, p1, p2, u2.
+  - The stubbed dry run reached all six rungs. Its comparator refused empty result files, and read 31 of 32 against
+    a reference with one changed hash. The gate's fault branch fired on a stub job that exited 3.
+- **Predictions:**
+  - **Answers:** in every boot, all 32 phases equal `2026-10-11-same-answers/phases.json`'s native phases (rows and
+    hash), with status 0.
+  - **Lifetime instructions** (opcount, image region):
+    - prot executes CDERIVE (funct7 0x51) and CREVOKE (0x52) each between 10,000 and 100,000 times, and CRENEW
+      (0x54) at least once;
+    - unprot executes fewer than 1,000 of each and no CRENEW.
+    - This is the control: if prot's CREVOKE count is not 10 times unprot's, the patch did not take effect, and
+      the run says nothing about it.
+  - **Image instructions, prot against unprot:** +0.3 % to +3 % (the two-operand revision on the twin was +0.63 %).
+    Repeats of an arm agree within 0.01 %.
+- **Branches:**
+  - A prot fault is a finding about this revision in this environment, localised before anything else. One
+    candidate is known in advance: on this table CRENEW cannot renew in place (the gcc section above). The patch
+    takes a zero result as a failed renew, and what follows that path is not predicted.
+  - An answer that differs in either arm stops the comparison.
+  - A boot that returns no SQ_TEST line is void and is rerun once.
+
+### Result: Fig. 10's SQLite revision runs in oneop at +0.56 % image instructions, every prediction met (00:35-00:36)
+
+Six boots, `nested/oneop/fig10/runs/fig10-sq-*`, each lock grant immediate. Every boot returned status 0 with all 32
+phases equal to the native reference (`cmp-sq.py`: none differ, none missing, none extra).
+
+| boot | arm | plugin | image instructions | CDERIVE | CREVOKE | CRENEW |
+|---|---|---|---:|---:|---:|---:|
+| opc-u | unprot | opcount | 223,245,566 | 6 | 1 | 0 |
+| opc-p | prot | opcount | 224,493,724 | 28,228 | 28,215 | 539 |
+| u1 | unprot | zones3 | 223,245,669 | | | |
+| p1 | prot | zones3 | 224,493,621 | | | |
+| p2 | prot | zones3 | 224,493,805 | | | |
+| u2 | unprot | zones3 | 223,245,566 | | | |
+
+- **Control: met.** prot executes 28,215 CREVOKEs against unprot's 1, and 28,228 CDERIVEs and 539 CRENEWs, inside
+  the predicted ranges. Unprot's 6 and 1 are mallocng's own lifetimes. The two plugins agree on each arm's image
+  count: opcount's `ALL image` and zones3's `ZONE image` differ by at most 103 instructions.
+- **Image instructions: +1,248,095.5 (+0.559 %)**, ABBA means 224,493,713 against 223,245,617.5. That is inside
+  the +0.3 % to +3 % band. The repeats agree within 0.0001 %. That is 21.9 image instructions per executed lifetime
+  instruction, not attributed per function.
+- Against the two-operand revision: on the twin, the dev-era patch cost +0.63 % in program instructions over
+  56,442 lifetime instructions (`--size 1` section above). That was a different SDK, compiler, kit and counting rule, so
+  the two numbers are not a difference of the revisions.
+- CRENEW ran 539 times, and nothing faulted. Whether each one renewed in place or fell back on this table was not
+  read.
+- **For silicon:** these images run one-operand CREVOKE and CRENEW, which P1 does not decode (funct7 0x54 is CSNODE
+  there). They wait for bitstream 4. What this run settles is the answers and the instruction cost on the ISA
+  bitstream 4 is to implement.
+
+### Pre-registration: mruby `bm_ao_render.rb 16`, Fig. 10's revision, in oneop (written 2026-11-23 00:48, before the runs)
+
+- **Build worktree.** `nested/oneop/fig10/wt` is revision 71ce199d8fea, so the recipes, runtime and SDK are the
+  environment's. Fig. 10's patch file replaces that revision's file there, and is never committed from it. For mruby
+  that is `0008-gc-slots-as-sublet-lifetimes.patch` of 5060011844e (`4a1314e3ab82f318…`). It differs from
+  71ce199d8fea's 0008 only in raising out-of-memory when `gc_issue` fails.
+- **A builder trap, caught before any run.** `ports/common/application/build-virtual.sh` sets `MRBD_PIN=4.0.0-rc2`
+  only for the lifetime arm. The stock arm then builds mruby head (ad98f216e), with 174 objects and 2.42 MB of text
+  against the protected arm's 124 objects and 1.69 MB. Both arms are now built with `MRBD_PIN=4.0.0-rc2`, the pin
+  Fig. 10 and P1 used. The head build is kept as `fig10/mruby/stock-head-unmatched` and is not run.
+- **Images** (`fig10/build-mruby.sh`, the environment's compiler clang cba01ed3090d). Both apply 0001-0003, 0008,
+  0009 and 0010, and 0008 is live only under `-DMRB_CAPSTONE_SUBLET`:
+  - stock `6fd8fe7b2b2b6246…`, text 1,691,804 bytes;
+  - prot `02584cf74a3fb56e…`, text 1,692,224 bytes.
+  - By encoding, `gc.o` holds no lifetime instruction on stock, and CDERIVE 2 and one-operand CREVOKE 2 on prot.
+    Each whole image adds mallocng's 6 CDERIVE and 3 CREVOKE.
+- **Workload, Fig. 10's:** `bm_ao_render.rb 16` (`e44efffd…`, the same file in both trees). The answer is the PPM
+  on stdout. The reference `cfd73bb1…` (781 bytes) is this tree's native build, and equals the P1 record's.
+- **Runs.** `fig10/chain-mruby.sh`, with the SQLite chain's design: opcount on unprot, then on prot, then zones3
+  ABBA. The runner is `fig10/run-app-zones.sh`; its gate's MATCH and MISMATCH branches were exercised on stubs.
+  The stubbed chain reached all six rungs, and its first dry run caught a truncated EXPECT, fixed before this
+  commit.
+- **Predictions:**
+  - **Answers:** every boot prints the reference PPM, status 0.
+  - **Lifetime instructions** (opcount, image region):
+    - prot executes at least 100,000 CDERIVE and 100,000 CREVOKE, and no CRENEW;
+    - stock executes fewer than 1,000 of each.
+    - The control: prot's CREVOKEs are at least 100 times stock's.
+  - **Image instructions, prot against stock:** +0.5 % to +5 % (the twin's in-context +1.64 % on P1's images).
+    Repeats agree within 0.01 %.
+- **Branches:**
+  - A prot fault with cause 29 at `add_heap`'s CDERIVE is Q-15 in this environment: the page's 80 KiB life is not
+    representable. It is recorded, and the Q-15-repaired variant (P1's) is pre-registered separately.
+  - Any other prot fault is localised first.
+  - An answer that differs stops the comparison.
+
+### Result: the mruby chain is void on two instrument errors of this lane; nothing is read from it (00:48-01:00)
+
+- **Answers were not checked.** `bm_ao_render.rb`'s PPM does not end in a newline, so `icount`'s own
+  `ICOUNT instructions=… status=…` line was appended to its last line. The gate then hashed 821 bytes, the 781-byte
+  PPM plus that line, and every boot reads MISMATCH with a different hash. The count itself was lost the same way.
+  The gate was tested on stub output that ended in a newline, so the stub could not show this. The answer files
+  stayed in the guest, so the PPMs cannot be checked afterwards.
+- **The control was mis-specified.** Stock executes 1,173,238 CDERIVE and 1,172,318 CREVOKE, because mruby's
+  `mrb_malloc` sits on mallocng, whose lifetimes are on in both arms (`heap_lifetimes` in the SDK). The
+  pre-registered "stock below 1,000, prot at least 100 times stock" cannot hold. That is my prediction's error, not
+  the patch's: prot executes 916,189 CDERIVE and 916,101 CREVOKE more than stock.
+- By the pre-registered rule, a run whose answers differ or whose control fails is not read, so no cost is read.
+  Seen anyway: image zones stock 4,721,740,155 in each of its three boots, prot 4,798,649,926 in each of its three
+  boots.
+- **A process slip as well.** I edited `run-app-zones.sh` while the chain's first boot was running it. That boot's
+  data (serial log, opcount file) was complete. The tail of the script then ran from a shifted offset
+  (`timeout: failed to run command '--icount'`) and reported rc 1. The rule is already in this lane's notes:
+  never edit a running script. The fixed runner is a new file, `run-app-zones2.sh`.
+
+### Amendment 1 to the mruby pre-registration, and the Perl pre-registration (written 2026-11-23 01:01, before the runs)
+
+- **The runner, for both:** `fig10/run-app-zones2.sh`. `icount` runs `sh -c "exec ./capstone-vexec ./app … > answer.txt"`
+  with its own line sent to `count.txt`, so the answer file holds only the program's stdout. On a stub whose output
+  has no final newline it reads MATCH. Both chains' stubbed dry runs reached all six rungs on it.
+- **The control, restated for any port whose allocator sits on malloc:** the lifetime instructions prot executes
+  beyond stock. It is not a ratio, because mallocng's own lifetimes are in both arms. Plus the static census: the
+  ported object holds lifetime instructions in prot and none in stock.
+- **mruby rerun** (`fig10-mrb-r2`, otherwise as pre-registered):
+  - the reference PPM in every boot;
+  - prot beyond stock: at least 100,000 CDERIVE and 100,000 CREVOKE, and no CRENEW in either arm;
+  - image instructions +0.5 % to +5 %, the band written before the void chain;
+  - repeats within 0.01 %.
+  - The void chain's zones were seen before this amendment. So the cost result of the rerun is a confirmation on the
+    same images, not a blind prediction.
+- **Perl**, Fig. 10's revision, `0001-sv-heads-as-sublet-lifetimes.patch` of 5060011844e (`83501a59ae08d54a…`),
+  copied into `fig10/wt` (`fig10/build-perl.sh`):
+  - Images: Perl 5.36.3 with the port's tree patches 0001-0012 in both arms; prot adds the sublet 0001.
+    - stock `9ebe0d0456894107…`, text 7,023,436 bytes;
+    - prot `3c1962c60f1ce918…`, text 7,009,156 bytes.
+    - By encoding, `sv.o` holds no lifetime instruction on stock, and CDERIVE 28 and one-operand CREVOKE 3 on
+      prot.
+  - Workload, Fig. 10's: perlbench's train script as SPEC runs it, `perl -I. -I./lib suns.pl` with
+    `PERL_HASH_SEED=0`. The staged files are SPEC's `suns.pl`, `WORDS` and `lib`, licensed, and staged outside
+    the repository. The answer is stdout against SPEC's `suns.out` (`01688ea0c1058063…`). The validate file is
+    not compared.
+  - Runs: `fig10/chain-perl.sh`, six boots as for mruby.
+  - **Predictions:**
+    - SPEC's `suns.out` in every boot, status 0;
+    - prot beyond stock: at least 100,000 CDERIVE and 100,000 CREVOKE, and no CRENEW;
+    - image instructions +1 % to +10 %. The twin's train zone with SV heads protected, all five commands, was
+      +5.619 % against stock. suns.pl alone was not measured.
+    - repeats within 0.01 %.
+  - Branches as for mruby: a fault is localised first, and an answer that differs stops the comparison.
+
+### Pre-registration: CPython, Fig. 10's pyperformance subset, Fig. 10's revision, in oneop (written 2026-11-23 01:11, before the runs)
+
+- **Images** (`fig10/build-cpython.sh`). 5060011844e's `cpython-3.13.7-0009-pymalloc-arena-pointer.patch`
+  (`8456fb1d48304444…`) and `0014-pymalloc-sublet-lifetimes.patch` (`fc63552d6c4d9eaf…`) are copied into
+  `fig10/wt`. Both arms apply the port's series and prot adds 0014; the logs' patch lists differ by 0014 alone.
+  - stock `9966571644f86eb9…`, text 6,520,620 bytes;
+  - prot `d14a767ceb839438…`, text 6,521,532 bytes.
+  - By encoding, the cross-built `Objects/obmalloc.o` holds no lifetime instruction on stock, and CDERIVE 6 and
+    one-operand CREVOKE 2 on prot.
+- **Workload, Fig. 10's:** `pyperformance-subset.py` of 5060011844e (`544de26d…`), over pyperformance 1.14.0 and
+  pyperf 2.10.0 from the pinned PyPI wheels (sha256 `94068ac2…` and `79196bc4…`, both checked).
+  - The run is `-S`, with `PYTHONHASHSEED=0`.
+  - One stage, built from stock's build (`fig10/tools/stage-cpython.py`), serves both arms, so the arms differ
+    only in the image. It holds the Lib and `_sysconfigdata`, compiled by the native 3.13.7 with
+    `--invalidation-mode unchecked-hash`, because the guest's copy of the stage does not keep mtimes. Two stagings
+    give the same trees (stdlib `c5549c6d…`, bench `2d53e3a0…`).
+  - The answer is stdout. It is the native build's own stdout on the same driver (`58211793…`): eight benchmark
+    lines, then `PYPERFORMANCE-OK 8`.
+- **Runs:** `fig10/chain-cpython.sh`, six boots as for mruby, on `run-app-zones2.sh`. The stubbed chain reached
+  all six rungs.
+- **Predictions:**
+  - **Answers:** the native stdout in every boot, status 0.
+  - **Lifetime instructions:** prot beyond stock, at least 100,000 CDERIVE and 100,000 CREVOKE, and no CRENEW. The
+    twin's dev-era runs of seven benchmarks issued 2.9 M CDERIVEs, so this floor is deliberately low.
+  - **Image instructions, prot against stock:** +0.5 % to +5 % (the twin's in-context +1.63 % summed, dev-era patch).
+    Repeats agree within 0.01 %.
+- **Branches** as for mruby.
+
+### Result: mruby rerun (fig10-mrb-r3): reference PPM in all six boots, +1.63 % image instructions (01:03-01:15)
+
+- A second rerun was needed first. `fig10-mrb-r2` (and the Perl chain launched with it) ran `icount sh -c …`, and
+  `icount` calls `execv`, which does not search PATH: every job returned status 32512 (127 << 8) with image zone 0.
+  Those 12 boots ran no image and are void. My host stub had searched PATH, so it could not show this. The runner
+  now names `/bin/sh`, and the stub now refuses a bare name, so it reproduces 32512 on the old form.
+- **Answers: met.** All six boots print the reference PPM (781 bytes, MATCH), status 0.
+- **Control: met.** prot executes 916,189 CDERIVE and 916,101 CREVOKE beyond stock (2,089,427 and 2,088,419
+  against 1,173,238 and 1,172,318). Neither arm executes a CRENEW.
+- **Image instructions: +76,909,771 (+1.629 %)**, stock 4,721,740,155 and prot 4,798,649,926. Every boot of an arm
+  reads the same count to the instruction, and opcount's `ALL image` agrees. Inside +0.5 % to +5 %. That is 42
+  image instructions per added lifetime instruction. As amended, this confirms on images whose zones had been seen.
+
+### Result: Perl, Fig. 10's revision on suns.pl: SPEC's answer, and +34.9 % image instructions, far above the band (01:15-01:26)
+
+- **Answers: met.** All six boots print SPEC's `suns.out` (53 bytes, MATCH), status 0.
+- **Control: met.** prot executes 1,077,695 CDERIVE and 864,583 CREVOKE beyond stock (2,064,268 and 1,684,005
+  against 986,573 and 819,422), and no CRENEW.
+- **Image instructions: +726,556,662.5 (+34.88 %)**, stock 2,082,932,016 and 2,082,932,020, prot 2,809,488,676
+  and 2,809,488,685 (repeats within 0.000001 %). **The prediction, +1 % to +10 %, is missed.** That is 374 image
+  instructions per added lifetime instruction, against mruby's 42 and SQLite's 22.
+- **Candidate, from the source, not yet from the counts.** Fig. 10's 0001 finds a head's arena with
+  `S_sv_arena_of`, a walk of `PL_sv_arenaroot` (the patch's lines 108-113), at every issue and release. That is the
+  walk pending patch 0002 replaces with a sorted array and bisection ("Perl with the arena lookup repaired"
+  above). A walk over hundreds of arenas per lifetime instruction would give a price of this size. Two diagnostic boots with per-function counts (zones3 with
+  each image's symbols, `fig10-perl-fn-*`) are queued to read where the 726.6 M fall. No mechanism is claimed
+  before they are read.
+- **Per function** (`fig10-perl-fn-stock` and `-prot`, zones3 with each image's symbols; both give SPEC's answer, and
+  the zones equal the chain's within 3 instructions). The named functions sum to +726,556,497:
+  - `Perl_sv_arena_head` +434,181,209 at 80,084 entries (absent from stock): 5,421 instructions per call. prot
+    allocates 2,536 arenas (`Perl_more_sv` entries), so a call that walks the arena list most of the way is this
+    size;
+  - `Perl_sv_arena_issue` +87,051,697 at 238,418 entries;
+  - `Perl_newSV_type` +104,610,611 (entries 53,215 to 890,464, so inlining moved);
+  - `Perl_newSVsv_flags` +76,284,648 at the same 53,139 entries;
+  - `Perl_sv_free2` +33,644,294 and `Perl_sv_clear` +12,122,082 at the same entries;
+  - `Perl_newSVpvn_flags` -25,979,116 at the same entries.
+- **Reading.** The price is mainly the arena lookup. `Perl_sv_arena_head` alone is 60 % of it, at a per-call
+  size that fits a walk, and the patch's source has the walk (`S_sv_arena_of` over `PL_sv_arenaroot`). That the
+  other increases are the same walk inlined elsewhere is inferred from the entries, and was not read from the
+  disassembly. Fig. 10's revision predates the repair in pending patch 0002, so on silicon this revision would carry
+  the walk too. The variant worth pricing is 0001 plus 0002. 0002 has since landed (2026-11-23): on the perl
+  corpus, 0001 and 0001+0002 agree in all 11 cases and all 47 qualify files
+  (`bug-corpora/perl/release-differential/results/2026-11-22-virtual-0002/README.md`), and it is now
+  `ports/perl/sublet/patches/5.36.3/0002`.
+
+### Pre-registration: Perl, Fig. 10's revision plus 0002, the variant worth pricing (written 2026-11-23 06:37, before the runs)
+
+- **The variant.**
+  - Patch: `fig10/patches/fig10-perl-0002-on-5060-0001.patch` (`d93308435dd5d4f6…`).
+  - Pending 0002 (`sublet/pending/5.36.3/0002-sv-arena-lookup-by-index.patch` of the perl0002 worktree) was written
+    on dev's 0001, not on Fig. 10's. Two of its three hunks apply to Fig. 10's 0001 unchanged.
+  - The third registers each new arena in `Perl_more_sv`. Its context differs, so the one line
+    `S_sv_arena_register((SV *)chunk);` is placed after `sv_add_arena` under `#ifdef PERL_CAPSTONE_SUBLET`.
+    `Perl_more_sv` is the only place either revision adds an arena.
+  - Built in a second scratch worktree (`fig10/wt2`, 71ce with the same swapped-in files as `fig10/wt`, plus this
+    patch as `sublet/patches/5.36.3/0002`), by `fig10/build-perl0002.sh`.
+  - Image `528d7f1e35a1cd74…`. Against prot's tree, only `sv.c` differs, apart from generated files that differ by
+    their miniperl path.
+  - By encoding, `sv.o` holds CDERIVE 2 and one-operand CREVOKE 3; prot's holds 28 and 3. The derive sites likely
+    fell because `S_sv_arena_of` grew and stopped being inlined. That was not read from the disassembly; the dynamic
+    counts below are the check.
+  - 16 MiB, so it maps at 0x3ff7000000 like prot (symbols `fig10/syms/perl-p0002.syms`).
+- **Runs:** `fig10/chain-perl0002.sh`, four boots:
+  - opcount p0002;
+  - zones3 p0002 twice, with FN lines;
+  - a zones3 stock control, against `fig10-perl-r2`'s stock readings.
+  - Same workload and answer as the Perl chain. The stubbed chain reached all four (`fig10/perl/chain02-dry.txt`).
+  - The chain queues behind the kit-devq corpus runs, as the tshark chain does.
+- **Predictions:**
+  - SPEC's `suns.out` in every boot, status 0;
+  - the stock control within 0.001 % of 2,082,932,016-2,082,932,020;
+  - **lifetimes unchanged:** p0002's CDERIVE and CREVOKE counts equal prot's (2,064,268 and 1,684,005) within 1 %,
+    and no CRENEW. The index changes how an arena is found, not which heads get lifetimes. This stands in for a
+    fixture here; the protection fixture for 0002 is the perl0002 corpus;
+  - **image instructions: +2 % to +12 % against stock**, and at least 400 M fewer than prot's 2,809,488,676;
+  - `Perl_sv_arena_head`: under 200 instructions per call (prot: 5,421);
+  - repeats within 0.01 %.
+- **Branches:**
+  - lifetime counts that differ from prot's by more than 1 %: the variant changed what is protected. It is not priced,
+    and the difference is localised first;
+  - above +12 %: attributed per function before anything else is said;
+  - below +2 %: it is reported as it stands, with the per-function deltas.
+
+### Result: Perl, Fig. 10's revision plus 0002 (08:45-09:07)
+
+All six predictions hold.
+
+- **The runs.** The chain first started at 08:33 and was stopped four minutes into its first boot, to let three short
+  SQLite corpus runs take the QEMU lock first. That partial boot is kept apart (`fig10/runs-aborted/`). The chain
+  then ran 08:45-09:07, four boots, rc 0.
+- **Answer.** `suns.out` in every boot: stdout sha256 `01688ea0…`, MATCH, status 0.
+- **Stock control.** `fig10-perl02-u3` reads 2,082,931,984 against 2,082,932,016-020, which is -32 to -36 (0.000002 %).
+- **Lifetimes unchanged.** opcount p0002: CDERIVE (funct7 0x51) 2,064,278 and CREVOKE (0x52) 1,684,011, against
+  prot's 2,064,268 and 1,684,005, so +0.0005 % and +0.0004 %. No CRENEW (0x54) line.
+- **Image instructions: +174,659,199 (+8.385 %) against stock, inside the band.** p0002 reads 2,257,591,183 and
+  2,257,591,178 (zones3 p1, p2) and 2,257,591,179 (opcount). That is 551,897,493 below prot's 2,809,488,676, against
+  the predicted 400 M. So 0002 removes 76 % of Fig. 10's revision's +726.6 M.
+- **`Perl_sv_arena_head`: 147.1 instructions per call** (11,782,336 at the same 80,084 entries), against prot's
+  5,421.
+- **Repeats:** p1 and p2 within 5 instructions.
+- **Per function, against stock** (`fig10-perl02-p1` against `-u3`, each with its own symbols). The named functions
+  sum to +169,111,580 of the zone's +174,659,199, so 5,547,619 falls outside every FN range.
+  - `Perl_sv_arena_issue` +77,477,237 at 1,077,570 entries (absent from stock). That is 71.9 per call; prot had
+    87,051,697 at 238,418 entries;
+  - `Perl_sv_free2` +44,139,039 at the same 864,579 entries;
+  - `memmove` +24,696,528 (entries 877,558 against 875,022);
+  - `Perl_sv_arena_head` +11,782,336;
+  - `Perl_newSVpvn_flags` +5,842,025 at the same entries;
+  - `memset` +2,395,488, `calloc` +1,625,273, `Perl_more_sv` +1,058,115 (2,536 arenas against stock's 1,590), and
+    `aligned_alloc` +765,647;
+  - against these, `Perl_vivify_ref` -2,750,681 and `Perl_sv_clear` -864,273 at the same entries.
+  - `Perl_sv_arena_issue` is entered 4.5 times as often as in prot. Read as inlining moved by the lookup's growth,
+    which fits `sv.o`'s CDERIVE words falling from 28 to 2. That is inferred, not read from the disassembly.
+- **Memory** was not measured in this chain: oneop's runner reads instructions only. Stock's peak for this workload
+  is not on record either, so the memory condition is open for this variant.
+
+### Pre-registration: Perl's peak memory on suns.pl in oneop, stock, prot and p0002 (written 2026-11-24 05:28, before the runs)
+
+- **Method.** `fig10/run-app-mem.sh` is `run-app-zones3.sh` without the plugin. It runs the image under busybox
+  `time -v` and reads `Maximum resident set size`, the vexec process's `ru_maxrss`.
+  - busybox 1.36.1 prints `%M` as `ptok(pagesize, ru_maxrss)` (`miscutils/time.c:283-284`), which multiplies by
+    pagesize/1024. Linux already reports `ru_maxrss` in kB, so the printed value is 4 times the peak. Every figure
+    below is the printed value divided by 4.
+  - The script also samples MemTotal − MemAvailable once a second. That is the census's "peak used", but it is too
+    coarse for a run of about 3 s, so it is recorded and not judged.
+- **Controls of the method** (stock image, one boot each, 05:25-05:27):
+  - positive: a script that builds a 50,000,000-byte string reads 107,036 kB;
+  - negative: a one-line script reads 8,896 kB.
+  - The difference, 98,140 kB, matches the two copies of the string that `x` produces (97,656 kB). So the peak
+    includes the domain's heap.
+  - The 1 s sampler saw only +40,572 kB of the same run, which is why it is not judged.
+- **Runs.** `fig10/chain-perl-mem.sh`: stock, prot and p0002, interleaved, two boots each. The workload and answer
+  are `chain-perl.sh`'s (suns.pl, `PERL_HASH_SEED=0`). The images are the chains' own: stock `9ebe0d04…`, prot
+  `3c1962c6…` and p0002 `528d7f1e…`.
+- **Predictions.**
+  - SPEC's `suns.out` in every boot, status 0.
+  - Repeats of an arm within 64 kB.
+  - **prot against stock: +4,000 to +12,000 kB.** The counted arenas give 2,536 against 1,590 (`Perl_more_sv`
+    entries, above). prot's arena is 4,080 + 84 × 16 = 5,424 bytes (`SV_ARENA_HEADS` = 4080/48 − 1, plus one
+    capability per head, `sv.c:367`), and stock's is 4,080. That is +7,268,064 bytes, before allocator overhead.
+  - **p0002 against prot: −64 to +256 kB.** The index holds one 16-byte entry per arena, 2,536 entries, and grows
+    by at most double.
+- **Branches.** A peak outside a band is reported with both arms' readings before any reading of why. A mismatch
+  in the answer stops the comparison for that arm.
+
+### Result: Perl's peak memory on suns.pl: p0002 is +4,800 kB (+10.3 %) over stock, every prediction met (05:28-05:37)
+
+- **Answers: met.** All six boots print SPEC's `suns.out`, status 0. The readings are in `fig10/runs-mem/perl-mem-*`.
+- **Peak RSS of the vexec process** (printed `ru_maxrss` / 4):
+
+  | arm | boot 1 | boot 2 | against stock |
+  |---|---|---|---|
+  | stock `9ebe0d04…` | 46,744 kB | 46,744 kB | |
+  | prot `3c1962c6…` | 51,408 kB | 51,412 kB | +4,666 kB (+9.98 %) |
+  | p0002 `528d7f1e…` | 51,544 kB | 51,544 kB | +4,800 kB (+10.27 %) |
+
+- **Repeats: met**, within 4 kB.
+- **prot against stock: met** (band +4,000 to +12,000 kB). The arena arithmetic gave +7,098 kB, so the reading sits
+  2,432 kB below that estimate. The estimate assumed every arena stays resident at the peak, and no reading here says
+  why it falls short.
+- **p0002 against prot: met**, +134 kB (band −64 to +256). That is about the index's size, 2,536 entries of 16 bytes
+  grown by doubling.
+- The census's system-wide "peak used", sampled once a second, reads 175,516 and 175,768 kB for stock, 184,352 kB for
+  both prot boots, and 184,092 and 184,596 kB for p0002. That is about +8.7 MB against stock. It counts the kernel and
+  the module as well as the process, and it is sampled too coarsely to judge. It is recorded and not read further.
+- **So the memory condition for p0002 is answered:** its peak is 10.3 % above stock's on this workload. Fig. 10's
+  revision accounts for 10.0 % of that, and the index for 0.3 %.
+
+### Result: the CPython chain is void: the environment refuses `ioctl(FIOCLEX)`, so no script can be run by path (01:26-01:28)
+
+- Every boot exited with status 2 in 0.8 s and printed only `./app: can't open file
+  '/tmp/ap/bench/pyperformance-subset.py': [Errno 38] Function not implemented`. Stock's image ran 43.3 M
+  instructions: start-up and its imports worked.
+- Diagnostic boots (`fig10-cpy-probe-*`, stock image), with the probe imported as a module:
+  - `os.open`, `O_CLOEXEC`, `stat`, `fstat`, `open(…, 'rb')`, `realpath`, `listdir` and `lstat` all
+    succeed on that file;
+  - `os.set_inheritable` (either value) fails with errno 38, and so does `fcntl.ioctl(fd, FIOCLEX)`;
+  - `fcntl(F_SETFD, FD_CLOEXEC)` succeeds.
+  - So this environment's native route answers `ioctl(FIOCLEX)` with ENOSYS. CPython's run-file path calls
+    `_Py_set_inheritable`, which does not fall back on ENOSYS. Imports open with `O_CLOEXEC` and never reach it.
+    Fig. 10's own runs used a different platform (the trap route of 35de150cef).
+
+### Amendment 2: CPython run as a module (written 2026-11-23 01:34, before the run)
+
+- The only change: the driver runs as `-S -m pyperformance_subset`, with `PYTHONPATH=/tmp/ap/bench`. The driver
+  is the same file under a module name, staged and compiled with the rest (stage `stage2`: stdlib tree
+  `c5549c6d…` as before, bench tree `bf5cc1a0…`). It finds its benchmarks through `__file__`, which `-m` sets.
+- The native build's stdout run the same way equals its script-mode stdout byte for byte (`58211793…`). That is
+  still the reference.
+- Predictions and branches as pre-registered. The stubbed chain reached all six rungs.
+
+### Result of amendment 2: CPython stops again, at `os.uname()`; Fig. 10's CPython workload does not run in this environment (01:34-01:37)
+
+- Every boot now starts the driver and fails in pyperf, at `platform.machine()` → `os.uname()`: `OSError: [Errno 38]
+  Function not implemented`, status 1. The images ran 439 M (stock) and 446 M (prot) instructions, so nothing is
+  read from them.
+- So this environment's native route refuses at least two calls Fig. 10's CPython workload needs:
+  `ioctl(FIOCLEX)` and `uname`. Both were found only by running, one at a time, so the list is not known to be
+  complete. Removing either from the workload would make it a different workload from Fig. 10's, so that is not
+  done.
+- **Stopped here for CPython.** Its Fig. 10 revision needs an environment that routes these calls, or the trap
+  route Fig. 10 used (35de150cef). The image pair and the stage stay built (`fig10/cpython`, `stage2`).
+
+### Pre-registration: Fig. 10's Wireshark revision in oneop (written 2026-11-23 06:15, before the protected arm has run)
+
+- **Revision:** `wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch` of 5060011844e (`ca4ba97e22407f4a…`, the copy in
+  `fig10/wt` equal to it). It changes `wmem_allocator.h`, `wmem_allocator_block.c` and `wmem_allocator_block_fast.c`.
+  - Built by `fig10/build-tshark.sh`: tshark 4.6.8 with the port's patches in both arms; the dependencies come from
+    a local copy of the cached source tarballs, because their URLs return 404.
+  - Image `xbuild/run/tshark`: stock `352e193c849f6a16…`, prot `d026193831257cf6…`.
+- **Static census, by encoding** (`fig10/tools/census-lifetime.py`, llvm-objdump words, opcode 0x5B funct3 1):
+  - stock: none of the 16 wmem objects holds a lifetime instruction;
+  - prot: `wmem_allocator_block.c.o` holds CDERIVE 10, one-operand CREVOKE 2 and CRENEW 1; `wmem_allocator_block_fast.c.o`
+    holds 10, 1 and 1. The other 14 objects hold the same counts in both arms.
+  - So Fig. 10's wmem revision uses CRENEW, and the "no CRENEW" prediction of the other apps is not made here.
+- **Workload:** the one 5060011844e's plan `2026-11-15-wireshark-established-workload.md` defines.
+  - `tshark -r C -V -n` with `TZ=UTC` and an empty `HOME` and `WIRESHARK_CONFIG_DIR`, one process per capture.
+  - The 169 captures of `test-captures-4.6.8.txt` (`c8d1114f…`), in that order, all in one boot. They are copied
+    from the build's `xsrc/test/captures`, including the 13 in `mysql/` and `zabbix/`.
+- **Runner:** `fig10/run-app-zones4.sh`.
+  - It is `run-app-zones3.sh` with a loop: every process runs inside one `icount`, and each capture's stdout is
+    appended under a `=== C rc=N` header. A nonzero exit is therefore part of the answer.
+  - `APP_SET` prints the inputs and the nonzero count; an `APP_PROG` line goes to the console per capture.
+  - The zones3 window is `IMG_LO`/`IMG_HI`.
+- **Where the image is mapped.** The image is 32 MiB (`roundup_pow_of_two` of text plus data, `binfmt-dom.h:156`) and
+  is aligned to its size, so it is mapped at 0x3ff6000000, not at 0x3ff7000000. Its `.text` runs from 0x3ff6000000 to
+  0x3ff71a941c.
+  - The chain's zones3 window is 0x3ff0000000-0x3ff8000000, opcount's image range.
+  - Per-function lines use symbols at that base (`fig10/syms/tshark-{stock,prot}.syms`, `tools/mksyms-base.py`).
+  - Checked on the stock probe below: the FN lines sum to 99.985 % of the image zone, and `__set_thread_area` is
+    entered 169 times, once per process.
+- **Stock probes (they establish the answer; seen before this text):**
+  - `fig10-ts-probe1`/`probe2`: two captures. The output is tshark's `-V` dissection in UTC.
+  - `fig10-ts-probe3` (opcount, timeout 3,600 s): the boot did not complete within the timeout. It is void.
+  - `fig10-ts-probe4` (zones3, timeout 21,600 s), 05:06-06:14:
+    - 169 inputs, 0 nonzero;
+    - stdout 34,055,148 bytes, sha256 `b190069b62f6265ebfb63e5991443886028440a22f5df364c244330734690347`;
+    - 13,357,016,045 instructions in the icount, image zone 6,312,779,721.
+- **Runs:** `fig10/chain-tshark.sh`, six boots (opcount stock, prot; zones3 u1 p1 p2 u2), timeout 21,600 s each.
+  - The stubbed chain reached all six rungs with the right image, plugin, window and symbols
+    (`fig10/tshark/chain-dry.txt`).
+  - About 70 min per boot.
+  - It starts only after the kit-devq corpus runs (perl0002, SQLite, PHP) have had the QEMU lock. Those wait for an
+    exclusive lock, and this lane's own oneop and twin runs kept them out for 5-10 h.
+- **Predictions:**
+  - every boot: 169 inputs, 0 nonzero, stdout sha256 `b190069b…`;
+  - **control:** prot beyond stock executes at least 100,000 CDERIVE and at least 1,000 CREVOKE. Stock runs musl
+    mallocng's lifetimes too (`fig10-ts-probe3`'s partial count: 1.66 M CDERIVE), so the control is the difference.
+    CRENEW: stock 0; prot is recorded, not predicted;
+  - **image instructions, prot vs stock: +0.3 % to +6 %.** The twin's tshark on 9,000 frames, at dev's revision, was
+    +2.69 % in-context. Here every process also pays tshark's start-up, which wmem touches less.
+  - repeats within 0.01 %.
+- **Branches:**
+  - a prot boot that differs from `b190069b…`, or has a nonzero capture: no cost is read, and the capture is named
+    from the answer's headers;
+  - control not met: the patch did not take effect, and the run says nothing about protection;
+  - cost outside the band: attributed per function from the FN lines before anything else is said.
+
+### Result: Fig. 10's Wireshark revision in oneop (read 2026-11-23 22:44)
+
+The six boots of `fig10/chain-tshark.sh` ran from 12:22 to 22:41, with a 21,600 s timeout each (the chain prints
+`timeout=` per boot). Every runner exited 0.
+
+**Deviation from the pre-registration.** The pre-registration gives every boot 21,600 s, but the chain's first launch
+did not export `TIMEOUT`. `run-app-zones4.sh` therefore used its own 3,600 s default, and three boots (opc-u from 09:07,
+opc-p from 10:12, then u1) ran to that cap. Those three are void and nothing is read from them. The chain now exports
+the value. The relaunch reran all six boots under the same names, so the void boots' directories were overwritten.
+
+Readings against the predictions:
+1. **Every boot: holds.** All six report 169 inputs, 0 nonzero, and stdout sha256 `b190069b…` (MATCH).
+2. **Control: holds.** In the image zone, prot minus stock is:
+   - CDERIVE 4,091,559 − 2,016,854 = 2,074,705 (at least 100,000 was predicted);
+   - CREVOKE 1,992,502 − 1,963,762 = 28,740 (at least 1,000 was predicted);
+   - CRENEW: stock 0 (no funct7 0x54 line), prot 9,471.
+3. **Image instructions, prot vs stock: +2.27 %, inside the +0.3 % to +6 % band.**
+   - Stock u1 6,317,790,819 and u2 6,314,379,942; prot p1 6,460,856,200 and p2 6,458,616,090.
+   - The mean difference is 143,650,765 instructions.
+4. **Repeats within 0.01 %: does not hold.**
+   - Stock repeats agree within 0.054 % (3,410,877) and prot within 0.035 % (2,240,110). That is about a fortieth of
+     the measured effect.
+   - The spread is in musl mallocng, not in wmem: u1 − u2 is `alloc_slot` +1,635,543, `nontrivial_free` +919,091, and
+     `get_meta`, `__malloc_alloc_meta` and `enframe` at about +195,000 each. The wmem functions differ by 0 to 5
+     instructions between repeats.
+   - Why mallocng varies between identical boots is not established here.
+
+**Where the +2.27 % goes.** The FN lines cover 99.985 % of the image zone in every boot. Mean prot − stock:
+
+| function | instructions | share of the difference | entries stock / prot |
+|---|--:|--:|--:|
+| `wmem_block_fast_sublet_alloc` | 114,319,526 | 79.6 % | 0 / 1,905,321 |
+| `wmem_block_sublet_alloc` | 11,597,546 | 8.1 % | 0 / 153,761 |
+| `wmem_block_fast_alloc` | 9,626,582 | 6.7 % | 1,905,321 / 1,907,699 |
+| `memset` | 4,271,186 | 3.0 % | 976,197 / 1,134,526 |
+| `wmem_block_sublet_realloc` + `_fast_sublet_realloc` − the plain reallocs | 750,985 | 0.5 % | 0 / 14,505 |
+| `wmem_sublet_issue_at` | 689,462 | 0.5 % | 0 / 14,505 |
+| all other functions | 2,395,478 | 1.7 % | |
+
+So about 94 % of the difference is in the patched block allocators' alloc paths. Of the rest, `memset` is entered
+158,329 more times on prot. Its callers are not attributed here.
 
 ### Note: the s100 heartbeat (2026-11-25, board-free)
 
