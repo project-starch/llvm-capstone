@@ -1,0 +1,133 @@
+--- a/arch/riscv/include/asm/capstone_task.h
++++ b/arch/riscv/include/asm/capstone_task.h
+@@ -13,6 +13,8 @@
+ /* Make the current task run a protected program: the mm carries context and its table's root,
+  * the task carries TIF_CAPSTONE, and srevroot names the table. */
+ int riscv_capstone_bind(void *context, unsigned long root);
++/* Stage 2: the boot probe found the CRVC mode (bit 0 of an srevroot write reads back). */
++extern bool sublet_crvc_hw;
+ #endif
+ #else
+ static inline void riscv_capstone_release(struct task_struct *task) { }
+--- a/arch/riscv/kernel/capstone_task.c
++++ b/arch/riscv/kernel/capstone_task.c
+@@ -29,6 +29,23 @@
+ 	mutex_unlock(&current->signal->cred_guard_mutex);
+ 	return error;
+ }
++
++/* Stage 2, before any protected process exists: write 1 and read it back. A hart with the mode
++ * reads bit 0; srevroot_q stays 0 throughout, so nothing decodes in the mode. Then write 0. */
++bool sublet_crvc_hw __ro_after_init;
++static int __init sublet_crvc_probe(void)
++{
++	unsigned long got;
++
++	csr_write(0x5c1, 1);
++	got = csr_read(0x5c1);
++	csr_write(0x5c1, 0);
++	sublet_crvc_hw = got & 1;
++	pr_info("sublet: CRVC probe read 0x%lx after writing 1: %s\n", got,
++		sublet_crvc_hw ? "the CRVC mode is present" : "no CRVC mode, flagged images are refused");
++	return 0;
++}
++core_initcall(sublet_crvc_probe);
+ #endif
+ 
+ /* The task flag survives through mm_release, which clears the exit word through
+--- a/arch/riscv/kernel/sublet/binfmt.h
++++ b/arch/riscv/kernel/sublet/binfmt.h
+@@ -37,7 +37,9 @@
+ struct dom_image {
+     Elf64_Phdr text, data;
+     u64 entry, bytes, stack;
++    unsigned long crvc;  /* stage 2: 1 when e_flags carries EF_CAPSTONE_CRVC */
+ };
++#define DOM_EF_CAPSTONE_CRVC 0x100
+ _Static_assert(sizeof(struct capstone_delegate_entry) == 96, "delegate ABI");
+ 
+ static int dom_read(struct file *f, void *buf, size_t n, u64 at)
+@@ -114,6 +116,7 @@
+     im->bytes = roundup_pow_of_two(im->text.p_memsz + PAGE_ALIGN(im->data.p_memsz));
+     if (im->bytes > CV_MAX_EAGER_BYTES) goto out;
+     im->entry = h.e_entry - im->text.p_vaddr;
++    im->crvc = (h.e_flags & DOM_EF_CAPSTONE_CRVC) ? 1 : 0;
+     rc = 0;
+ out:
+     kfree(names); kfree(sh); kfree(ph);
+@@ -269,7 +272,7 @@
+  * (restore_user).
+  */
+ static int dom_enter(struct sublet_context *c, struct linux_binprm *bprm, unsigned long entry,
+-		     unsigned long **slots, unsigned long sp, unsigned long top)
++		     unsigned long **slots, unsigned long sp, unsigned long top, unsigned long crvc)
+ {
+ 	struct pt_regs *regs = current_pt_regs();
+ 	int rc;
+@@ -297,9 +300,12 @@
+ 	sublet_set_user_ref_cursor(regs, 2, slots[2], sp - top);
+ 	sublet_set_user_ref(regs, 3, slots[3]);
+ 	c->dom_entry = entry;
+-	rc = riscv_capstone_bind(c, c->table_pa);
++	/* Stage 2: bit 0 of the root is the CRVC mode; table_pa is page-aligned. */
++	rc = riscv_capstone_bind(c, c->table_pa | crvc);
+ 	if (rc)
+ 		return rc;
++	if (crvc)
++		pr_info("sublet: %s[%d] binds in the CRVC mode\n", current->comm, task_pid_nr(current));
+ 	pr_info("sublet: %s[%d] enters 0x%lx, table 0x%llx\n", current->comm, task_pid_nr(current),
+ 		entry, (unsigned long long)c->table_pa);
+ 	return 0;
+@@ -350,6 +356,12 @@
+ 	rc = dom_parse(bprm->file, &im);
+ 	if (rc)
+ 		return rc;
++	/* A hart without the mode would run c.ldcsp as c.fldsp: refuse the image. */
++	if (im.crvc && !sublet_crvc_hw) {
++		pr_info("sublet: %s[%d] CRVC image refused: this hart has no CRVC mode\n",
++			current->comm, task_pid_nr(current));
++		return -ENOEXEC;
++	}
+ 	st = kvzalloc(sizeof(*st), GFP_KERNEL);
+ 	tail = kmalloc(PAGE_SIZE, GFP_KERNEL);
+ 	if (st)
+@@ -432,7 +444,7 @@
+ 	current->mm->end_data = base + im.text.p_memsz + im.data.p_memsz;
+ 	current->mm->start_stack = sp;
+ #ifdef CONFIG_RISCV_CAPSTONE_TRAP
+-	rc = dom_enter(c, bprm, base + (unsigned long)im.entry, slots, sp, top);
++	rc = dom_enter(c, bprm, base + (unsigned long)im.entry, slots, sp, top, im.crvc);
+ 	if (!rc)
+ 		c = NULL;	/* the mm owns the context now: riscv_capstone_release ends it */
+ 	else
+--- a/arch/riscv/mm/context.c
++++ b/arch/riscv/mm/context.c
+@@ -315,6 +315,17 @@
+ 
+ #ifdef CONFIG_RISCV_CAPSTONE_TRAP
+ 	/* srevroot names the table of the mm that runs next, or none. */
++#ifdef SUBLET_MUTANT_CRVC_LEAK
++	/* Twin only: the mode bit with no table, for one named ordinary process. */
++	if (!next->context.capstone_root && task && !strncmp(task->comm, "crvcleak", 8)) {
++		static int said;
++
++		csr_write(0x5c1, 1);
++		if (!said++)
++			printk_deferred(KERN_EMERG "sublet: mutant CRVC_LEAK wrote 1 for %s[%d]\n",
++					task->comm, task_pid_nr(task));
++	} else
++#endif
+ #ifdef SUBLET_MUTANT_LEAK_ROOT
+ 	if (next->context.capstone_root)
+ #endif
+--- a/arch/riscv/mm/sublet-table.c
++++ b/arch/riscv/mm/sublet-table.c
+@@ -129,7 +129,7 @@
+ {
+     unsigned long old = csr_read(0x5c1);
+ 
+-    if (old != c->table_pa)
++    if ((old & ~1UL) != c->table_pa)  /* stage 2: bit 0 is the CRVC mode */
+         csr_write(0x5c1, c->table_pa);
+     return old;
+ }
