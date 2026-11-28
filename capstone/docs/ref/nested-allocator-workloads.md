@@ -3957,6 +3957,84 @@ The programme asks for a perlbench variant with CRENEW and the liveness test. Wh
   (application ABI 2, mallocng, virtual profile), and every bodies-port control repeated there. That build is
   deferred behind item 5 (the bug-corpus images), which has a consumer on the board.
 
+## mcf train on the twin: what separates the Full image's OOM from V1f's pass (2026-11-22)
+
+Asked by the SPEC lane. On bkit91 the Full image of 505.mcf_r train was killed by the OOM killer, while V1f's image
+completed. Both twin runs below use the tree kernel (`perf/tree/images-tree`, capstone_vm.c byte-identical to the
+board's) with the kit's module flags (`node_table_pool=4 dom_grant_root=/tmp/nt/sr dom_null=1 dom_local_tmp=1`), slot
+28, and a 936 MiB guest (MemTotal 921,488 kB).
+
+| image | run | result | memory |
+|---|---|---|---|
+| Full `fa650b98…` | `census/out/mem2-mcftrain-fa650b98` | OOM-killed at 99 s guest, specdiff 0/2 | anon-rss 892,748 kB, total-vm 1,108,624 kB at the kill (kernel line) |
+| V1f `d5e5dc49…` | `census/out/mem2-mcftrain-v1f-d5e5dc49` | rc 0, specdiff 2/2 | VmHWM 887,188 kB |
+
+So V1f fits with a few MB to spare, and Full needs more than 892,748 kB. The OOM is the task's own memory, as the
+earlier reading of the arc arrays found. Each image's unstripped build, stripped with the kit's recipe, reproduces the
+staged hash, so the provenance below is read from the images' own builds.
+- **V1f.** SDK `native01/sdk-native`, with the runtime at a486f0ccbbd1, which has no mapping cache. musl's realloc grows a
+  large chunk through `__heap_remapping` (map, copy, unmap). Compiler cc-prmerged.
+- **Full.** SDK FRCDKMSa3, whose runtime and libc are `perf/alean/sdkm13b`: the runtime at 3e70344d8c3f built with
+  `CAPSTONE_HEAP_MAPPING_REUSE=ON`, musl with the alloc-lean patches. Two allocator differences:
+  - (a) the mapping cache keeps freed mappings for reuse, at most 512 of them and 64 MiB in all, and they stay
+    resident. It gives them back only when an acquire fails, and a lazy grant does not fail before the OOM killer
+    acts;
+  - (b) realloc grows a large chunk in place when its mapping has room. Otherwise it moves the chunk to a mapping with
+    room for twice the size, up to 1 GiB.
+
+  Also different: the compiler (llvm-c9 with the cclever flags), the rest of the runtime between those two
+  revisions, and Full's `CAPSTONE_MEMSET_CAP_ZERO=ON` (not checked in V1f's build).
+- **Withdrawn.** My message to the SPEC lane (2026-11-22, not committed anywhere) read Full's 200 MB of total-vm over
+  its RSS as the old and new arc arrays mapped together while `__heap_remapping` copies. Full's realloc does not take
+  that path for a growing large chunk. The gap fits (b)'s untouched room.
+
+### Pre-registration: two one-object variants of Full on the twin (written 2026-11-22 03:20, before the runs)
+
+Each image is Full's own objects relinked through a copy of its SDK, with one allocator object replaced. A control
+relink through the unmodified SDK reproduces `fa650b98` byte for byte. Each replaced object, rebuilt from the unmodified
+source with the recorded flags, reproduces the SDK's object byte for byte.
+- **R0 `24a4cc5e…`.** `malloc-mapping.c` built with `CAPSTONE_HEAP_MAPPING_REUSE=0`. The symbols that differ are
+  `__heap_mapping`, `__heap_unmapping`, `__heap_protected`, the cache's tables and counters (`mr_live` is 768 KiB of
+  bss), and `memmove`, which nothing references any more.
+- **W0 `8b782488…`.** musl's mallocng `realloc.c` without (b); the result is byte-identical to V1f's `realloc.c`. Only
+  `__libc_realloc` differs.
+
+Runs: the configuration of the two runs above, R0 then W0, one each. Readings for a completed run: rc, specdiff and
+`@@MEM-PEAK` VmHWM. For a killed run: the kernel's OOM line (anon-rss, total-vm). The sampler's last sample is not an
+end reading.
+
+Outcomes:
+- R0 completes (2/2) and W0 is killed: the mapping cache is the variable that separates the two images.
+- W0 completes and R0 is killed: the moved-with-room realloc is.
+- Both complete: either change alone gives back enough, at a margin of a few MB. Both are levers, and neither is "the"
+  cause.
+- Both are killed: neither allocator difference alone; what is left is the compiler and codegen and the other runtime
+  changes. The row stays "killed by OOM on bkit91", with no cause.
+- **Predicted: R0 completes and W0 is killed.**
+
+This is a diagnostic, not a measured arm. The paper's Full row does not change. Any board run goes through the SPEC
+lane, under a new addendum.
+
+### Results: R0 completes and W0 is killed, as predicted (QEMU twin, 2026-11-22 03:14-05:47)
+
+Both runs used the configuration above, one each, R0 then W0.
+
+| image | run | result | memory |
+|---|---|---|---|
+| R0 `24a4cc5e…` (no mapping cache) | `census/out/mem2-mcftrain-r0-24a4cc5e` | rc 0, specdiff 2/2 | VmHWM 885,680 kB |
+| W0 `8b782488…` (V1f's realloc) | `census/out/mem2-mcftrain-w0-8b782488` | OOM-killed at 100 s guest, specdiff 0/2 | anon-rss 892,728 kB, total-vm 1,065,808 kB at the kill (kernel line) |
+
+This is the first outcome: on this input, the mapping cache is the variable that separates Full from V1f.
+- **R0.** Without the cache, Full's image peaks 1,508 kB below V1f's (885,680 against 887,188 kB). It also peaks about 7 MB
+  below the anon-rss of both killed runs (892,748 and 892,728 kB).
+- **W0.** V1f's realloc alone leaves anon-rss at the kill where Full's was, 20 kB lower. Total-vm at the kill is
+  42,816 kB lower (1,065,808 against 1,108,624 kB). So, at the kill, (b)'s room shows in address space and not in
+  resident memory.
+
+Limits: one run per image, and R0's margin is about 7 MB in a 921,488 kB guest. The readings come from the twin, not the
+board. The paper's Full row does not change. Bounding the cache, or giving its mappings back under memory pressure, is
+a runtime change and goes to the runtime side on its own.
+
 ## Item 5: the SQLite and PHP bug corpora for the board (2026-11-23)
 
 The programme's item 5: prepare the images and the pre-registration, and the runtime lane queues them on a P1 board.
