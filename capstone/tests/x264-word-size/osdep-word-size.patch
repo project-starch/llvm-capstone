@@ -1,0 +1,11 @@
+--- a/common/osdep.h
++++ b/common/osdep.h
+@@ -228,7 +228,7 @@
+ #define X264_PTHREAD_MUTEX_INITIALIZER 0
+ #endif
+ 
+-#define WORD_SIZE sizeof(void*)
++#define WORD_SIZE sizeof(intptr_t)  /* capability ABI: void* is 16 bytes, the word is intptr_t */
+ 
+ #define asm __asm__
+ 
