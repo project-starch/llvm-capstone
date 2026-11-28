@@ -3247,6 +3247,128 @@ its stage holds (`nested/rectrace/traces/INDEX.md` on the capstone work volume, 
   FRCDKMS images, not FRCDKMSa3, so two more traces on those images (gcc 3ed5c0be…, mcf 3d7e6211…) are being taken,
   with context-edge markers, which B5a needs to flush its caches.
 
+### gcc's three allocators with one-operand CREVOKE and CRENEW (QEMU, 2026-11-20): +0.78 % instructions in gcc's code
+
+**Question.** What does the collaborator's port of gcc's pools, GC heap and obstacks (one-operand CREVOKE and CRENEW,
+`origin/native-kernel-new-qemu:capstone/ports/spec-cpu2017/sublet/502.gcc_r`) cost on a real input, per allocator?
+
+**Environment.** No kit for the reference model c1985bb529 exists (the SPEC lane confirmed: no revision pins it).
+The environment of revision 71ce199d8fea, where the port was verified, was rebuilt on this host (QEMU 9e69171f1c,
+the native task route; record of the build and every deviation on the capstone work volume, `nested/oneop/STATUS.md`).
+Its control on SPEC's test input reproduces the recorded result in kind: 30 of 30 outputs match, the port costs
++0.63 % (recorded +0.58 %), and the port without the gcc fix faults with cause 25 at the recorded address; absolute
+counts are 1.8-1.9 % below the record's, whose executables were built by another compiler or flags.
+
+**Arms**, each rebuilt from the stock build directory with the gcc fix, differing only in which allocator is ported
+(sha256 of the executables): fix f9327fbd…, pool 79542acf…, ggc a2a748bd…, obst 92fff9aa…, all dda1118b… (= the port's
+own sublet executable), and stock 3ec35baa….
+
+**First reading, withdrawn before use.** Whole-job instruction counts read pool +15.3 %, ggc -6.4 %, obst +4.6 %,
+all -0.5 %: not additive, and about 590 instructions per lifetime instruction for the pools. They are kernel work:
+user-mode ticks are equal in every arm (1,402-1,413), and system ticks follow the pages the kit's collector sweeps
+(pool 3.1 times fix's, ggc 0.09 times). On this kit's table (paged, 30-bit ids) ids carry no generation, so a released
+record returns to the free list only after a full stale-tag sweep, and CRENEW cannot renew in place (QEMU 9e69171f1c
+cap_rev_table.c:9-12, cap_rev_tree.c:361-371). The GC arm's lower sweep count is consistent with node_ensure's policy
+at 71ce199d8fea (capstone_vm.c ~1355-1395: collect only once retired records reach a quarter of the capacity), and is
+not traced. A record with generations removes this kernel share; it belongs to the kit, not to the port.
+
+**Result.** Exact counts of gcc's own code (the native image's address window, user mode), by `zones.c`, one boot
+per arm, train01, -icount shift=0; every output matches SPEC's reference:
+
+| arm | gcc's code, instructions | against fix | lifetime instructions (counting build) |
+|---|---:|---:|---|
+| fix | 13,999,404,828 | | |
+| pool | 14,013,217,259 | +0.099 % | 2,488,995 CDERIVE, 1,832,637 CRENEW |
+| ggc | 14,003,801,664 | +0.031 % | 1,414,198 CDERIVE, 46,579 CREVOKE |
+| obst | 14,090,979,945 | +0.654 % | 1,289,643 CDERIVE, 105,684 CREVOKE |
+| all | 14,109,183,145 | **+0.784 %** | the sum |
+| stock | 14,003,000,543 | +0.026 % | none (no gcc fix) |
+
+- Additive: pool + ggc + obst = +109.8 M, exactly the full port's difference.
+- About 3 instructions per lifetime instruction for the pools and the GC heap, about 66 for the obstacks, whose port
+  keeps one reference per object and walks them on every free.
+- These are instructions on QEMU. The two-operand pool port alone cost +0.8 % instructions on the twin and +5.3 %
+  cycles on P1; the cycles of this port need a bitstream with one-operand CREVOKE and CRENEW.
+
+**Next.** The obstack port first (a lifetime per chunk or per free-to-mark region, so that a free ends a subtree in
+one CREVOKE), with a fixture that a freed object's reference still faults; then the typed free lists, objects of 4 KiB
+and more and growing obstack objects, each priced alone the same way.
+
+### gcc's obstack port refined: +0.654 % to +0.348 % (QEMU, 2026-11-20)
+
+Profiled first, with the protection held fixed. Exact counts of every function of gcc's code (TCG plugin
+`capstone/tests/record-trace/zones.c`, one boot per arm on the 71ce199d8fea environment, train01) put the obstack
+port's +91.6 M in the out-of-line issue call (+34.9 M, 1.29 M calls), the callers of the obstack macros (about +28 M),
+the walk that pops a dropped chunk's references one by one (+11.0 M), and memcpy (+9.9 M). A counting build shows
+memcpy's excess to be the reference stack's growth: 2,043 reallocs copied 26,327,552 bytes, 9,872,832 instructions
+predicted against +9,944,403 measured. The CREVOKEs themselves are 105,684 in all.
+
+A lifetime per chunk or per free-to-mark region was considered and rejected: an object freed to a mark inside a chunk
+that stays live would keep a live reference, and the cost it would remove (the CREVOKEs) is not where the cost is.
+
+Three refinements (`capstone/ports/spec-cpu2017/own-allocators/502.gcc_r/obstack-variant.py`), priced alone and
+together against the arm with only the gcc fix:
+
+| arm | gcc's code against fix |
+|---|---:|
+| obstack port as the collaborator wrote it | +0.654 % |
+| a: issue fast path inline | +0.475 % |
+| b: O(1) forgetting of a dropped chunk's references | +0.592 % |
+| a and b | +0.413 % |
+| a, b and c: the reference stack in segments, never copied | **+0.348 %** |
+| all three allocators, the collaborator's | +0.784 % |
+| all three allocators, obstacks refined | **+0.478 %** |
+
+- Every output matches SPEC's reference. A fixture of six modes (`obstack-fixture.c`) answers the same for the
+  collaborator's obstack and every refinement: the controls read, every freed object faults with cause 25, the
+  survivors of a partial free read; stock obstack reads the freed objects of an in-chunk free.
+- Two slips caught before any reading: b's new chunk field first moved every chunk's first object 4 bytes off its
+  alignment (a pad keeps it at 16); the fixture first had fewer objects than one stack segment, so c's segment
+  boundary was not exercised (a sixth mode crosses it).
+- What remains of the obstacks' +48.7 M is mostly in the callers that now carry the inline path, above all
+  bitmap_element_allocate (+23.6 M before c), which serves most calls from its own free list: the typed free lists
+  are next.
+
+### Opcode census of the +Spatial images for the spatial-only core (QEMU twin, 2026-11-20)
+
+For the rtl lane: every executed 0x5B instruction counted by code region (plugin `capstone/tests/record-trace/opcount.c`
+on the twin a0501ebc39), on the FRCDKMSspa3 images of gcc train01 (3d8bfb5a…), mcf test (17b2fa0b…) and perlbench test
+(cdd368de…). The images execute CDERIVE (26,065 / 318 / 163,069) and CREVOKE (22,441 / 276 / 46,242), from the SDK
+runtime's `__heap_mapping` and `__heap_unmapping`, although the SDK's heap lifetimes are off; a spatial-only core
+must not make them illegal. REVOKE, TIGHTEN, DELIN, SPLIT, MREV, DROP, CALL, RETURN, CSSUPERVISE, CSRETIRE, CSNODE and
+LCC with zimm 0 execute 0 times in every image (LDC, the positive control, 1.7-8.1 G). The twin's kernel and firmware
+are not the board's (Linux 6.1 against the board's 6.4.14, kit-unq's firmware against the board monitor), so their
+counts are a proxy only; the rtl lane reads the board's kernel and monitor statically.
+
+### gcc's own free lists as lifetimes, and a second use after free in gcc (QEMU, 2026-11-20): the port at +0.750 %
+
+On top of the three allocators, the objects gcc keeps on private free lists are renewed (CRENEW) when they go on the
+list: bitmap elements and heads, EXPR_LIST and INSN_LIST nodes, C front-end bindings and scopes, sequence stacks, gimple
+sequences and phi nodes (scripts in `capstone/ports/spec-cpu2017/own-allocators/502.gcc_r/`). SSA names are left out:
+gcc reads released names through old references by design (`SSA_NAME_IN_FREE_LIST`).
+
+| part (train01, gcc's code, against the arm with both gcc fixes) | cost | renewals |
+|---|---:|---:|
+| pools, GC heap, obstacks (refined) | +0.478 % | |
+| bitmap elements and heads | +0.236 % | 4,043,806 |
+| EXPR_LIST, INSN_LIST | +0.034 % | 686,221 |
+| bindings, scopes, sequence stacks, gimple sequences, phi nodes | +0.001 % | 97,371 |
+| **all** | **+0.750 %** | |
+
+- Every output matches. A bitmap fixture shows what the list port adds: an element freed by bitmap_clear_bit or
+  bitmap_clear faults with it and reads without it, also with the obstack port in place.
+- **A second use after free in gcc 4.5** (the first was df_insn_rescan): `remove_phi_node` calls
+  `release_phi_node (phi)`, which puts the node on gcc's free list, then `release_ssa_name (gimple_phi_result (phi))`,
+  which reads it through the same reference. Stock survives because nothing reuses the node in between; with the phi
+  list ported, train01 faults there (cause 25, after 1.47 G instructions). The fix swaps the two calls; output unchanged,
+  -543 instructions; it is in every arm, with a new baseline. Whether either gcc fix is mentioned anywhere outside this
+  record is the lead's decision.
+- **Objects of 4 KiB and more** (2026-11-20): the GC heap's 1,136 large objects on train01 are all exactly
+  representable (powers of two on page boundaries), so they now get lifetimes too (`large-port.py`); obstacks finish
+  none on train01. +0.33 M instructions; **the whole gcc port +0.752 %** of gcc's code against the arm with both gcc
+  fixes. Growing obstack objects stay without a lifetime of their own until obstack_finish: gcc reads a growing
+  object's base in four places (pretty-print.c, reorg.c), none of which runs on train01.
+
 ## Item 5: the SQLite and PHP bug corpora for the board (2026-11-23)
 
 The programme's item 5: prepare the images and the pre-registration, and the runtime lane queues them on a P1 board.
