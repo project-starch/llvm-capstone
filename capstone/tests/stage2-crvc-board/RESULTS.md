@@ -186,11 +186,17 @@ The allowance is 0.0005 × mean(K) + max(range(OFF), range(K), B_s) + 0.02 s.
     crvc_q = 0 the change adds no stall and no flop on any path.
 - **The seal control now holds on all four stages.** RESULTS' UNDECIDED stands as what one K0 boot could read. This
   reading adds the cost, and it regrades nothing.
+  - **perlbench's "holds" is weak:** no seal cost is detected, which is not the same as no cost. It read +1.26 s
+    (+0.46 %) against an allowance of 3.26 s, and that allowance is almost all range(K) = 3.10 s, which K0's own
+    excursion set. At this noise the test cannot tell 1.26 s from zero. Without K0, mean(K0b, K0c) = 276.64 gives
+    +0.24 s.
+  - On gcc, imagick and nab the allowances are small (0.03-0.99 s) and "holds" means what it says.
 - **K0's own window against the stock boots stays refuted on perlbench and nab.** That refutation was K0's single
   reading. K0b and K0c (276.61, 276.67) also lie below the stock window's floor of 277.42. Whether K, its firmware or
   the overlay moves perlbench on b42c8c644 by about 1 s is not decided here.
 - **The condition for replacing the campaign seal** (GO, the seal control holding, and the lead's agreement) now
   waits only on the lead.
-  - What is offered: gcc t1.c 1.6 % faster with CRVC. perlbench, imagick and nab do not move. No measured cost to
-    programs without the mode.
+  - What is offered: gcc t1.c 1.6 % faster with CRVC. perlbench, imagick and nab do not move. On programs without the
+    mode, no seal cost is detected: on gcc, imagick and nab within small allowances, and on perlbench at most about
+    +0.46 %, which this reading cannot distinguish from zero.
   - Board 2 is on b42c8c644, read back.
