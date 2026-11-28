@@ -1,0 +1,7 @@
+table 0695833879ef604f window ticks 664520; ticks with a non-timer kernel entry 26852
+registered pair: ticks 664520 Pearson 0.2215 (rotated 0.0684) Spearman 0.6445 (rotated 0.1246)
+registered pair, non-timer ticks dropped: ticks 637668 Pearson 0.3969 (rotated 0.0783) Spearman 0.6403 (rotated 0.1310)
+program hpm3 vs twin program misses: ticks 664520 Pearson 0.2029 (rotated 0.1453) Spearman 0.6141 (rotated 0.1247)
+program hpm3 vs twin program misses, non-timer ticks dropped: ticks 637668 Pearson 0.6578 (rotated 0.1575) Spearman 0.6090 (rotated 0.1330)
+split (graded variant, as registered): X 14.1617 Y 3.8157 X/mean 2.2735
+END (post hoc; the registered reading is unchanged)

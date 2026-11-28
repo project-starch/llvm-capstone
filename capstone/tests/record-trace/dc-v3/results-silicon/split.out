@@ -1,0 +1,14 @@
+table sha256 0695833879ef604f02de8d4013b9ce86246d8ba326aca48ae9488e5c771024a8 window [105.28, 6752.71] rc=0; program sum 26,679,585,857 (twin key 26,644,263,390); twin intervals 467257 slice 46854
+BUILD needs X / mean <= 0.6227 (graded), i.e. Y/X >= 1.6732 at a 10 % slice
+program key, total cycles (GRADED): ticks 664520 instructions 26,679,585,857 cycles 166,185,499,490 mean CPI 6.2289
+  aligned: X_slice 14.1617 Y_rest 3.8157 X/mean 2.2735 Y/X 0.2694 (against) (weighted ratios 15.4299 / 5.2053) hpm3/kins slice 479.022 rest 115.109 slice share 0.1001 r 0.2215
+  shifted control: X_slice 5.3147 Y_rest 4.0202 X/mean 0.8532 Y/X 0.7564 (against) (weighted ratios 8.0595 / 6.0253) hpm3/kins slice 208.361 rest 145.221 slice share 0.1001 r 0.0684
+  UNALIGNED (not read)
+program key, program cycles: ticks 664520 instructions 26,679,585,857 cycles 149,137,877,260 mean CPI 5.5900 (reported, not graded)
+  aligned: X_slice 12.7233 Y_rest 3.4765 X/mean 2.2761 Y/X 0.2732 (against) (weighted ratios 13.9114 / 4.6642) hpm3/kins slice 479.022 rest 115.109 slice share 0.1001 r 0.2215
+  shifted control: X_slice 4.7141 Y_rest 3.6679 X/mean 0.8433 Y/X 0.7781 (against) (weighted ratios 7.0613 / 5.4263) hpm3/kins slice 208.361 rest 145.221 slice share 0.1001 r 0.0684
+  UNALIGNED (not read)
+all-mode key, total cycles: ticks 664520 instructions 30,658,727,592 cycles 166,185,499,490 mean CPI 5.4205 (reported, not graded)
+  aligned: X_slice 7.0399 Y_rest 3.7407 X/mean 1.2988 Y/X 0.5314 (against) (weighted ratios 9.8151 / 4.9322) hpm3/kins slice 291.767 rest 114.107 slice share 0.1000 r 0.4640
+  shifted control: X_slice 5.0304 Y_rest 3.8321 X/mean 0.9280 Y/X 0.7618 (against) (weighted ratios 6.7049 / 5.2778) hpm3/kins slice 174.145 rest 127.177 slice share 0.1000 r 0.0855
+  ALIGNED
