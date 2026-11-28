@@ -8881,3 +8881,258 @@ twin-cm3. The two overlays' manifests differ in that one file and nowhere else.
 - Three repetitions per arm, one boot, ungated.
 - The clock value is the overlay's build time, so the boot's wall clock started at 03:24:34Z. Any value over 30 days
   past the epoch serves.
+
+## Line B campaign arm "Full + ports": gcc's and perlbench's ports as B5TL1-paired stages (2026-11-26)
+
+runtime's Line B plan (dev b4aae7e416e8, `docs/plans/2026-11-25-line-b-final-campaign.md`) adds an arm "Full + ports":
+- B5TL1 on b42c8c644, with this lane's gcc port (all-abc-bm-ls-tfl-phi) and perlbench port in place of the stock
+  stages.
+- The plan's audit found that neither port was in any campaign arm.
+- runtime's rule for the pair: the port stages use B5TL1's compiler identity and flags, and differ only in the port's
+  own sources and shim. They are checked against B5TL1's replayed compile lines, not only run.sh.
+
+### The images: B5TL1's own build trees, recompiled with the port sources
+
+`<hdd>/nested/b5b2/ports/build-ports.sh` (`7c40ced6…`) copies the compiler lane's B5TL1 build trees
+(`<hdd>/perf/cclever/arms/B5TL1/spec/<bench>`, read-only) and rebuilds each with that tree's own `compile.txt` and
+`link.txt`.
+- The compiler is B5TL1's `sdk/capstone-cc` (`6efe2f77…`), which runs llvm-c9 clang 29027126f39b (`ecd6d8c4…`), with
+  the traplean1 SDK.
+- The flags are B5TL1's own compile lines. B5TL1's `extra-flags` file is byte-equal to FRCDKMSa3's, and the base set is
+  the same.
+- Each image is stripped as build-arm.sh strips (llvm-c4 objcopy, keeping `.capstone_virtual`,
+  `.capstone_application` and `.capstone_domreq`).
+- Each image is scanned with `scan_illegal.py`, and `trap_altstack` is checked present (the trap runtime).
+
+| arm | what differs from B5TL1's tree | strip.dom sha256 | scan | CDERIVE | CREVOKE | CRENEW |
+|---|---|---|---|---:|---:|---:|
+| perl-stock | nothing: the replay control | `f3c8c80d71844564` = B5TL1's | ILLEGAL=0 | 6 | 5 | 1 |
+| perl-full | heads + bodies + HE + op slabs (rev 4), defines, shim, header dir | `b4eb3e6f267f5f34` | ILLEGAL=0 | 96 | 15 | 1 |
+| perl-fullnr | perl-full + `_BODIES_NOREVOKE`, `_OPS_NOREVOKE` | `1f00aa5238b003c0` | ILLEGAL=0 | 96 | 8 | 1 |
+| gcc-stock | nothing: the replay control | `f800e015d161c911` = B5TL1's | ILLEGAL=0 | 6 | 5 | 1 |
+| gcc-port | 11 sources and `sublet-port.h` | `cff54b2a361867f2` | ILLEGAL=0 | 81 | 9 | 44 |
+
+- **Both replay controls reproduce B5TL1's images byte for byte.** So the replay is B5TL1's build, and the port arms
+  differ from it only where the table says.
+- **perl-full** is the twin's full port (section "perlbench item 3: the full port", image `ce3a48e5` on the vm route):
+  - the committed `port-sv-heads.py`, `fix-lookup.py`, `fix-lookup-pages.py`, `port-sv-bodies.py`, `port-he.py` and
+    `port-op-slabs.py` (revision 4), run on the copy;
+  - the patched sources are asserted equal to the twin's full tree (`perlspec/fx2/full`), apart from Makefile.spec and
+    the build products;
+  - each of the 69 compile lines is B5TL1's, plus `-DPERL_CAPSTONE_SUBLET -DPERL_CAPSTONE_SUBLET_BODIES
+    -DPERL_CAPSTONE_SUBLET_HE -DPERL_CAPSTONE_SUBLET_OPS`, plus `-include oneop-shim.h` (`335b499c…`, Fig. 10's
+    one-operand revision: `capstone_cap_revoke_child(parent, child)` becomes `capstone_cap_release(child)`), plus `-I`
+    to a frozen copy of the B5TL1 runtime tree's `capability.h` (`a502b2a6…`) and `capability-slot.h` (`a00a47fc…`).
+  - The CREVOKE census fires: the control has 7 fewer, the three allocator ports' 7, as on the twin's full-nr.
+- **gcc-port:**
+  - each of the 11 port files (`alloc-pool.c bitmap.c c-decl.c df-scan.c emit-rtl.c ggc-page.c gimple.c
+    include/obstack.h lists.c obstack.c tree-phinodes.c`) is first checked byte-equal between B5TL1's tree and oneop's
+    stock tree, then replaced by `oneop/gcc-arms/all-abc-bm-ls-tfl-phi`'s;
+  - `sublet-port.h` is added;
+  - the 387 compile lines are unchanged, as in oneop, where the port changes no compile line.
+- **Fixtures** (`build-fixtures.sh`, `5ee38100…`): the committed `make-{bodies,he,ops}-fixture.py`, each generated from
+  the tree's own `perlmain.c`, compiled with its `perlmain.o` line and linked in its place, on perl-full and
+  perl-fullnr. All six scan ILLEGAL=0.
+
+### The stages and payloads: the campaign's own overlays with the image replaced
+
+The campaign pairs gcc's t1.c in overlay `SP-B5TL1-g3` and perlbench's makerand.pl in `SP-B5TL1-g4mk` (runtime's
+`trapk/fpga/spec`, relinked into CF-* by `trapk/build-campaign.sh`).
+- B5TL1's own stages were made by replacing the image in an existing stage (plan.json `native.arm_replaced`).
+- `make-port-stages.py` (`374b3cc4…`) does the same:
+  - it copies `SP-B5TL1-<g>/ovl` whole to `board/SP-B5TL1P-<g>/ovl`;
+  - it replaces only the trap-route image;
+  - it records a `port` entry in plan.json.
+- `diff -rq` against the source overlay is asserted to give exactly plan.json and the image. So /init (`d6b55a97…`),
+  smoke.dom, probes.list, run.sh and in/ are byte-identical.
+- g4mk's plan.json `executables` entry names an older arm's image (`371553e3…`, B5T), inherited from its source stage.
+  The shipped binary is B5TL1's `f3c8c80d…`, checked by hash. The label is stale, not the content; runtime records it in
+  spectest Amendment 12. The port stage leaves that field as it is.
+- runtime built the payloads on the final Full kernel. This lane rechecked both hashes:
+  - fpga-final, NO_HZ_IDLE, TRAP_TEST off, msghdr loader in;
+  - keep-tags firmware with `FW_FAST_RDTIME=y` (2 fast-path references);
+  - `caplifive-b5b2.dtb`.
+
+| payload | stage | fw_payload.bin sha256 | bytes |
+|---|---|---|---:|
+| CF-B5TL1-g3 (stock pair) | gcc stock | `997e2fd6fdbdecdf…` | 21,662,216 |
+| CFP-B5TL1-g3 | gcc-port | `6616eecf0c797071…` | 21,662,216 |
+| CF-B5TL1-g4mk (stock pair) | perl stock | `e82d42ebe558cb18…` | 19,565,064 |
+| CFP-B5TL1-g4mk | perl-full | `432e6ae27d5aa062…` | 19,565,064 |
+
+- runtime checked that each built overlay's manifest equals `SP-B5TL1P-<g>/ovl` byte for byte.
+
+### The twin, at the board's memory: protection fixture and the stage pair (2026-11-26 13:57-14:00)
+
+`twin-ports.sh` (`064197f8…`) runs both boots:
+- qemu-crv, Image `749fed26…`, the keep-tags fw_jump.elf, `sublet.dom_wide_grants=1`;
+- runtime's `trapk/boot-long.py` with `BOOT_MEM=962M` and `BOOT_SILENCE_S=21600`;
+- /init = `init-twin` (`66815b00…`): the campaign overlays' /init plus a per-stage sampler of the lowest MemAvailable.
+  It is twin-only and the same on every stage, and is not in the board overlays.
+- **Disclosed:**
+  - The first fixture boot (13:43) had a non-executable /init. The kernel fell back to buildroot's init and waited
+    at a login prompt. It was stopped after 13 min, and nothing was read from it.
+  - The runner now refuses an /init that is not 0755, tested both ways. The first grading of the stage pair had no
+    grading root, because the root was never created, so every stage read MISS on a missing plan.json. The same
+    capture was regraded once the root was made, and that grade is the one below.
+
+**Fixture** (35 commands, `fixture/stage-fx`, console log `4d4dd517…`): the bodies, HE and ops fixtures on perl-full and on
+perl-fullnr.
+
+| build | bodies (modes 0-4) | HE (modes 0-4) | ops (modes 0-7 full, 0-6 control) |
+|---|---|---|---|
+| perl-full | 0 reads (`cur=5`); 1-4 fault, `sublet: fault cause=25` | 0 reads; 1-4 fault, cause 25 | 0 reads; 1-4 fault, cause 25; 5 `errors=3`; 6 `errors=0`; **7 `booted`, rc 0** |
+| perl-fullnr | 0-3 read (1 and 3 the freed body, 2 the old body); 4 faults, cause 25 | 0-4 read (1-2 `read_after_delete`, 3-4 `read_after_free`) | 0-3 read (1-3 `read_after_free`); 4 faults, cause 25; 5 and 6 as on full |
+
+- **34 of 35 read as the vm-route twin's full-port fixture did** (`perlfxfull-ce3a48e5`): every fault, every control
+  read, and the live reads before each mode-3 and mode-4 fault: bodies 4,999 and 3,000, ops 2,999, all good, 0 bad.
+- So each of the three ports' protection holds on the trap route, and removing the seven CREVOKEs lets the stale reads
+  through.
+- **Mode 7 differs, and the cause is the route.** Mode 7 is the boot's positive control. It parses `-e 0`, whose script
+  perl opens as /dev/null, and the vm-route twin's sandbox refuses that (EACCES), so perl_parse fails. The trap route
+  runs a plain Linux process, which opens /dev/null. This log has no `Permission denied` line, where the vm route's
+  carries one, so the boot succeeds and prints `booted`.
+  - So on this route the boot check's failure path is not exercised. Modes 0-6 boot from `fx-boot.pl` and return or
+    fault as predicted.
+
+**Stage pair** (one boot, console log `9d019eca…`), graded by `grade-spec-chain.py` (`4fa95eaf…`) with
+`SPEC_STAGE_ROOT=ports/twinroot`: `C=ok`, **all four PASS**, specdiff 1/1 each.
+
+| stage | image | run (s, twin) | lowest MemAvailable (kB, of 943,568) |
+|---|---|---:|---:|
+| B5TL1 perl stock (g4mk, makerand.pl) | `f3c8c80d…` | 59.81 | 859,276 |
+| B5TL1P perl-full | `b4eb3e6f…` | 57.27 | 859,356 |
+| B5TL1 gcc stock (g3, t1.c) | `f800e015…` | 1.25 | 856,400 |
+| B5TL1P gcc-port | `cff54b2a…` | 1.47 | 857,760 |
+
+- **Memory:** neither port lowers the system's lowest MemAvailable below stock's.
+  - perl reads +80 kB, and gcc +1,360 kB.
+  - The sampler reads once a second. gcc's 1.25-1.47 s run gets one or two samples, so its figure is weak.
+- The twin's run times are not silicon's. They are given, and they are not predictions.
+
+### Pre-registration: the "Full + ports" boots CFP-B5TL1-g3 (gcc) and CFP-B5TL1-g4mk (perlbench) on b42c8c644 (written 2026-11-26 14:03 host time (+08), before either boot)
+
+**Question.** Do gcc's port (all-abc-bm-ls-tfl-phi) and perlbench's full port (heads, bodies, hash entries, op slabs) run
+on B5b-2 silicon with B5TL1's answers, in the campaign's own form? What does each cost there in wall time, against its
+stock pair on the same seal and kernel?
+
+**The boots.**
+
+| boot | payload (above) | pairs with |
+|---|---|---|
+| CFP-B5TL1-g3 | `6616eecf0c797071…` | CF-B5TL1-g3 `997e2fd6…` |
+| CFP-B5TL1-g4mk | `432e6ae27d5aa062…` | CF-B5TL1-g4mk `e82d42eb…` |
+
+- Seal: the full **b42c8c644**, read back by name before and after each boot.
+- runtime allocates the board and slot, and the board lane runs both boots with the same runner, bounds and procedure as
+  the campaign's CF-B5TL1-<g> boots.
+- A pair is read only when both of its boots ran on the same board and seal.
+- If the runner's logs carry no preflight-gate line, the boot is reported **UNGATED**.
+
+**Predictions.**
+1. Each port boot: smoke `C=ok`, its one stage `PASS` (QSTEP rc 0, specdiff 1/1), as on the twin.
+2. **No time prediction.** Each port boot's run time (`up1 − up0`) against its stock pair's is the reading. N = 1 per
+   arm. The twin's +17.6 % (gcc) and −4.2 % (perl) are an emulator's, and predict nothing on silicon.
+
+**Grader.**
+- `SPEC_STAGE_ROOT=<hdd>/nested/b5b2/ports/boardroot python3 <hdd>/b5b2linux/grade-spec-chain.py <UART> <out>
+  B5TL1-<bench>` (`4fa95eaf…`). `boardroot/B5TL1/<bench>` is the port stage (`ports/stages/<bench>`).
+  run-stage.py's reader does not read plan.json's image hashes, so the port stage's plan.json and the stock one read
+  the same.
+- Controls in board form: the twin capture's port stages, renamed to their board names (`ports/grade-ctl/`):
+  - `pos-g3` and `pos-g4mk` read PASS, exit 0;
+  - `neg-g3` and `neg-g4mk`, each with one base64 character flipped in its output's in-band file, read MISS, exit 1.
+
+**How each outcome reads.**
+- **PASS:** the port runs on silicon with B5TL1's answer. Its time against the stock pair is the port's silicon cost on
+  this stage, N = 1.
+  - It joins Line B's Full + ports row. The share is the runtime and rtl lanes' to compute, with the per-event prices
+    named by their source.
+- **MISS with QSTEP rc 0:** a wrong answer, reported with the stage's read lines. That is a correctness finding about
+  the port on silicon.
+- **A fault line (`sublet: fault`)** in a port boot and not in its stock pair: reported with its pc, against the port's
+  sources.
+- **A silence stop or a stage cut:** no reading for that boot. The wedge snapshot goes to runtime.
+
+**Amendment 1 (2026-11-26 14:27 host time (+08), before any of the four boots): the grader becomes grade-spec-chain-v2.py, with v1 recorded beside it.**
+- **Why.** nested-corpus showed that on silicon a kernel printk can land inside a program's own console output
+  (result above, 0e8089933116). The board lane then found that v1 (`4fa95eaf…`) is wrong on two shapes:
+  - a foreign line inside an `@@SPEC-FILE` block reads MISS, which protection did not cause;
+  - a mid-line splice inside an `@@SPEC-HASH` block silently truncates a hash.
+- **v2** is `<hdd>/b5b2linux/grade-spec-chain-v2.py`, sha256 `b976d2884c8c42d5…`. It is the board lane's, pre-registered at
+  llvm-capstone board/meas-pw `5106037bcc89`.
+  - It is v1 plus one step: inside those blocks only, it removes every `[ <t>] …` and `TRAPTEST: …` line with its
+    newline, so that a split line rejoins.
+  - A line still foreign afterwards makes the stage NO READING, never MISS. gzip's CRC32 checks every decoded file.
+- **Checked here:**
+  - v2 on `ports/grade-ctl/`: pos-g3 and pos-g4mk PASS, neg-g3 and neg-g4mk MISS, exit codes 0, 0, 1, 1, as under v1;
+  - a copy of pos-g3 with a kernel fault line spliced mid-line into the t1.c output's SPEC-FILE block: v1 MISS, exit 1;
+    v2 PASS with `INBAND … 1 interleaved line(s) removed`, exit 0;
+  - the twin capture of the stage pair: v2's output is identical to v1's (all four PASS).
+- **Binding:** v2's verdict, with the same stage roots as registered (`ports/boardroot` for the CFP boots). v1's line is
+  recorded beside it. A stage where the two differ is reported with both readings and v2's INBAND line.
+- Nothing else changes: the boots, the payloads, the predictions and the outcome readings.
+
+### Result: "Full + ports". Both ports PASS on silicon with B5TL1's answers, and so do both stock pairs; v2 and v1 agree on every row (board 2, b42c8c644, 2026-11-26 15:37-16:14 host time, read against c4732c42a52b with Amendment 1 1ab5179e06d3)
+
+**Platform, as read back.** One board, one seal, one kernel per pair, so both pairs are readable.
+
+| boot | booking | payload | host time | uart sha256 | preflight |
+|---|---:|---|---|---|---|
+| CF-B5TL1-g3 (stock) | 1586 | `997e2fd6fdbdecdf…` | 15:37:23-15:42:58 | `ef564f145a309141…` | UNGATED; read afterwards, BLOCK by C10's 20 MB budget |
+| CFP-B5TL1-g3 (port) | 1587 | `6616eecf0c797071…` | 15:43:00-15:48:36 | `5e4b0123351f21a8…` | UNGATED; read afterwards, BLOCK by C10's 20 MB budget (21.66 MB) |
+| CF-B5TL1-g4mk (stock) | 1588 | `e82d42ebe558cb18…` | 15:48:42-16:01:34 | `2522348b57230d99…` | GO |
+| CFP-B5TL1-g4mk (port) | 1589 | `432e6ae27d5aa062…` | 16:01:41-16:14:34 | `4c1171058609dd33…` | BLOCK by C10's FDT count; runtime ruled past it |
+
+- The board lane ran the boots and preflight-board-run.sh. Every boot's readback names `…-r80-r77_b42c8c644.bit`
+  before and after, and every booking was released.
+- Preflight ran once, at 07:44:09Z, on all four payloads. The two g3 boots had started before it (07:37:22Z and
+  07:42:59Z, their chain.log START lines), so both are UNGATED and their BLOCK is an after-the-fact reading. The g4mk
+  boots started after it.
+- **C10's BLOCKs are not about the payloads' contents.**
+  - The g3 size BLOCK hits runtime's own B5TL1-g3 payload identically, and that payload ran on this seal.
+  - The FDT BLOCK on CFP-g4mk is a false positive. The payload has the one real FDT at `0x14000` (3,518 B, version 17),
+    as CF-g4mk has. Its second `d00dfeed` sits at `0xd73e9a` inside compressed data, with a totalsize of
+    1,180,622,853, and is no FDT (checked here on the payload). The fixed check (dev `6daffca3824c`) reads GO.
+- **The port images are in the port payloads,** by each payload's overlay manifest. CFP-g3 carries `cpugcc_r_base.native`
+  `cff54b2a361867f2…` and CFP-g4mk carries `perlbench_r_base.native` `b4eb3e6f267f5f34…`, the port images built above.
+  The captures print no image hash, so the identity rests on the payload hash.
+
+**Grades.** Binding: v2 (`grade-spec-chain-v2.py` `b976d2884c8c42d5…`), with the registered stage roots; v1
+(`4fa95eaf…`) beside it. The board lane graded the boots, and every row was rerun here with the same output.
+
+| boot | stage root | v2 | v1 | v2 INBAND | `sublet: fault` lines |
+|---|---|---|---|---|---:|
+| CF-g3 | `c4/b5b2spec/board-stages` | `C=ok`, gcc PASS, rc 0 | the same | none | 0 |
+| CFP-g3 | `nested/b5b2/ports/boardroot` | `C=ok`, gcc PASS, rc 0 | the same | none | 0 |
+| CF-g4mk | `b5b2linux/g4mkroot` | `C=ok`, perlbench PASS, rc 0 | the same | 1 line removed | 0 |
+| CFP-g4mk | `nested/b5b2/ports/boardroot` | `C=ok`, perlbench PASS, rc 0 | the same | 1 line removed | 0 |
+
+- The two INBAND removals are whole `TRAPTEST: tick` lines (396.88 and 396.87) inside the perl hash block. v1's own
+  filter also dropped them, so the two graders agree.
+
+**Against the predictions.**
+1. **Met, on both port boots:** smoke `C=ok`, and the one stage PASS.
+2. **The time readings** (`up1 − up0` of the stage's `@@SPEC-END`, 0.01 s resolution, N = 1 per arm):
+
+| stage | stock | port | port / stock | twin port / stock |
+|---|---:|---|---:|---:|
+| 502.gcc_r (t1.c) | 5.55 s | 5.83 s | 1.050 | 1.176 |
+| 500.perlbench_r (makerand.pl) | 275.70 s | 279.75 s | 1.015 | 0.958 |
+
+- gcc's difference, 0.28 s, is 28 resolution steps over a 5.5 s run.
+- These are readings, one boot per arm, not cost estimates. The twin's ratios are an emulator's, and they did not
+  predict these.
+
+**Reading.**
+- Both ports run on B5b-2 silicon in the campaign's form with B5TL1's answers, with no fault line in either. That is the
+  first board run of each:
+  - gcc's all-abc-bm-ls-tfl-phi port;
+  - perlbench's full port (heads, bodies, hash entries and op slabs).
+- They join Line B's Full + ports row. The share is the runtime and rtl lanes' to compute, with the per-event prices
+  named by their source.
+
+**Limits.**
+- One boot per arm. Test-size inputs only: gcc's t1.c and perl's makerand.pl.
+- The port's image identity is read from the payload, not from the capture.
+- Both g3 boots are ungated. CFP-g4mk was preflight-BLOCKED by a false positive and ran on runtime's ruling.
