@@ -169,6 +169,43 @@ open.
   images got their flags from the replayed `make.out` lines. The measured runtime (alloc-lean) is not on dev. Landing
   it is the lead's decision.
 
+## Audit and decisions, 2026-11-28 (the lead: "audit the current state thoroughly, then decide")
+
+Each row was re-read at its source this morning.
+
+| Item | State on 28 Nov | Record |
+|---|---|---|
+| Campaign (P1-P4) | Phases A, C, C2 and board 2's long rows read: P1 on 42 boots, P2 everywhere, P3 on imagick and gcc (perlbench undecided, inside the noise), P4 within 0.06 % over three boards. The qualification perl gap is not reproduced (1.81 s of 11.02 s). Phase B runs on boards 1 (CS) and 3 (CF) for about a day more | runtime/b5b2-linux cf82e5bc09b5 |
+| Item 10, stage 2 | Seal N 796af23d9 built clean (WNS +1.796, LUT 149,891). On board 2: GO by gcc t1.c, −1.62 %; perlbench, imagick, nab flat; outputs equal on every boot (checked here with a positive control); the seal's cost on perlbench is not detected: +1.26 s against an allowance of 3.26 s that is the K reference's own range. N has not run the silicon kits that qualified b42c8c644 (b5b2n, crevoke4b, wapflu) | compiler/stage2-trap-spec 30a2f27261b8, 249d7eeb8d65 |
+| Placement control | code placement alone moves perlbench 11.38 s and nab 2.21 s on b42c8c644 | c89f177d0403 |
+| Record cache, mcf | LB 1024x8 NO BUILD on silicon's own tick positions (n 7.49 M, 5.45x under the line). RC stays UNDECIDED: no owner of c's upper bound | dev a7038b49974f; runtime/b5b2-linux b341d69fcca6 |
+| Item 7, Plain | images built 25 Nov (tests/line-b-plain, dev 22145821659d) and smoke-tested on the twin; **never booted on rvbase**; their four payloads use stock OpenSBI without FW_FAST_RDTIME and put x264 with imagick, so they do not meet this plan's matching rules (the Full arm runs FW_FAST_RDTIME; x264 needs an image of its own). The firmware supports FW_FAST_RDTIME without keep-tags (fw_base.S:932), and the DTS memory nodes are equal | dev 22145821659d |
+| Items 6, 8, 9, 14 | no progress since 26 Nov (train memory checks, train stages, the re-registrations, the embedded suites) | git log --all since 25 Nov |
+| Item 13 | the hardware-cost table rebuilt from the sealed builds | land/rtl-b5b2-kitsil 26801c60085d |
+| Landing | 51 commits on runtime/b5b2-linux are not on dev (kits b5b2-spectest, -campaign, -ticklog and others); the DECLARED-checker fix waits on preflight-declared-multi aca4580de705 | |
+| Incidents open | two JTAG debug-module busy timeouts on two boards (N = 2), both recovered by one rerun; unattributed | campaign RESULTS |
+
+**Decisions:**
+1. **Stage 2 does not replace b42c8c644 for this campaign.** It reads, but on one stage of four (gcc −1.6 %), with
+   perlbench, imagick and nab flat and lbm, mcf, xz and x264 never built for the mode. Replacing the seal would
+   discard the Full arm's rows (about 60 board-hours with x264), needs N's own kit qualification, and the campaign
+   kernel would have to become K. Stage 2 stays a separate, measured result. It can be revisited after the
+   campaign, as its own arm on N, if the lead wants it in the paper.
+2. **Board 2 first takes the compiler's x264 bracket on N** (FLASH-N, X-OFF, X-ON, X-OFF2, FLASH-B42, about 13 h),
+   once its pre-registration is pushed: the compiler lane reports the lead's answer on stage 2 as "measure more
+   first". **The Plain arm goes to the first board free after that** (board 1 or 3 when Phase B ends, about 20:00Z,
+   or board 2 after the bracket): the baseline every overhead row needs, and the plan's next board item. Before any
+   Plain boot: the Plain-matched images relinked on the Plain kernel with FW_FAST_RDTIME=y (KEEP=n), in the campaign's
+   groups (g1b, g2i, g3, g4mk, x264b), overlays byte-identical to the 25 Nov images; a twin replay of all eight
+   stages; a pre-registration with predictions. On the board: a flash to rvbase 8db8f9cda, a first boot that is
+   the Plain kernel's Tier 1 and the size proof, then the short groups three times and the long groups as board
+   time allows. The runtime lane relinks (item 5); the compiler lane, which built the native images, is asked to
+   confirm them first.
+3. **Owed records:** the spectest RESULTS x264 rows with the UNGATED disclosure; the campaign, ticklog, placement and
+   stage-2 readings into `docs/ref/fpga-silicon-measurements-for-paper.md`; the kits land on dev, squashed per kit,
+   after their sessions end.
+4. **The JTAG busy timeout** becomes an ISSUES entry at a third instance, or now if one fails its rerun.
+
 ## Questions that are the lead's (none of them blocks the order above)
 
 - Landing the measured runtime and the measured codegen default on dev. The runtime lane recommends both.
