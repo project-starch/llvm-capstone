@@ -25,6 +25,11 @@ shows 2, 2 and 4 changed lines, and 0 for the other three.
 
 - v2 is v1 plus INBAND, the console-splice repair: a stage's step text is read with interleaved kernel lines taken out
   (b5b2-inband-interleave-2026-11-26 on board/meas-pw). The campaign's binding grade is v2, with v1 reported beside it.
+- **x264's PASS is reproducibility, not correctness (RETRACTED 2026-11-28, dev 59f229e2579d).** X264_REF's
+  BuckBunny_New.264 key (`0e453c44…`) is the malformed Capstone stream, so a match is reproducibility, not correctness.
+  Every Capstone x264 writes a malformed H.264 stream: x264's WORD_SIZE is sizeof(void*), which is 16 on capstone64.
+  The reconstructed frames, which SPEC's own validation compares, are still a correct-output check. The grader is
+  unchanged, because running sessions use it.
 - scan-c25ldc.py and grade-mcffault.py call mapfaults.py from their own directory.
 
 ## Equivalence with the copies that ran (2026-11-28)
