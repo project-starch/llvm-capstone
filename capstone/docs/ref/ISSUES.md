@@ -8,7 +8,7 @@ Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = 
 software). An S-n is promoted to R-n/C-n only when the origin is demonstrated, never on suspicion.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-10-16 (audit pass over the headings against caplifive_sublet_d93a8d66b; see docs/history/16-10-2026_07-00-00_rtl-audit-sublet.md). I-17 added 2026-11-28; the headings have not been re-audited against the Line B seals (b42c8c644, 14f2ef81a) since. The registry was split on 2026-09-09: this file was meant to list only what is still OPEN, and now also carries FIXED entries whose evidence is recent; resolved and retracted entries are in [`ISSUES-ARCHIVE.md`](ISSUES-ARCHIVE.md), verbatim and by ID. R-26 and R-27 archived 2026-09-09 (fixed in RTL, in the flashed bitstream 66c4e7517).
+Last updated 2026-10-16 (audit pass over the headings against caplifive_sublet_d93a8d66b; see docs/history/16-10-2026_07-00-00_rtl-audit-sublet.md). I-17 added 2026-11-28. Line B dispositions 2026-11-28 (rtl lane): S-21, S-22, S-25, S-26, S-29, R-44 and R-69 carry their Line B status against b42c8c644, R-77's status leads with "not measured on silicon", and S-35 states its owed control; the other headings have not been re-audited against the Line B seals (b42c8c644, 14f2ef81a). The registry was split on 2026-09-09: this file was meant to list only what is still OPEN, and now also carries FIXED entries whose evidence is recent; resolved and retracted entries are in [`ISSUES-ARCHIVE.md`](ISSUES-ARCHIVE.md), verbatim and by ID. R-26 and R-27 archived 2026-09-09 (fixed in RTL, in the flashed bitstream 66c4e7517).
 
 ---
 
@@ -339,12 +339,15 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 **Impact.** A program that branches on these errnos (ENODEV for an unsupported file mapping, ENOMEM for an oversize mapping) takes another path. No port has been checked for such a dependency.
 
 
-## S-21 — silicon only: every CSRUNV escape restores the S caller's registers and CSRs (M-mode ones included) from frame+1024, and a child thread's frame is a page the domain can write `OPEN — security, silicon only, found 2026-10-18 by the board lane reading vp2 Tier 1 boot 3-T1's repeat (confirmed from source by the claim-auditor and two-sided by the RTL lane; NOT YET DEMONSTRATED, the RTL lane's sim arm is pre-registered); RULED the same day by the semantics owner: the module makes a child frame unreachable before its first entry (the compiler lane), and the RTL keeps the caller snapshot out of the frame on the next bitstream (the RTL lane); a consequence of vp2 item D's decision 1; fix (a) ON DEV since ffb6fc71f523 (2026-10-20); measured two-sided on QEMU 2026-10-26 (dev 33a555af8e21)`
+## S-21 — silicon only: every CSRUNV escape restores the S caller's registers and CSRs (M-mode ones included) from frame+1024, and a child thread's frame is a page the domain can write `NOT REACHABLE ON LINE B (b42c8c644, re-checked 2026-11-28); live on P1. Was: OPEN — security, silicon only, found 2026-10-18 by the board lane reading vp2 Tier 1 boot 3-T1's repeat (confirmed from source by the claim-auditor and two-sided by the RTL lane; NOT YET DEMONSTRATED, the RTL lane's sim arm is pre-registered); RULED the same day by the semantics owner: the module makes a child frame unreachable before its first entry (the compiler lane), and the RTL keeps the caller snapshot out of the frame on the next bitstream (the RTL lane); a consequence of vp2 item D's decision 1; fix (a) ON DEV since ffb6fc71f523 (2026-10-20); measured two-sided on QEMU 2026-10-26 (dev 33a555af8e21)`
 
 > **Line B (B5b-2, the Sublet format; 904cd9c6b and later, census 2026-11-25): not reachable; live on P1.** CSRUNV, CSRETIRE
 > and CSSUPERVISE are illegal at decode before any other check (decoder.sv :1499, :1395-1397, :1484-1486 at 28fcbb646;
 > b5b2-illegal's sites 12 and 14 and its RUNV arm, 2 / 1 / 1), the supervisor's state is never set (csr_regfile.sv sets
 > sup_active only on an armed CALL, :2211, and a CSRUNV entry, :2224; CALL is deleted too), and the domain switcher's register port is tied off (cva6.sv :2451-2452 at 28fcbb646; the board lane's .vds census of 904cd9c6b's synthesis tree elaborates no capstone_dom_switcher). So no context is entered or escaped on Line B.
+> Re-checked at b42c8c644, the Full seal, 2026-11-28: decoder.sv, cva6.sv and csr_regfile.sv are unchanged from
+> 28fcbb646 (git diff empty), so the line numbers above hold. b42c8c644's routed hierarchy has no dom_switcher
+> instance (llvm-capstone 26801c60085d).
 
 Siblings: S-22 (the paused context's OWN state, read back from the same domain-reachable frame), Q-30 (the frame slots'
 visibility after an escape, which is how this was found). The main thread is not affected: its frame is a kernel page.
@@ -424,12 +427,15 @@ launcher's later unmap skips a second retire.
 **Impact.** Benign programs run unaffected (Tier 1/2 proceed). Any claim that the virtual profile isolates the kernel
 from a domain ON SILICON must not outrun this issue until (a) is on the board and the demonstration arm reads 25.
 
-## S-22 — silicon only: the paused context's own state stays in its frame, so a domain that can write a child thread's frame can change that thread's satp, srevroot and mstatus on resume and reload stale tagged register copies `OPEN — security, silicon only, filed 2026-10-18 beside S-21 from the RTL lane's two-sided read; the same module fix as S-21 covers it today; the RTL fixes (a consuming resume, the hidden words out of the frame) are the RTL lane's for the next bitstream`
+## S-22 — silicon only: the paused context's own state stays in its frame, so a domain that can write a child thread's frame can change that thread's satp, srevroot and mstatus on resume and reload stale tagged register copies `NOT REACHABLE ON LINE B (b42c8c644, re-checked 2026-11-28); live on P1. Was: OPEN — security, silicon only, filed 2026-10-18 beside S-21 from the RTL lane's two-sided read; the same module fix as S-21 covers it today; the RTL fixes (a consuming resume, the hidden words out of the frame) are the RTL lane's for the next bitstream`
 
 > **Line B (B5b-2, the Sublet format; 904cd9c6b and later, census 2026-11-25): not reachable; live on P1.** CSRUNV, CSRETIRE
 > and CSSUPERVISE are illegal at decode before any other check (decoder.sv :1499, :1395-1397, :1484-1486 at 28fcbb646;
 > b5b2-illegal's sites 12 and 14 and its RUNV arm, 2 / 1 / 1), the supervisor's state is never set (csr_regfile.sv sets
 > sup_active only on an armed CALL, :2211, and a CSRUNV entry, :2224; CALL is deleted too), and the domain switcher's register port is tied off (cva6.sv :2451-2452 at 28fcbb646; the board lane's .vds census of 904cd9c6b's synthesis tree elaborates no capstone_dom_switcher). So no context is entered or escaped on Line B.
+> Re-checked at b42c8c644, the Full seal, 2026-11-28: decoder.sv, cva6.sv and csr_regfile.sv are unchanged from
+> 28fcbb646 (git diff empty), so the line numbers above hold. b42c8c644's routed hierarchy has no dom_switcher
+> instance (llvm-capstone 26801c60085d).
 
 Siblings: S-21 (the S caller's snapshot at frame+1024, restored on every escape; same frame, same module fix), Q-30.
 
@@ -697,7 +703,15 @@ cannot show during rungs (RETRACTED, dev 9e645777a5fb). The `!same` attribution 
 **Fix:** the module faults the page in through the kernel's write-fault path (which sets D) before pinning, for
 cause 15 (`resolve_dirty`). Compiler lane, in the module queue's next revision.
 
-## S-25 — silicon only (vp2 bf3db3175): a capability store whose translation faults inside a virtual context retires with no exception and leaves a ghost entry in the store buffer's commit queue, which never drains; one ghost wedges every later DYN operation, four wedge every store `OPEN — mechanism REPORTED confirmed in simulation by the RTL lane (va-runv8 against its plain-sd control on bf3db3175, pre-registered at capstone-ariane 179b06610; the result itself not yet committed when this entry was filed), consistent with every board wedge reading; the RTL defect is R-57 (filed by the RTL lane, dev 891186fc9d93, where the trace chain and the readings sit); its fix (carry the store exception to the STC's writeback, as R-56 did for loads; capstone-ariane virtual-profile-2-c 2114e11bd) is the next bitstream's; until then no capability store may be the first access to a page (docs/design/virtual-capstone/isa.md)`
+## S-25 — silicon only (vp2 bf3db3175): a capability store whose translation faults inside a virtual context retires with no exception and leaves a ghost entry in the store buffer's commit queue, which never drains; one ghost wedges every later DYN operation, four wedge every store `FIXED IN RTL BY R-57 AND NOT REACHABLE THROUGH A CONTEXT ON LINE B (b42c8c644, 2026-11-28); live on vp2 bf3db3175. Was: OPEN — mechanism REPORTED confirmed in simulation by the RTL lane (va-runv8 against its plain-sd control on bf3db3175, pre-registered at capstone-ariane 179b06610; the result itself not yet committed when this entry was filed), consistent with every board wedge reading; the RTL defect is R-57 (filed by the RTL lane, dev 891186fc9d93, where the trace chain and the readings sit); its fix (carry the store exception to the STC's writeback, as R-56 did for loads; capstone-ariane virtual-profile-2-c 2114e11bd) is the next bitstream's; until then no capability store may be the first access to a page (docs/design/virtual-capstone/isa.md)`
+
+> **Line B (b42c8c644), 2026-11-28.** The mechanism is R-57, a faulting capability store retiring without its fault.
+> R-57's fix (2114e11bd, the store-side merge of the LSU's exception into the CAP_WB writeback) is present at
+> b42c8c644: ex_stage.sv :1561-1563 (stc_lsu_ex_now / stc_lsu_ex_saved). It was read on silicon on the batch
+> c721c1a2a, where sparse-churn COMPLETES. The context route itself is gone too: CSRUNV and CSSUPERVISE are illegal at decode before any other check (decoder.sv :1499, :1484-1486 at
+> b42c8c644, unchanged from 28fcbb646), and the domain switcher's register port is tied off (cva6.sv :2451-2452), with
+> no dom_switcher instance in b42c8c644's routed hierarchy (llvm-capstone 26801c60085d). So no virtual context is
+> entered, escaped or resumed on Line B.
 
 Siblings: R-57 (this defect's RTL entry), S-24 (the `vm` loop, a different mechanism), R-56 (the load-side twin), R-49
 (the same ghost-count shape, another cause).
@@ -733,7 +747,12 @@ and cannot show this.
 - **The Tier 2 record stays boot 4c.**
 - **Tier 3 runs with the pin off.** A wedge there with this signature is read as S-25.
 
-## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `MECHANISM SUPPORTED ON SILICON 2026-10-19 (tree A, N=1 per arm, UNGATED; five cold boots): with no process-ABI STEP since a cold boot, csupquantum (0x7C3) is still 0 and a first virtual context loops in escapes of kind 1, cause 0 (diag_escapes, 16 of 16) without progress; writing 2,000,000 or 1,000 at boot removes the spin with no STEP. On silicon the no-progress threshold lies below 1,000 cycles, where the RTL simulation retires nothing up to 1,500. Workaround: any process-ABI STEP first (b0-hello), as every recipe does. Proposed fix: a boot-time 0x7C3 write in the monitor (the var firmware's, caplifive-opensbi s26-boot-quantum aab63d5)`
+## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `NOT REACHABLE ON LINE B (b42c8c644, re-checked 2026-11-28); live on P1. Was: MECHANISM SUPPORTED ON SILICON 2026-10-19 (tree A, N=1 per arm, UNGATED; five cold boots): with no process-ABI STEP since a cold boot, csupquantum (0x7C3) is still 0 and a first virtual context loops in escapes of kind 1, cause 0 (diag_escapes, 16 of 16) without progress; writing 2,000,000 or 1,000 at boot removes the spin with no STEP. On silicon the no-progress threshold lies below 1,000 cycles, where the RTL simulation retires nothing up to 1,500. Workaround: any process-ABI STEP first (b0-hello), as every recipe does. Proposed fix: a boot-time 0x7C3 write in the monitor (the var firmware's, caplifive-opensbi s26-boot-quantum aab63d5)`
+
+> **Line B (b42c8c644), 2026-11-28: not reachable.** CSRUNV and CSSUPERVISE are illegal at decode before any other check (decoder.sv :1499, :1484-1486 at
+> b42c8c644, unchanged from 28fcbb646), and the domain switcher's register port is tied off (cva6.sv :2451-2452), with
+> no dom_switcher instance in b42c8c644's routed hierarchy (llvm-capstone 26801c60085d). So no virtual context is
+> entered, escaped or resumed on Line B.
 
 Siblings: S-23 (the same virtual entry path), S-25.
 
@@ -882,7 +901,13 @@ whose resuming CSRUNV has rd = x15; the same 21 images by sha256 as on bf3db3175
 20 twice: pym0, and pym0-fence with fence_before_entry=1, every program faulting at 0x12. Only the bitstream differs.
 Bundle: `cpython/pymalloc-repros/results/2026-10-19-vp2c-treeA/vp2-malloc`; record `records/pym0-treeA.board.txt` on
 lane vp2-tier12.
-## S-29 — the virtual-context switcher installs and restores `satp` with no TLB flush, so a context can be served the caller's translation of a virtual address and the caller, after an escape, the context's `DEMONSTRATED IN SIMULATION 2026-10-18 on bf3db3175 by the RTL lane (va-satpstale, four arms, no exceptions) and CONFIRMED ON SILICON 2026-10-19 on tree A 8522d72fe, 7 of 7 bare arms reading their pre-registered vectors, graded by image hash; FIXED on virtual-profile-2-c d427e7391 (an unqualified flush-all on the switcher's satp write), lint at baseline on all eleven counters with the UNOPTFLAT membership identical BY NAME to the base; QEMU is the STRICTER side and is the reference (it flushes on every entry, escape and resume whose translation state differs, and keeps a context's translations in an index no other context reads), ruled by the semantics owner; NO CORPUS CONSEQUENCE today, because every CSRUNV the module issues runs with the caller's live satp equal to the context's; for the caller's DATA accesses the window is an ABI RULE IN BOTH DIRECTIONS, not something software cannot work around; the surface a fence cannot cover is the caller's first instruction FETCH after an escape, which is S-23's shape and is NOT observed here`
+## S-29 — the virtual-context switcher installs and restores `satp` with no TLB flush, so a context can be served the caller's translation of a virtual address and the caller, after an escape, the context's `NOT REACHABLE ON LINE B (b42c8c644, re-checked 2026-11-28); live on P1. Was: DEMONSTRATED IN SIMULATION 2026-10-18 on bf3db3175 by the RTL lane (va-satpstale, four arms, no exceptions) and CONFIRMED ON SILICON 2026-10-19 on tree A 8522d72fe, 7 of 7 bare arms reading their pre-registered vectors, graded by image hash; FIXED on virtual-profile-2-c d427e7391 (an unqualified flush-all on the switcher's satp write), lint at baseline on all eleven counters with the UNOPTFLAT membership identical BY NAME to the base; QEMU is the STRICTER side and is the reference (it flushes on every entry, escape and resume whose translation state differs, and keeps a context's translations in an index no other context reads), ruled by the semantics owner; NO CORPUS CONSEQUENCE today, because every CSRUNV the module issues runs with the caller's live satp equal to the context's; for the caller's DATA accesses the window is an ABI RULE IN BOTH DIRECTIONS, not something software cannot work around; the surface a fence cannot cover is the caller's first instruction FETCH after an escape, which is S-23's shape and is NOT observed here`
+
+> **Line B (b42c8c644), 2026-11-28: not reachable.** The defect is the switcher's satp install and restore. CSRUNV and CSSUPERVISE are illegal at decode before any other check (decoder.sv :1499, :1484-1486 at
+> b42c8c644, unchanged from 28fcbb646), and the domain switcher's register port is tied off (cva6.sv :2451-2452), with
+> no dom_switcher instance in b42c8c644's routed hierarchy (llvm-capstone 26801c60085d). So no virtual context is
+> entered, escaped or resumed on Line B.
+> satp changes only by the kernel's own csrw, which the kernel pairs with sfence.vma.
 
 **Siblings:** S-23 (the fetch face, where this window is the strongest candidate and NOT the demonstrated
 mechanism — the board lane showed pb10's refused address is physical and covered by a loaded region, so a stale
@@ -1132,6 +1157,13 @@ silicon-specific is the cost of a delegated round.
   storm the same way on silicon.
 
 ## S-35 — silicon only (B5b-2, 904cd9c6b, board 3): SPEC mcf under Linux stops silently, an LDC at the LSU head and the store port never granted, for at least the LED window `OPEN 2026-11-25 — one instance (B5b-2 Linux boot 5, B5T mcf test, silent at uptime 2,799 s before the 3,600 s watchdog); ORIGIN UNATTRIBUTED on silicon; its shape REPRODUCED IN SIMULATION as R-80, and whether this instance is R-80 is the diagnostic seal 28fcbb646's question (pattern pre-registered, llvm-capstone land/rtl-crevoke4b c7877d008be7); observation-only apertures to read the next instance are built and gated (capstone-ariane b5b2-wedgeap 47d749153, in the combined build 28fcbb646)`
+
+> **Owed, stated plainly (2026-11-28).** Whether this instance is R-80 is unread, and nothing scheduled reads it:
+> - the discriminating control, R-80's unfixed arm b5b2-ldcexc2 on the diagnostic seal 28fcbb646, which must WEDGE
+>   on silicon, has never been run (its pattern pre-registered at llvm-capstone land/rtl-crevoke4b c7877d008be7);
+> - the fixed arm has read AS PREDICTED on a5c45a46d and 14f2ef81a, but not on b42c8c644 itself;
+> - so R-80's fix on silicon is NOT DISCRIMINATING, and S-35 stays ORIGIN UNATTRIBUTED.
+> - As of 2026-11-28 neither reading is scheduled; the 28fcbb646 control needs its own flash.
 
 Siblings: R-80 (the mechanism this shape is, DEMONSTRATED IN RTL SIMULATION: a faulting LDC that is not popped starves the
 write buffer's cache update; fix a5c45a46d). M-16 (P1 tshark stop: the same LSU head, a different store side, below). R-77 (the
@@ -1570,7 +1602,7 @@ te by the RTL lane, 2026-09-24.
 > needs registered arbitration, a miss fixture first, and synthesis. **Any remedy must fail closed and
 > re-pass R-35's acceptance fixture (exactly 7 traps).**
 
-### R-44 — the CPMP tracker still ADOPTS any unseen revnode id as valid, so R-35's authority escape remains open for S/U-mode capability enforcement `OPEN — split out of R-35 on 2026-09-25 so that closing R-35 does not orphan it; LIVE IN PRODUCTION; fix deferred on a boot-kill risk`
+### R-44 — the CPMP tracker still ADOPTS any unseen revnode id as valid, so R-35's authority escape remains open for S/U-mode capability enforcement `NOT REACHABLE ON LINE B (b42c8c644, re-checked 2026-11-28); live on P1. Was: OPEN — split out of R-35 on 2026-09-25 so that closing R-35 does not orphan it; LIVE IN PRODUCTION; fix deferred on a boot-kill risk`
 
 > **Line B (B5b-2, the Sublet format; 904cd9c6b and later, census 2026-11-25): not reachable; live on P1.** The CPMP's entries and
 > their tags change only through the CCSR write path or the domain switcher's register port (csr_regfile.sv :2189-2192,
@@ -1578,6 +1610,11 @@ te by the RTL lane, 2026-09-24.
 > CAPENTER deleted). Its enable is set only by CCSRRW (commit_stage.sv :233, :797), which is illegal at decode (decoder.sv
 > :1575, deleted in the reference). And the domain switcher's register port is tied off (cva6.sv :2451-2452 at 28fcbb646; the board lane's .vds census of 904cd9c6b's synthesis tree elaborates no capstone_dom_switcher). So on Line B the CPMP keeps its reset entries, untagged, and the
 > tracker has nothing to adopt. P1 and earlier lines are unchanged.
+> Re-checked at b42c8c644, the Full seal, 2026-11-28: decoder.sv, cva6.sv and csr_regfile.sv are unchanged from
+> 28fcbb646 (git diff empty), so the line numbers above hold. b42c8c644's routed hierarchy has no dom_switcher
+> instance (llvm-capstone 26801c60085d).
+> Under the Sublet format the CPMP trackers carry no lifetime id and VALID is held at 0, fail closed (pmp/src/pmp_data_if.sv
+> :202-212 at b42c8c644, from 8cbf393d4), so no unseen id is adopted as valid.
 
 > **The defect.** `core/pmp/src/pmp_data_if.sv:86-93` @ `4ad0df694`, inside `cpmp_revnode_tracking`:
 > when a CPMP entry presents a revnode id different from the one it tracks, the tracker takes it and sets
@@ -4395,7 +4432,12 @@ cycle's `dtlb_is_page`. `lsu_paddr_o` is unchanged.
 - Correctness: only where software maps a device through a superpage. No image has been checked for that.
 - The board's THP mcf run (runtime lane) is the cheap silicon reading of the performance half.
 
-### R-69 — a CSRUNV RESUME takes the context's mstatus and satp from the frame unchecked: a frame rewritten between the escape and the resume runs its context with bare translation and any mstatus bits (MPRV, MPP, TVM, ...) `OPEN on C.5a and E5 (present by source at e7af48457 / bitstream 3, 1fc2cd5aa / C.5a, a481031ca / E0 and 443f67892 / E5: the raw id-3 and id-66 writes and the single entry to the phase-7 precheck; vp2 bf3db3175 not checked for id 66); DEMONSTRATED IN SIMULATION 2026-11-09 on E5 443f67892 (va-runv-bare.S, predictions in its header before any run); FIX IN RTL on e5-native 14b0a57df (the resume clamp), sealed caplifive_e5native_14b0a57df (sha256 b6698b7c...), clamp measured in simulation; NOT MEASURED ON SILICON. Found 2026-11-09 by the claim-auditor of the native (i) detach/adopt design`
+### R-69 — a CSRUNV RESUME takes the context's mstatus and satp from the frame unchecked: a frame rewritten between the escape and the resume runs its context with bare translation and any mstatus bits (MPRV, MPP, TVM, ...) `NOT REACHABLE ON LINE B (b42c8c644, re-checked 2026-11-28); live on P1. Was: OPEN on C.5a and E5 (present by source at e7af48457 / bitstream 3, 1fc2cd5aa / C.5a, a481031ca / E0 and 443f67892 / E5: the raw id-3 and id-66 writes and the single entry to the phase-7 precheck; vp2 bf3db3175 not checked for id 66); DEMONSTRATED IN SIMULATION 2026-11-09 on E5 443f67892 (va-runv-bare.S, predictions in its header before any run); FIX IN RTL on e5-native 14b0a57df (the resume clamp), sealed caplifive_e5native_14b0a57df (sha256 b6698b7c...), clamp measured in simulation; NOT MEASURED ON SILICON. Found 2026-11-09 by the claim-auditor of the native (i) detach/adopt design`
+
+> **Line B (b42c8c644), 2026-11-28: not reachable.** A RESUME is a CSRUNV action. CSRUNV and CSSUPERVISE are illegal at decode before any other check (decoder.sv :1499, :1484-1486 at
+> b42c8c644, unchanged from 28fcbb646), and the domain switcher's register port is tied off (cva6.sv :2451-2452), with
+> no dom_switcher instance in b42c8c644's routed hierarchy (llvm-capstone 26801c60085d). So no virtual context is
+> entered, escaped or resumed on Line B.
 
 Siblings: none. A resumed context's satp PPN/ASID and srevroot come from the frame too. Residual 2b in the plan doc:
 the semantics owner recorded it as kernel authority, because the kernel chooses both at ENTRY. It is not this entry.
@@ -5258,7 +5300,7 @@ Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the 
   The runtime lane's makerand perf null on (d) is its own reading.
 **Exposure.** The native module's `run()`/`run_x0()` (`capstone_vm.c:2009`, `:2021`, bkit91 kernel; the runtime lane's reading) put `csrw 0x5c1, zero` in the same asm statement as every CSRUNV. So the SPEC native route never takes an S trap with srevroot non-zero after an escape, and its service resumes (gcc train01: about 2,450 per run) complete on P1 silicon with every smoke 9/9. Any other CSRUNV caller, including B5b's replacement of CSRUNV, must keep that write or have this fixed.
 
-### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `OPEN 2026-11-20; FIX IN RTL 2026-11-25 (capstone-ariane b5b2-prefix 7861abcfa: the timeout counts only after acceptance; the final B5b-2 candidate b42c8c644), simulated; SYNTHESISED in b42c8c644 (sealed, sha256 6a09f34d...190a, llvm-capstone 266e59a9a095), its Tier 1 kits AS PREDICTED on boards 3 and 2 (board/meas-pw f47b2a686ce2); THE FIX ITSELF NOT MEASURED ON SILICON: no kit value moves with it (crevoke4b-bare-2026-11-25 PREREG, b42c8c644 addendum); the false 25 DEMONSTRATED on the B5b-2 line in simulation (b5b2-crevint -DCI_YLDC (b)); was: DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
+### R-77 — the verdict probe's pre-acceptance timeout ends in an ARCHITECTURAL cause 25: a rev-node unit that cannot serve a probe for ~1 M cycles turns a live capability's access into a false safety fault `FIXED IN RTL (b42c8c644, sealed), NOT MEASURED ON SILICON (2026-11-28: no kit value moves with the fix). Was: OPEN 2026-11-20; FIX IN RTL 2026-11-25 (capstone-ariane b5b2-prefix 7861abcfa: the timeout counts only after acceptance; the final B5b-2 candidate b42c8c644), simulated; SYNTHESISED in b42c8c644 (sealed, sha256 6a09f34d...190a, llvm-capstone 266e59a9a095), its Tier 1 kits AS PREDICTED on boards 3 and 2 (board/meas-pw f47b2a686ce2); THE FIX ITSELF NOT MEASURED ON SILICON: no kit value moves with it (crevoke4b-bare-2026-11-25 PREREG, b42c8c644 addendum); the false 25 DEMONSTRATED on the B5b-2 line in simulation (b5b2-crevint -DCI_YLDC (b)); was: DEMONSTRATED IN SIMULATION on the I$-64B variant only (capstone-ariane perf/p1-ic64b 3ce15b957 = P1 + CVA6ConfigIcacheLineWidth 128 -> 512; its seal was withdrawn and never flashed), claim-audited (the timeout mechanics SUPPORTED; the first causal chain REFUTED, below); the same early-access ordering on P1 d83d3a633 is SERVED after 3,633 cycles and does not time out (one test shape); NOT MEASURED ON SILICON; the variant's starvation holder NOT TRACED; no fix written`
 
 **B5b-2 line, 2026-11-25 (the PRE fix).** The probe is accepted only when the lifetime unit is idle (capstone_sublet_life.sv
 :235, :251), and under CAPSTONE_DYN_BYPASS an independent LDC issues during a CREVOKE walk (issue_read_operands.sv
