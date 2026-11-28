@@ -5710,6 +5710,1041 @@ Readings against the predictions:
 So about 94 % of the difference is in the patched block allocators' alloc paths. Of the rest, `memset` is entered
 158,329 more times on prot. Its callers are not attributed here.
 
+## perlbench item 3: the port's code without its lifetime instructions (2026-11-24)
+
+### Pre-registration: Perl suns.pl on P1, U P N N P U in one boot, N = the port with its lifetime instructions neutralised (written 2026-11-24 08:18, before the boot)
+
+**Question.** The programme (item 3) asks where Perl 5.36's +788.8 M in-context cycles on suns.pl go. The attribution
+in "Perl with the arena lookup repaired" puts 491.7 M (62 %) in the port's +173.3 M twin instructions, priced at the
+stock arm's mean of 2.838 cycles per instruction. It leaves 32-33 % unattributed, and it calls that price the softest
+number: no board run has priced the port's instructions apart from the lifetimes they create. This boot adds an arm N
+that differs from P only in its lifetime instructions:
+- N−U is the port's other instructions at their real price;
+- P−N is the lifetime instructions together with their records.
+
+**The images.**
+- U: the stock image of every P1 Perl boot, `3012f392…` (built 2026-11-17).
+- P: `perl-protre.strip.dom` `09f8b716…`. This is patch 0001 + 0002, rebuilt today by `nested/perl/build-arms2.sh`
+  (`f8232cb6…`; FRCDKMS SDK, clang `ecd6d8c4…`, Perl tarball `f2a1ad88…` as in `PROVENANCE.txt`).
+  - It is not byte-identical to the 2026-11-18 image `693568f6…` (protfix): 10,393 bytes differ, in `.rodata`,
+    `.text` and `.data`. One known source is `__DATE__`/`__TIME__` ("Compiled at Nov 24 2026 08:07:20" against
+    "Nov 18 2026 11:03:21"). A changed string can move `.rodata` and the `.text` offsets that reach it. That every
+    differing byte comes from it is not shown.
+  - Section sizes are equal. A full opcode census of `.text` (`nested/perl/tools/capop-census.py`, `568d72b5…`) is
+    identical, and on the twin P reads the same instructions as protfix (below).
+- N: `perl-protnop.strip.dom` `d2d79d42…`. It is P plus `nested/perl/lifenop/0003-lifetime-instructions-neutralised.patch`
+  (`caf0cf33…`), an experiment patch kept outside `ports/`. In `sv.c` it redirects `capstone_cap_derive` and
+  `capstone_cap_revoke_child` to copies of their asm:
+  - the live CDERIVE (funct7 0x51) becomes MOVC (0x0a). The bytes were checked with `llvm-mc`: `movc a0, a1` and
+    `.insn r 0x5b, 0x1, 0x0a, a0, a1, x0` are both `5b 95 05 14`;
+  - CREVOKE (0x52) becomes `add x0, rs1, rs2`, a 4-byte word with the same two source registers;
+  - the refusing zero-size CDERIVE and every operand and clobber are unchanged.
+  - So a head is handed out as a copy of its arena's capability, with the cursor at the head and no record of its own.
+    The arena's own derive in `Perl_more_sv` is neutralised the same way, so each arena carries the capability that
+    `Newxz` returned. Nothing in the port reads a child's bounds.
+- Static census, P to N: CDERIVE 42 → 26 (−16, the live derive at each inlined site), MOVC +16, CREVOKE 7 → 6, ADD-to-x0
+  0 → 1. Total 4-byte words (957,966) and RVC words (273,062) are equal. The census of U to P differs in many classes,
+  so the census can fire.
+
+**Twin control** (`nested/out/npn-1`, 2^20 records, P in the stage's "unprot" slot and N in its "prot" slot, order P N
+N P): every command rc 0 with `suns.out`.
+- In-context instructions:
+  - P 1,905,129,684 and 1,905,131,815;
+  - N 1,905,130,755 and 1,905,130,627.
+  - N−P is −58 instructions on the means, inside the repeats' own spread of 2,131.
+- P equals the 2026-11-18 protfix twin run (1,905,130,536 and 1,905,132,087) within that spread.
+- So N executes P's instructions, apart from the substitutions. N−U on the twin is P−U, +173.3 M.
+
+**Configuration.**
+- Bitstream P1 (`…-pagedtbl_d83d3a633`), kit `nested/kits/bkit91-rec1m` (`node_flat_records=1048576`, SHA256SUMS
+  verified), board 1.
+- The runtime lane arms the chain `nested/p1n/p1n-b1.*` behind pid 893413 (board 1's current run and the board lane's
+  booking). The chain reads P1 back by name, and flashes it sha-checked if it is not resident.
+- Stage `nested/p1n/upn` (`upn.SHA256SUMS`) is the kit's `make-train-stage.sh` around `nested/appd/perl-upn`, made by
+  `appd/make-abba3-stage.py` (`a82bdfc5…`, make-abba-stage.py with a third arm).
+  - The smoke files are byte-identical to the perlfix stage's.
+  - Commands u1 p1 n1 n2 p2 u2, each in a fresh tmpfs copy of the inputs, with `PERL_HASH_SEED=0`.
+  - List line `upn 1200 60`, so `BAKED_TIMEOUT=4800` (the dry run prints it). Expected wall time: about 40 min of
+    commands.
+- Checked off the board (rule 8, `nested/p1n/recheck-p1k.sh` = recheck-p1.sh with the kit as a parameter):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on the perlfix boot's real transcript and on its cut, PASS all 9 steps;
+  - real firmware build 23,760,392 B, under the cap;
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/p1n/dry.log`).
+- Read by `appd/parse-abba.py` per command, with the readings computed per arm pair.
+
+**Rules.**
+- Answers: every command returns `suns.out`. Otherwise that arm is not read.
+- Repeats: 1 % in-context and 2 % kernel + other, per arm. Otherwise that arm's difference is not read.
+- Stock control: U within ±1 % of the perlfix boot's 4,914.4 M. Outside it, no comparison with that boot is made, but
+  this boot's own differences are still read.
+
+**Predictions.**
+1. **Records:**
+   - N's record counters sit at U's: hpm3, hpm4, hpm5 and hpm7 each within 10 % of the U-to-P gap from U. On perlfix
+     the gaps were +0.455 M, +12.3 M, +16.6 M and +1.45 M.
+   - N's L1D misses (hpm8) lie between U's and P's. N keeps the larger arenas and the `issued` array.
+2. **N−U, the port's other instructions on silicon: 250 M to 600 M** in-context cycles.
+   - At the mean price (2.838 a twin instruction) it would be 491.7 M.
+   - At the lookup pair's measured price (1.67) it would be 289 M.
+3. **P−N**, the lifetime instructions with their records, is the rest of P−U. Today's P−U is expected within ±5 % of
+   +788.8 M.
+
+**What each outcome says.**
+- **N−U near 491.7 M (418 to 565 M):** the mean price holds for the port's code. P−N is the 32-33 % remainder plus
+  the walks and replays.
+- **N−U below 418 M:** the port's code is cheaper than the mean, and the lifetimes cost more than the table
+  attributed.
+- **N−U above 565 M:** the code is dearer, for example through the `issued` array's cache traffic. Then the remainder
+  belongs to the code, not to the records.
+- **P−N:**
+  - From it come the measured walks (P−N hpm4) and the replays (P−N hpm7 at 17-20 cycles each).
+  - What is left is divided by the lifetime instructions P executes beyond N: on perlfix, 1.94 M CDERIVEs and
+    CREVOKEs. That gives a price per lifetime instruction, including its record traffic beyond walks and replays.
+  - This pair does not split the instruction from its record.
+
+**Limits.**
+- One run per arm, U first, not interleaved, which is the perlfix boot's design.
+- N's heads are not protected. N is an instrument, not a variant anyone would ship.
+- Item 3's CRENEW and liveness-test variant is no longer deferred behind item 5, which is done. It follows this pair,
+  in the one-operand environment ("The CRENEW and liveness-test variant" above).
+
+### Result: U P N N P U on P1 (board 1, 2026-11-24 09:29-10:08, read against d1a4526e5f8e)
+
+**The boot.**
+- Chain `nested/p1n/p1n-b1.*` (pid 2048772) on board 1. It read P1 back by name as resident (no flash) and booked
+  1465, then unbooked.
+- Smoke PASS on all 9 steps. The watchdog sampled throughout (151 ALIVE/QUIET lines).
+- The command line carries `capstone_vm.node_flat_records=1048576`.
+- The staged images decompress to the registered hashes: U `3012f392`, P `09f8b716`, N `d2d79d42`.
+- The chain's generic SPEC classifier logged `SPEC rc=2 MALFORMED: @@SPEC-DONE 6 but 0 commands ended`. It reads
+  SPEC's own per-command markers, which this stage does not print, so this line is not a verdict.
+- The pre-registered reader is `appd/parse-abba.py` (`1d0459d5…`) on `board.txt`, then `nested/p1n/read-upn.py`
+  (`4bec0c0e…`). Its output is `nested/p1n/upn.json` (`647f93bb…`).
+
+**The checks.**
+- Answers: all six commands rc 0, each with `suns.out`.
+- Repeats:
+  - In-context cycles, all three arms: U 0.06 %, P 0.06 %, N 0.02 %, all within 1 %.
+  - Kernel + other: U 2.11 % and P 2.78 %, both over 2 %, so they are not read. N is 0.04 %.
+- Stock control: U 4,915.1 M against the perlfix boot's 4,914.4 M, +0.02 %. Met.
+
+**In-context cycles, means of each arm's two commands:**
+
+| pair | difference | share of P−U |
+|---|---:|---:|
+| P−U | +789.1 M (+16.05 %) | 100 % |
+| N−U, the port's code without its lifetime instructions | +564.9 M (+11.49 %) | 71.6 % |
+| P−N, the lifetime instructions with their records | +224.2 M (+4.09 % of N) | 28.4 % |
+
+**Predictions.**
+1. **Records.**
+   - hpm3, hpm5 and hpm7 met: N−U is 6.1 %, 0.3 % and 4.1 % of the U-to-P gap.
+   - **hpm4 missed:** N's walk cycles are 11.1 % of the gap from U, against the pre-registered 10 % (U 18.51 M,
+     N 19.88 M, P 30.87 M).
+   - hpm8 met: N's L1D misses (19.93 M) lie between U's (14.52 M) and P's (21.98 M).
+   - So N has U's record traffic, as it should with no records of its own. It keeps 72 % of P's added L1D misses
+     (+5.41 M of +7.46 M).
+2. **N−U, +564.9 M, met** (band 250-600 M).
+   - It falls in the outcome range "the mean price holds" (418-565 M), 0.1 M below its upper edge.
+   - The implied price is 3.260 cycles per twin instruction (564.9 M over +173,265,263). Stock's mean is 2.838, so
+     this is 15 % above it.
+   - The reading sits on the boundary between "the mean holds" and "the code is dearer". The repeats (0.06 %, about
+     3 M) cannot place it on either side.
+3. **P−U, +789.1 M, met** (+0.0 % from +788.8 M, band ±5 %).
+
+**The revised attribution of P−U, +789.1 M in-context cycles:**
+
+| part | cycles | share | price and its source |
+|---|---:|---:|---|
+| the port's code, measured | 564.9 M | 71.6 % | N−U on the board. The twin counts it at +173.3 M instructions, so 3.260 cycles each (measured, the replacement for the 2.838 mean) |
+| record-table walks | 11.0 M | 1.4 % | P−N hpm4, read as cycles (measured) |
+| event-23 replays | 23.7-27.9 M | 3.0-3.5 % | P−N hpm7, +1.39 M at 17-20 cycles each (Addendum 1's RTL estimate, from source) |
+| the lifetime instructions and their other record traffic | 185.4-189.5 M | 23.5-24.0 % | P−N less the two rows above |
+| **not attributed** | **none at this resolution** | | The rows add to P−U by construction: N−U + P−N = P−U |
+
+- **A price per lifetime instruction.**
+  - The port's executed CDERIVEs and CREVOKEs come from the one-operand environment's opcode counts of the same
+    patches on suns.pl. Protected minus stock is +1,077,705 CDERIVE and +864,589 CREVOKE, 1,942,294 together.
+    - Protected: 0001 + 0002, `nested/oneop/fig10/runs/fig10-perl02-opc-p`.
+    - Stock: the same `perl/stock` image, `fig10-perl-r2-opc-u`.
+    - (Corrected before landing. The first version cited `fig10-perl-r2-opc-p`, which is 0001 alone with the linear
+      arena search. Its counts differ by 10 and 6, so no figure moves.)
+    - That count is from the one-operand build of the patches, not from the board image's own trace.
+  - That makes 95.5-97.6 cycles per lifetime instruction. N runs a MOVC or an ADD in each one's place, so this price
+    is over a 1-cycle substitute.
+  - It includes each instruction's record traffic beyond the walks and replays. This pair does not split the
+    instruction from its record.
+  - It sits at the top of the 63-100 cycles assumed in the perlfix pre-registration.
+- **Where the previously unattributed 255.7-260.1 M (32.4-33.0 %) goes.**
+  - At the 2.838 mean the code took 491.7 M. Measured, it takes 564.9 M, so 73.2 M of the remainder is the code's.
+  - The lifetime instructions take 185.4-189.5 M, most of it.
+  - The walks (12.3 → 11.0 M) and the replays (24.7-29.0 → 23.7-27.9 M) each move by about 1 M against the earlier
+    table, because P−N leaves out the small part of each that N−U carries.
+- **The L1D misses are not priced.** N−U carries +5.41 M of them, and P−N +2.05 M. They are inside the code's and the
+  lifetimes' rows above, not separate from them.
+- **Context entries are the code's, not the lifetimes'.** N−U is +1,819 entries (+39.7 %) and P−N is +32. What the
+  port's code does that enters the context more often is not examined here.
+- Uptime: N−U +27 s and P−N +10 s.
+
+**Limits.**
+- One run per arm, U first, not interleaved. The two U commands bracket the boot and agree within 0.06 %, so drift
+  over it is no larger than that.
+- Kernel + other is not read: U's and P's repeats fail the 2 % rule.
+- N is an instrument. Its heads are unprotected copies of their arena's capability.
+
+## perlbench item 3: the CRENEW variant, Perl 5.36's SV heads in the one-operand environment (2026-11-24)
+
+### Pre-registration: Fig. 10's Perl revision plus 0002, with heads renewed instead of released, in oneop (written 2026-11-24 08:37, before the runs)
+
+**Question.** The programme (item 3) asks for a variant with CRENEW and the liveness test.
+- **The liveness half needs no run.** As "The CRENEW and liveness-test variant" records, no QEMU decodes a liveness
+  test. Its instruction case is one probe replaced by one instruction, 0.032 % of Perl's instructions. So the variant
+  has no instruction saving to measure, and its case is semantic.
+- **The CRENEW half** runs here, on Perl 5.36's SV heads with suns.pl, where Fig. 10's revision and 0002 already have
+  oneop readings. perlbench's bodies port does not build in oneop yet (its SPEC build covers gcc only), so the
+  bodies half stays the open line of this item.
+- What a renew saves: when a head is freed, p0002 releases its lifetime (CREVOKE), and the next issue of that head
+  derives a new one (CDERIVE).
+- This variant renews the lifetime at the free (CRENEW). Every old copy goes stale as before, and the arena keeps the
+  new lifetime, so the head's next issue hands it out with no CDERIVE.
+
+**The arm.**
+- `fig10/perl/renew`, built by `fig10/build-perlrenew.sh` on `fig10/wt3`: a worktree at 71ce199d8fea with wt2's two
+  Perl patches (0001 `83501a59…`, 0002 `d9330843…`, the p0002 build's) plus
+  `fig10/renew/0003-sv-heads-renewed.patch` (`4b502316…`). The tarball is `f2a1ad88…` and the compiler is the
+  environment's.
+- The patch changes two functions in `sv.c`:
+  - `S_sv_arena_retire` sets `*issued = capstone_cap_renew(*issued)` where p0002 released and cleared;
+  - `Perl_sv_arena_issue` returns a non-NULL `issued` entry as it is, and derives only for a head never issued.
+  - `SVf_BREAK` heads are untouched, as before.
+  - Arena teardown stays `Safefree` of the arena. If that frees the arena with a release, the release ends every
+    lifetime derived inside it, renewed ones included. Whether mallocng's free releases it is not checked here, and a
+    lifetime left live at exit costs nothing these runs read.
+- Static census (`fig10/tools/census-lifetime.py`), p0002 to renew:
+  - one-operand CREVOKE 6 → 3, CRENEW 0 → 3, CDERIVE 8 → 8;
+  - 1,753,484 → 1,753,486 instructions.
+- **This image never goes to P1.** P1 decodes funct7 0x54 as CSNODE.
+
+**Runs.** `fig10/chain-perlrenew.sh`, chain-perl0002.sh's four oneop boots with `suns.pl` and `PERL_HASH_SEED=0`:
+- opcount renew;
+- zones3 renew twice (symbols `fig10/syms/perl-renew.syms`);
+- zones3 p0002 as the same-day control.
+A dry run with an echo runner reaches `CHAIN-PERLRN-DONE` through all four.
+
+**What is read: image-zone instructions only.**
+- oneop's table has no generations. CRENEW cannot renew in place there, and the table's cost of a renew falls in the
+  kit's sweeps, outside the zone.
+- So this reads what renewing saves in the program's own instructions, not its cost on a record table.
+- Cycles need a bitstream with CRENEW, and none is written.
+
+**Predictions.**
+1. **Answers:** `suns.out` in every boot.
+2. **Control:** q3 reads p0002's 2,257,591,178-183 within ±40.
+3. **Lifetime instructions** (opcount renew against p0002's 2,064,278 CDERIVE and 1,684,011 CREVOKE):
+   - CRENEW (0x54) equals CREVOKE's fall exactly, because each retire that released now renews.
+   - CDERIVE falls by 600,000 to 1,077,570. The upper bound is p0002's issue count. Only first issues still derive,
+     and those are bounded by the heads in its 2,536 arenas.
+4. **Image instructions: renew minus p0002 between −20 M and −2 M.** The derive path skipped on a reissue is about
+   12 instructions, against a load and a branch added.
+5. **Repeats:** r1 and r2 within 10 instructions.
+
+**What follows.**
+- If held, the saving per reissue (zone delta ÷ CDERIVE fall) is what a renew is worth in the port's code.
+- The bodies half is the same change on perlbench's body free lists, once perlbench builds in oneop.
+
+### Result: the CRENEW variant saves 11.68 M image instructions (−0.52 %), 13.5 per reissue; every prediction but one holds (08:38-08:44)
+
+Chain `fig10/chain-perlrenew.sh`, four boots, rc 0, read by `fig10/read-renew.py`.
+
+- **Answers:** `suns.out` in every boot (sha256 `01688ea0…`, MATCH, status 0). **Held.**
+- **Control:** q3 (p0002, same day) reads 2,257,591,178, inside p0002's 2,257,591,178-183. **Held.**
+- **Repeats:** r1 2,245,912,933 and r2 2,245,912,932, 1 instruction apart. **Held.**
+- **Image instructions: renew − p0002 = −11,678,248 (−0.52 %), inside the −20 M to −2 M band. Held.**
+  - Against stock's 2,082,931,984, the variant costs +7.82 %, against p0002's +8.385 %.
+  - The per-function profile against q3 puts −11,677,721 of it in `Perl_sv_arena_issue`, at the same 1,077,570
+    entries (77,477,237 → 65,799,516). No other function moves by more than 700.
+- **Lifetime instructions** (opcount renew against p0002's opcount):
+  - CDERIVE 2,064,278 → 1,199,660, which is −864,618, inside the band. **Held.**
+  - CREVOKE 1,684,011 → 819,422 (−864,589). CRENEW 0 → 864,662.
+  - **"CRENEW equals CREVOKE's fall exactly": not held.** CRENEW is 73 higher.
+- **Saving per reissue: 13.51 image instructions per CDERIVE removed** (11,677,721 ÷ 864,618). The band assumed
+  about 12 for the derive path, less a load and a branch.
+
+**The 73, as far as this run reads them.**
+- `Perl_sv_free2` executes 73 more instructions in renew at the same 864,579 entries, and no other function moves
+  by a count near 73.
+- That fits 73 retires that find a non-NULL `issued` entry in renew where p0002 finds NULL, and so renew a lifetime
+  p0002 would not release. p0002 clears the entry when it releases. The renew variant never clears it, so a head
+  that comes back to a retire without passing through `Perl_sv_arena_issue` is renewed again.
+- Which Perl path hands a head out without the issue call is not identified here, and the reading above is
+  inferred, not traced.
+- **The counts do not close, so the 73 are not fully accounted for.**
+  - With 73 second renews, at most 864,589 distinct entries could be reissued without a derive. Yet CDERIVE fell by
+    864,618.
+  - The opcode totals include mallocng's own CDERIVEs and CREVOKEs. Those moved by +10 and +6 between the prot and
+    p0002 builds, whose head code differs only in the lookup. So a few dozen in these totals is not attributable to
+    the heads from opcounts alone.
+  - Per-function opcode counts would settle it, and this runner does not give them.
+- If the hypothesis holds, it costs nothing in correctness here, since every old copy is already stale. But a
+  renew-at-free design would then have to clear or mark the entry, or count on every handout going through the issue
+  call.
+
+**Reading.**
+- Renewing a head at its free instead of releasing it removes 864,618 of Perl's 2,064,278 CDERIVEs on suns.pl. In
+  the image zone that is worth 13.5 instructions a reissue, 0.52 % of the zone. It is a seventh of p0002's
+  +174.7 M over stock.
+- That is the program's side only. On oneop's table, without generations, a renew is a release plus an allocation
+  in the kit, and its record cost is not in these numbers. Cycles need a bitstream with CRENEW.
+- The bodies half (perlbench's body free lists) remains open. perlbench does not build in oneop yet.
+
+## perlbench item 3: the CRENEW variant of the SV bodies port, SPEC's test.pl in the one-operand environment (2026-11-24)
+
+### Pre-registration: bodies renewed instead of revoked, perlbench test.pl in oneop (written 2026-11-24 10:33, before the runs)
+
+**Question.** This is item 3's open CRENEW line for bodies, after the heads half above.
+- When a body is freed, the bodies port (`own-allocators/500.perlbench_r/port-sv-bodies.py`, `3933328d…`) revokes it
+  (CREVOKE), and the free list keeps the segment's pointer.
+- When the body is popped again, the port derives a new child (CDERIVE).
+- The variant renews the body at the free (CRENEW). Every old copy goes stale, as after the revoke, and the free list
+  keeps the renewed capability. A reissue hands that capability out with no CDERIVE.
+
+**perlbench in oneop, new today.**
+- `oneop/build-spec-perl.sh` is `build-spec.sh` for 500.perlbench_r, in a fresh copy of the pristine tree
+  (`spec/tree-perl`), with label `oneopperl` and the environment's SDK. Its executable is `ba295e57…`.
+- `fig10/build-perlbench-arms.sh` makes four copies of the build directory and rebuilds each with `make.out`'s own 69
+  compile commands and link command:
+  - **stock**, unchanged: byte-identical to the build's executable (`ba295e57…`), the replay control;
+  - **heads** (`408defc6…`): `port-sv-heads.py` (`f55e5096…`), `fix-lookup.py` (`f5ccf26e…`) and
+    `fix-lookup-pages.py` (`ddcfced5…`), with `-DPERL_CAPSTONE_SUBLET`. Its sources equal the twin's prot6 tree
+    (`perlspec/fx2/prot6`, the board's prot6 image) except `Makefile.spec`, which names the compiler;
+  - **bodies** (`7d5f41fa…`): heads plus `port-sv-bodies.py`, with `-DPERL_CAPSTONE_SUBLET_BODIES`. Its sources equal
+    the twin's bodies tree (`perlspec/fx2/bodies`), except `Makefile.spec`;
+  - **bodren** (`36c66ae5…`): bodies plus `fig10/renew/bodies-renew.py` (`9945e787…`, an experiment script, never a
+    port script), with `-DPERL_CAPSTONE_SUBLET_BODIES_RENEW`.
+- The variant changes two functions of the bodies port:
+  - `S_sv_body_retire` returns `capstone_cap_renew(body)` where the port revoked and returned the segment's pointer.
+    `del_body` stores that capability as the free-list link, in the word upstream already uses for it.
+  - `S_sv_body_issue` hands a popped capability out as it is when its bounds are narrower than a segment (a renewed
+    body). Otherwise, for a body fresh from an arena, it derives as before.
+- Static census, bodies to bodren (`capop-census.py`): CREVOKE 9 → 6, CRENEW 0 → 3, funct7 0x04 (the bounds reads)
+  +10, funct7 0x0c −3, funct3 3 −6, and 4-byte words +10.
+- **This image never goes to P1.** P1 decodes funct7 0x54 as CSNODE.
+
+**Runs.** `fig10/chain-perlbench-renew.sh`, five oneop boots, one image each, SPEC's test.pl (`-I. -I./lib test.pl`):
+- zones3 bodies;
+- zones3 bodren;
+- opcount bodren;
+- opcount bodies;
+- zones3 heads, the environment's check against the twin.
+
+The answer is the twin's own stock `test.out` (`7990ff94…`). On the twin, SPEC's reference differs in three known
+scripts. A dry run with an echo runner reaches `CHAIN-PBRN-DONE` through all five.
+
+**What is read: image-zone instructions only,** as in the heads half. oneop's table has no generations, and cycles
+need a bitstream with CRENEW.
+
+**Predictions.**
+1. **Answers:** every boot's `test.out` is the same file.
+   - If it equals the twin's stock output, it is read as is.
+   - If all five agree but differ from the twin's, the instruction readings are still read, and the difference is
+     recorded.
+   - If an arm's output differs from the others, that arm is not read.
+2. **Environment check:** bodies minus heads (image zone) within ±30 % of the twin's +636,442,127. The compiler
+   differs: oneop's builds have no RVC words.
+3. **Lifetime instructions** (opcount bodren against opcount bodies):
+   - CRENEW appears, and CREVOKE falls by exactly the CRENEW count. Each body retire with a segment renews instead of
+     revoking.
+   - CDERIVE falls by at most the CRENEW count: only reissues of renewed bodies skip it.
+   - The heads half read CRENEW 73 above CREVOKE's fall, from a cause it did not trace. So "exactly" is the claim
+     here, and a miss is recorded as one.
+4. **Image instructions: bodren minus bodies between −2 and −14 instructions per removed CDERIVE.**
+   - The derive skipped on a reissue is the asm's 10 instructions plus its operand set-up, against 4-5 added for the
+     bounds test.
+   - The retire swaps a CREVOKE and its address arithmetic for one CRENEW.
+   - The heads half read 13.51 per removed CDERIVE, with no bounds test.
+
+**What follows.**
+- If held, the saving per reissue is what a renew is worth in the bodies port's code.
+- Its share of the bodies port's +0.733 % is the reading for item 3.
+- The hash-entry and op-slab ports are the same change in principle. They are not built here.
+
+### Amendment before any reading (written 2026-11-24 10:41): suns.pl, and the port's one-operand revision
+
+The first boot (`fig10-pbrn-z-bod`) ended at once, and the chain was stopped. No arm was read. Two causes, each found
+in source:
+
+1. **test.pl cannot run in oneop.** SPEC's test.pl runs every test as a new process of `$^X`. The twin's stage
+   provides one, and oneop's single-image runner cannot exec one.
+   - A check of the stock arm with the twin's driver line (`$^X="../sw/perl"; do "./test.pl"`, `fig10-pbrn-chk-stock3`)
+     prints `can't run '../../sw/perl base/cond.t': Permission denied` for all 317 tests, at 0.25 G image
+     instructions against the twin's 87 G.
+   - **The workload is now suns.pl** (`-I. -I./lib suns.pl`, SPEC's train input). It runs in one process and is what the
+     5.36 heads half used.
+   - The answer is SPEC's `suns.out` (`01688ea0…`). The stock arm matches it in oneop (`fig10-pbrn-chk-suns`:
+     2,488,000,453 image instructions, a feasibility check made before this amendment).
+   - The environment check against the twin's test.pl figure is dropped, because no twin reading of perlbench on
+     suns.pl exists. Bodies minus heads is still read, with nothing to check it against.
+2. **The 5.22 port emits the two-operand CREVOKE, which oneop's model refuses as illegal.** Its `capability.h` says so:
+   use `capstone_cap_release`.
+   - The heads arm faulted with cause 2 after 0.1 M image instructions, and bodies after 0.37 M.
+   - The fix is the same one-operand revision Fig. 10 made to the 5.36 patch. `fig10/perlbench/oneop-shim.h`
+     (`335b499c…`) is force-included into the port arms and maps `capstone_cap_revoke_child(parent, child)` to
+     `capstone_cap_release(child)`. On this model a release ends the child's lifetime and every lifetime derived
+     inside it.
+   - The rebuilt arms are heads `453cbfed…`, bodies `0f6b36fe…` and bodren `618d7bf7…`
+     (`build-perlbench-arms.sh` `0a175b46…`). The stock replay is again byte-identical to the build's executable.
+   - A scan of each image's CREVOKE words (rs2 = x0 means one operand):
+     - stock: 3 one-operand, 0 two-operand;
+     - the first heads build: 3 one-operand, 3 two-operand (the fault; the scan fires);
+     - rebuilt heads 6/0, bodies 9/0, bodren 6/0.
+
+**Runs.**
+- The chain is unchanged apart from the workload and fresh run names `fig10-pbrn2-*` (`chain-perlbench-renew.sh`
+  `6db35678…`, an echo-runner dry run to `CHAIN-PBRN-DONE`).
+- The boots are as before: zones3 bodies, zones3 bodren, opcount bodren, opcount bodies, zones3 heads.
+
+**Predictions, as amended.**
+1. **Answers:** SPEC's `suns.out` in every boot. A boot that differs is not read.
+2. **Dropped:** the twin test.pl check.
+3. **Kept unchanged:**
+   - Lifetime instructions: CRENEW = CREVOKE's fall exactly, and CDERIVE falls by at most the CRENEW count.
+   - Image instructions: bodren minus bodies at −2 to −14 per removed CDERIVE.
+
+### Result: perlbench's SV bodies renewed instead of revoked, suns.pl in oneop (2026-11-24 10:41-10:50, read against 71e4e38d4b66 as amended by 057682723325)
+
+All five boots (`fig10/runs/fig10-pbrn2-*`) returned status 0 with SPEC's `suns.out` (`output=MATCH`).
+
+| arm | image-zone instructions | against stock |
+|---|---:|---:|
+| stock (`fig10-pbrn-chk-suns`, the feasibility run before the amendment) | 2,488,000,453 | |
+| heads (`453cbfed`) | 2,648,354,139 | +6.445 % |
+| bodies (`0f6b36fe`) | 2,699,578,683 | +8.504 % |
+| bodren (`618d7bf7`) | 2,691,163,440 | +8.166 % |
+
+The opcount boots agree with the zone boots to within 8 instructions: bodies 2,699,578,691, bodren 2,691,163,441.
+
+**Executed lifetime instructions (opcount):**
+
+| | CDERIVE (0x51) | CREVOKE (0x52) | CRENEW (0x54) |
+|---|---:|---:|---:|
+| bodies | 3,114,591 | 2,574,839 | 0 |
+| bodren | 2,276,822 | 1,737,087 | 837,815 |
+| change | −837,769 | −837,752 | +837,815 |
+
+**Against the predictions.**
+1. Answers: **met**, `suns.out` in all five.
+2. **CRENEW equals CREVOKE's fall exactly: missed by 63.** CRENEW is 837,815 and the fall 837,752.
+   - The heads half missed the same claim by 73, in the same direction.
+   - Where the 63 renews come from is not traced here. A renew where the bodies arm made no revoke at all would give
+     this, as would a revoke elsewhere that the bodies arm makes and bodren does not. Neither is checked.
+3. **CDERIVE falls by at most the CRENEW count: met.** The fall is 837,769, so 46 renewed bodies were not handed out
+   again before the end.
+4. **Image instructions, −2 to −14 per removed CDERIVE: met.** Bodren minus bodies is −8,415,243 (−0.312 % of the
+   bodies arm), **10.04 instructions per removed CDERIVE**. The heads half read 13.51 with no bounds test; this
+   variant adds one.
+
+**Reading.**
+- Renewing a freed body instead of revoking it removes 16.4 % of the bodies port's own instructions on suns.pl:
+  8.42 M of the +51.22 M that bodies adds to heads.
+- The protected image goes from +8.504 % to +8.166 % against stock.
+- These are instructions of the program only. oneop's table has no generations, and cycles need a bitstream that
+  decodes CRENEW, as for the heads half.
+- The arms here are the 5.22 port with the one-operand revision (`oneop-shim.h`), on suns.pl. The board's perlbench
+  images are the two-operand port on test.pl. So these figures say what a renew saves in the port's code, not what
+  any board image would read.
+- Hash entries and op slabs are not built here. Their free paths have the same shape, a revoke at the free and a
+  derive at the next issue, so the same change applies. Its saving there is not measured.
+
+## perlbench item 3: test.pl's port code without its lifetime instructions (2026-11-24)
+
+### Pre-registration: perlbench test.pl on P1, u = stock and n = prot6 with its lifetime instructions neutralised, one boot (written 2026-11-24 11:07, before the boot)
+
+**Question.**
+- The brief's attribution item for perlbench is test.pl's cost. prot6's +13,583.8 M in-context cycles (pair6) leave
+  34.4-35.4 % unattributed at the mean instruction price.
+- On suns.pl the N arm settled the same question for Perl 5.36 (result above): the code took 71.6 % at 3.260 cycles per
+  twin instruction, and the lifetimes took 95.5-97.6 cycles per instruction.
+- This boot runs the same instrument on test.pl. N is prot6 with its two lifetime instructions neutralised, so:
+  - N−U is the port's code at its board price;
+  - P−N is the lifetime instructions with their records. P comes from pair6's boot, through the stock check.
+
+**The images.**
+- u: stock `c1744e87…` (the paper's Full image), as in pair6.
+- n: `perlbench_r.protnop.strip.dom` `9acc61bc…` (full `48620b2d…`), built in `nested/perlspec/fx2/protnop`:
+  - a copy of prot6's tree (`fx2/prot6`, the heads port + `fix-lookup.py` + `fix-lookup-pages.py`);
+  - `sv.c` gets the lifenop block of `nested/perl/lifenop/0003` (`caf0cf33…`), inserted after
+    `#include <capstone/capability.h>`. The diff is `fx2/lifenop-522.patch` (`3ef306a8…`);
+  - only `sv.o` is recompiled, with prot6's own compile line, and the image is linked with prot6's link line;
+  - it is stripped as prot6 was: llvm-c4 `llvm-objcopy --strip-all`, keeping `.capstone_virtual`,
+    `.capstone_application` and `.capstone_domreq`. The same command on prot6's full image reproduces `37381b03`.
+- Checks on the build:
+  - **Control.** prot6's `sv.c`, recompiled unchanged with that line, gives a `sv.o` byte-identical to prot6's.
+  - **The header's asm** (`capstone/runtime/include/capstone/capability.h`, unchanged since 2026-10-17) is the asm
+    the 0003 block copies, apart from the two substituted instructions.
+  - **Census, prot6 to N** (`capop-census.py`): CDERIVE 72 → 41 (−31, the live derive at each inlined site), MOVC
+    +31, CREVOKE 9 → 6, ADD-to-x0 0 → 3. Total 4-byte words (407,149) and RVC words (146,562) are equal, and the
+    symbol table is identical (`mksyms.py` output equal to `perl-prot6.syms`). The census of prot6 against stock
+    differs in many classes, so it can fire.
+- **Twin control** (`nested/census/out/zperl-protnop-9acc61bc`, `fx2/stage-ptn`, prot6's twin stage with only the image
+  replaced, run as prot6's: zones4, 2^20 records). makerand.out and test.out equal the stock twin run's (the twin's three
+  known scripts). Image zone: N 86,774,083,025 against prot6's 86,774,090,874, **N−P = −7,849** (0.00001 %). So N executes
+  prot6's instructions apart from the substitutions, and N−U on the twin is +2,440,555,323.
+- **Lifetime instructions:** the port's executed CDERIVEs and CREVOKEs on test.pl, as prot6 minus N in the twin's opcode
+  counts (`nested/p1pn/opc.sh`, `396dd4d1…`: opcount boots of `stage-pt6` and `stage-ptn`, running at this writing). The
+  count is fixed by those two runs before the boot, enters the reader as its fourth argument, and is quoted with its runs
+  in the result.
+
+**Configuration.**
+- Bitstream P1 (`…-pagedtbl_d83d3a633`), kit `nested/kits/bkit91-rec1m` (2^20 records, SHA256SUMS verified). The
+  board is the runtime lane's to choose.
+- Chain: `nested/p1pn/p1pn.conf` and `p1pn.list` on `nested/p1s100/nat-run3p.sh`. The chain reads P1 back by name,
+  and flashes it sha-checked if it is not resident.
+- Stage `nested/p1pn/pairn` (`pairn.SHA256SUMS`, 574 files). It is the kit's `make-train-stage.sh` around
+  `fx2/stage-pairn`, which is `fx2/stage-pair6` with only its prot image replaced. Against pair6's board stage, one
+  file differs, the prot `.xz`. So run.sh, the commands and the u image are pair6's byte for byte.
+  - The stage's second arm is labelled "p" and runs N.
+  - Commands: makerand.pl then test.pl, for u, then for n.
+- List line `pairn 86400 660`, so `BAKED_TIMEOUT=345600` (the dry run prints it), as in pair6. Expected wall time:
+  about 7.5 h of commands.
+- Checked off the board (rule 8, `nested/p1n/recheck-p1k.sh` with `RD=nested/p1pn`):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on pair6's real transcript and on its cut, PASS all 9 steps;
+  - real firmware build 23,760,392 B (`da2a5384…`);
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/p1pn/dry.log`).
+- Read by `nested/p1pn/read-pairn.py` (`732d220d…`): this boot's transcript, pair6's, SPEC's references and the
+  lifetime count.
+  - Tested on pair6's own transcript as both inputs. It reproduces pair6's +13,583.8 M and counters, and its band
+    and record checks fire (N−U "OUT", 100 % of every gap).
+  - On a transcript cut after the first arm it prints NOT READ and exits 1.
+
+**Rules.**
+- Answers: every command rc 0, and both arms' makerand.out and test.out byte-equal to SPEC's references, with empty
+  `.err` files. Otherwise nothing is read.
+- Stock check: u's test.pl in-context cycles within ±1 % of pair6's u (267,219.2 M).
+  - Outside it, N−U is still read within this boot.
+  - P−N is not read: it needs pair6's P.
+
+**Predictions** (test.pl, in-context cycles).
+1. **N−U: 4,000 M to 11,000 M.** The twin counts it at +2,440.6 M instructions (prot6 minus stock).
+   - At suns.pl's measured ratio to the mean (3.260 / 2.838 = 1.149, so 3.640 here) it would be 8,884 M.
+   - At the stock mean (3.169) it would be 7,733 M.
+   - At the lookup pair's 1.67 it would be 4,076 M.
+2. **Records:** N's hpm3, hpm4, hpm5 and hpm7 each within 15 % of pair6's U-to-P gap from U. 15 % because suns.pl's N
+   read hpm4 at 11.1 %. N's L1D misses (hpm8) lie between U's and pair6's P.
+3. **P−N** is the rest of pair6's +13,583.8 M.
+   - From it come the walks (P−N hpm4) and the replays (P−N hpm7 at 17-20 cycles each).
+   - What is left is divided by the lifetime instructions above.
+
+**What each outcome says.**
+- **N−U 8,000-9,770 M** (suns.pl's ratio ±10 %): the code's price ratio carries over from Perl 5.36 to perlbench.
+- **Below 8,000 M:** the code is cheaper here, and the lifetimes cost more per instruction than on suns.pl.
+- **Above 9,770 M:** the code is dearer here.
+- **The per-lifetime-instruction price set against suns.pl's 95.5-97.6:** close means the lifetime cost is a property
+  of the instructions and their records. Far means it depends on the program's record working set (test.pl's record
+  TLB misses are 89 % above stock, suns.pl's 66 %).
+
+**Limits.**
+- One run per arm, u first, not interleaved, as in pair6.
+- P−N is cross-boot (pair6's P against this boot's N), each taken against its own boot's u. pair6's u reproduced st2's
+  u to +0.009 % across boots.
+- N is an instrument: its heads are unprotected copies of their arena's capability.
+- Kernel + other is printed but not part of any prediction.
+
+**The lifetime count, fixed before the boot** (2026-11-24 12:48; the p1pn boot has not started). `nested/p1pn/opc.out`,
+opcount boots of `stage-pt6` (`opc-prot6-37381b03`, 11:07-11:54) and `stage-ptn` (`opc-protnop-9acc61bc`,
+11:54-12:41), both rc 0, image zone:
+- CDERIVE (0x51) 34,414,810 → 20,620,015, prot6 minus N **13,794,795**;
+- CREVOKE (0x52) 30,966,183 → 18,717,505, prot6 minus N **12,248,678**;
+- **lifetime instructions 26,043,473**, the reader's fourth argument.
+- Cross-checks: MOVC (funct7 0x0a) rises by 13,794,897, 102 above CDERIVE's fall. All image instructions differ by
+  −4,062 (the zone runs read −7,849). Neither enters the reading.
+
+### Result: N−U +9,092.9 M, P−N +4,490.9 M, 129.1-133.9 cycles per lifetime instruction (board 1, 2026-11-24 14:20-22:00, read against 021cd655daec)
+
+**The boot.**
+- Chain `nested/p1pn/p1pn.*` (pid 2329273) ran on board 1 after M-16. It read P1 back by name as resident (no flash),
+  booked 1476, and unbooked it (HTTP 200).
+- The smoke passed all 9 steps. The watchdog sampled throughout (1,439 ALIVE/QUIET lines).
+- The command line carries `capstone_vm.node_flat_records=1048576`.
+- The stage still verifies against `pairn.SHA256SUMS` (rc 0, no mismatches). Its images decompress to the registered
+  hashes: u `c1744e87`, n `9acc61bc`.
+- The chain's `SPEC rc=2` is the generic classifier, which does not read this stage's markers. It is not a verdict.
+- Transcript `…/out-nat-p1pn-perlbench-b1/pairn/board.txt` (sha256 `3c1c76f7…`). It was read by `read-pairn.py`
+  (`732d220d…`) with pair6's transcript, SPEC's references and the lifetime count 26,043,473 fixed above.
+
+**The checks.**
+- **Answers: met.** All four commands rc 0. Both arms' `makerand.out` (`539d02dc…`) and `test.out` (`b41ee90a…`) equal
+  SPEC's references, and every `.err` is empty.
+- **Stock check: met.** u's test.pl reads 267,083.1 M against pair6's u 267,219.2 M, −0.051 %.
+
+**In-context cycles, test.pl:**
+
+| | cycles | difference | share of P−U |
+|---|---:|---:|---:|
+| u (this boot) | 267,083,082,253 | | |
+| n (this boot) | 276,176,023,556 | N−U **+9,092.9 M (+3.40 %)** | 66.9 % |
+| P (pair6, against pair6's u) | 280,802,971,216 | P−U +13,583.8 M | 100 % |
+| | | P−N = P−U − N−U **+4,490.9 M** | 33.1 % |
+
+**Predictions.**
+1. **N−U, +9,092.9 M: met** (band 4,000-11,000 M).
+   - That is 3.726 cycles per twin instruction (over +2,440,555,323), 1.176 times the stock mean of 3.169. suns.pl
+     read 1.149.
+   - It falls in the registered outcome "the code's price ratio carries over from Perl 5.36" (8,000-9,770 M).
+2. **Records: met.**
+   - N's distance from u, as a share of pair6's u-to-P gap: hpm3 (record-TLB misses) 1.7 %, hpm4 (walk cycles) 4.4 %,
+     hpm5 0.7 %, hpm7 (event-23 replays) 3.9 %. All are under 15 %.
+   - N's L1D misses (hpm8, 1,343.1 M) lie between u's (1,305.6 M) and pair6's P (1,416.2 M). N−U carries +37.5 M of
+     them, 33.9 % of pair6's P−U +110.5 M.
+3. **P−N** is the rest of P−U, +4,490.9 M. It divides as follows:
+
+| part | cycles | share of P−U | price and its source |
+|---|---:|---:|---|
+| the port's code, measured | 9,092.9 M | 66.9 % | N−U on the board, 3.726 cycles per twin instruction |
+| record-table walks | 295.6 M | 2.2 % | P−N hpm4, read as cycles (measured; each side against its own boot's u) |
+| event-23 replays | 707.3-832.2 M | 5.2-6.1 % | P−N hpm7, +41.61 M at 17-20 cycles each (Addendum 1's RTL estimate, from source) |
+| the lifetime instructions and their other record traffic | 3,363.1-3,487.9 M | 24.8-25.7 % | P−N less the two rows above |
+| **not attributed** | **none at this resolution** | | N−U + P−N = P−U by construction |
+
+- **A price per lifetime instruction: 129.1-133.9 cycles.** It is the last row over 26,043,473 executed CDERIVEs and
+  CREVOKEs: prot6 minus N in the twin's opcode counts, fixed before the boot.
+  - It covers the instruction and its record traffic beyond the walks and the replays, as on suns.pl.
+  - N runs a MOVC or an ADD in each one's place, so the price is over a 1-cycle substitute.
+- **Where the unattributed 34.4-35.4 % goes.**
+  - At the stock mean the code would have taken 7,733 M (the pre-registration's figure). Measured, it takes
+    9,092.9 M, so 1,359.9 M of the remainder is the code's.
+  - The lifetime instructions take 3,363.1-3,487.9 M, most of the rest.
+  - The walks and the replays move slightly against the earlier table, because P−N leaves out the small part of each
+    that N−U carries.
+- **Against suns.pl's 95.5-97.6.** The test.pl price is 1.32-1.40 times suns.pl's. No threshold for "close" was
+  registered, and 32-40 % above is not close.
+  - On the registered reading, the lifetime cost is not a fixed property of the instructions. It depends on the
+    program's record working set.
+  - test.pl's record-TLB misses are 89 % above stock and suns.pl's 66 %. That is consistent with this reading.
+  - It is two programs, a consistency rather than a test. The counts also come from different instruments: suns.pl's
+    from the one-operand build, test.pl's from the twin.
+- **Reported, not part of any prediction:** kernel + other N−U +1,339.5 M; uptime span N−U +421.1 s.
+
+**Limits.**
+- As registered: one run per arm, u first, not interleaved.
+- P−N is cross-boot: pair6's P against this boot's N, each taken against its own boot's u. The two u's agree to 0.051 %.
+- N is an instrument. Its heads are unprotected copies of their arena's capability.
+
+## perlbench item 3: CRENEW for hash entries and op slabs, and the protection fixtures of all three CRENEW variants, in oneop (2026-11-24)
+
+### Pre-registration (written 2026-11-24 12:48, before the runs)
+
+**Question.**
+- Item 3's two remaining CRENEW lines, after the bodies half above, use the same change and the same reading.
+- The fixtures answer the runtime lane's standing condition for all three variants. It was not checked for the bodies
+  variant before its result: is protection unchanged when a renew replaces the revoke?
+
+**The arms** (`fig10/build-perlbench-arms2.sh`, from the same oneopperl build directory, `make.out`'s compile and
+link commands, and the one-operand shim `oneop-shim.h` as before):
+- **he** (`42cb82ec…`): heads + `port-sv-bodies.py` + `port-he.py`, with `-DPERL_CAPSTONE_SUBLET -DPERL_CAPSTONE_SUBLET_HE`,
+  as the twin's he arm.
+- **heren** (`087516c3…`): he + `fig10/renew/he-renew.py`, an experiment script. In `capstone_sv_segs.h` (hv.c's
+  copy of the segment helpers) it makes the bodies variant's two changes:
+  - the retire returns `capstone_cap_renew(entry)`;
+  - the issue hands a popped capability out as it is when its bounds are narrower than a segment.
+- **ops** (`a1c60222…`): heads + `port-op-slabs.py` (revision 4), with `-DPERL_CAPSTONE_SUBLET -DPERL_CAPSTONE_SUBLET_OPS`.
+- **opsren** (`e8338bba…`): ops + `fig10/renew/ops-renew.py`, also an experiment script:
+  - `S_op_retire` returns `capstone_cap_renew(op)` where it revoked and returned the slab's own pointer. The free chain
+    (`opslab_freed`) then holds the renewed child.
+  - `S_op_issue` hands a reused slot out as it is when its bounds are narrower than its home slab's lifetime. A
+    renewed child spans its slot, header included, which is what a derive would give.
+  - Both paths still find the holding slab first, as in the port.
+- **Static census** (4-byte words of `.text`):
+  - he 9 CREVOKE, heren 6 CREVOKE and 3 CRENEW (`del_HE`'s three sites), +13 words;
+  - ops 7 CREVOKE, opsren 6 CREVOKE and 1 CRENEW, +10 words.
+- Neither image goes to P1, which decodes funct7 0x54 as CSNODE.
+
+**Fixtures** (`fig10/build-renew-fixtures.sh`):
+- The port's own fixture scripts, each compiled with its arm's `perlmain.o` line and linked in `perlmain.o`'s place:
+  - `make-bodies-fixture.py` on bodies (`9151c874…`), bodren (`3150a3aa…`) and the control bodies-nr (`f04275c7…`);
+  - `make-he-fixture.py` on he (`fd8f6afa…`), heren (`f0841be5…`) and he-nr (`dc50e9af…`);
+  - `make-ops-fixture.py` on heads (`a7ba2720…`, the reference for mode 5), ops (`558ff148…`), opsren (`e3300a7e…`)
+    and ops-nr (`27f93d9d…`).
+- **The controls:**
+  - each is a copy of its port arm rebuilt with the port's NOREVOKE define on every compile:
+    `PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE` for bodies and he, `PERL_CAPSTONE_SUBLET_OPS_NOREVOKE` for ops;
+  - their CREVOKE counts fall to the shim's 6, 6 and 6.
+- One oneop boot (`fig10/run-renew-fx.sh`) runs every fixture in modes 0-7. It prints each run's lines, its exit status
+  and the kernel fault line that run added. The bodies and HE fixtures return 2 above mode 4.
+
+**Runs.** `fig10/chain-perlbench-renew3.sh` (TAG `fig10-pbrn3`), with a dry run through both stubs to
+`CHAIN-PBRN3-DONE` (`perlbench/dry3.log`). The boots, in order:
+- the fixture boot;
+- suns.pl, one image per boot: zones3 he, zones3 heren, opcount heren, opcount he, zones3 ops, zones3 opsren,
+  opcount opsren, opcount ops.
+
+The answer is SPEC's `suns.out` (`01688ea0…`), as in the bodies half.
+
+**Predictions.**
+1. **Fixtures.**
+   - **Each renew arm faults exactly where its port arm faults.** A fault is read from the run's fault line, and the
+     two arms are compared run by run.
+   - **bodies and bodren:** mode 0 reads, and modes 1-4 fault.
+   - **he and heren:** mode 0 reads, and modes 1-4 fault.
+   - **ops and opsren:** mode 0 reads, and modes 1-4 fault. In mode 2, the op made in the freed op's slot reads, and
+     so does the second op. Modes 5 and 6 return.
+   - **Controls:**
+     - bodies-nr reads in modes 0-3 and faults in mode 4 (the twin's control did);
+     - he-nr reads in modes 0-4;
+     - ops-nr reads in modes 0-3, faults in mode 4, and returns in modes 5 and 6.
+   - **heads with the ops fixture:** reads in modes 0-3 and returns in modes 5 and 6. Its mode 4 is not predicted.
+   - Mode 7 is recorded, not predicted. Its positive control was the twin sandbox's refusal of `/dev/null`, which
+     oneop's need not share.
+   - If a control does not read where predicted, its fixture's protected modes are not read.
+2. **Answers:** `suns.out` in every suns.pl boot. A boot that differs is not read.
+3. **Lifetime instructions** (opcount, renew arm against port arm, for he and for ops):
+   - CRENEW appears;
+   - CREVOKE falls by the CRENEW count to within 0.1 % of it. The two halves so far missed "exactly" by 73 and 63,
+     untraced, so the band is stated here instead;
+   - CDERIVE falls by at most the CRENEW count.
+4. **Image instructions:** renew arm minus port arm between −2 and −14 per removed CDERIVE, for each. Bodies read 10.04
+   and heads 13.51.
+
+**What is read.**
+- Each variant's saving, and its share of its port's own instructions (port arm minus heads, from a heads zones3
+  reading; `fig10-pbrn2-z-heads`, 2,648,354,139).
+- Not read: cycles, since no bitstream decodes CRENEW, and memory (not measured in oneop).
+- The free lists hold the same words in the variant and the port, a renewed capability in place of the own pointer.
+
+### Result: CRENEW for hash entries and op slabs, and the three variants' fixtures (2026-11-24 12:50-13:06, read against 835248d344fa)
+
+Read with `fig10/read-renew3.py`, which was checked on a synthetic transcript with one mode altered (its checks fire).
+All nine boots ran. The fixture boot is `oneop/runs/fig10-pbrn3-fx`, and the suns.pl boots are `fig10/runs/fig10-pbrn3-*`.
+
+**Fixtures** (RET0 = returned 0 with no fault line; FAULT = the run added a fault line, every one cause 25):
+
+| image | m0 | m1 | m2 | m3 | m4 | m5 | m6 | m7 |
+|---|---|---|---|---|---|---|---|---|
+| bodies, bodren | RET0 | FAULT | FAULT | FAULT | FAULT | 2 | 2 | 2 |
+| bodies-nr | RET0 | RET0 | RET0 | RET0 | FAULT | 2 | 2 | 2 |
+| he, heren | RET0 | FAULT | FAULT | FAULT | FAULT | 2 | 2 | 2 |
+| he-nr | RET0 | RET0 | RET0 | RET0 | RET0 | 2 | 2 | 2 |
+| ops, opsren | RET0 | FAULT | FAULT | FAULT | FAULT | RET0 | RET0 | 3 |
+| ops-nr | RET0 | RET0 | RET0 | RET0 | FAULT | RET0 | RET0 | 3 |
+| heads (ops fixture) | RET0 | RET0 | RET0 | RET0 | FAULT | RET0 | RET0 | 3 |
+
+- **Prediction 1: met, all 15 checks.**
+  - Every renew arm faults in the same modes as its port arm, at the fixture's own read in `main`.
+  - The bodies pair faults at the same four pcs. The he and ops pairs' pcs differ by a constant 0x34 and 0x28
+    across modes, a constant shift, consistent with the renew images' longer code.
+  - Mode 0 reads its value in every image: `read cur=5`, `val_ok=1`, `ok=1 slabbed=1`.
+  - Mode 2 of the ops fixture prints `reused_slot same=1 o3_ok=1 o2_ok=1` in ops and opsren. The op made in the freed
+    op's slot reads, then the freed op faults. In opsren that slot is handed out as its renewed capability.
+  - Modes 5 and 6 print `errors=3` and `errors=0` in all four ops-fixture images.
+- **Not predicted:**
+  - heads faults in mode 4, a kept op after its CV is freed. The heads arm has no op lifetimes, so this fault comes
+    from elsewhere, not traced.
+  - Mode 7 fired: `boot failed parse=13` and exit 3 in all four ops-fixture images. So oneop, like the twin, refuses
+    `-e 0`'s `/dev/null`.
+  - It follows that the bodies and HE fixtures, which boot from `-e 0` and do not read the parse's status, ran on
+    an interpreter whose parse failed, as on the twin. Their controls read where predicted, so the C API reads they
+    make work. Their fixture code is the port's, unchanged here.
+- **Reading.** Replacing the revoke by a renew leaves the fixtures' protection unchanged in all three ports. This
+  includes the bodies variant, whose result above was read without a fixture.
+
+**suns.pl** (every answer `suns.out`; the opcount boots agree with the zone boots to within 13 instructions):
+
+| | image zone | CDERIVE | CREVOKE | CRENEW |
+|---|---:|---:|---:|---:|
+| heads (`fig10-pbrn2-z-heads`; opcount `fig10-pbrn3-posthoc-opc-heads`) | 2,648,354,139 | 2,119,561 | 1,737,086 | 0 |
+| he | 2,649,186,665 | 2,171,952 | 1,737,094 | 0 |
+| heren | 2,649,451,709 | 2,171,945 | 1,737,086 | 8 |
+| ops | 2,648,821,424 | 2,120,404 | 1,737,802 | 0 |
+| opsren | 2,648,823,355 | 2,120,270 | 1,737,086 | 716 |
+
+- **Prediction 2, answers: met.**
+- **Prediction 3, lifetime instructions: met for both.**
+  - CRENEW equals CREVOKE's fall exactly: 8 = 8, and 716 = 716.
+  - CDERIVE falls by 7 and 134, each at most the CRENEW count.
+- **Prediction 4, −2 to −14 instructions per removed CDERIVE: missed for both, with the sign reversed.** Both
+  variants cost instructions instead of saving them:
+  - heren +265,044 (+0.010 %) for 7 removed derives;
+  - opsren +1,931 for 134, +14.41 per removed derive.
+- **Why, for hash entries** (from the heads opcount, a boot added after the reading, not pre-registered):
+  - suns.pl hands out 52,391 hash entries (he's CDERIVE minus heads') and frees 8 of them (CREVOKE, likewise).
+  - The variant's bounds test runs at every issue. If all of the +265,044 is that test, it costs 265,044 / 52,391 =
+    **5.06 instructions per issue**, the size the bodies half's pre-registration put on it (4-5). The split is
+    inferred, not read from a per-function count.
+  - A renew can save at most a derive per freed entry, and suns.pl frees almost none.
+- **For op slabs:** 843 ops issued and 716 freed. The +1,931 is not traced. The test runs only on the reuse path, so
+  its cost per reused slot is not known from these counts.
+- **Reading.**
+  - On suns.pl, the hash-entry and op-slab ports have little free traffic: +832,526 and +467,285 image instructions
+    over heads, against the bodies port's +51.22 M.
+  - Their CRENEW variants therefore read only the fixed cost of telling a renewed capability from an arena pointer.
+  - What a renew saves where these allocators free often (test.pl, where hash entries cost +97.2 M on the twin) is not
+    measured: oneop cannot run test.pl.
+  - This result says nothing for or against the bodies variant's 10.04 saving.
+- Not read: cycles, and memory.
+
+## perlbench item 3: the full port, bodies, hash entries and op slabs together on the heads port (2026-11-25)
+
+### Pre-registration: the combined image's fixture, test.pl and memory on the twin (written 2026-11-25 00:32, before the runs)
+
+**Question.** Each of the three allocator ports was priced alone on the twin, with its own fixture. The board pair
+of stock against the whole port needs one image that carries all three. This section checks that image on the twin
+before any board pre-registration: protection, answers, instructions and memory.
+
+**The images** (`nested/perlspec/fx2/build-full.sh`, `build-full-fixtures.sh`):
+- **full** (`perlbench_r.full.strip.dom` `ce3a48e5…`, full `44ce64f2…`):
+  - a copy of prot6's tree, then the committed `port-sv-bodies.py`, `port-he.py` and `port-op-slabs.py` (revision 4);
+  - every object recompiled with prot6's compile lines plus `-DPERL_CAPSTONE_SUBLET_BODIES -DPERL_CAPSTONE_SUBLET_HE
+    -DPERL_CAPSTONE_SUBLET_OPS`, linked with prot6's link line;
+  - stripped as prot6 was. The same strip of prot6's full image reproduces prot6's `.dom` (control, IDENTICAL).
+- **Census against prot6:** CDERIVE 72 → 100 (+28) and CREVOKE 9 → 16 (+7). The CREVOKE rise equals the three
+  arms' own (+3, +3, +1).
+- **full-nr**, the control (`7d6bb54e…`): full rebuilt with `PERL_CAPSTONE_SUBLET_BODIES_NOREVOKE` and
+  `PERL_CAPSTONE_SUBLET_OPS_NOREVOKE` on all 69 compiles. Its CREVOKE count is prot6's 9, so all seven of the ports'
+  CREVOKEs are gone (the census fires).
+- **Fixtures:** the committed `make-{bodies,he,ops}-fixture.py`, each generated from the tree's own `perlmain.c`,
+  compiled with its `perlmain.o` line and linked in its place, then stripped. Six images, `fixture-full/bin`.
+- **Twin stage** `stage-full`: `stage-pt6` with only the prot image replaced (`diff -rq`: the `.xz` and plan.json's
+  note).
+
+**Runs** (`nested/census/chain-full.sh`, slot 28, 2^20 records, `dom_grant_root`):
+1. Fixture `perlfxfull-ce3a48e5`, 35 commands: bodies and HE modes 0-4 on full and full-nr; ops modes 0-7 on full
+   and 0-6 on full-nr.
+2. test.pl zones `zperl-full-ce3a48e5` (zones4, `perl-full.syms`).
+3. Memory `rss-full-ce3a48e5`, only if test.out and makerand.out equal the stock twin run's.
+- The chain's gate took both branches in an echo dry run: on ops4's results it ran the memory step, and on revision 1's
+  and on a missing directory it did not.
+
+**Predictions.**
+1. **Fixture**, each as its own arm read alone:
+   - bodies on full: mode 0 reads, modes 1-4 fault with cause 25;
+   - bodies on full-nr: modes 0-3 read, and mode 4 faults (the segment's end);
+   - HE on full: mode 0 reads, modes 1-4 fault;
+   - HE on full-nr: modes 0-4 read;
+   - ops on full: mode 0 reads, modes 1-4 fault, mode 5 returns `errors=3`, mode 6 `errors=0`, and mode 7 prints
+     `FIXTURE boot failed` and exits 3;
+   - ops on full-nr: modes 0-3 read, mode 4 faults, and modes 5-6 return as on full.
+   - Any other reading is reported as itself, and the board pair is not pre-registered until it is explained.
+2. **Answers:** test.out and makerand.out byte-equal to the stock twin run's (specdiff 1/2, the twin's three known
+   scripts).
+3. **Image zone:** the arms' sum is +636.4 M (bodies) + 97.2 M (HE) + 628.0 M (ops) = +1,361.7 M over prot6's
+   86,774,090,874 (+1.569 %). Predicted within ±15 % of that sum: +1,157 M to +1,566 M (+1.33 % to +1.80 %).
+   - Below the band: the ports share work (the HE arm already carved from the bodies' segments).
+   - Above it: they interact, for example through the lookup paths.
+4. **Memory:** peak used within ±1 % of prot6's 102,620 kB (101,594-103,646 kB). Each arm read alone moved it by less
+   than 250 kB.
+
+### Result: the combined image passes its fixture, keeps stock's answers and costs +1,384.1 M in the image zone, inside the band (twin, 2026-11-25 00:32-02:17, read against e9cdb6841c9e)
+
+**1. Fixture `perlfxfull-ce3a48e5`: met, all 35 commands as predicted.** Serial log sha256 `1f639564…`.
+
+| arm | full | full-nr (no CREVOKE) |
+|---|---|---|
+| bodies | mode 0 reads (`cur=5`); modes 1-4 fault, cause 25 | modes 0-3 read (1 and 3 read the freed body, 2 the old body); mode 4 faults, cause 25 |
+| HE | mode 0 reads; modes 1-4 fault, cause 25 | modes 0-4 read (1-2 `read_after_delete`, 3-4 `read_after_free`) |
+| ops | mode 0 reads; modes 1-4 fault, cause 25; mode 5 `errors=3`, mode 6 `errors=0`; mode 7 `FIXTURE boot failed parse=13 run=0`, rc 3 | modes 0-3 read (1-3 `read_after_free`); mode 4 faults, cause 25; modes 5 and 6 as on full |
+
+- Every fault is `kind=2 cause=25` with rc 139. Modes 3 and 4 fault only after their live reads (4,999, 2,999 and 3,000
+  good reads, 0 bad), so the live objects stay readable while the freed ones fault.
+- So each of the three ports' protection holds in the combined image, and removing the seven CREVOKEs is what lets
+  the stale reads through. The control's two faults (bodies mode 4, at the segment's end, and ops mode 4) were
+  predicted, as registered, and do not depend on a revoke.
+- stderr carries the harness's `Can't open /dev/null: Permission denied`, as in the earlier perl fixtures.
+
+**2. Answers: met.** `zperl-full-ce3a48e5`'s test.out and makerand.out are byte-equal to the stock twin run's
+(`zperl-stock`), specdiff 1/2 as there, and the chain's gate ran the memory step.
+
+**3. Image zone: +1,384.1 M, met** (band +1,157 M to +1,566 M).
+
+| zone | prot6 | full | full − prot6 |
+|---|---:|---:|---:|
+| image | 86,774,090,874 | 88,158,235,556 | **+1,384,144,682 (+1.595 %)** |
+| user | 5,638,059,112 | 5,666,285,925 | +28.2 M |
+| kernel | 26,155,713,688 | 26,279,319,186 | +123.6 M |
+| firmware | 23,300,788 | 23,286,332 | −0.01 M |
+
+- `capmix.txt` sha256 `61f4deeb…`.
+- It is 22.4 M (1.6 %) above the arms' sum of +1,361.7 M: within the band, so neither a shared-work saving nor an
+  interaction is read.
+
+**4. Memory: met.** `rss-full-ce3a48e5`: peak used 101,844 kB, −776 kB (−0.76 %) against prot6's 102,620 kB (band
+101,594-103,646 kB), and +3.96 % against stock's 97,968 kB. The three arms read alone were −156 kB (bodies), −116 kB
+(HE) and −236 kB (ops 4), −508 kB together. The sampler's VmHWM field reads 2,868 kB against prot6's 2,724; it is
+reported, not read.
+
+**5. Lifetime instructions, counted for the board pair** (not a prediction): `opc-full-ce3a48e5` (opcount, slot 29,
+`nested/p1pf/opc29.sh`, run beside the memory run; the queued `opc.sh` was stopped before it started) against
+`opc-prot6-37381b03`:
+
+| executed on test.pl (image) | prot6 | full | full − prot6 |
+|---|---:|---:|---:|
+| all instructions | 86,774,070,441 | 88,158,232,696 | +1,384,162,255 |
+| CDERIVE (funct7 0x51) | 34,414,810 | 53,440,173 | +19,025,363 |
+| CREVOKE (funct7 0x52) | 30,966,183 | 45,503,771 | +14,537,588 |
+
+- So the three allocators execute **33,562,951** more lifetime instructions than the heads port, 1.29 times the heads
+  port's own 26,043,473 (pairn).
+- The opcount's all-instruction difference agrees with the zones' (+1,384,144,682) to 17,573, 0.001 %.
+
+**So the board pair is pre-registered** (next section): every check on the combined image came out as registered.
+
+
+### Pre-registration: perlbench test.pl on P1, u = stock and f = the full port, one boot on board 1 (written 2026-11-25 02:28, before the boot)
+
+**Question.** pair6 read the heads port (prot6) against stock on test.pl: +13,583.8 M in-context cycles, +5.08 %. (The
+paper's figure is still prot2's +5.84 %; a change is the lead's.) The full port adds the three allocators (bodies, hash
+entries, op slabs). This boot reads the full port
+against stock in one boot (F−U), and, through pair6's boot, the three allocators' cost over the heads port (F−P6).
+
+**The images.**
+- u: stock `c1744e87…` (the paper's Full image), as in pair6 and pairn.
+- f: `perlbench_r.full.strip.dom` `ce3a48e5…`, the twin result above: protection fixture met (35 of 35), answers equal
+  to stock's, image zone +1,384.1 M twin instructions over prot6, memory 101,844 kB (−0.76 % against prot6).
+- **Lifetime instructions** (twin opcode counts on test.pl, `opc-full-ce3a48e5` against `opc-prot6-37381b03`):
+  +1,384,162,255 instructions in all, of which +19,025,363 CDERIVE and +14,537,588 CREVOKE: **ΔL = 33,562,951**.
+
+**Configuration.**
+- Bitstream P1 (`…-pagedtbl_d83d3a633`). Board 1 holds another seal (B5b-2) at this writing, so the chain flashes P1
+  from its sealed bit, sha256 checked against `SEAL-…-pagedtbl_d83d3a633.sha256`, and reads the resident name back
+  before the bake. The runtime lane reserved board 1 for this boot.
+- Kit `nested/kits/bkit91-rec1m` (2^20 records, SHA256SUMS verified), pairn's.
+- Chain: `nested/p1pf/p1pf.conf` and `p1pf.list` on `nested/p1s100/nat-run3p.sh`, list line `pairf 86400 660`, so
+  `BAKED_TIMEOUT=345600`, as in pair6 and pairn. Expected: about 7.5 h of commands, plus the flash.
+- Stage `nested/p1pf/pairf` (`pairf.SHA256SUMS`, 574 files), the kit's `make-train-stage.sh` around `fx2/stage-pairf`.
+  Against pairn's board stage (`diff -rq`) one file differs, the prot `.xz`. So run.sh, the commands and the u image are
+  pair6's byte for byte. Commands: makerand.pl then test.pl, for u, then for f.
+- Checked off the board (rule 8, `nested/p1n/recheck-p1k.sh` with `RD=nested/p1pf`):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on pair6's real transcript and on its cut, PASS all 9 steps, `BAKED_TIMEOUT=345600`;
+  - real firmware build 23,760,392 B (`95b1c6ce…`);
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/p1pf/dry.log`).
+  - **Disclosed:** the recheck relinked the shared kernel tree `perf/k2n/linux-board-k2n-native-hpm2tree` with
+    bkit91-rec1m's `node_flat_records=1048576`. The next 262,144-record bake from that tree recompiles the four
+    `CONFIG_CMDLINE` objects (the mechanism seen in M-16's tsu-r2). This boot's own bake relinks it the same way.
+- Read by `nested/p1pf/read-pairf.py` (`2906ef92…`): this boot's transcript, pair6's, and SPEC's references.
+  - On pair6's own transcript as both inputs it reproduces pair6's +13,583.8 M and exits 0.
+  - On a transcript cut after the first arm it exits 1.
+
+**Rules.**
+- Answers: every command rc 0, and both arms' makerand.out and test.out byte-equal to SPEC's references, with empty
+  `.err` files. Otherwise nothing is read.
+- Stock check: u's test.pl in-context cycles within ±1 % of pair6's u (267,219.2 M).
+  - Outside it, F−U is still read within this boot.
+  - F−P6 is not read: it needs pair6's P.
+
+**Predictions** (test.pl, in-context cycles).
+Prices from pairn (test.pl, P1, same kit): the heads port's code at 3.726 cycles per twin instruction (stock mean
+3.169), and its lifetime instructions at 172.4 cycles each all in (P−N 4,490.9 M over 26,043,473, walks and replays
+included), of which 129.1-133.9 is the remainder after the walks and replays.
+1. **F−P6: +8,700 M to +11,800 M, point +10,945 M.**
+   - Point: 3.726 × 1,384.16 M = 5,157 M of code, plus 172.4 × 33.56 M = 5,788 M of lifetimes.
+   - Low edge: the code at the stock mean (4,386 M) and the lifetimes at the remainder-only price 129.1 (4,333 M).
+   - High edge: the code at 3.726 and the lifetimes at 1.15 times the all-in price (6,656 M), for a larger record
+     working set than the heads port's alone.
+2. **F−U: +22,300 M to +25,400 M (+8.3 % to +9.5 %), point +24,529 M (+9.18 %)**: pair6's P6−U6 (+13,583.8 M) plus 1.
+3. **Records:** F's hpm3 (record-TLB misses) and hpm4 (walk cycles) above pair6's P, each against its own boot's u.
+   F's L1D misses (hpm8) above pair6's P.
+
+**What each outcome says** (the reading is the lifetime price left over after the code at 3.726: (F−P6 − 5,157 M)
+over 33,562,951):
+- **Within ±15 % of 172.4** (146.6-198.3 cycles): the allocators' lifetimes cost what the heads' do per instruction.
+- **Below:** the allocators' records are cheaper, for example because they share pages with the heads' records.
+- **Above:** the record working set grows with the extra lifetimes, as on test.pl against suns.pl.
+- If the stock check fails, only F−U is read.
+
+**Limits.**
+- One run per arm, u first, not interleaved, as in pair6 and pairn.
+- F−P6 is cross-boot: this boot's F against pair6's P6, each taken against its own boot's u. pairn's u reproduced pair6's
+  to −0.051 %.
+- The prices come from pairn (one boot) and the twin's counts. Kernel + other is printed but not part of any prediction.
+
+### Result: F−U +25,600.5 M (+9.58 %), F−P6 +12,016.7 M; both just above their bands; 204.4 cycles per lifetime instruction (board 1, 2026-11-25 02:29-10:24, read against 3c0441a27b8e)
+
+**The boot.**
+- The chain `nested/p1pf/p1pf.*` (pid 2403759) found board 1 on another seal. It flashed P1 from its sealed bit: local
+  sha256 equal to the seal's, `FLASH END rc=0`, and the resident name read back as `…-pagedtbl_d83d3a633`. It booked
+  1492 and unbooked it at the end (HTTP 200). The board is left on P1.
+- The smoke passed all 9 steps. The watchdog sampled throughout (1,475 ALIVE/QUIET lines). The command line carries
+  `capstone_vm.node_flat_records=1048576`.
+- The stage still verifies against `pairf.SHA256SUMS` (rc 0). Its images decompress to the registered hashes: u
+  `c1744e87`, f `ce3a48e5`.
+- The chain's `SPEC rc=2` is the generic classifier, which does not read this stage's markers. It is not a verdict.
+- Transcript `…/out-nat-p1pf-perlbench-b1/pairf/board.txt` (sha256 `5a1597c46680ee7c…`). It was read by
+  `read-pairf.py` (`2906ef92…`) with pair6's transcript and SPEC's references, rc 0.
+- Board time: boot 02:31:34 to 10:24:02, 7 h 52 min, against about 7.5 h expected.
+
+**The checks.**
+- **Answers: met.** All four commands rc 0. Both arms' `makerand.out` (`539d02dc…`) and `test.out` (`b41ee90a…`) equal
+  SPEC's references, and every `.err` is empty.
+- **Stock check: met.** u's test.pl reads 267,243.5 M against pair6's u 267,219.2 M, +0.009 %. So F−P6 is read.
+
+**In-context cycles, test.pl:**
+
+| | cycles | difference |
+|---|---:|---:|
+| u (this boot) | 267,243,452,830 | |
+| f (this boot) | 292,843,972,843 | F−U **+25,600.5 M (+9.58 %)** |
+| P6 (pair6, against pair6's u) | 280,802,971,216 | P6−U6 +13,583.8 M (+5.08 %) |
+| | | F−P6 = F−U − P6−U6 **+12,016.7 M** (+4.50 % of u) |
+
+**Predictions.**
+1. **F−P6, +12,016.7 M: missed**, 216.7 M (1.8 %) above the band's high edge of 11,800 M. Point +10,945 M.
+2. **F−U, +25,600.5 M (+9.58 %): missed**, 200.5 M above the band's high edge of 25,400 M (+9.5 %). It is prediction 1
+   plus pair6's P6−U6, so it is the same miss counted once more.
+3. **Records: met.** Each is f's distance from its own boot's u, against pair6's P from its u:
+
+| counter | F−U | P6−U6 | ratio |
+|---|---:|---:|---:|
+| hpm3, record-TLB misses | +47,086,857 | +21,445,211 | 2.20 |
+| hpm4, walk cycles | +692,425,980 | +309,100,291 | 2.24 |
+| hpm5 | +587,350,062 | +247,290,028 | 2.38 |
+| hpm7, event-23 replays | +126,937,338 | +43,288,874 | 2.93 |
+| hpm8, L1D misses | +257,345,625 | +110,524,171 | 2.33 |
+
+**The reading** registered for this outcome is the lifetime price after the code at 3.726:
+(12,016.7 M − 5,157.4 M) / 33,562,951 = **204.4 cycles per lifetime instruction**. That is 1.185 times the heads'
+172.4, above the registered 146.6-198.3, so it is the registered outcome **"above"**.
+
+What the price depends on, stated before it is read:
+- **It is under-determined by the code price.** The full port's code is priced at the heads port's 3.726 cycles per
+  twin instruction, which was not measured for these allocators. At 3.873, 3.9 % more, the price reaches the band's edge,
+  198.3, and at 3.88 it is inside it (198.0). At the stock mean 3.169 it is 227.3. This boot cannot separate "the lifetimes cost more" from "the
+  allocators' code costs a few per cent more per instruction". Only an N-style instrument build of the full port
+  (its lifetime instructions replaced, as pairn did for the heads) would.
+- **The record counters do not show a larger record working set per lifetime instruction.** The registered gloss of
+  "above" was "the record working set grows with the extra lifetimes". The lifetime instructions grow 2.29 times over
+  the heads port's (26,043,473 + 33,562,951 against 26,043,473). The record-TLB misses grow 2.20 times and the walk
+  cycles 2.24 times, slightly less than the lifetime count. So the gloss is not supported. What grows faster than the
+  lifetime count is the event-23 replays (2.93 times): 2.49 per added lifetime instruction against 1.66 for the heads'.
+  No mechanism is claimed.
+
+**F−P6, attributed:**
+
+| part | cycles | share of F−P6 | price and its source |
+|---|---:|---:|---|
+| the allocators' code | 5,157.4 M | 42.9 % | 3.726 cycles per twin instruction × 1,384,162,255 (pairn's N−U price for the heads' code; **assumed**, not measured here) |
+| record-table walks | 383.3 M | 3.2 % | F−P6 hpm4, read as cycles (measured; each side against its own boot's u) |
+| event-23 replays | 1,422.0-1,673.0 M | 11.8-13.9 % | F−P6 hpm7, +83,648,464 at 17-20 cycles each (Addendum 1's RTL estimate, from source) |
+| the lifetime instructions and their other record traffic | 4,803.0-5,054.0 M | 40.0-42.1 % | F−P6 less the three rows above |
+| **not attributed** | **none at this resolution** | | the last row is the remainder by construction |
+
+- The remainder is **143.1-150.6 cycles per lifetime instruction**, against pairn's 129.1-133.9 for the heads'.
+- It carries the code row's assumption: every 0.1 cycle per twin instruction moves 138.4 M between the first and the
+  last rows, 4.1 cycles per lifetime instruction.
+
+**Memory**, from the twin (not measured on the board): 101,844 kB, +3.96 % against stock's 97,968 kB.
+
+**Reported, not part of any prediction:** kernel + other F−U +1,955.3 M (pairn's N−U +1,339.5 M); uptime span F−U
++1,133.0 s.
+
+**Limits.**
+- As registered: one run per arm, u first, not interleaved.
+- F−P6 is cross-boot: this boot's F against pair6's P6, each taken against its own boot's u. The two u's agree to
+  0.009 %.
+- Both misses are within 2 % of the band's edge, on one boot per arm. No run-to-run spread for f has been measured.
+- Reported, not read (no noise band was registered, so "missed" stands): the three boots' stock u's (pair6, pairn and
+  this one) span 267,083.1-267,243.5 M, 160.4 M. The misses are 200.5 and 216.7 M, and F−P6 is cross-boot.
+
 ### Note: the s100 heartbeat (2026-11-25, board-free)
 
 The `@@BEAT` field of the s100 stages read `$(stat -c %s st.db 2>/dev/null || echo 0)`. The board's busybox has no `stat`
@@ -5718,3 +6753,195 @@ applet, so every beat of the board-2 run read 0 and the fallback hid it ("The `s
 the file is absent, never a number. The manifests were regenerated (`sha256sum -c` rc 0). `read-s100pair.py` accepts
 `NA` and the padded `wc` output. It was tested on `pair-dry/ret-twin-u1.txt` and on a copy with `NA` beats. The s100
 rechecks predate the change, so rule 8 is re-run on them before the final campaign.
+
+## perlbench item 3: the full port's code without its lifetime instructions, test.pl on P1 (2026-11-25)
+
+### Pre-registration: perlbench test.pl on P1, u = stock and n = the full port with its lifetime instructions neutralised, one boot on board 1 (written 2026-11-25 12:31, before the boot)
+
+**Question.** The full port's board pair (result above, d50760796c1a) read F−P6 +12,016.7 M. It priced the lifetimes
+at 204.4 cycles each, but only by assuming the allocators' code costs the heads' 3.726 cycles per twin instruction.
+At 3.88 the price falls inside the band. This boot measures the allocators' code on the board, as pairn did for the
+heads. N is the full port with its lifetime instructions neutralised, so:
+- the allocators' code price is (NF−N)/(Z_NF−Z_N);
+- the allocators' own lifetime price is ((F−NF) − (P6−N))/(L_FULL−L_HEADS).
+
+**The instrument.**
+- `nested/perlspec/fx2/build-fullnop2.sh` builds n, `perlbench_r.fullnop2.strip.dom` `3fec4963…` (full `943dfb3e…`):
+  - a copy of the full port's tree (`fx2/full`, `ce3a48e5`);
+  - `lifenop-522.patch`'s block (pairn's) after the capability.h include in the three translation units that call the
+    lifetime helpers: `sv.c` (heads and bodies), `op.c` (op slabs) and `capstone_sv_segs.h` (hash entries, in `hv.c`);
+  - only `sv.o`, `op.o` and `hv.o` recompiled, with the full port's own compile lines, linked with its link line and
+    stripped as it was.
+- **Controls:**
+  - the full port's full image strips to its `.dom`;
+  - the three objects, recompiled unchanged, are byte-identical to the full port's;
+  - the compile warnings equal the control's (105, 24 and 17);
+  - `mksyms.py` gives `perl-full.syms` exactly.
+- **Census, full port to n** (`capop-census.py`): CDERIVE 100 → 56 (−44), MOVC +44, CREVOKE 16 → 6 (−10),
+  ADD-to-x0 0 → 10. Word counts are equal (407,693 and 146,812).
+- **One derive stays real: the body segment's, `s->life` of a chunk at its aligned address.**
+  - The bodies and hash-entry issue paths take each child at `a − s->lo` from that life's base. That is the aligned
+    address only for a real derive: a MOVC copy keeps the chunk's base.
+  - The first instrument, `fullnop` (`82fd9265…`, `build-fullnop.sh`), neutralised that derive too. Every body was
+    handed out the alignment pad off, and test.pl failed 58 output lines on the twin (40.0 G instructions against
+    88.2 G).
+  - It is set aside and not used. pairn's heads port had no such derive: its lives start at offset 0.
+- **Twin** (`fx2/stage-fnop2`, the full port's twin stage with only the image replaced, zones4 and opcount, 2^20
+  records):
+  - makerand.out and test.out equal the stock twin run's.
+  - Image zone: Z_NF 88,154,230,752 against the full port's 88,158,235,556, NF−F = −4,004,804 (−0.005 %). The
+    neutralised derives skip a few instructions of their checks.
+  - **Lifetime instructions, F minus NF** (opcount; `opc-full-ce3a48e5` against `opc-fullnop2-3fec4963`): CDERIVE
+    32,847,623 and CREVOKE 26,758,241, so **L_FULL = 59,605,864**.
+    - Against prot6's L_HEADS 26,043,473, the difference is 33,562,391. The twin's earlier opcode difference of the
+      two images was 33,562,951.
+    - MOVC rises 32,848,149.
+  - Z_NF − Z_N = 1,380,147,727 and Z_NF − Z_U = 3,820,703,050.
+
+**Configuration.**
+- P1 is resident on board 1. The chain reads it back by name.
+- Kit `nested/kits/bkit91-rec1m` (2^20 records), pairf's.
+- Chain `nested/p1pnf/p1pnf.conf` and `p1pnf.list` on `nested/p1s100/nat-run3p.sh`, behind the M-16 stress chain
+  (pid 3170600). The list line is `pairnf 86400 660`, so `BAKED_TIMEOUT=345600`.
+- Stage `nested/p1pnf/pairnf` (`pairnf.SHA256SUMS`, 574 files). Against pairf's stage one file differs, the prot
+  `.xz`, which unpacks to `3fec4963…`. Commands: makerand.pl then test.pl, for u, then for n.
+- Checked off the board (rule 8, `recheck-p1k.sh` with `RD=nested/p1pnf`):
+  - real bake rc 0;
+  - `BOARD_STUB=2` rc 0 on pairf's real transcript and on its cut, PASS all 9 steps, `BAKED_TIMEOUT=345600`;
+  - real firmware build 23,760,392 B;
+  - an `NR_DRY=1` pass of the chain to DONE.
+- **Reader** `nested/p1pnf/read-pairnf.py` (`3ed8e1d1…`). Its inputs are this boot, pairf's, pairn's and pair6's
+  transcripts, SPEC's references, and `nested/p1pnf/counts.txt` (`5786cc10…`, the twin numbers above, fixed now).
+  - With pairn's transcript as this boot it reproduces pairn's N−U +9,092.9 M and P6−N 172.44.
+  - On pair6's cut it exits 1. With a count missing it exits 1.
+- Disclosed as for pairf: this boot's bake relinks the shared kernel tree with `node_flat_records=1048576`.
+
+**Rules.**
+- Answers: as pairf's.
+- Stock check: u within ±1 % of pair6's u. Outside it, only NF−U and the full port's code price are read.
+
+**Readings and their outcomes.** Every arm is taken against its own boot's u.
+- **NF−U** prices the full port's code: NF−U over Z_NF−Z_U, against the heads' 3.726 and the stock mean 3.169.
+- **The allocators' code price** c_a = (NF−N)/(Z_NF−Z_N), with N from pairn.
+- **The allocators' lifetime price** ((F−NF) − (P6−N))/33,562,391, with F from pairf and P6 from pair6.
+  - It equals (12,016.7 M − c_a × 1,380.15 M)/33.56 M, so the two readings are one measurement seen twice.
+  - Against the heads' 172.4 ± 15 % (146.6-198.3), as pairf registered:
+    - **c_a ≤ 3.885, so the price is ≥ 198.3 (NF−U ≤ 14,454 M):** pairf's "above" stands, measured. The allocators'
+      lifetimes cost more per instruction than the heads'.
+    - **c_a between 3.885 and 5.142 (NF−U 14,454-16,189 M):** the allocators' lifetimes cost what the heads' do,
+      and pairf's miss was its code price.
+    - **c_a above 5.142:** the allocators' lifetimes are cheaper than the heads'.
+
+**Prediction.** NF−U +13,500 to +16,800 M. The low edge puts the allocators' code at the stock mean, 3.169; the high
+edge puts the lifetimes at the heads' remainder-only price, 129.1. Point +14,249 M: c_a = 3.736, the heads' price,
+which is pairf's assumption. The pairf result's counters favour it: the record-TLB misses and walk cycles there scale
+with the lifetime count, the replays faster.
+- Records: n's distance from u in hpm3, hpm4 and hpm7, each under 15 % of pairf's F−U in the same counter, as N's
+  were under pair6's.
+
+**Limits.**
+- One run per arm, u first, not interleaved.
+- The allocators' code and lifetime prices take four boots: this one, pairf, pairn and pair6. Their u's span
+  267,083.1-267,243.5 M so far.
+- n is an instrument. Its children are unprotected copies of their parents' capabilities, and one derive per body
+  segment stays real.
+
+### Result: pairnf, board 1, P1 (2026-11-25 14:49-22:33)
+
+The chain (pid 461875) read P1 back by name and booted pairnf 14:49:52-22:33:46: BOOT rc 0, smoke PASS on all 9
+steps, unbooked (HTTP 200). The chain's `SPEC rc=2` is the generic classifier's known format gap (it wants
+`@@SPEC-DONE <n>`); the transcript has all four `@@SPEC-END` lines with rc 0 and `@@SPEC-DONE 500.perlbench_r test`.
+Read by `read-pairnf.py` (`3ed8e1d1…`, exit 0) with pairf's, pairn's and pair6's transcripts and `counts.txt`.
+
+- **Answers:** makerand.out and test.out equal SPEC's references for u and n (test.out `b41ee90a…`), with empty
+  stderr.
+- **Stock check met:** u 267,214.1 M against pair6's 267,219.2 M (−0.002 %). Under the same check, pairf is +0.009 %
+  and pairn −0.051 %.
+- **NF−U +13,556.0 M (+5.07 %)**, inside the predicted +13,500 to +16,800 M, at its low edge. The point was +14,249.
+  The span is +625.5 s, and kernel and other +1,826.9 M.
+- **The full port's code price:** 13,556.0 M / 3,820,703,050 = **3.548 cycles per twin instruction**, between the
+  stock mean 3.169 and the heads' 3.726.
+- **The allocators' code price:** c_a = (NF−N)/(Z_NF−Z_N) = (13,556.0 − 9,092.9) M / 1,380,147,727 = **3.234**.
+- **The allocators' own lifetime price:** ((F−NF) − (P6−N))/33,562,391 = (12,044.5 − 4,490.9) M / 33,562,391 =
+  **225.1 cycles per lifetime instruction**.
+  - The full port's lifetimes all in, (F−NF)/L_FULL, are 202.1. The heads' (P6−N)/L_HEADS reproduce 172.44.
+  - The identity with pairf's registered form holds: (12,016.7 − 3.234 × 1,380.15)/33.56 = 225.1.
+- **Outcome: the first branch.** c_a ≤ 3.885, so the price is ≥ 198.3. pairf's "above" stands, measured: the
+  allocators' lifetimes cost more per instruction than the heads' (225.1 against 172.4 ± 15 %, band 146.6-198.3).
+- **Records met:** n's distance from u in hpm3, hpm4 and hpm7 is −12.2 %, −10.8 % and −8.5 % of pairf's F−U in the
+  same counter, each under 15 % in size. All three are negative: n reads slightly fewer of those events than u. In
+  hpm8, which is not registered, n is +14.5 %.
+- Source of every cycle price above: P1's `run_cycles` for each command on board 1, as the pre-registration names.
+  The twin supplies only the instruction counts (`counts.txt`).
+
+## Note: B5T-g4's perl cause-28 is perl's own write past argv[0] (2026-11-25, CPU only)
+
+**The event.** B5T-g4 ran on board 3 (`904cd9c6b`). Inside SPEC's test.pl harness, one `.perl-native` child faulted
+(`b5b2linux/b3chain2-20261125T0716-B5T-g4/uart.txt`, the board lane's tree). The child is a copy of
+`perlbench_r_base` `38ce666f…`, and `perf/cclever/arms/B5T/exes/perlbench_r.full` (`67a24421…`) strips to it. The
+fault line:
+`sublet: fault cause=28 pc=0x3ff7c01480 address=0x3ff7bfff78 pid=246 ra=0x3ff7c342a6 code=0x3ff7c00000-0x3ff7e50000`.
+
+**Where it stops.**
+- **pc** vaddr 0x11480 is `memset`+0x64, the third `sd` of the 32-byte loop. The stores at a3 = `…ff68` and +8
+  passed, and +0x10 = `…ff78` faulted. So the capability ends in [`…ff78`, `…ff7f`].
+- **ra** vaddr 0x442a6 is in `Perl_magic_set`, at its `jal memset` with a1 = 0x20 and a2 = PL_origalen − len − 1.
+  That is SPEC's `mg.c:3170`, `case '0'`:
+  `memset(PL_origargv[0] + len + 1, ' ', PL_origalen - len - 1)`.
+- **Why the padding goes out of bounds.**
+  - `perl.c:1516-1602` sets PL_origalen to the whole contiguous argv[] + environ[] string area.
+  - On this route, argv[0]'s capability covers only its own string. That string is `/tmp/nt/sr/.perl-native`,
+    24 bytes. The store offsets put its start in (`…ff5b`, `…ff63`], so its end lands at the bound.
+  - The address sits 0x88 below the code base because the initial stack's string area lies just under the image.
+- **Neither deep recursion nor a small stack is involved.**
+
+**Which test: `t/op/leaky-magic.t`**, by two independent lines of evidence.
+- **Ordinal.** pid 246 is the 130th `.perl-native` of test.pl's command in the capture.
+  - The stage's test.pl command was replayed on the host. It ran under user-mode qemu-riscv64 8.2.2, built from the
+    release tarball (`847346c1…`), with the stage's own `natperl` (`5737866a…`) as the harness and as every child.
+  - `$^X` is a logging wrapper that re-enters through `qemu -0`, so grandchildren are logged too.
+  - Invocation 130 is `-I.. -MTestInit op/leaky-magic.t`.
+- **Mechanism.** In the stage's `in/` tree, a python search finds one write to `$0` that the harness runs:
+  leaky-magic.t lines 71-75 do `local $$_ = 'thew'` for each name in `qw< : ? ! - | ^ ~ = % . \ / ; 0 >`.
+  - The search's other hits do not write `$0` when the harness runs:
+    - `TestInit.pm:30`, `$0 =~ s/\.dp$//`, matches nothing here, and a failed `s///` sets no magic;
+    - `TestInit.pm:65` runs only from the top level, which the harness is not;
+    - `t/japh/abigail.t` runs only under torture.
+  - For the name `0`, that is a symbolic `local $0 = "thew"`.
+  - The search's patterns were checked against this line and against six forms of a direct write.
+- **Unexplained:** the replay made 317 invocations in all, while the board had made 372 when `/init` killed the stage
+  at 3,600 s. So after some point the board spawned children the native run did not. The ordinal match rests on the
+  two sequences agreeing up to 130. The mechanism evidence does not.
+
+**Native and twin.**
+- **Native:** in the replay, every test passes ("All tests successful", 208 s), op/leaky-magic.t included, and
+  `local $0 = "thew"` runs.
+- **Twin (B5T, the trap kernel):** the stage `F1-perl-dollar0` ran B5T's image against natperl, with the board's default
+  boot arguments (no wide grants). It ran on `-e 'local $0="thew"'` and on leaky-magic.t, from the board's path
+  `/tmp/nt/sr/.perl-native`, on Image `749fed26…`. The run finished at 2026-11-25 22:39:26 (its lock.log).
+  - B5T faulted in both:
+    `sublet: fault cause=28 pc=0x3ff7c01480 address=0x3ff7bfff88 … ra=0x3ff7c342a6 code=0x3ff7c00000-0x3ff7e50000`,
+    rc 139.
+  - natperl returned rc 0 on both.
+  - So the twin reads the board's fault at the same memset store (vaddr 0x11480), from the same `jal memset`
+    (vaddr 0x442a6), in the same code window.
+  - The address is 0x10 higher than the board's `…ff78`. argv[0]'s string sits at a position set by the argv and
+    environ strings above it, and those differ between SPEC's harness child and this stage. That fits the mechanism,
+    but the twin's argv and environ were not read, so the 0x10 is not traced.
+
+**Reading (the runtime lane's ruling).**
+- This is a spatial check catching perl's deliberate write past argv[0]'s string. C does not give argv[0] the
+  argv + environ block, so it is the protection working as designed, not a defect of the route.
+- Nothing is fixed. A perl port patch would change the workload. Widening argv[0]'s capability over the block is a
+  loader semantics change, and it would weaken exactly the check that fired.
+
+**Reach.** Does any perlbench train input write `$0`? None does. The python search covered all 941 files of
+`data/train/input` and `data/all/input`: diffmail, perfect, scrabbl, splitmail and suns, with `lib/`.
+- It found no direct write, list write, symbolic-name write, `local` of `$0` or `PROGRAM_NAME`, and each of those
+  patterns was checked against a positive control.
+- Its hits are comments, a `Config.pm` value and mail text in `lib/spam.pl`.
+- The symbolic dereference hits are reference variables (`$$data`, `$$abr`, …), not the name `0`.
+- So the fault cannot reach a measured train row. test.pl is not measured.
+
+**Files** (`<hdd>/capstone/nested/b5b2/perlfault/`): `run-native.sh`, `children.log` (the 317 invocations),
+`sr/test.out`, and the twin overlay `ovl/`.
