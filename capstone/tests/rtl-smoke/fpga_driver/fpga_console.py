@@ -89,8 +89,9 @@ def _redact(msg: str, url: str) -> str:
 # unset means 1, so every script written before board #2 keeps meaning board #1). The board selects the console-URL
 # secret file and the host-side lock. The constructor checks that the URL it was given IS that board's secret, so a
 # wrapper that read the wrong file cannot drive the other board. Neither the URL nor the file content is ever printed.
-BOARD_SECRETS = {"1": "~/.claude-kisp/secrets/fpga-console-url", "2": "~/.claude-kisp/secrets/fpga-console-url-board2"}
-BOARD_LOCKS = {"1": "/tmp/capstone/.board.lock", "2": "/tmp/capstone/.board2.lock"}
+BOARD_SECRETS = {"1": "~/.claude-kisp/secrets/fpga-console-url", "2": "~/.claude-kisp/secrets/fpga-console-url-board2",
+                 "3": "~/.claude-kisp/secrets/fpga-console-url-board3"}   # board 3: 2026-11-06
+BOARD_LOCKS = {"1": "/tmp/capstone/.board.lock", "2": "/tmp/capstone/.board2.lock", "3": "/tmp/capstone/.board3.lock"}
 
 # SERVER-SIDE LEASES (2026-10-19; the console's board-lease, first mode LEASE_ENFORCE=log). A lease is taken where the
 # local board lock is taken and released where the console is closed; the local flock stays as the backstop. While held,
@@ -112,6 +113,13 @@ class LeaseYield(RuntimeError):
 
 class LeaseLost(RuntimeError):
     """The server no longer holds this run's lease: the run is INFRA, and nothing more may be started."""
+
+
+class SocketInfra(RuntimeError):
+    """The Socket.IO session could not be made live, or no FRESH power_state event arrived on it: INFRA, not a reading.
+    Raised instead of falling back to the cached state or toggling blind (2026-11-26, board 1: twice a long upload
+    outlived the socket -- engineio logged 'packet queue is empty, aborting', its write loop exited while its state
+    stayed 'connected', and the power toggle emitted next was queued to a loop that no longer sent anything)."""
 
 
 def board_id() -> str:
@@ -154,7 +162,7 @@ class FpgaConsole:
         # as possible human interference when above 1, this client), and a power or NV-bitstream transition that this
         # client did not make stops the run at once: the board is left exactly as found (no power-off, no release),
         # since a human may be mid-session, and the stop prints [fpga-foreign] so no wrapper retries over it.
-        self._watch = (self.board == "2" and not allow_unverified and client is None)
+        self._watch = (self.board in ("2", "3") and not allow_unverified and client is None)   # board 3 is shared as board 2 is
         self._own_until = 0.0
         self._users = {"start": None, "max": None, "last": None, "flagged": False, "samples": []}
         self._last_power = None
@@ -212,6 +220,12 @@ class FpgaConsole:
         # publish them. None means "never seen", which is distinct from any real value.
         self._server_epoch: Optional[int] = None
         self._server_restarted = False
+        # Socket liveness (2026-11-26): the monotonic time of the latest (re)connect, the connect arguments for a
+        # reconnect of our own, and how many we made.
+        self._last_connect_ts: Optional[float] = None
+        self._connect_args: Optional[Dict[str, Any]] = None
+        self._own_reconnects = 0
+        self._remade_since: Optional[float] = None   # monotonic time just BEFORE the latest re-made session
         self._uart_gap_chunks = 0
 
         # Server-side lease (see LEASE_HOLDER): None until taken; "none" when the console has no lease API.
@@ -293,6 +307,8 @@ class FpgaConsole:
         # which then lands verbatim in a captured run log. The board URL is secret and a
         # hard project rule says it must never be echoed into a log. Seen for real on
         # 2026-07-29: a connect timeout wrote the hostname into a run log.
+        self._connect_args = dict(auth=auth, socketio_path=self._socketio_path, namespaces=[C.CONNECT.namespace],
+                                  wait=True, wait_timeout=timeout)
         try:
             self.sio.connect(
                 self.url,
@@ -363,6 +379,7 @@ class FpgaConsole:
         # ring buffer + current states again or it silently misses the post-reset
         # boot log (this is exactly what stalled the first hardware recon).
         def on_connect() -> None:
+            self._last_connect_ts = time.monotonic()
             try:
                 self._lease_bind()
             except Exception:  # pragma: no cover - best effort; log mode refuses nothing
@@ -434,7 +451,8 @@ class FpgaConsole:
             nv = data.get("nv_bitstream_name")
             if self._last_nv is not None and nv is not None and nv != self._last_nv and now > self._own_until:
                 self._foreign(f"nv_bitstream_name {self._last_nv} -> {nv}")
-            if data.get("state") not in (None, "done", "idle") and now > self._own_until:
+            # "error" is a finished state (board 3 kept its first, failed flash's), not someone else's flash in progress
+            if data.get("state") not in (None, "done", "idle", "error") and now > self._own_until:
                 self._foreign(f"flash_state {data.get('state')}")
             if nv is not None:
                 self._last_nv = nv
@@ -962,7 +980,14 @@ class FpgaConsole:
             # boot over it transmits nothing (board 2, 2026-11-14, four boots): park first, verified, or raise.
             from .switch_park import park_switches
             park_switches(self)
-        cur = self._current_state(C.POWER_STATE_EVENT, timeout=5.0)
+        # LIVE SOCKET FIRST (2026-11-26): a dead write loop under a 'connected' state silently drops the toggle. If the
+        # session is not live it is re-made, and the state is then read from a power_state event received AFTER that
+        # (re)connect -- never from the cache, never from /api/state (which carries no power_state field).
+        remade = self._ensure_live_socket()
+        if remade:
+            cur = self._fresh_power_state(since=self._remade_since)
+        else:
+            cur = self._current_state(C.POWER_STATE_EVENT, timeout=5.0)
         if cur == want:
             self._log(f"power already {want}")
             return
@@ -971,7 +996,89 @@ class FpgaConsole:
             self._powered_on_once = True
         self._own_until = mark + timeout + 30.0   # this client's own power transition (the shared-board watch)
         self._emit("power_toggle")
+        try:
+            self.wait_state(C.POWER_STATE_EVENT, want, timeout, since=mark)
+            return
+        except ActionTimeout as e:
+            first = e
+        # The toggle did not show. Make the session live, read the state FRESH, and toggle once more only if the
+        # board still reads the state it had before the toggle. Never a second blind toggle: power_toggle is a toggle.
+        self._ensure_live_socket(force=True)
+        st = self._fresh_power_state(since=self._remade_since)
+        self._log(f"power: no {want!r} within {timeout} s of the toggle ({first}); fresh state {st!r}")
+        if st == want:
+            return
+        if st != cur:
+            raise SocketInfra(f"power: fresh state {st!r} is neither {want!r} nor the pre-toggle {cur!r}; not toggling")
+        mark = self.now()
+        self._own_until = mark + timeout + 30.0
+        self._log("power: the board still reads the pre-toggle state on a live session; one more toggle")
+        self._emit("power_toggle")
         self.wait_state(C.POWER_STATE_EVENT, want, timeout, since=mark)
+
+    def _socket_live(self) -> bool:
+        """Connected at both layers AND the engineio write loop still running (it can exit on 'packet queue is
+        empty, aborting' while the state still reads 'connected')."""
+        eio = getattr(self.sio, "eio", None)
+        if not getattr(self.sio, "connected", False) or eio is None or getattr(eio, "state", None) != "connected":
+            return False
+        wl = getattr(eio, "write_loop_task", None)
+        return wl is None or not hasattr(wl, "is_alive") or wl.is_alive()
+
+    def _ensure_live_socket(self, force: bool = False, wait: float = 30.0) -> bool:
+        """Return False if the session was already live (and not `force`); otherwise wait up to `wait` s for the
+        library's own reconnect, else make one ourselves (disconnect + connect with the original arguments; the
+        connect handler re-binds the lease and re-requests history and states). True once live again; SocketInfra
+        if it cannot be made live."""
+        if self._socket_live() and not force:
+            return False
+        self._remade_since = time.monotonic()
+        eio = getattr(self.sio, "eio", None)
+        # A dead write loop under state 'connected' is invisible to the library until the server's ping timeout, so
+        # waiting for its reconnect only burns the window: reconnect at once. Otherwise give its reconnect `wait` s.
+        dead_loop = eio is not None and getattr(eio, "state", None) == "connected"
+        end = time.monotonic() + wait
+        while not force and not dead_loop and time.monotonic() < end:
+            if self._socket_live():
+                self._log("socket: live again (the library reconnected)")
+                return True
+            time.sleep(0.5)
+        if self._connect_args is None:
+            raise SocketInfra("socket: not live and never connected by connect(); no reconnect possible")
+        self._log(f"socket: {'forced ' if force else ''}reconnect of our own (write loop alive: {getattr(getattr(getattr(self.sio, 'eio', None), 'write_loop_task', None), 'is_alive', lambda: None)()})")
+        try:
+            self.sio.disconnect()
+        except Exception:  # pragma: no cover - best effort
+            pass
+        self._remade_since = time.monotonic()
+        try:
+            self.sio.connect(self.url, **self._connect_args)
+        except Exception as e:
+            raise SocketInfra(f"socket: reconnect failed: {_redact(str(e), self.url)}") from None
+        self._own_reconnects += 1
+        t = time.monotonic() + 10.0
+        while time.monotonic() < t and not self._socket_live():
+            time.sleep(0.2)
+        if not self._socket_live():
+            raise SocketInfra("socket: reconnected but not live within 10 s")
+        return True
+
+    def _fresh_power_state(self, since: float, timeout: float = 15.0) -> str:
+        """The state of a power_state event RECEIVED at or after `since` (monotonic), waiting up to `timeout` s; the
+        connect handler's history request makes the server push its states. SocketInfra if none arrives."""
+        deadline = time.monotonic() + timeout
+        with self._cond:
+            while True:
+                for ts, ev, data in reversed(self._events):
+                    if ts < since:
+                        break
+                    if ev == C.POWER_STATE_EVENT:
+                        return data.get(C.STATUS_STATE_KEY) if isinstance(data, dict) else data
+                rem = deadline - time.monotonic()
+                if rem <= 0:
+                    raise SocketInfra(f"socket: no fresh power_state event within {timeout} s of the (re)connect; "
+                                      f"not falling back to the cache, not toggling")
+                self._cond.wait(timeout=rem)
 
     def upload_boot_image(self, name: str, file_path: str) -> Any:
         """Action 1a: upload a boot image (multipart). Returns the JSON response
